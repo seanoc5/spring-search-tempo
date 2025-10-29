@@ -2,6 +2,8 @@ package com.oconeco.spring_search_tempo.base.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.EntityListeners
+import jakarta.persistence.Enumerated
+import jakarta.persistence.EnumType
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -41,9 +43,11 @@ abstract class SaveableObject {
     )
     var uri: String? = null
 
+    @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "text")
     var status: Status = Status.NEW
 
+    @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "text")
     var analysisStatus: AnalysisStatus = AnalysisStatus.LOCATE
 

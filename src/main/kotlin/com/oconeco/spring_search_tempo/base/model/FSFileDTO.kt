@@ -1,5 +1,7 @@
 package com.oconeco.spring_search_tempo.base.model
 
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.Status
 import jakarta.validation.constraints.NotNull
 
 
@@ -10,6 +12,10 @@ class FSFileDTO {
     @NotNull
     @FSFileUriUnique
     var uri: String? = null
+
+    var status: Status? = null
+
+    var analysisStatus: AnalysisStatus? = null
 
     var label: String? = null
 
