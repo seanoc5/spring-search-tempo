@@ -45,11 +45,11 @@ abstract class SaveableObject {
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "text")
-    var status: Status = Status.NEW
+    var status: Status? = Status.NEW
 
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "text")
-    var analysisStatus: AnalysisStatus = AnalysisStatus.LOCATE
+    var analysisStatus: AnalysisStatus? = AnalysisStatus.LOCATE
 
     @Column(columnDefinition = "text")
     var label: String? = null
