@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+    <body>
+        <div th:fragment="pagination()" th:if="${paginationModel != null}" class="row mt-4">
+            <nav th:if="${paginationModel.steps.size > 3}" class="col-sm-8">
+                <ul class="pagination">
+                    <li th:each="step : ${paginationModel.steps}" th:classappend="${(step.active ? 'active' : '') + (step.disabled ? ' disabled' : '')}" class="page-item">
+                        <a th:href="${requestUri + step.url}" class="page-link">[[${step.label}]]</a>
+                    </li>
+                </ul>
+            </nav>
+            <div th:classappend="${paginationModel.steps.size <= 3}? offset-sm-8" class="col-sm-4 pt-sm-2 text-sm-end">[[${paginationModel.elements}]]</div>
+        </div>
+
+        <div th:fragment="sorting(object, sortOptions)" th:with="columnClass=${columnClass}" th:classappend="${columnClass}" class="col-md-6 col-lg-4">
+            <select class="js-selectlinks form-select">
+                <option th:each="sortOption : ${sortOptions}"
+                        th:value="@{${requestUri}(sort=${sortOption},filter=${filter})}"
+                        th:selected="${(param.sort == null && sortOptionStat.first) || (param.sort != null && param.sort[0] == sortOption)}"
+                        >[[#{__${object}__.list.sort.__${sortOption}__}]]</option>
+            </select>
+        </div>
+
+        <form th:fragment="searchFilter(object)" th:action="${requestUri}" method="get" class="col-md-6 col-lg-4">
+            <div class="input-group mb-3">
+                <input type="text" name="filter" th:value="${filter == null ? '' : filter}" th:placeholder="#{__${object}__.list.filter}" class="form-control" />
+                <button type="submit" class="btn btn-secondary">[[#{searchFilter.apply}]]</button>
+            </div>
+        </form>
+    </body>
+</html>

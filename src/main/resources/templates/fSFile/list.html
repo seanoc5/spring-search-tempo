@@ -1,0 +1,59 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{fSFile.list.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{fSFile.list.headline}]]</h1>
+                <div>
+                    <a th:href="@{/fSFiles/add}" class="btn btn-primary ms-2">[[#{fSFile.list.createNew}]]</a>
+                </div>
+            </div>
+            <div th:if="${!fSFiles.empty || filter != null}" class="row">
+                <div th:replace="~{fragments/utils::searchFilter(object='fSFile')}" />
+                <div th:replace="~{fragments/utils::sorting(object='fSFile', sortOptions=${ {'id,ASC', 'uri,ASC', 'label,ASC'} }, columnClass='offset-lg-4')}" />
+            </div>
+            <div th:if="${fSFiles.empty}">[[#{fSFile.list.empty}]]</div>
+            <div th:if="${!fSFiles.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">[[#{fSFile.id.label}]]</th>
+                            <th scope="col">[[#{fSFile.crawlDepth.label}]]</th>
+                            <th scope="col">[[#{fSFile.size.label}]]</th>
+                            <th scope="col">[[#{fSFile.version.label}]]</th>
+                            <th scope="col">[[#{fSFile.archived.label}]]</th>
+                            <th scope="col">[[#{fSFile.bodySize.label}]]</th>
+                            <th scope="col">[[#{fSFile.fsFolder.label}]]</th>
+                            <th><!-- --></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="fSFile : ${fSFiles}">
+                            <td>[[${fSFile.id}]]</td>
+                            <td>[[${fSFile.crawlDepth}]]</td>
+                            <td>[[${fSFile.size}]]</td>
+                            <td>[[${fSFile.version}]]</td>
+                            <td>[[${fSFile.archived}]]</td>
+                            <td>[[${fSFile.bodySize}]]</td>
+                            <td>[[${fSFile.fsFolder}]]</td>
+                            <td>
+                                <div class="float-end text-nowrap">
+                                    <a th:href="@{/fSFiles/edit/{id}(id=${fSFile.id})}" class="btn btn-sm btn-secondary">[[#{fSFile.list.edit}]]</a>
+                                    <form th:action="@{/fSFiles/delete/{id}(id=${fSFile.id})}"
+                                            th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{fSFile.list.delete}]]</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </div>
+    </body>
+</html>

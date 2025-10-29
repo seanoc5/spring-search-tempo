@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:18.0
+    environment:
+    - POSTGRES_DB=tempo
+    - POSTGRES_USER=postgres
+    - POSTGRES_PASSWORD=password
+    ports:
+    - 5433:5432

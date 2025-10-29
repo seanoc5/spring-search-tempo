@@ -1,0 +1,35 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{fSFile.add.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{fSFile.add.headline}]]</h1>
+                <div>
+                    <a th:href="@{/fSFiles}" class="btn btn-secondary">[[#{fSFile.add.back}]]</a>
+                </div>
+            </div>
+            <div th:replace="~{fragments/forms::globalErrors('fSFile')}" />
+            <form th:action="${requestUri}" method="post" novalidate="">
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='uri', required=true, type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='label', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='description', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='type', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='crawlDepth', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='size', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='version', required=true, type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='archived', type='checkbox')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='owner', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='group', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='permissions', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='bodyText', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='bodySize', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='fSFile', field='fsFolder', type='select')}" />
+                <input type="submit" th:value="#{fSFile.add.headline}" class="btn btn-primary mt-4" />
+            </form>
+        </div>
+    </body>
+</html>

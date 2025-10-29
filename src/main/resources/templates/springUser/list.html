@@ -1,0 +1,49 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{springUser.list.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{springUser.list.headline}]]</h1>
+                <div>
+                    <a th:href="@{/springUsers/add}" class="btn btn-primary ms-2">[[#{springUser.list.createNew}]]</a>
+                </div>
+            </div>
+            <div th:if="${!springUsers.empty || filter != null}" class="row">
+                <div th:replace="~{fragments/utils::searchFilter(object='springUser')}" />
+                <div th:replace="~{fragments/utils::sorting(object='springUser', sortOptions=${ {'id,ASC', 'label,ASC', 'firstName,ASC'} }, columnClass='offset-lg-4')}" />
+            </div>
+            <div th:if="${springUsers.empty}">[[#{springUser.list.empty}]]</div>
+            <div th:if="${!springUsers.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">[[#{springUser.id.label}]]</th>
+                            <th scope="col">[[#{springUser.enabled.label}]]</th>
+                            <th><!-- --></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="springUser : ${springUsers}">
+                            <td>[[${springUser.id}]]</td>
+                            <td>[[${springUser.enabled}]]</td>
+                            <td>
+                                <div class="float-end text-nowrap">
+                                    <a th:href="@{/springUsers/edit/{id}(id=${springUser.id})}" class="btn btn-sm btn-secondary">[[#{springUser.list.edit}]]</a>
+                                    <form th:action="@{/springUsers/delete/{id}(id=${springUser.id})}"
+                                            th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{springUser.list.delete}]]</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </div>
+    </body>
+</html>

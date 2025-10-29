@@ -1,0 +1,55 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{fSFolder.list.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{fSFolder.list.headline}]]</h1>
+                <div>
+                    <a th:href="@{/fSFolders/add}" class="btn btn-primary ms-2">[[#{fSFolder.list.createNew}]]</a>
+                </div>
+            </div>
+            <div th:if="${!fSFolders.empty || filter != null}" class="row">
+                <div th:replace="~{fragments/utils::searchFilter(object='fSFolder')}" />
+                <div th:replace="~{fragments/utils::sorting(object='fSFolder', sortOptions=${ {'id,ASC', 'uri,ASC', 'label,ASC'} }, columnClass='offset-lg-4')}" />
+            </div>
+            <div th:if="${fSFolders.empty}">[[#{fSFolder.list.empty}]]</div>
+            <div th:if="${!fSFolders.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">[[#{fSFolder.id.label}]]</th>
+                            <th scope="col">[[#{fSFolder.crawlDepth.label}]]</th>
+                            <th scope="col">[[#{fSFolder.size.label}]]</th>
+                            <th scope="col">[[#{fSFolder.version.label}]]</th>
+                            <th scope="col">[[#{fSFolder.archived.label}]]</th>
+                            <th><!-- --></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="fSFolder : ${fSFolders}">
+                            <td>[[${fSFolder.id}]]</td>
+                            <td>[[${fSFolder.crawlDepth}]]</td>
+                            <td>[[${fSFolder.size}]]</td>
+                            <td>[[${fSFolder.version}]]</td>
+                            <td>[[${fSFolder.archived}]]</td>
+                            <td>
+                                <div class="float-end text-nowrap">
+                                    <a th:href="@{/fSFolders/edit/{id}(id=${fSFolder.id})}" class="btn btn-sm btn-secondary">[[#{fSFolder.list.edit}]]</a>
+                                    <form th:action="@{/fSFolders/delete/{id}(id=${fSFolder.id})}"
+                                            th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{fSFolder.list.delete}]]</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </div>
+    </body>
+</html>

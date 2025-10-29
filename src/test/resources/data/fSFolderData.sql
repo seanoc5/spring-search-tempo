@@ -1,0 +1,63 @@
+INSERT INTO fsfolder (
+    id,
+    uri,
+    label,
+    description,
+    type,
+    crawl_depth,
+    size,
+    version,
+    archived,
+    owner,
+    "group",
+    permissions,
+    date_created,
+    last_updated
+) VALUES (
+    1400,
+    'Dolor sit amet consectetur adipiscing elit.',
+    'Dictum fusce ut placerat orci nulla pellentesque dignissim enim.',
+    'Dictum fusce ut placerat orci nulla pellentesque dignissim enim.',
+    'Pellentesque nec nam aliquam sem. Risus viverra adipiscing at in tellus.',
+    64,
+    53,
+    24,
+    TRUE,
+    'Sed faucibus turpis in eu mi bibendum neque.',
+    'Ullamcorper eget nulla facilisi etiam dignissim diam.',
+    'Nam liber tempor cum soluta nobis eleifend option congue nihil imperdiet doming id quod mazim placerat facer possim assum.',
+    '2024-09-02 14:30:00',
+    '2024-09-02 14:30:00'
+);
+
+INSERT INTO fsfolder (
+    id,
+    uri,
+    label,
+    description,
+    type,
+    crawl_depth,
+    size,
+    version,
+    archived,
+    owner,
+    "group",
+    permissions,
+    date_created,
+    last_updated
+) VALUES (
+    1401,
+    'Sagittis aliquam malesuada bibendum arcu vitae elementum curabitur vitae nunc.',
+    'Erat pellentesque adipiscing commodo elit.',
+    'Erat pellentesque adipiscing commodo elit.',
+    'Sed blandit libero volutpat sed cras ornare arcu dui vivamus.',
+    65,
+    54,
+    25,
+    FALSE,
+    'Dolor sit amet consectetur adipiscing elit.',
+    'Tortor consequat id porta nibh venenatis cras sed.',
+    'Donec pretium vulputate sapien nec sagittis aliquam malesuada.',
+    '2024-09-03 14:30:00',
+    '2024-09-03 14:30:00'
+);

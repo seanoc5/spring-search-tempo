@@ -1,0 +1,46 @@
+package com.oconeco.spring_search_tempo.web
+
+import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
+import com.oconeco.spring_search_tempo.base.config.BaseIT
+import io.restassured.RestAssured
+import io.restassured.http.ContentType
+import org.hamcrest.Matchers
+import org.junit.jupiter.api.Test
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.HttpStatus
+
+
+@SpringBootTest(
+    classes = [SpringSearchTempoApplication::class],
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
+)
+class SpringSearchTempoApplicationTest : BaseIT() {
+
+    @Test
+    fun contextLoads() {
+    }
+
+    @Test
+    fun springSessionWorks() {
+        val sessionId = RestAssured
+                .given()
+                    .accept(ContentType.JSON)
+                .`when`()
+                    .get("/sessionCreate")
+                .then()
+                    .statusCode(HttpStatus.OK.value())
+                .extract()
+                .sessionId()
+        RestAssured
+                .given()
+                    .sessionId(sessionId)
+                    .accept(ContentType.JSON)
+                .`when`()
+                    .get("/sessionRead")
+                .then()
+                    .statusCode(HttpStatus.OK.value())
+                    .body(Matchers.equalTo("test"))
+
+    }
+
+}

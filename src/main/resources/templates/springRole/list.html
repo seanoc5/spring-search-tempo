@@ -1,0 +1,48 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{springRole.list.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{springRole.list.headline}]]</h1>
+                <div>
+                    <a th:href="@{/springRoles/add}" class="btn btn-primary ms-2">[[#{springRole.list.createNew}]]</a>
+                </div>
+            </div>
+            <div th:if="${!springRoles.empty}" class="row">
+                <div th:replace="~{fragments/utils::sorting(object='springRole', sortOptions=${ {'id,ASC', 'label,ASC', 'description,ASC'} }, columnClass='offset-md-6 offset-lg-8')}" />
+            </div>
+            <div th:if="${springRoles.empty}">[[#{springRole.list.empty}]]</div>
+            <div th:if="${!springRoles.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">[[#{springRole.id.label}]]</th>
+                            <th scope="col">[[#{springRole.springUser.label}]]</th>
+                            <th><!-- --></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="springRole : ${springRoles}">
+                            <td>[[${springRole.id}]]</td>
+                            <td>[[${springRole.springUser}]]</td>
+                            <td>
+                                <div class="float-end text-nowrap">
+                                    <a th:href="@{/springRoles/edit/{id}(id=${springRole.id})}" class="btn btn-sm btn-secondary">[[#{springRole.list.edit}]]</a>
+                                    <form th:action="@{/springRoles/delete/{id}(id=${springRole.id})}"
+                                            th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{springRole.list.delete}]]</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </div>
+    </body>
+</html>

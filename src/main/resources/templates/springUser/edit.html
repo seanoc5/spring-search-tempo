@@ -1,0 +1,28 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{springUser.edit.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{springUser.edit.headline}]]</h1>
+                <div>
+                    <a th:href="@{/springUsers}" class="btn btn-secondary">[[#{springUser.edit.back}]]</a>
+                </div>
+            </div>
+            <div th:replace="~{fragments/forms::globalErrors('springUser')}" />
+            <form th:action="${requestUri}" method="post" novalidate="">
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='id', disabled=true, type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='label', required=true, type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='firstName', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='lastName', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='email', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='enabled', type='checkbox')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='password', required=true, type='textarea')}" />
+                <input type="submit" th:value="#{springUser.edit.headline}" class="btn btn-primary mt-4" />
+            </form>
+        </div>
+    </body>
+</html>

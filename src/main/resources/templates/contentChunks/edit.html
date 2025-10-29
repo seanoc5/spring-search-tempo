@@ -1,0 +1,47 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{contentChunks.edit.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{contentChunks.edit.headline}]]</h1>
+                <div>
+                    <a th:href="@{/contentChunkss}" class="btn btn-secondary">[[#{contentChunks.edit.back}]]</a>
+                </div>
+            </div>
+            <div th:replace="~{fragments/forms::globalErrors('contentChunks')}" />
+            <form th:action="${requestUri}" method="post" novalidate="">
+                <input type="submit" th:value="#{contentChunks.edit.headline}" class="btn btn-primary mt-4 mb-4" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='id', disabled=true, type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='chunkNumber', required=true, type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='chunkType')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='createdAt')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='endPosition', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='ftsVector')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='lastModifiedDate')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='namedEntities', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='nouns', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parentType')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='startPosition', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='text', required=true, type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='tokenAnnotations', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='vectorEmbedding')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='verbs', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='solrIndexedAt')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='textLength', type='number')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='userAnnotations', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='status')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parseNpvp', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parseUd', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parseTree', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='conllu', type='textarea')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parentChunk', type='select')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='concept', type='select')}" />
+                <input type="submit" th:value="#{contentChunks.edit.headline}" class="btn btn-primary mt-4" />
+            </form>
+        </div>
+    </body>
+</html>

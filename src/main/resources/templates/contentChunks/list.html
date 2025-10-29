@@ -1,0 +1,56 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>[[#{contentChunks.list.headline}]]</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[#{contentChunks.list.headline}]]</h1>
+                <div>
+                    <a th:href="@{/contentChunkss/add}" class="btn btn-primary ms-2">[[#{contentChunks.list.createNew}]]</a>
+                </div>
+            </div>
+            <div th:if="${contentChunkses.empty}">[[#{contentChunks.list.empty}]]</div>
+            <div th:if="${!contentChunkses.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">[[#{contentChunks.id.label}]]</th>
+                            <th scope="col">[[#{contentChunks.chunkNumber.label}]]</th>
+                            <th scope="col">[[#{contentChunks.chunkType.label}]]</th>
+                            <th scope="col">[[#{contentChunks.createdAt.label}]]</th>
+                            <th scope="col">[[#{contentChunks.endPosition.label}]]</th>
+                            <th scope="col">[[#{contentChunks.ftsVector.label}]]</th>
+                            <th scope="col">[[#{contentChunks.lastModifiedDate.label}]]</th>
+                            <th scope="col">[[#{contentChunks.parentType.label}]]</th>
+                            <th><!-- --></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="contentChunks : ${contentChunkses}">
+                            <td>[[${contentChunks.id}]]</td>
+                            <td>[[${contentChunks.chunkNumber}]]</td>
+                            <td>[[${contentChunks.chunkType}]]</td>
+                            <td>[[${contentChunks.createdAt}]]</td>
+                            <td>[[${contentChunks.endPosition}]]</td>
+                            <td>[[${contentChunks.ftsVector}]]</td>
+                            <td>[[${contentChunks.lastModifiedDate}]]</td>
+                            <td>[[${contentChunks.parentType}]]</td>
+                            <td>
+                                <div class="float-end text-nowrap">
+                                    <a th:href="@{/contentChunkss/edit/{id}(id=${contentChunks.id})}" class="btn btn-sm btn-secondary">[[#{contentChunks.list.edit}]]</a>
+                                    <form th:action="@{/contentChunkss/delete/{id}(id=${contentChunks.id})}"
+                                            th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{contentChunks.list.delete}]]</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+</html>
