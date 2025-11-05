@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Solr managed schema - automatically generated - DO NOT EDIT -->
+<schema name="default-config" version="1.6">
+    <uniqueKey>id</uniqueKey>
+    <fieldType name="binary" class="solr.BinaryField"/>
+    <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
+    <fieldType name="booleans" class="solr.BoolField" sortMissingLast="true" multiValued="true"/>
+    <fieldType name="ignored" class="solr.StrField" indexed="false" stored="false" multiValued="true"/>
+    <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
+    <fieldType name="location_rpt" class="solr.SpatialRecursivePrefixTreeFieldType" geo="true" maxDistErr="0.001" distErrPct="0.025"
+               distanceUnits="kilometers"/>
+    <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
+        <analyzer>
+            <tokenizer name="keyword"/>
+            <filter name="lowercase"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="pdate" class="solr.DatePointField" docValues="true"/>
+    <fieldType name="pdates" class="solr.DatePointField" docValues="true" multiValued="true"/>
+    <fieldType name="pdouble" class="solr.DoublePointField" docValues="true"/>
+    <fieldType name="pdoubles" class="solr.DoublePointField" docValues="true" multiValued="true"/>
+    <fieldType name="pfloat" class="solr.FloatPointField" docValues="true"/>
+    <fieldType name="pfloats" class="solr.FloatPointField" docValues="true" multiValued="true"/>
+    <fieldType name="phonetic_en" class="solr.TextField" indexed="true" stored="false">
+        <analyzer>
+            <tokenizer name="standard"/>
+            <filter inject="false" name="doubleMetaphone"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="pint" class="solr.IntPointField" docValues="true"/>
+    <fieldType name="pints" class="solr.IntPointField" docValues="true" multiValued="true"/>
+    <fieldType name="plong" class="solr.LongPointField" docValues="true"/>
+    <fieldType name="plongs" class="solr.LongPointField" docValues="true" multiValued="true"/>
+    <fieldType name="point" class="solr.PointType" subFieldSuffix="_d" dimension="2"/>
+    <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
+    <fieldType name="rank" class="solr.RankField"/>
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
+    <fieldType name="strings" class="solr.StrField" sortMissingLast="true" docValues="true" multiValued="true"/>
+
+    <fieldType name="text_analysis" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+        <analyzer>
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_analysis.txt"/>
+            <filter name="lowercase"/>
+            <filter name="englishMinimalStem"/>
+            <filter outputUnigrams="false" maxShingleSize="4" name="shingle"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_edge_ngram" class="solr.TextField" positionIncrementGap="100">
+        <analyzer type="index">
+            <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+            <filter class="solr.EdgeNGramFilterFactory" maxGramSize="20" minGramSize="1"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_ngram" class="solr.TextField" positionIncrementGap="100">
+        <analyzer type="index">
+            <tokenizer maxGramSize="20" name="nGram" minGramSize="1"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+            <filter class="solr.LowerCaseFilterFactory"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_shingle_edge" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+        <analyzer>
+            <tokenizer name="standard"/>
+            <filter name="lowercase"/>
+            <filter name="englishMinimalStem"/>
+            <filter outputUnigrams="false" maxShingleSize="4" name="shingle"/>
+            <filter class="solr.EdgeNGramFilterFactory" maxGramSize="20" minGramSize="3"/>
+        </analyzer>
+    </fieldType>
+
+
+    <!-- standard configs below -->
+    <fieldType name="text_en" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+        <analyzer type="index">
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter name="lowercase"/>
+            <filter name="englishPossessive"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer name="standard"/>
+            <filter expand="true" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter name="lowercase"/>
+            <filter name="englishPossessive"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_en_splitting" class="solr.TextField" autoGeneratePhraseQueries="true" positionIncrementGap="100" multiValued="true">
+        <analyzer type="index">
+            <tokenizer name="whitespace"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter name="wordDelimiterGraph" splitOnCaseChange="1" catenateNumbers="1" catenateWords="1" generateNumberParts="1" generateWordParts="1"
+                    catenateAll="0"/>
+            <filter name="lowercase"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+            <filter name="flattenGraph"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer name="whitespace"/>
+            <filter expand="true" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter name="wordDelimiterGraph" splitOnCaseChange="1" catenateNumbers="0" catenateWords="0" generateNumberParts="1" generateWordParts="1"
+                    catenateAll="0"/>
+            <filter name="lowercase"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_en_splitting_tight" class="solr.TextField" autoGeneratePhraseQueries="true" positionIncrementGap="100">
+        <analyzer type="index">
+            <tokenizer name="whitespace"/>
+            <filter expand="false" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter generateWordParts="0" catenateNumbers="1" catenateWords="1" name="wordDelimiterGraph" generateNumberParts="0" catenateAll="0"/>
+            <filter name="lowercase"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+            <filter name="removeDuplicates"/>
+            <filter name="flattenGraph"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer name="whitespace"/>
+            <filter expand="false" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="stop" ignoreCase="true" words="lang/stopwords_en.txt"/>
+            <filter generateWordParts="0" catenateNumbers="1" catenateWords="1" name="wordDelimiterGraph" generateNumberParts="0" catenateAll="0"/>
+            <filter name="lowercase"/>
+            <filter protected="protwords.txt" name="keywordMarker"/>
+            <filter name="englishMinimalStem"/>
+            <filter name="removeDuplicates"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_gen_sort" class="solr.SortableTextField" positionIncrementGap="100" multiValued="true">
+        <analyzer type="index">
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="stopwords.txt"/>
+            <filter name="lowercase"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="stopwords.txt"/>
+            <filter expand="true" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="lowercase"/>
+        </analyzer>
+    </fieldType>
+    <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+        <analyzer type="index">
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="stopwords.txt"/>
+            <filter name="lowercase"/>
+        </analyzer>
+        <analyzer type="query">
+            <tokenizer name="standard"/>
+            <filter name="stop" ignoreCase="true" words="stopwords.txt"/>
+            <filter expand="true" ignoreCase="true" synonyms="synonyms.txt" name="synonymGraph"/>
+            <filter name="lowercase"/>
+        </analyzer>
+    </fieldType>
+
+    <fieldType name="text_ws" class="solr.TextField" positionIncrementGap="100">
+        <analyzer>
+            <tokenizer name="whitespace"/>
+        </analyzer>
+    </fieldType>
+    <field name="_root_" type="string" docValues="false" indexed="true" stored="false"/>
+    <field name="_text_" type="text_general" multiValued="true" indexed="true" stored="false"/>
+    <field name="_version_" type="plong" indexed="false" stored="false"/>
+    <field name="author" type="text_en" multiValued="true"/>
+    <field name="body_text" type="text_en" multiValued="true"/>
+    <field name="body_text_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="bucket1" type="text_en" multiValued="true" stored="true"/>
+    <field name="bucket2" type="text_en" multiValued="true" stored="true"/>
+    <field name="bucket3" type="text_en" multiValued="true" stored="true"/>
+    <field name="bucket4" type="text_en" multiValued="true" stored="true"/>
+    <field name="content_subtype" type="string" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="content_type" type="string" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="contexts" type="text_en" multiValued="true"/>
+    <field name="current_date" type="pdate" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="date_created" type="pdate" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="db_id" type="string" multiValued="false" indexed="true" required="false" stored="true"/>
+    <field name="description" type="text_en" multiValued="true"/>
+    <field name="description_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="display_order" type="pint" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="document" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="entities" type="text_en" multiValued="true"/>
+    <field name="excerpt" type="text_en" multiValued="true"/>
+    <field name="excerpt_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="id" type="string" multiValued="false" indexed="true" required="true" stored="true"/>
+    <field name="keywords" type="text_en" multiValued="true"/>
+    <field name="label" type="text_en" multiValued="false"/>        <!-- removed _txt_en, may be repercussions -->
+    <field name="language" type="string" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="last_updated" type="pdate" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="mime_type" type="string" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="ner" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="ner_chunk" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="path" type="text_en_splitting"/>
+    <field name="pos" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="publish_date" type="pdate" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="queries" type="text_en" multiValued="true"/>
+    <field name="queries_a" type="text_analysis" multiValued="true"/>
+    <field name="query_count" type="plong"/>
+    <field name="response_text" type="text_en" multiValued="true"/>
+    <field name="response_text_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="result_types" type="string" multiValued="true"/>
+    <field name="sayt_description" type="text_edge_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sayt_label" type="text_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sayt_label_shingle" type="text_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sayt_query" type="text_edge_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sayt_subdoc_url_txt_en" type="text_edge_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sayt_subdocs" type="text_edge_ngram" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="sentence_struct" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="sentences" type="text_en" multiValued="true"/>
+    <field name="sentences_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="source" type="text_en_splitting"/>
+    <field name="structure_size" type="plong" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="structured_content" type="text_en" multiValued="true"/>
+    <field name="structured_content_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="structured_size" type="plong" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="tags" type="text_general" docValues="false" multiValued="true" indexed="true" stored="true"/> <!-- note: text field can't have docvalues  -->
+    <field name="text_size" type="plong" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="timestamp" type="pdate" default="NOW" multiValued="false" indexed="true" stored="true"/>
+    <field name="title" type="text_en"/>
+    <field name="title_a" type="text_analysis" termPositions="true" termVectors="true" multiValued="true" termOffsets="true"/>
+    <field name="token" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="uri" type="text_en_splitting"/>
+    <field name="version" type="plong" docValues="true" multiValued="false" indexed="true" stored="true"/>
+    <field name="word_embeddings" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+    <field name="yake_keywords" type="string" docValues="true" multiValued="true" indexed="true" stored="true"/>
+
+    <dynamicField name="*_txt_en_split" type="text_en_splitting" indexed="true" stored="true"/>
+    <dynamicField name="*_txt_sort" type="text_gen_sort" indexed="true" stored="true"/>
+    <dynamicField name="ignored_*" type="ignored"/>
+    <dynamicField name="*_s_lower" type="lowercase" indexed="true" stored="true"/>
+    <dynamicField name="*_txt_en" type="text_en" indexed="true" stored="true"/>
+    <dynamicField name="random_*" type="random"/>
+    <dynamicField name="*_t_sort" type="text_gen_sort" multiValued="false" indexed="true" stored="true"/>
+    <dynamicField name="*_point" type="point" indexed="true" stored="true"/>
+    <dynamicField name="*_srpt" type="location_rpt" indexed="true" stored="true"/>
+    <dynamicField name="attr_*" type="text_general" multiValued="true" indexed="true" stored="true"/>
+    <dynamicField name="*_txt" type="text_general" indexed="true" stored="true"/>
+    <dynamicField name="*_dts" type="pdates" indexed="true" stored="true"/>
+    <dynamicField name="*_str" type="strings" docValues="true" indexed="false" stored="false" useDocValuesAsStored="false"/>
+    <dynamicField name="*_is" type="pints" indexed="true" stored="true"/>
+    <dynamicField name="*_ss" type="strings" indexed="true" stored="true"/>
+    <dynamicField name="*_ls" type="plongs" indexed="true" stored="true"/>
+    <dynamicField name="*_bs" type="booleans" indexed="true" stored="true"/>
+    <dynamicField name="*_fs" type="pfloats" indexed="true" stored="true"/>
+    <dynamicField name="*_ds" type="pdoubles" indexed="true" stored="true"/>
+    <dynamicField name="*_dt" type="pdate" indexed="true" stored="true"/>
+    <dynamicField name="*_ws" type="text_ws" indexed="true" stored="true"/>
+    <dynamicField name="*_i" type="pint" indexed="true" stored="true"/>
+    <dynamicField name="*_s" type="string" indexed="true" stored="true"/>
+    <dynamicField name="*_l" type="plong" indexed="true" stored="true"/>
+    <dynamicField name="*_b" type="boolean" indexed="true" stored="true"/>
+    <dynamicField name="*_f" type="pfloat" indexed="true" stored="true"/>
+    <dynamicField name="*_d" type="pdouble" indexed="true" stored="true"/>
+    <dynamicField name="*_t" type="text_general" multiValued="false" indexed="true" stored="true"/>
+    <dynamicField name="*_p" type="location" indexed="true" stored="true"/>
+
+    <copyField source="author" dest="bucket1"/>
+    <copyField source="body_text" dest="bucket3"/>
+    <copyField source="content_subtype" dest="bucket4"/>
+    <copyField source="content_type" dest="bucket4"/>
+    <copyField source="description" dest="bucket1"/>
+    <copyField source="description_txt_en" dest="sayt_description"/>
+    <copyField source="entities" dest="bucket2"/>
+    <copyField source="keywords" dest="bucket1"/>
+    <copyField source="label" dest="sayt_label"/>
+    <copyField source="label" dest="label_txt_en"/>
+    <copyField source="label_txt_en" dest="sayt_label"/>
+    <copyField source="label_txt_en" dest="sayt_label_shingle"/>
+    <copyField source="mime_type" dest="bucket4"/>
+    <copyField source="path" dest="bucket1"/>
+    <copyField source="queries" dest="bucket3"/>
+    <copyField source="queries" dest="queries_a"/>
+    <copyField source="query_txt_en" dest="sayt_query"/>
+    <copyField source="response_text" dest="bucket4"/>
+    <copyField source="sentences" dest="bucket2"/>
+    <copyField source="source" dest="bucket4"/>
+    <copyField source="structured_content" dest="bucket2"/>
+    <copyField source="subdoc_url_txt_en" dest="sayt_subdoc_url_txt_en"/>
+    <copyField source="subdocs_txt_en" dest="sayt_subdocs"/>
+    <copyField source="tags" dest="sayt_label"/>
+    <copyField source="tags" dest="bucket2"/>
+    <copyField source="title" dest="bucket1"/>
+    <copyField source="title" dest="title_a"/>
+    <copyField source="uri" dest="bucket2"/>
+    <copyField source="title" dest="title_s"/>
+    <copyField source="author" dest="author_ss"/>
+    <copyField source="keywords" dest="keyword_ss"/>
+    <copyField source="path" dest="path_s"/>
+    <copyField source="entities" dest="entities_ss"/>
+    <copyField source="queries" dest="query_ss"/>
+    <copyField source="*_txt_en" dest="_text_"/>
+</schema>
