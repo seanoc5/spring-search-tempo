@@ -1,12 +1,12 @@
 spring:
   batch:
     jdbc:
-      initialize-schema: never
+      initialize-schema: always
     job:
       enabled: true
       name: fsCrawlJob
   datasource:
-    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/tempo}
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://minti9:5433/tempo}
     username: ${JDBC_DATABASE_USERNAME:postgres}
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
@@ -14,7 +14,7 @@ spring:
       maximum-pool-size: 10
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
@@ -29,31 +29,39 @@ spring:
     compose:
       lifecycle-management: start-only
   session:
-    jdbc.initialize-schema: embedded
-error:
-  handling:
-    http-status-in-json-response: true
-    exception-logging: NO_LOGGING
-    full-stacktrace-http-statuses: 5xx
-    log-levels:
-      5xx: ERROR
-    codes:
-      FSFileUriUnique: FSFILE_URI_UNIQUE
-      FSFolderUriUnique: FSFOLDER_URI_UNIQUE
-      AnnotationLabelUnique: ANNOTATION_LABEL_UNIQUE
-      SpringUserLabelUnique: SPRING_USER_LABEL_UNIQUE
-      SpringRoleLabelUnique: SPRING_ROLE_LABEL_UNIQUE
-management:
-  endpoints:
-    web:
-      exposure:
-        include: '*'
-  endpoint:
-    health:
-      show-details: always
-server:
-  port: 8089
+    jdbc.initialize-schema: always
+#error:
+#  handling:
+#    http-status-in-json-response: true
+#    exception-logging: NO_LOGGING
+#    full-stacktrace-http-statuses: 5xx
+#    log-levels:
+#      5xx: ERROR
+#    codes:
+#      FSFileUriUnique: FSFILE_URI_UNIQUE
+#      FSFolderUriUnique: FSFOLDER_URI_UNIQUE
+#      AnnotationLabelUnique: ANNOTATION_LABEL_UNIQUE
+#      SpringUserLabelUnique: SPRING_USER_LABEL_UNIQUE
+#      SpringRoleLabelUnique: SPRING_ROLE_LABEL_UNIQUE
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: '*'
+#  endpoint:
+#    health:
+#      show-details: always
+#server:
+#  port: 8089
 
+#todo: merge into `crawler` below
+app:
+  crawl:
+    startPath: ${APP_CRAWL_START:./}
+    maxDepth: ${CRAWL_MAX_DEPTH:10}
+    followLinks: ${CRAWL_FOLLOW_LINKS:false}
+
+# application.yaml
 crawler:
   defaultPlan: "local-fast"
   crawls:
