@@ -1,0 +1,11 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop  # Auto-create schema for tests
+    show-sql: false
+  batch:
+    job:
+      enabled: false  # Disable batch jobs during tests unless explicitly needed
+  session:
+    jdbc:
+      initialize-schema: always  # Create session tables for tests

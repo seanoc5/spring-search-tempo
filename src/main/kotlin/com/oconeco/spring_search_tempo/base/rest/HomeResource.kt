@@ -1,10 +1,5 @@
-package com.oconeco.spring_search_tempo.web.rest
+package com.oconeco.spring_search_tempo.base.rest
 
-import com.oconeco.spring_search_tempo.base.rest.AnnotationResource
-import com.oconeco.spring_search_tempo.base.rest.FSFileResource
-import com.oconeco.spring_search_tempo.base.rest.FSFolderResource
-import com.oconeco.spring_search_tempo.base.rest.SpringRoleResource
-import com.oconeco.spring_search_tempo.base.rest.SpringUserResource
 import com.oconeco.spring_search_tempo.base.util.KotlinUtils
 import org.springframework.hateoas.RepresentationModel
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder

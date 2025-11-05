@@ -11,13 +11,13 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpStatus
-import org.springframework.modulith.test.ApplicationModuleTest
 
 
-@ApplicationModuleTest(
+
+@SpringBootTest(
     classes = [SpringSearchTempoApplication::class],
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    mode = ApplicationModuleTest.BootstrapMode.ALL_DEPENDENCIES
+    
 )
 class SpringUserResourceTest : BaseIT() {
 
@@ -89,7 +89,7 @@ class SpringUserResourceTest : BaseIT() {
                     .post("/api/springUsers")
                 .then()
                     .statusCode(HttpStatus.CREATED.value())
-        Assertions.assertEquals(1, springUserRepository.count())
+        Assertions.assertEquals(3, springUserRepository.count())  // 2 from springUserData.sql + 1 new
     }
 
     @Test
