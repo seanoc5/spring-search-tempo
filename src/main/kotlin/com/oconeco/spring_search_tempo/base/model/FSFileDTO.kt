@@ -13,9 +13,9 @@ class FSFileDTO {
     @FSFileUriUnique
     var uri: String? = null
 
-    var status: Status? = null
+    var status: Status? = Status.NEW
 
-    var analysisStatus: AnalysisStatus? = null
+    var analysisStatus: AnalysisStatus? = AnalysisStatus.LOCATE
 
     var label: String? = null
 

@@ -1,0 +1,93 @@
+spring:
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: true
+      name: fsCrawlJob
+  datasource:
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://minti9:5433/tempo}
+    username: ${JDBC_DATABASE_USERNAME:postgres}
+    password: ${JDBC_DATABASE_PASSWORD:password}
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
+        id:
+          new_generator_mappings: true
+  messages:
+    basename: messages,messagesWeb
+  docker:
+    compose:
+      lifecycle-management: start-only
+  session:
+    jdbc.initialize-schema: always
+#error:
+#  handling:
+#    http-status-in-json-response: true
+#    exception-logging: NO_LOGGING
+#    full-stacktrace-http-statuses: 5xx
+#    log-levels:
+#      5xx: ERROR
+#    codes:
+#      FSFileUriUnique: FSFILE_URI_UNIQUE
+#      FSFolderUriUnique: FSFOLDER_URI_UNIQUE
+#      AnnotationLabelUnique: ANNOTATION_LABEL_UNIQUE
+#      SpringUserLabelUnique: SPRING_USER_LABEL_UNIQUE
+#      SpringRoleLabelUnique: SPRING_ROLE_LABEL_UNIQUE
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: '*'
+#  endpoint:
+#    health:
+#      show-details: always
+#server:
+#  port: 8089
+
+#todo: merge into `crawler` below
+app:
+  crawl:
+    startPath: ${APP_CRAWL_START:./}
+    maxDepth: ${CRAWL_MAX_DEPTH:10}
+    followLinks: ${CRAWL_FOLLOW_LINKS:false}
+
+# application.yaml
+crawler:
+  defaultPlan: "local-fast"
+  crawls:
+    - name: "local-fast"
+      label: "Local quick scan"
+      startPath: "/opt/work/projects"
+      rules:
+        SKIP:
+          - "^.*/(\\.git|\\.idea|node_modules|\\.venv)(/.*)?$"
+          - "^.*/(target|build|dist)(/.*)?$"
+        LOCATE:
+          - "^.*/(docs|notes)(/.*)?$"
+        INDEX:
+          - "^.*/(src|lib)(/.*)?$"
+        ANALYSIS:
+          - "^.*/research(/.*)?$"
+
+    - name: "media-archive"
+      label: "NAS media archive"
+      startPath: "/mnt/nas/media"
+      rules:
+        SKIP:
+          - "^.*/(cache|tmp|@Recycle)(/.*)?$"
+        LOCATE:
+          - "^.*/(photos|music|videos)(/.*)?$"
+        INDEX: []
+        ANALYSIS: []
+
+

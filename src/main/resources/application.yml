@@ -1,12 +1,12 @@
 spring:
   batch:
     jdbc:
-      initialize-schema: always
+      initialize-schema: never
     job:
       enabled: true
       name: fsCrawlJob
   datasource:
-    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5433/tempo}
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/tempo}
     username: ${JDBC_DATABASE_USERNAME:postgres}
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
@@ -14,7 +14,7 @@ spring:
       maximum-pool-size: 10
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
@@ -29,7 +29,7 @@ spring:
     compose:
       lifecycle-management: start-only
   session:
-    jdbc.initialize-schema: always
+    jdbc.initialize-schema: embedded
 error:
   handling:
     http-status-in-json-response: true
@@ -53,6 +53,7 @@ management:
       show-details: always
 server:
   port: 8089
+
 app:
   crawl:
     # Global defaults that all crawls inherit

@@ -61,7 +61,7 @@ class FolderProcessor(
                 return null
             }
 
-            log.debug("Folder exists, updating: {} (timestamps match: {}, status: {})",
+            log.info("\t\tFolder exists, updating: {} (timestamps match: {}, status: {})",
                 uri, timestampsMatch, existingFolder.status)
 
             val updatedDto = folderMapper.updateFSFolderDTO(existingFolder, FSFolderDTO())
@@ -84,6 +84,7 @@ class FolderProcessor(
         }
 
         // Set basic properties
+        dto.type = "FOLDER"
         dto.uri = uri
         dto.label = item.name
         dto.crawlDepth = calculateCrawlDepth(item)
