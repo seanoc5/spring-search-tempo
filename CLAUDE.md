@@ -2,9 +2,75 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
 ## Project Overview
 
-Spring Search Tempo is a Spring Boot 3.5 application written in Kotlin that combines content management, text processing, and batch processing capabilities. It uses Spring Modulith for modular architecture and includes a file system abstraction with text chunking and analysis features.
+This app combines content management, text processing, and batch processing capabilities.
+
+Spring Search Tempo is a Spring Boot 3.5 application written in Kotlin that aims to provide a starting template for a full-text search engine. The 'example' use case is a local file system crawl, but the app is designed to be extensible to other data sources and potentially even enterprise and e-commerce search foundation.
+
+The design assumes one more 'crawls' (or 'scans') per day. We will provide 'opinionated' starter configurations with 'focused' crawls based on typical content locations. For example:
+* USER (replace with current user, or explicit user name)
+  * ~/Documents/**
+  * ~/Pictures/**
+* WORK
+  * /opt/work/**
+* CONFIG
+  * /etc/**
+* SYSTEM
+  * /usr/**
+  * /var/**
+  * /lib/**
+  * ...
+* ...
+
+Each of these 'top' bullets will be a 'crawl' with a different 'profile' (pattern matching, etc). 
+
+We also assume significant performance improvement in 'subsequent' crawls if we load the 'index' of previous crawls. This will be as fast and light as possible, assuming we can use the time stamps on the cached/saved record to check for content changes since the last crawl. 
+
+
+It uses Spring Modulith for modular architecture and includes a file system abstraction with text chunking and analysis features. The developer (Sean) is not familiar with Spring Modulith, but is open to learning. Highlight any modulith-relevant code.
+
+
+### Phase 1
+By default, the the application will crawl "personal" content like local/LAN filesystems in Phase 1. 
+For simplicity sake, we will use postgres as the main (and only) persistence store. 
+The app has stepped levels of processing, from ignore to (heavy) analysis:  
+* **ignore** (assume these are non-relevant, not-searchable), e.g.
+  * folders: (/tmp|/run|/root|/proc|/sys|/dev|/mnt|/media|/lost+found|.*\(.gradle||build|obj|out)|.*[/\](node_modules|vendor|packages))
+  * files: (.*\.(lck|tmp|~|bak|bk1|bk2)|(deleteme.*|ignoreme.*))
+* **locate** (assume these are searchable, but not processed), e.g.
+  * OS files like (/usr/.*|/boot/.*), save metadata like linux `plocate`, but no content extraction
+* **index** (basic tika-like content extraction to text blob, no advanced processing)
+* **analyze** (advanced processing, e.g. NLP, chunking, vectorization, etc.) [placeholder in phase 1, todo: implement in phase 2]
+* **semantic** (semantic search, e.g. embeddings, etc.) [placeholder in phase 1 and 2, todo: implement in phase 3]
+
+We will configure postgres full text search (FTS) to enable fast text search capabilities. The crawl/processing configuration will come from application profile, but also overridable by environment variables or command line arguments.
+
+## Phase 2
+* **analyze** (advanced processing, e.g. NLP, chunking, vectorization, etc.) [implement in phase 2]
+  * use stanford coreNLP, default annotations (see https://stanfordnlp.github.io/CoreNLP/annotators.html):
+    * Tokenization
+    * Sentence splitting (default to saving as 'contentChunks' with chunkType 'Sentence'
+    * Part of speech tagging 
+    * Dependency parsing
+    * Named entity recognition
+* Browser information (start with Firefox, extend to other browsers in phase 3)
+  * history
+  * bookmarks/tags 
+
+## Phase 3
+* **semantic** (semantic search, e.g. embeddings, etc.) [implement in phase 3]
+  * implement a 'naive' paragraph splitter with the assumption that well-written pages should have distinct "thoughts" in paragraphs. 
+    * we can either convert html to text, and look for blank text-lines as separators, or preferably, use a parser to look for html tags that define (or strongly suggest) paragraphs. 
+  * by default vector embed: the entire page, 
+  * along with 'useful' contentChunks 
+    * (paragraphs if they exist)
+    * sentences
+    * phrase chunks (if they exist)
+  * 
+
+  * 
 
 ## Technology Stack
 

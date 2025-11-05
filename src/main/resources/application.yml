@@ -55,7 +55,148 @@ server:
   port: 8089
 app:
   crawl:
-    startPath: /opt/work/springboot
-    maxDepth: ${CRAWL_MAX_DEPTH:10}
-    followLinks: ${CRAWL_FOLLOW_LINKS:false}
+    # Global defaults that all crawls inherit
+    defaults:
+      max-depth: 10
+      follow-links: false
+      parallel: false
+      folder-patterns:
+        skip:
+          - ".*/\\.git/.*"
+          - ".*/\\.gradle/.*"
+          - ".*/\\.idea/.*"
+          - ".*/build/.*"
+          - ".*/out/.*"
+          - ".*/target/.*"
+          - ".*/dist/.*"
+          - ".*/node_modules/.*"
+          - ".*/vendor/.*"
+          - ".*/packages/.*"
+          - "/tmp/.*"
+          - "/run/.*"
+          - "/root/.*"
+          - "/proc/.*"
+          - "/sys/.*"
+          - "/dev/.*"
+          - "/mnt/.*"
+          - "/media/.*"
+          - "/lost\\+found/.*"
+      file-patterns:
+        skip:
+          - ".*\\.(lck|tmp|~|bak|bk1|bk2)$"
+          - ".*/(deleteme.*|ignoreme.*)"
+
+    # List of crawl definitions
+    crawls:
+      - name: "USER_DOCUMENTS"
+        label: "User Documents"
+        enabled: true
+        start-path: "${user.home}/Documents"
+        max-depth: 15
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+          analyze:
+            - ".*\\.(md|txt)$"
+
+      - name: "USER_PICTURES"
+        label: "User Pictures"
+        enabled: true
+        start-path: "${user.home}/Pictures"
+        max-depth: 8
+        folder-patterns:
+          skip:
+            - ".*/\\.thumbnails/.*"
+            - ".*/cache/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|tiff|raw)$"
+
+      - name: "WORK"
+        label: "Work Projects"
+        enabled: true
+        start-path: "/opt/work"
+        max-depth: 10
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash)$"
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+            - ".*\\.(md|txt|rst|adoc)$"
+            - ".*/Dockerfile$"
+            - ".*/(Makefile|Rakefile|Gemfile|build\\.gradle.*|pom\\.xml)$"
+          analyze:
+            - ".*\\.(md|txt)$"
+
+      - name: "CONFIG"
+        label: "System Configuration"
+        enabled: false
+        start-path: "/etc"
+        max-depth: 3
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(conf|cfg|config|ini)$"
+            - ".*/.*\\.d/.*$"
+
+      - name: "SYSTEM_USR"
+        label: "System /usr Files"
+        enabled: false
+        start-path: "/usr"
+        max-depth: 5
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"
+
+      - name: "SYSTEM_BOOT"
+        label: "System /boot Files"
+        enabled: false
+        start-path: "/boot"
+        max-depth: 3
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"
+
+      - name: "USER_DOWNLOADS"
+        label: "User Downloads"
+        enabled: true
+        start-path: "${user.home}/Downloads"
+        max-depth: 5
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          skip:
+            - ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg)$"
+          index:
+            - ".*\\.(pdf|txt|md|docx?|xlsx?|csv)$"
+
+      - name: "USER_DESKTOP"
+        label: "User Desktop"
+        enabled: true
+        start-path: "${user.home}/Desktop"
+        max-depth: 5
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"
 

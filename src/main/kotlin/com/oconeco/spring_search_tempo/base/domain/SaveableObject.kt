@@ -94,9 +94,9 @@ enum class Status {
 }
 
 enum class AnalysisStatus {
-    SKIP,
+    IGNORE,
     LOCATE,
     INDEX,
     ANALYZE,
-    DEEP_ANALYZE
+    SEMANTIC
 }

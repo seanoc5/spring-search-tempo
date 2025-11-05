@@ -2,13 +2,17 @@
 
 This app was created with Bootify.io - tips on working with the code [can be found here](https://bootify.io/next-steps/).
 
+The app is a starting template for a full-text search engine. The 'example' use case is a local file system crawl, but the app is designed to be extensible to other data sources and potentially even enterprise and e-commerce search foundation.
+
+For the curious: `tempo` is a portmanteau of `temporal`, `tempus`, which are Latin words for `time` and `search`. Throw in a touch of `template` and you (er, **I**) get `tempo`.
+
 ## Development
 
 When starting the application `docker compose up` is called and the app will connect to the contained services. [Docker](https://www.docker.com/get-started/) must be available on the current system.
 
 During development it is recommended to use the profile `local`. In IntelliJ `-Dspring.profiles.active=local` can be added in the VM options of the Run Configuration after enabling this property in "Modify options". Create your own `application-local.yml` file to override settings for development.
 
-After starting the application it is accessible under `localhost:8080`.
+After starting the application it is accessible under `localhost:8089`.
 
 ## Testing requirements
 
