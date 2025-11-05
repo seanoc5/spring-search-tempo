@@ -53,7 +53,7 @@ class FsCrawlJobBuilder(
         val maxDepth = crawl.getMaxDepth(crawlConfiguration.defaults)
         val followLinks = crawl.getFollowLinks(crawlConfiguration.defaults)
 
-        return JobBuilder("fsCrawl_${crawl.name}", jobRepository)
+        return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
             .start(buildFoldersStep(crawl, effectivePatterns, maxDepth, followLinks))
             .build()
