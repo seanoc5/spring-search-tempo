@@ -33,6 +33,9 @@ class FsCrawlJobBuilder(
     private val fsFolderRepository: FSFolderRepository,
     private val folderService: FSFolderService,
     private val folderMapper: FSFolderMapper,
+    private val fsFileRepository: com.oconeco.spring_search_tempo.base.repos.FSFileRepository,
+    private val fileService: com.oconeco.spring_search_tempo.base.FSFileService,
+    private val fileMapper: com.oconeco.spring_search_tempo.base.service.FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
     private val crawlConfiguration: CrawlConfiguration
 ) {
@@ -56,6 +59,7 @@ class FsCrawlJobBuilder(
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
             .start(buildFoldersStep(crawl, effectivePatterns, maxDepth, followLinks))
+            .next(buildFilesStep(crawl, effectivePatterns))
             .build()
     }
 
@@ -121,5 +125,61 @@ class FsCrawlJobBuilder(
     private fun createFolderWriter(): ItemWriter<FSFolderDTO> {
         log.debug("Creating FolderWriter")
         return FolderWriter(folderService = folderService)
+    }
+
+    /**
+     * Build the files processing step for a crawl.
+     */
+    private fun buildFilesStep(
+        crawl: CrawlDefinition,
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+    ): Step {
+        log.info("Building files step for crawl: {}", crawl.name)
+
+        val startPath = Path(crawl.startPath)
+
+        return StepBuilder("fsCrawlFiles_${crawl.name}", jobRepository)
+            .chunk<Path, com.oconeco.spring_search_tempo.base.model.FSFileDTO>(100, transactionManager)
+            .reader(createFileReader())
+            .processor(createFileProcessor(startPath, effectivePatterns))
+            .writer(createFileWriter())
+            .build()
+    }
+
+    /**
+     * Create a file reader that reads files from indexed folders.
+     */
+    private fun createFileReader(): ItemReader<Path> {
+        log.debug("Creating FileReader")
+        return FileReader(
+            folderRepository = fsFolderRepository,
+            batchSize = 100
+        )
+    }
+
+    /**
+     * Create a file processor with pattern matching and text extraction.
+     */
+    private fun createFileProcessor(
+        startPath: Path,
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+    ): ItemProcessor<Path, com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
+        log.debug("Creating FileProcessor with pattern matching")
+        return FileProcessor(
+            startPath = startPath,
+            fileRepository = fsFileRepository,
+            folderRepository = fsFolderRepository,
+            fileMapper = fileMapper,
+            patternMatchingService = patternMatchingService,
+            filePatterns = effectivePatterns.filePatterns
+        )
+    }
+
+    /**
+     * Create a file writer.
+     */
+    private fun createFileWriter(): ItemWriter<com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
+        log.debug("Creating FileWriter")
+        return FileWriter(fileService = fileService)
     }
 }

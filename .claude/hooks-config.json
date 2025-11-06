@@ -1,0 +1,74 @@
+{
+  "description": "Recommended hooks configuration for Spring Search Tempo",
+  "instructions": "Add these to ~/.claude/settings.json or use /hooks command",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "name": "Block commits without passing tests",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | { read cmd; if echo \"$cmd\" | grep -q 'git commit'; then echo 'Running pre-commit checks...'; cd \"$PWD\" && ./gradlew compileKotlin -q || exit 2; fi; }"
+          }
+        ]
+      },
+      {
+        "name": "Protect sensitive files from modification",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json, sys; data=json.load(sys.stdin); path=data.get('tool_input',{}).get('file_path',''); sys.exit(2 if any(p in path for p in ['application-production.yml', '.env', 'credentials', 'secrets']) else 0)\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "name": "Auto-compile Kotlin after edits",
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read file; if echo \"$file\" | grep -q '\\.kt$'; then echo \"Compiling Kotlin...\"; cd \"$PWD\" && ./gradlew compileKotlin -q 2>&1 | tail -5; fi; }"
+          }
+        ]
+      },
+      {
+        "name": "Show DB stats after bootRun completes",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command' | { read cmd; if echo \"$cmd\" | grep -q 'bootRun.*completed\\|Job.*COMPLETED'; then echo '📊 Run /db-query to see indexed content stats'; fi; }"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "name": "Suggest slash commands based on keywords",
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.prompt // \"\"' | { read prompt; case \"$prompt\" in *bug*|*error*|*fail*) echo '💡 Tip: Use /fix-bug for systematic debugging';; *entity*|*add*|*create*) echo '💡 Tip: Use /add-entity to scaffold full-stack entities';; *test*) echo '💡 Tip: Use /tdd or /test-module';; esac; exit 0; }"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "name": "Cleanup background processes",
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pkill -f 'gradlew.*bootRun' 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

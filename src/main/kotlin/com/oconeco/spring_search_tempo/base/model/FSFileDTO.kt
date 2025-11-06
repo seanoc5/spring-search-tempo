@@ -38,6 +38,8 @@ class FSFileDTO {
 
     var permissions: String? = null
 
+    var fsLastModified: java.time.OffsetDateTime? = null
+
     var bodyText: String? = null
 
     var bodySize: Long? = null
