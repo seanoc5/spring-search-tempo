@@ -14,4 +14,6 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
 
     fun existsByUri(uri: String?): Boolean
 
+    fun findByUri(uri: String): FSFile?
+
 }

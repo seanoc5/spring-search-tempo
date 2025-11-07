@@ -74,19 +74,12 @@ class FileProcessor(
                 0L
             }
 
-            // Check if file already exists
-            val existingFile = fileRepository.existsByUri(uri).let {
-                if (it) {
-                    // Need to fetch full entity for update
-                    // For now, treat as new (optimization: add findByUri to repository)
-                    null
-                } else {
-                    null
-                }
-            }
+            // Check if file already exists and get its ID for update
+            val existingFile = fileRepository.findByUri(uri)
 
             val dto = FSFileDTO()
-            dto.status = Status.NEW
+            dto.id = existingFile?.id // Set ID for update if exists
+            dto.status = if (existingFile != null) Status.CURRENT else Status.NEW
             dto.uri = uri
             dto.label = item.name
             dto.type = "FILE"

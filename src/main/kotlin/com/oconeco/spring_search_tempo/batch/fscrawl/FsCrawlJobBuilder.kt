@@ -37,7 +37,8 @@ class FsCrawlJobBuilder(
     private val fileService: com.oconeco.spring_search_tempo.base.FSFileService,
     private val fileMapper: com.oconeco.spring_search_tempo.base.service.FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
-    private val crawlConfiguration: CrawlConfiguration
+    private val crawlConfiguration: CrawlConfiguration,
+    private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunksService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -60,6 +61,7 @@ class FsCrawlJobBuilder(
             .incrementer(RunIdIncrementer())
             .start(buildFoldersStep(crawl, effectivePatterns, maxDepth, followLinks))
             .next(buildFilesStep(crawl, effectivePatterns))
+            .next(buildChunkingStep(crawl))
             .build()
     }
 
@@ -181,5 +183,46 @@ class FsCrawlJobBuilder(
     private fun createFileWriter(): ItemWriter<com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
         log.debug("Creating FileWriter")
         return FileWriter(fileService = fileService)
+    }
+
+    /**
+     * Build the chunking step that splits file bodyText into ContentChunks.
+     */
+    private fun buildChunkingStep(crawl: CrawlDefinition): Step {
+        log.info("Building chunking step for crawl: {}", crawl.name)
+
+        return StepBuilder("fsCrawlChunks_${crawl.name}", jobRepository)
+            .chunk<com.oconeco.spring_search_tempo.base.domain.FSFile, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(10, transactionManager)
+            .reader(createChunkReader())
+            .processor(createChunkProcessor())
+            .writer(createChunkWriter())
+            .build()
+    }
+
+    /**
+     * Create a chunk reader that reads FSFiles with bodyText.
+     */
+    private fun createChunkReader(): ItemReader<com.oconeco.spring_search_tempo.base.domain.FSFile> {
+        log.debug("Creating ChunkReader")
+        return ChunkReader(
+            fileRepository = fsFileRepository,
+            pageSize = 50
+        )
+    }
+
+    /**
+     * Create a chunk processor that splits text into sentences.
+     */
+    private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.domain.FSFile, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
+        log.debug("Creating ChunkProcessor")
+        return ChunkProcessor()
+    }
+
+    /**
+     * Create a chunk writer that saves ContentChunks.
+     */
+    private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
+        log.debug("Creating ChunkWriter")
+        return ChunkWriter(chunkService = chunkService)
     }
 }
