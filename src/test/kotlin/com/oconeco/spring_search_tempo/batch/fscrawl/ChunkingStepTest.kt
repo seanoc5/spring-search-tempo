@@ -1,8 +1,8 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.oconeco.spring_search_tempo.base.ContentChunksService
-import com.oconeco.spring_search_tempo.base.domain.FSFile
-import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.FSFileService
+import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.junit.jupiter.api.Test
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -12,6 +12,7 @@ import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.test.JobLauncherTestUtils
 import org.springframework.batch.test.context.SpringBatchTest
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -36,6 +37,7 @@ import org.springframework.transaction.PlatformTransactionManager
 @SpringBootTest(
     properties = [
         "spring.batch.job.enabled=false", // Disable auto-run
+        "spring.batch.jdbc.initialize-schema=always", // Initialize Spring Batch schema
         "spring.jpa.hibernate.ddl-auto=update", // Allow schema updates for test
         "spring.main.allow-bean-definition-overriding=true"
     ]
@@ -47,15 +49,25 @@ class ChunkingStepTest {
     lateinit var jobLauncherTestUtils: JobLauncherTestUtils
 
     @Autowired
-    lateinit var fileRepository: FSFileRepository
+    lateinit var fileService: FSFileService
 
     @Autowired
     lateinit var chunkService: ContentChunksService
 
+    /**
+     * Wire the test job to JobLauncherTestUtils.
+     * This is required for Spring Batch Test to know which job to test.
+     * We use @Qualifier to specify which Job bean to inject since there are multiple.
+     */
+    @Autowired
+    fun setJob(@Qualifier("chunkingTestJob") job: Job) {
+        jobLauncherTestUtils.job = job
+    }
+
     @Test
     fun `should process files and create content chunks`() {
         // Given: Count files with bodyText and existing chunks
-        val filesWithBodyText = fileRepository.count() // Simplified for test
+        val filesWithBodyText = fileService.findAll(null, org.springframework.data.domain.Pageable.unpaged()).totalElements
         val initialChunkCount = countTotalChunks()
 
         println("=== Chunking Step Test ===")
@@ -111,29 +123,54 @@ class ChunkingStepTest {
         @Bean
         fun chunkingTestJob(
             jobRepository: JobRepository,
-            chunkingStep: Step
+            chunkingTestStep: Step
         ): Job {
             return JobBuilder("chunkingTestJob", jobRepository)
-                .start(chunkingStep)
+                .start(chunkingTestStep)
                 .build()
         }
 
         @Bean
-        fun chunkingStep(
+        fun chunkReader(fileService: FSFileService): ChunkReader {
+            return ChunkReader(fileService, pageSize = 50)
+        }
+
+        @Bean
+        fun chunkProcessor(): ChunkProcessor {
+            return ChunkProcessor()
+        }
+
+        @Bean
+        fun chunkWriter(chunkService: ContentChunksService): ChunkWriter {
+            return ChunkWriter(chunkService)
+        }
+
+        @Bean
+        fun chunkingTestStep(
             jobRepository: JobRepository,
             transactionManager: PlatformTransactionManager,
-            fileRepository: FSFileRepository,
-            chunkService: ContentChunksService
+            chunkReader: ChunkReader,
+            chunkProcessor: ChunkProcessor,
+            chunkWriter: ChunkWriter
         ): Step {
             return StepBuilder("chunkingTestStep", jobRepository)
-                .chunk<FSFile, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(
+                .chunk<FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(
                     10,
                     transactionManager
                 )
-                .reader(ChunkReader(fileRepository, pageSize = 50))
-                .processor(ChunkProcessor())
-                .writer(ChunkWriter(chunkService))
+                .reader(chunkReader)
+                .processor(chunkProcessor)
+                .writer(chunkWriter)
                 .build()
+        }
+
+        /**
+         * Configure JobLauncherTestUtils with our test job.
+         * This is required for @SpringBatchTest to work properly.
+         */
+        @Bean
+        fun jobLauncherTestUtils(): JobLauncherTestUtils {
+            return JobLauncherTestUtils()
         }
     }
 }

@@ -69,6 +69,13 @@ class FSFileServiceImpl(
             .stream()
             .collect(CustomCollectors.toSortedMap(FSFile::id, FSFile::id))
 
+    override fun findFilesWithBodyText(pageable: Pageable): Page<FSFileDTO> {
+        val page = fSFileRepository.findByBodyTextIsNotNull(pageable)
+        return PageImpl(page.content
+                .map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
+                pageable, page.totalElements)
+    }
+
     @EventListener(BeforeDeleteFSFolder::class)
     fun on(event: BeforeDeleteFSFolder) {
         val referencedException = ReferencedException()

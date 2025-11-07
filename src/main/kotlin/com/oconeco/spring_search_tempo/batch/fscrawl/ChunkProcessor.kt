@@ -1,12 +1,12 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
+import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 
 /**
- * ItemProcessor that splits FSFile bodyText into sentence-level ContentChunks.
+ * ItemProcessor that splits FSFileDTO bodyText into sentence-level ContentChunks.
  *
  * For Phase 1, uses simple regex-based sentence splitting. Phase 2 will enhance
  * this with Stanford CoreNLP for linguistic analysis.
@@ -20,7 +20,7 @@ import org.springframework.batch.item.ItemProcessor
  *
  * @return List of ContentChunksDTO, one per sentence (or null if no bodyText)
  */
-class ChunkProcessor : ItemProcessor<FSFile, List<ContentChunksDTO>> {
+class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
 
     companion object {
         private val log = LoggerFactory.getLogger(ChunkProcessor::class.java)
@@ -41,7 +41,7 @@ class ChunkProcessor : ItemProcessor<FSFile, List<ContentChunksDTO>> {
 
     private var totalChunksCreated = 0
 
-    override fun process(item: FSFile): List<ContentChunksDTO>? {
+    override fun process(item: FSFileDTO): List<ContentChunksDTO>? {
         val bodyText = item.bodyText
         if (bodyText.isNullOrBlank()) {
             log.debug("Skipping file {} - no bodyText", item.uri)

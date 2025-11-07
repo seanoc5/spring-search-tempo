@@ -46,4 +46,25 @@ class FSFileDTO {
 
     var fsFolder: Long? = null
 
+    // Document metadata fields (extracted by Tika)
+    var author: String? = null
+
+    var title: String? = null
+
+    var subject: String? = null
+
+    var keywords: String? = null
+
+    var comments: String? = null
+
+    var creationDate: String? = null
+
+    var modifiedDate: String? = null
+
+    var language: String? = null
+
+    var contentType: String? = null
+
+    var pageCount: Int? = null
+
 }

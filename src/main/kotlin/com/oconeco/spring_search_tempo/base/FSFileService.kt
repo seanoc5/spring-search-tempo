@@ -21,4 +21,10 @@ interface FSFileService {
 
     fun getFSFileValues(): Map<Long, Long>
 
+    /**
+     * Find files with non-null bodyText for chunking.
+     * Used by batch processing to retrieve files that need text chunking.
+     */
+    fun findFilesWithBodyText(pageable: Pageable): Page<FSFileDTO>
+
 }

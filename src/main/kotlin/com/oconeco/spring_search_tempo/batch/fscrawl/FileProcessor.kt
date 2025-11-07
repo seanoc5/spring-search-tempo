@@ -8,6 +8,9 @@ import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.FSFileMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
+import com.oconeco.spring_search_tempo.base.service.TextExtractionResult
+import com.oconeco.spring_search_tempo.base.service.TextExtractionService
+import com.oconeco.spring_search_tempo.base.service.TextAndMetadataResult
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 import java.nio.file.Files
@@ -17,7 +20,6 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import kotlin.io.path.fileSize
 import kotlin.io.path.name
-import kotlin.io.path.readText
 
 /**
  * ItemProcessor for files that:
@@ -31,6 +33,7 @@ import kotlin.io.path.readText
  * @param folderRepository Repository to link files to parent folders
  * @param fileMapper Mapper for DTO conversion
  * @param patternMatchingService Service for pattern-based analysis status determination
+ * @param textExtractionService Service for extracting text from various file formats using Tika
  * @param filePatterns Pattern set for file matching
  */
 class FileProcessor(
@@ -39,6 +42,7 @@ class FileProcessor(
     private val folderRepository: FSFolderRepository,
     private val fileMapper: FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
+    private val textExtractionService: TextExtractionService,
     private val filePatterns: PatternSet
 ) : ItemProcessor<Path, FSFileDTO> {
 
@@ -108,32 +112,44 @@ class FileProcessor(
                 return null
             }
 
-            // Extract text content based on analysis status
+            // Extract text content and metadata based on analysis status
             if (analysisStatus == AnalysisStatus.INDEX || analysisStatus == AnalysisStatus.ANALYZE) {
                 if (fileSize > MAX_TEXT_EXTRACT_SIZE) {
                     log.warn("File too large for text extraction: {} ({} bytes)", uri, fileSize)
                     dto.bodyText = "[File too large: ${fileSize} bytes]"
                     dto.bodySize = fileSize
+                    // Still try to detect content type for large files
+                    dto.contentType = textExtractionService.detectMimeType(item)
                 } else {
-                    try {
-                        // Simple text extraction - read as UTF-8
-                        // TODO: Add Apache Tika for better format support (PDF, DOCX, etc.)
-                        val text = item.readText(Charsets.UTF_8)
+                    // Use Tika-based text and metadata extraction service for all file formats
+                    when (val result = textExtractionService.extractTextAndMetadata(item, MAX_TEXT_EXTRACT_SIZE.toLong())) {
+                        is TextAndMetadataResult.Success -> {
+                            dto.bodyText = result.text
+                            dto.bodySize = result.text.length.toLong()
 
-                        // Sanitize: Remove null bytes (0x00) which PostgreSQL doesn't accept
-                        val sanitizedText = text.replace("\u0000", "")
+                            // Populate metadata fields
+                            val metadata = result.metadata
+                            dto.author = metadata.author
+                            dto.title = metadata.title
+                            dto.subject = metadata.subject
+                            dto.keywords = metadata.keywords
+                            dto.comments = metadata.comments
+                            dto.creationDate = metadata.creationDate
+                            dto.modifiedDate = metadata.modifiedDate
+                            dto.language = metadata.language
+                            dto.contentType = metadata.contentType
+                            dto.pageCount = metadata.pageCount
 
-                        if (sanitizedText != text) {
-                            log.debug("Sanitized {} null bytes from: {}", text.length - sanitizedText.length, uri)
+                            log.debug("Extracted {} chars and metadata from: {} (author={}, title={})",
+                                result.text.length, uri, metadata.author, metadata.title)
                         }
-
-                        dto.bodyText = sanitizedText
-                        dto.bodySize = sanitizedText.length.toLong()
-                        log.debug("Extracted {} chars from: {}", sanitizedText.length, uri)
-                    } catch (e: Exception) {
-                        log.warn("Failed to extract text from: {}", uri, e)
-                        dto.bodyText = "[Text extraction failed: ${e.message}]"
-                        dto.bodySize = 0L
+                        is TextAndMetadataResult.Failure -> {
+                            log.warn("Text extraction failed for: {} - {}", uri, result.error)
+                            dto.bodyText = "[Text extraction failed: ${result.error}]"
+                            dto.bodySize = 0L
+                            // Still try to detect content type
+                            dto.contentType = textExtractionService.detectMimeType(item)
+                        }
                     }
                 }
             } else {
@@ -141,6 +157,8 @@ class FileProcessor(
                 log.debug("LOCATE level, skipping text extraction: {}", uri)
                 dto.bodyText = null
                 dto.bodySize = null
+                // Still detect content type for LOCATE level
+                dto.contentType = textExtractionService.detectMimeType(item)
             }
 
             // Link to parent folder

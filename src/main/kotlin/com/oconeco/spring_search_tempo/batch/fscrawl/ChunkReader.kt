@@ -1,42 +1,38 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.domain.FSFile
-import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.FSFileService
+import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemReader
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
-import jakarta.persistence.EntityManager
-import jakarta.persistence.PersistenceContext
 
 /**
- * ItemReader that reads FSFile entities with non-null bodyText for chunking.
+ * ItemReader that reads FSFileDTO entities with non-null bodyText for chunking.
  *
- * Uses JPA pagination to efficiently process files in batches, avoiding loading
+ * Uses service layer pagination to efficiently process files in batches, avoiding loading
  * all files into memory at once.
  *
- * @param fileRepository Repository for accessing FSFile entities
+ * @param fileService Service for accessing FSFile entities
  * @param pageSize Number of files to load per page (default 50)
  */
 class ChunkReader(
-    private val fileRepository: FSFileRepository,
+    private val fileService: FSFileService,
     private val pageSize: Int = 50
-) : ItemReader<FSFile> {
+) : ItemReader<FSFileDTO> {
 
     companion object {
         private val log = LoggerFactory.getLogger(ChunkReader::class.java)
     }
 
-    @PersistenceContext
-    private lateinit var entityManager: EntityManager
-
     private var currentPage = 0
-    private var currentPageData: List<FSFile> = emptyList()
+    private var currentPageData: List<FSFileDTO> = emptyList()
     private var currentIndex = 0
     private var totalFilesProcessed = 0
     private var initialized = false
+    private var totalFiles: Long = 0
 
-    override fun read(): FSFile? {
+    override fun read(): FSFileDTO? {
         if (!initialized) {
             initialize()
         }
@@ -66,12 +62,11 @@ class ChunkReader(
     private fun initialize() {
         log.info("Initializing ChunkReader...")
 
-        // Count files with bodyText
-        val query = entityManager.createQuery(
-            "SELECT COUNT(f) FROM FSFile f WHERE f.bodyText IS NOT NULL AND LENGTH(f.bodyText) > 0",
-            Long::class.java
+        // Get first page to determine total count
+        val firstPage = fileService.findFilesWithBodyText(
+            PageRequest.of(0, pageSize, Sort.by("id"))
         )
-        val totalFiles = query.singleResult
+        totalFiles = firstPage.totalElements
 
         log.info("Found {} files with bodyText to chunk", totalFiles)
 
@@ -82,15 +77,11 @@ class ChunkReader(
     private fun loadNextPage() {
         log.debug("Loading page {} with page size {}", currentPage, pageSize)
 
-        // Use EntityManager for more control over the query
-        val query = entityManager.createQuery(
-            "SELECT f FROM FSFile f WHERE f.bodyText IS NOT NULL AND LENGTH(f.bodyText) > 0 ORDER BY f.id",
-            FSFile::class.java
+        val page = fileService.findFilesWithBodyText(
+            PageRequest.of(currentPage, pageSize, Sort.by("id"))
         )
-        query.firstResult = currentPage * pageSize
-        query.maxResults = pageSize
 
-        currentPageData = query.resultList
+        currentPageData = page.content
         currentIndex = 0
         currentPage++
 

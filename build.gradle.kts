@@ -54,6 +54,10 @@ dependencies {
 
     implementation("org.mapstruct:mapstruct:1.6.3")
 
+    // Apache Tika for text extraction from various file formats
+    implementation("org.apache.tika:tika-core:2.9.1")
+    implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
+
     kapt("org.mapstruct:mapstruct-processor:1.6.3")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")

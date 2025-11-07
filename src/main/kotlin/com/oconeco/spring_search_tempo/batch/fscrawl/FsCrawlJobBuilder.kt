@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
+import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -37,6 +38,7 @@ class FsCrawlJobBuilder(
     private val fileService: com.oconeco.spring_search_tempo.base.FSFileService,
     private val fileMapper: com.oconeco.spring_search_tempo.base.service.FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
+    private val textExtractionService: TextExtractionService,
     private val crawlConfiguration: CrawlConfiguration,
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunksService
 ) {
@@ -166,13 +168,14 @@ class FsCrawlJobBuilder(
         startPath: Path,
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
     ): ItemProcessor<Path, com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
-        log.debug("Creating FileProcessor with pattern matching")
+        log.debug("Creating FileProcessor with pattern matching and Tika text extraction")
         return FileProcessor(
             startPath = startPath,
             fileRepository = fsFileRepository,
             folderRepository = fsFolderRepository,
             fileMapper = fileMapper,
             patternMatchingService = patternMatchingService,
+            textExtractionService = textExtractionService,
             filePatterns = effectivePatterns.filePatterns
         )
     }
@@ -192,7 +195,7 @@ class FsCrawlJobBuilder(
         log.info("Building chunking step for crawl: {}", crawl.name)
 
         return StepBuilder("fsCrawlChunks_${crawl.name}", jobRepository)
-            .chunk<com.oconeco.spring_search_tempo.base.domain.FSFile, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(10, transactionManager)
+            .chunk<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(10, transactionManager)
             .reader(createChunkReader())
             .processor(createChunkProcessor())
             .writer(createChunkWriter())
@@ -202,10 +205,10 @@ class FsCrawlJobBuilder(
     /**
      * Create a chunk reader that reads FSFiles with bodyText.
      */
-    private fun createChunkReader(): ItemReader<com.oconeco.spring_search_tempo.base.domain.FSFile> {
+    private fun createChunkReader(): ItemReader<com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
         log.debug("Creating ChunkReader")
         return ChunkReader(
-            fileRepository = fsFileRepository,
+            fileService = fileService,
             pageSize = 50
         )
     }
@@ -213,7 +216,7 @@ class FsCrawlJobBuilder(
     /**
      * Create a chunk processor that splits text into sentences.
      */
-    private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.domain.FSFile, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
+    private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
         log.debug("Creating ChunkProcessor")
         return ChunkProcessor()
     }

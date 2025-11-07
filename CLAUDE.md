@@ -24,31 +24,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Spring Security with basic authentication
 - RESTful API with HATEOAS support
 - Thymeleaf + HTMX web UI
-- Spring Batch integration (example job)
+- Spring Batch integration for file crawling
 - Spring Modulith modular architecture
 - MapStruct DTO mapping
 - Custom validation framework
 - Entity lifecycle event handling
 - Testcontainers-based testing
-
-**In Progress**:
+- **Apache Tika text extraction** from 400+ file formats (PDF, DOCX, HTML, etc.)
+- **Document metadata extraction** (author, title, creation date, page count, etc.)
+- **Sentence-level text chunking** for processed files
 - Multi-crawl configuration system
 - Hierarchical pattern matching for file processing
-- Processing level implementation (IGNORE, LOCATE, INDEX)
+- Processing level implementation (IGNORE, LOCATE, INDEX, ANALYZE)
 
 **Remaining Phase 1 Work**:
 - Finalize crawl configuration format and loader
 - Implement incremental crawl using timestamps
 - Configure PostgreSQL full-text search (FTS)
 
-### 📋 Phase 2: Advanced Text Processing (PLANNED)
+### 📋 Phase 2: Advanced Text Processing (NEXT)
 
+**Planned**:
 - Stanford CoreNLP integration for NLP annotations
-- Sentence-level chunking with linguistic metadata
+- Linguistic metadata for sentence chunks (POS tags, dependencies)
 - Named entity recognition
 - Part-of-speech tagging and dependency parsing
 - Firefox browser history and bookmarks indexing
 - Enhanced search capabilities with linguistic filters
+
+**Note**: Basic sentence-level chunking is already implemented in Phase 1. Phase 2 will add NLP-powered linguistic analysis to these chunks.
 
 ### 📋 Phase 3: Semantic Search (FUTURE)
 
@@ -98,6 +102,7 @@ The application uses Spring Modulith for modular monolith architecture. Modules 
 **Purpose**: Core business logic and domain model
 **Responsibilities**:
 - File system abstraction (FSFile, FSFolder)
+- Text extraction from 400+ file formats using Apache Tika (TextExtractionService)
 - Text processing and chunking (ContentChunks)
 - User management (SpringUser, SpringRole)
 - Annotation/tagging system
@@ -108,6 +113,7 @@ The application uses Spring Modulith for modular monolith architecture. Modules 
 - `domain/`: JPA entities
 - `repos/`: Spring Data repositories
 - `service/`: Service layer (interfaces + implementations)
+  - `TextExtractionService`: Apache Tika-based text and metadata extraction from PDF, DOCX, XLSX, HTML, and 400+ other formats
 - `controller/`: Thymeleaf/HTMX web controllers
 - `rest/`: REST API resources with HATEOAS
 - `config/`: Configuration classes
@@ -171,6 +177,40 @@ class FSFolder : FSObject() {
 class FSFile : FSObject() {
     @Column(columnDefinition = "TEXT")
     var bodyText: String? = null
+
+    @Column
+    var bodySize: Long? = null
+
+    // Document metadata fields (extracted by Apache Tika)
+    @Column(columnDefinition = "text")
+    var author: String? = null
+
+    @Column(columnDefinition = "text")
+    var title: String? = null
+
+    @Column(columnDefinition = "text")
+    var subject: String? = null
+
+    @Column(columnDefinition = "text")
+    var keywords: String? = null
+
+    @Column(columnDefinition = "text")
+    var comments: String? = null
+
+    @Column(columnDefinition = "text")
+    var creationDate: String? = null
+
+    @Column(columnDefinition = "text")
+    var modifiedDate: String? = null
+
+    @Column(columnDefinition = "text")
+    var language: String? = null
+
+    @Column(columnDefinition = "text")
+    var contentType: String? = null
+
+    @Column
+    var pageCount: Int? = null
 
     @OneToMany(mappedBy = "fsFile")
     var contentChunks: MutableSet<ContentChunks> = mutableSetOf()
@@ -258,6 +298,74 @@ class Annotation {
     var fsObjects: MutableSet<FSObject> = mutableSetOf()
 }
 ```
+
+#### Text Extraction Service
+
+**Purpose**: Extract text content and metadata from diverse file formats using Apache Tika.
+
+**Location**: `com.oconeco.spring_search_tempo.base.service.TextExtractionService`
+
+**Supported Formats** (400+ total including):
+- Office documents: PDF, DOCX, XLSX, PPTX
+- OpenDocument formats: ODT, ODS, ODP
+- Plain text and source code: TXT, MD, Java, Kotlin, Python, etc.
+- Web formats: HTML, XML, JSON
+- Archive formats: ZIP, TAR, GZIP (with metadata)
+- Email formats: EML, MSG
+- Image formats (with EXIF metadata): JPEG, PNG, TIFF
+
+**Key Methods**:
+
+```kotlin
+@Service
+class TextExtractionService {
+    // Extract text content only
+    fun extractText(path: Path, maxSize: Long): TextExtractionResult
+
+    // Extract both text and metadata (author, title, etc.)
+    fun extractTextAndMetadata(path: Path, maxSize: Long): TextAndMetadataResult
+
+    // Detect MIME type without full extraction
+    fun detectMimeType(path: Path): String
+}
+```
+
+**Result Types**:
+```kotlin
+sealed class TextExtractionResult {
+    data class Success(val text: String) : TextExtractionResult()
+    data class Failure(val error: String) : TextExtractionResult()
+}
+
+sealed class TextAndMetadataResult {
+    data class Success(val text: String, val metadata: FileMetadata) : TextAndMetadataResult()
+    data class Failure(val error: String) : TextAndMetadataResult()
+}
+
+data class FileMetadata(
+    val author: String?,
+    val title: String?,
+    val subject: String?,
+    val keywords: String?,
+    val comments: String?,
+    val creationDate: String?,
+    val modifiedDate: String?,
+    val language: String?,
+    val contentType: String?,
+    val pageCount: Int?
+)
+```
+
+**Features**:
+- Automatic format detection based on file content (not just extension)
+- Configurable file size limits to prevent OOM errors
+- PostgreSQL-safe text sanitization (removes null bytes)
+- Comprehensive metadata extraction from document properties
+- Graceful error handling with detailed failure messages
+- Supports files up to 10MB of extracted text (configurable)
+
+**Integration**:
+The `TextExtractionService` is integrated into the file crawling batch process via `FileProcessor`. When a file's processing level is set to `INDEX` or `ANALYZE`, the processor uses Tika to extract both text content and metadata, storing them in the `FSFile` entity.
 
 ### Data Flow
 
@@ -646,35 +754,63 @@ crawl:
 
 ### Adding New Processing Levels
 
-**Location**: `com.oconeco.springsearchtempo.base.service.crawl` (to be created)
+**Current Implementation**: Processing levels are handled in `FileProcessor` (batch module) using pattern matching.
 
-**Pattern**:
-1. Create processor interface: `FileProcessor`
-2. Implement for each level: `IgnoreProcessor`, `LocateProcessor`, `IndexProcessor`
-3. Register in processor factory/registry
-4. Update configuration schema to support new level
+**Location**: `com.oconeco.spring_search_tempo.batch.fscrawl.FileProcessor`
 
-**Example** (future implementation):
+**Existing Processing Levels**:
+- `IGNORE`: File is skipped entirely (not stored in database)
+- `LOCATE`: Only metadata stored (path, size, timestamps) - like `plocate`
+- `INDEX`: Full text extraction using Apache Tika + metadata storage
+- `ANALYZE`: Same as INDEX but also triggers sentence-level chunking
+
+**Current Implementation**:
 
 ```kotlin
-interface FileProcessor {
-    fun canProcess(file: Path, level: ProcessingLevel): Boolean
-    fun process(file: Path): ProcessingResult
-}
+class FileProcessor(
+    private val textExtractionService: TextExtractionService,
+    // ... other dependencies
+) : ItemProcessor<Path, FSFileDTO> {
 
-@Component
-class IndexProcessor : FileProcessor {
-    override fun canProcess(file: Path, level: ProcessingLevel): Boolean {
-        return level == ProcessingLevel.INDEX
-    }
+    override fun process(item: Path): FSFileDTO? {
+        // Determine processing level based on pattern matching
+        val analysisStatus = patternMatchingService.determineAnalysisStatus(
+            item, startPath, filePatterns
+        )
 
-    override fun process(file: Path): ProcessingResult {
-        // Use Tika to extract text
-        // Store in FSFile.bodyText
-        // Return result
+        when (analysisStatus) {
+            AnalysisStatus.IGNORE -> return null
+            AnalysisStatus.LOCATE -> {
+                // Store metadata only
+                dto.bodyText = null
+                dto.contentType = textExtractionService.detectMimeType(item)
+            }
+            AnalysisStatus.INDEX, AnalysisStatus.ANALYZE -> {
+                // Extract text and metadata using Tika
+                val result = textExtractionService.extractTextAndMetadata(item)
+                when (result) {
+                    is TextAndMetadataResult.Success -> {
+                        dto.bodyText = result.text
+                        dto.author = result.metadata.author
+                        dto.title = result.metadata.title
+                        // ... other metadata fields
+                    }
+                    is TextAndMetadataResult.Failure -> {
+                        dto.bodyText = "[Extraction failed: ${result.error}]"
+                    }
+                }
+            }
+        }
+        return dto
     }
 }
 ```
+
+**To Add New Processing Levels**:
+1. Add new enum value to `AnalysisStatus` in `com.oconeco.spring_search_tempo.base.config`
+2. Update pattern matching logic in `PatternMatchingService`
+3. Add processing logic in `FileProcessor.process()` method
+4. Update configuration schema to support new level
 
 ### Adding New Batch Jobs
 
@@ -1434,7 +1570,9 @@ src/main/kotlin/com/oconeco/springsearchtempo/
 
 ---
 
-**Last Updated**: 2025-11-06
+**Last Updated**: 2025-11-07
 **Version**: 0.0.1-SNAPSHOT
 **Spring Boot**: 3.5.7
 **Kotlin**: 1.9.25
+**Apache Tika**: 2.9.1
+**Key Dependencies**: MapStruct 1.6.3, PostgreSQL 18.0, Testcontainers, Spring Batch, Spring Modulith
