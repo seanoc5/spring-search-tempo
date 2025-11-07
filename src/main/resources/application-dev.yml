@@ -1,3 +1,5 @@
+server:
+  port: 8085
 spring:
   batch:
     jdbc:
@@ -6,7 +8,7 @@ spring:
       enabled: true
       name: fsCrawlJob
   datasource:
-    url: ${JDBC_DATABASE_URL:jdbc:postgresql://minti9:5432/tempo}
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://linyoga:5432/tempo}
     username: ${JDBC_DATABASE_USERNAME:postgres}
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
@@ -68,7 +70,7 @@ crawler:
   crawls:
     - name: "local-fast"
       label: "Local quick scan"
-      startPath: "/opt/work/projects"
+      startPath: "/opt/work/"
       rules:
         SKIP:
           - "^.*/(\\.git|\\.idea|node_modules|\\.venv)(/.*)?$"

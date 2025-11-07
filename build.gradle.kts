@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "com.oconeco"
-version = "0.1.1"
+version = "0.1.9"
 
 kotlin {
     jvmToolchain {

@@ -1,3 +1,5 @@
+server:
+  port: 8085
 spring:
   batch:
     jdbc:
@@ -51,8 +53,6 @@ management:
   endpoint:
     health:
       show-details: always
-server:
-  port: 8085
 
 app:
   crawl:

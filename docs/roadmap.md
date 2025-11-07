@@ -9,6 +9,7 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 **Mission**: Provide a production-ready, modular template for building intelligent search applications over diverse data sources.
 
 **Target Users**:
+- "Power Users" who want more control over the search process _(and keep history of good/poor results, sites, authors,...)_
 - Developers building search applications
 - Teams implementing personal knowledge management
 - Organizations needing enterprise content discovery
@@ -22,9 +23,9 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 ---
 
-## Current Status (v0.0.1-SNAPSHOT)
+## Current Status (v0.1.9)
 
-**Version**: 0.0.1-SNAPSHOT
+**Version**: 0.1.9
 **Last Updated**: 2025-11-07
 **Active Phase**: Phase 1 - Core Foundation (90% complete)
 
