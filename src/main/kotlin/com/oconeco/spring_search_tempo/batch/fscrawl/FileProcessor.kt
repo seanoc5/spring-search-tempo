@@ -81,6 +81,18 @@ class FileProcessor(
             // Check if file already exists and get its ID for update
             val existingFile = fileRepository.findByUri(uri)
 
+            // Incremental crawl: skip file if it hasn't been modified since last crawl
+            if (existingFile != null && fsModTime != null) {
+                val dbModTime = existingFile.fsLastModified
+                if (dbModTime != null && !fsModTime.isAfter(dbModTime)) {
+                    log.debug("File unchanged since last crawl, skipping: {} (fs={}, db={})",
+                        uri, fsModTime, dbModTime)
+                    return null
+                }
+                log.debug("File modified since last crawl: {} (fs={}, db={})",
+                    uri, fsModTime, dbModTime)
+            }
+
             val dto = FSFileDTO()
             dto.id = existingFile?.id // Set ID for update if exists
             dto.status = if (existingFile != null) Status.CURRENT else Status.NEW

@@ -1,7 +1,7 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture
 @Service
 class CrawlOrchestrator(
     private val jobLauncher: JobLauncher,
-    private val crawlConfiguration: CrawlConfiguration,
+    private val crawlConfigService: CrawlConfigService,
     private val jobBuilder: FsCrawlJobBuilder
 ) {
     companion object {
@@ -31,7 +31,7 @@ class CrawlOrchestrator(
      * @return Map of crawl names to their job execution results
      */
     fun executeAllCrawls(): Map<String, JobExecution> {
-        val enabledCrawls = crawlConfiguration.crawls.filter { it.enabled }
+        val enabledCrawls = crawlConfigService.getEnabledCrawls()
 
         if (enabledCrawls.isEmpty()) {
             log.warn("No enabled crawls found in configuration")
@@ -40,12 +40,14 @@ class CrawlOrchestrator(
 
         log.info("Executing {} enabled crawl(s)", enabledCrawls.size)
 
+        val defaults = crawlConfigService.getDefaults()
+
         // Separate parallel and sequential crawls
         val parallelCrawls = enabledCrawls.filter {
-            it.getParallel(crawlConfiguration.defaults)
+            it.getParallel(defaults)
         }
         val sequentialCrawls = enabledCrawls.filter {
-            !it.getParallel(crawlConfiguration.defaults)
+            !it.getParallel(defaults)
         }
 
         val results = mutableMapOf<String, JobExecution>()
@@ -136,8 +138,8 @@ class CrawlOrchestrator(
      * @return Map of crawl names to their job execution results
      */
     fun executeCrawlsByName(vararg crawlNames: String): Map<String, JobExecution> {
-        val crawlsToExecute = crawlConfiguration.crawls.filter {
-            it.name in crawlNames
+        val crawlsToExecute = crawlNames.mapNotNull { name ->
+            crawlConfigService.getCrawlByName(name)
         }
 
         if (crawlsToExecute.isEmpty()) {
@@ -158,8 +160,7 @@ class CrawlOrchestrator(
      * Get all enabled crawl names.
      */
     fun getEnabledCrawls(): List<String> {
-        return crawlConfiguration.crawls
-            .filter { it.enabled }
+        return crawlConfigService.getEnabledCrawls()
             .map { it.name }
     }
 
@@ -167,6 +168,7 @@ class CrawlOrchestrator(
      * Get all crawl names (enabled and disabled).
      */
     fun getAllCrawls(): List<String> {
-        return crawlConfiguration.crawls.map { it.name }
+        return crawlConfigService.getAllCrawls()
+            .map { it.name }
     }
 }

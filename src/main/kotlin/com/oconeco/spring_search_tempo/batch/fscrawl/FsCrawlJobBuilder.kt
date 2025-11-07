@@ -1,10 +1,10 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.oconeco.spring_search_tempo.base.FSFolderService
-import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
@@ -39,7 +39,7 @@ class FsCrawlJobBuilder(
     private val fileMapper: com.oconeco.spring_search_tempo.base.service.FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
-    private val crawlConfiguration: CrawlConfiguration,
+    private val crawlConfigService: CrawlConfigService,
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunksService
 ) {
     companion object {
@@ -55,9 +55,10 @@ class FsCrawlJobBuilder(
     fun buildJob(crawl: CrawlDefinition): Job {
         log.info("Building job for crawl: {} ({})", crawl.name, crawl.label)
 
-        val effectivePatterns = crawlConfiguration.getEffectivePatterns(crawl)
-        val maxDepth = crawl.getMaxDepth(crawlConfiguration.defaults)
-        val followLinks = crawl.getFollowLinks(crawlConfiguration.defaults)
+        val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
+        val defaults = crawlConfigService.getDefaults()
+        val maxDepth = crawl.getMaxDepth(defaults)
+        val followLinks = crawl.getFollowLinks(defaults)
 
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())

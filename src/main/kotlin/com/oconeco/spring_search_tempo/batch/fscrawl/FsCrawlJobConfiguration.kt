@@ -1,6 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.context.annotation.Bean
@@ -8,14 +8,14 @@ import org.springframework.context.annotation.Configuration
 
 /**
  * Configuration for file system crawl batch jobs.
- * Uses CrawlConfiguration to build jobs for each enabled crawl.
+ * Uses CrawlConfigService to build jobs for each enabled crawl.
  *
  * The fsCrawlJob bean is the default job that Spring Batch runs on startup.
  * It executes the first enabled crawl definition from application.yml.
  */
 @Configuration
 class FsCrawlJobConfiguration(
-    private val crawlConfiguration: CrawlConfiguration,
+    private val crawlConfigService: CrawlConfigService,
     private val jobBuilder: FsCrawlJobBuilder
 ) {
     companion object {
@@ -28,7 +28,7 @@ class FsCrawlJobConfiguration(
      */
     @Bean
     fun fsCrawlJob(): Job {
-        val firstEnabledCrawl = crawlConfiguration.crawls.firstOrNull { it.enabled }
+        val firstEnabledCrawl = crawlConfigService.getEnabledCrawls().firstOrNull()
 
         if (firstEnabledCrawl == null) {
             log.warn("No enabled crawls found in configuration. Using default settings.")
