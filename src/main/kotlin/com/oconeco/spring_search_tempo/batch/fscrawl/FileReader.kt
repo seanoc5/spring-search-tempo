@@ -80,12 +80,12 @@ class FileReader(
                 val folderPath = Path(folderUri)
 
                 if (!Files.exists(folderPath)) {
-                    log.warn("Folder no longer exists: {}", folderUri)
+                    log.warn("Folder no longer exists (skipping): {}", folderUri)
                     continue
                 }
 
                 if (!Files.isDirectory(folderPath)) {
-                    log.warn("Path is not a directory: {}", folderUri)
+                    log.warn("Path is not a directory (skipping): {}", folderUri)
                     continue
                 }
 
@@ -102,8 +102,14 @@ class FileReader(
                 } else {
                     log.debug("No files in folder: {}", folderUri)
                 }
+            } catch (e: java.nio.file.AccessDeniedException) {
+                log.warn("Access denied to folder (skipping): {} - {}", folderUri, e.message)
+                // Continue to next folder instead of failing
+            } catch (e: java.nio.file.NoSuchFileException) {
+                log.warn("Folder disappeared during processing (skipping): {} - {}", folderUri, e.message)
+                // Continue to next folder instead of failing
             } catch (e: Exception) {
-                log.error("Error accessing folder: {}", folderUri, e)
+                log.warn("Error accessing folder (skipping): {} - {}", folderUri, e.message)
                 // Continue to next folder instead of failing
             }
         }
