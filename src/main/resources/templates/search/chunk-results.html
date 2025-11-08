@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chunk Search - Spring Search Tempo</title>
+    <link rel="stylesheet" th:href="@{/css/main.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Content Chunk Search</h1>
+        <nav>
+            <a th:href="@{/}">Home</a> |
+            <a th:href="@{/search}">Search All</a> |
+            <a th:href="@{/search/files}">Files</a> |
+            <a th:href="@{/search/chunks}" class="active">Chunks</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="search-box">
+            <form th:href="@{/search/chunks}" method="get">
+                <input type="text"
+                       name="q"
+                       th:value="${query}"
+                       placeholder="Search content chunks..."
+                       class="search-input"
+                       autofocus
+                       required>
+                <button type="submit" class="btn-primary">Search Chunks</button>
+            </form>
+            <p class="search-help">
+                <small>
+                    Searching at sentence/paragraph level for precise matches
+                </small>
+            </p>
+        </div>
+
+        <div th:if="${error}" class="alert alert-error">
+            <p th:text="${error}">Error message</p>
+        </div>
+
+        <div th:if="${hasResults}">
+            <div class="results-summary">
+                <p>
+                    Found <strong th:text="${totalResults}">0</strong> content chunks
+                    <span th:if="${results.totalPages > 1}">
+                        (Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>)
+                    </span>
+                </p>
+            </div>
+
+            <div class="search-results">
+                <div th:each="result : ${results.content}" class="search-result chunk-result">
+                    <div class="result-header">
+                        <h3 class="result-title">
+                            <a th:href="@{|/contentChunks/${result.id}|}" th:text="${result.fileLabel ?: 'Chunk #' + result.chunkNumber}">
+                                Chunk title
+                            </a>
+                        </h3>
+                        <span class="result-rank" th:text="${#numbers.formatDecimal(result.rank, 1, 4)}">0.5000</span>
+                    </div>
+
+                    <div class="chunk-metadata">
+                        <span class="metadata-item">
+                            <strong>Chunk:</strong> #<span th:text="${result.chunkNumber}">1</span>
+                        </span>
+                        <span th:if="${result.chunkType}" class="metadata-item">
+                            <strong>Type:</strong> <span th:text="${result.chunkType}">Sentence</span>
+                        </span>
+                        <span th:if="${result.fileLabel}" class="metadata-item">
+                            <strong>File:</strong>
+                            <a th:href="@{|/fsFile/${result.fileUri}|}" th:text="${result.fileLabel}">
+                                file.txt
+                            </a>
+                        </span>
+                    </div>
+
+                    <p th:if="${result.fileUri}" class="result-uri" th:text="${result.fileUri}">file:///path/to/file</p>
+                    <p class="result-snippet" th:utext="${result.snippet}">
+                        Highlighted snippet with <b>matching</b> terms...
+                    </p>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div th:if="${results.totalPages > 1}" class="pagination">
+                <a th:if="${results.hasPrevious()}"
+                   th:href="@{/search/chunks(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                   class="btn-secondary">
+                    &laquo; Previous
+                </a>
+                <span class="page-info">
+                    Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>
+                </span>
+                <a th:if="${results.hasNext()}"
+                   th:href="@{/search/chunks(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                   class="btn-secondary">
+                    Next &raquo;
+                </a>
+            </div>
+        </div>
+
+        <div th:if="${query != null && query != '' && !hasResults && error == null}">
+            <div class="no-results">
+                <p>No content chunks found for "<strong th:text="${query}">query</strong>"</p>
+                <p>Try different keywords or search in <a th:href="@{/search/files(q=${query})}">files</a>.</p>
+            </div>
+        </div>
+
+        <div th:if="${query == null || query == ''}">
+            <div class="search-intro">
+                <h2>Content Chunk Search</h2>
+                <p>Search at the sentence or paragraph level for precise content matches.</p>
+                <p>Useful for finding specific quotes or passages within documents.</p>
+
+                <h3>What are Content Chunks?</h3>
+                <ul>
+                    <li><strong>Sentence</strong> - Individual sentences extracted from documents</li>
+                    <li><strong>Paragraph</strong> - Logical text blocks for context</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Spring Search Tempo</p>
+    </footer>
+</div>
+
+<style>
+    .active {
+        font-weight: bold;
+        color: #4CAF50;
+    }
+
+    .chunk-metadata {
+        margin: 0.5rem 0;
+        padding: 0.5rem;
+        background: #f5f5f5;
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .metadata-item {
+        display: inline-block;
+        margin-right: 1rem;
+    }
+
+    .chunk-result {
+        border-left: 4px solid #9C27B0;
+    }
+</style>
+</body>
+</html>
