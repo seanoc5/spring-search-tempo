@@ -90,24 +90,26 @@ app:
     # List of crawl definitions
     crawls:
       - name: "USER_DOCUMENTS"
-        label: "User Documents"
+        label: "User Docs"
         enabled: true
-        start-path: "${user.home}/Documents"
+        start-paths:
+          - "${user.home}/Documents"
         max-depth: 15
         parallel: true
         folder-patterns:
           index:
             - ".*"
         file-patterns:
-          index:
-            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
           analyze:
-            - ".*\\.(md|txt)$"
+            - ".*\\.(adoc|docx?|md|odt|pdf|pptx?|rtf|txt|xlsx?)$"
+          index:
+            - ".*\\.(csv|txt)$"
 
       - name: "USER_PICTURES"
         label: "User Pictures"
         enabled: true
-        start-path: "${user.home}/Pictures"
+        start-paths:
+          - "${user.home}/Pictures"
         max-depth: 8
         folder-patterns:
           skip:
@@ -122,7 +124,8 @@ app:
       - name: "WORK"
         label: "Work Projects"
         enabled: true
-        start-path: "/opt/work"
+        start-paths:
+          - "/opt/work"
         max-depth: 10
         parallel: true
         folder-patterns:
@@ -141,7 +144,8 @@ app:
       - name: "CONFIG"
         label: "System Configuration"
         enabled: false
-        start-path: "/etc"
+        start-paths:
+          - "/etc"
         max-depth: 3
         folder-patterns:
           locate:
@@ -154,7 +158,8 @@ app:
       - name: "SYSTEM_USR"
         label: "System /usr Files"
         enabled: false
-        start-path: "/usr"
+        start-paths:
+          - "/usr"
         max-depth: 5
         folder-patterns:
           locate:
@@ -166,7 +171,8 @@ app:
       - name: "SYSTEM_BOOT"
         label: "System /boot Files"
         enabled: false
-        start-path: "/boot"
+        start-paths:
+          - "/boot"
         max-depth: 3
         folder-patterns:
           locate:
@@ -178,7 +184,8 @@ app:
       - name: "USER_DOWNLOADS"
         label: "User Downloads"
         enabled: true
-        start-path: "${user.home}/Downloads"
+        start-paths:
+          - "${user.home}/Downloads"
         max-depth: 5
         folder-patterns:
           index:
@@ -192,7 +199,8 @@ app:
       - name: "USER_DESKTOP"
         label: "User Desktop"
         enabled: true
-        start-path: "${user.home}/Desktop"
+        start-paths:
+          - "${user.home}/Desktop"
         max-depth: 5
         folder-patterns:
           index:

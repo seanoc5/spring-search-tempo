@@ -97,4 +97,13 @@ tasks.withType<KotlinCompile>().configureEach {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+
+    // Increase heap size for tests due to Stanford CoreNLP models and Testcontainers
+    maxHeapSize = "4g"
+    jvmArgs = listOf(
+        "-XX:+UseG1GC",
+        "-XX:MaxGCPauseMillis=200",
+        "-Xms512m",
+        "-Xmx4g"
+    )
 }

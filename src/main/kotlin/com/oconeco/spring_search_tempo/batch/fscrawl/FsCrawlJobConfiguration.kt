@@ -37,7 +37,7 @@ class FsCrawlJobConfiguration(
                 name = "DEFAULT",
                 label = "Default Crawl",
                 enabled = true,
-                startPath = "/opt/work",
+                startPaths = listOf("/opt/work"),
                 maxDepth = 5,
                 followLinks = false
             )

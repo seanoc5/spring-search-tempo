@@ -48,7 +48,7 @@ class CrawlConfigurationIntegrationTest {
         enabledCrawls.forEach { crawl ->
             assertTrue(crawl.enabled, "All returned crawls should be enabled")
             assertTrue(crawl.name.isNotEmpty(), "Crawl name should not be empty")
-            assertTrue(crawl.startPath.isNotEmpty(), "Start path should not be empty")
+            assertTrue(crawl.startPaths.isNotEmpty(), "Start paths should not be empty")
         }
     }
 
@@ -58,7 +58,8 @@ class CrawlConfigurationIntegrationTest {
         val workCrawl = crawlConfigService.getCrawlByName("WORK")
         assertNotNull(workCrawl, "Should find WORK crawl")
         assertEquals("WORK", workCrawl?.name)
-        assertEquals("/opt/work", workCrawl?.startPath)
+        assertTrue(workCrawl?.startPaths?.contains("/opt/work") == true,
+            "WORK crawl should contain /opt/work in start paths")
     }
 
     @Test
@@ -180,8 +181,8 @@ class CrawlConfigurationIntegrationTest {
             filePatterns = effectivePatterns.filePatterns,
             parentFolderStatus = AnalysisStatus.INDEX
         )
-        assertEquals(AnalysisStatus.INDEX, pdfStatus,
-            "PDF files should be indexed in USER_DOCUMENTS crawl")
+        assertEquals(AnalysisStatus.ANALYZE, pdfStatus,
+            "PDF files should be analyzed in USER_DOCUMENTS crawl")
 
         // Test text file analysis
         val txtStatus = patternMatchingService.determineFileAnalysisStatus(
@@ -249,8 +250,9 @@ class CrawlConfigurationIntegrationTest {
         val docsCrawl = crawlConfigService.getCrawlByName("USER_DOCUMENTS")!!
 
         // Spring Boot should automatically resolve ${user.home}
-        assertTrue(docsCrawl.startPath.contains("user.home") ||
-                   docsCrawl.startPath.startsWith("/"),
+        assertTrue(docsCrawl.startPaths.isNotEmpty(), "Should have at least one start path")
+        val firstPath = docsCrawl.startPaths.first()
+        assertTrue(firstPath.contains("user.home") || firstPath.startsWith("/"),
             "Start path should contain variable or be resolved to absolute path")
     }
 
@@ -304,8 +306,8 @@ class CrawlConfigurationIntegrationTest {
                 "Crawl name should not be empty: $crawl")
             assertTrue(crawl.label.isNotEmpty(),
                 "Crawl label should not be empty: ${crawl.name}")
-            assertTrue(crawl.startPath.isNotEmpty(),
-                "Crawl start path should not be empty: ${crawl.name}")
+            assertTrue(crawl.startPaths.isNotEmpty(),
+                "Crawl start paths should not be empty: ${crawl.name}")
         }
     }
 

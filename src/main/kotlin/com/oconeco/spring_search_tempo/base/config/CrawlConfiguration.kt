@@ -50,12 +50,14 @@ data class CrawlDefaults(
 
 /**
  * Individual crawl definition with optional overrides of defaults.
+ * Supports multiple start paths for crawling multiple directory trees
+ * with a single shared configuration.
  */
 data class CrawlDefinition(
     var name: String = "",
     var label: String = "",
     var enabled: Boolean = true,
-    var startPath: String = "",
+    var startPaths: List<String> = emptyList(),  // Multiple start paths supported
     var maxDepth: Int? = null,  // null = use default
     var followLinks: Boolean? = null,  // null = use default
     var parallel: Boolean? = null,  // null = use default

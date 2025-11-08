@@ -16,12 +16,15 @@ import kotlin.io.path.isRegularFile
  * more efficient single-pass strategy that processes directories and files together
  * while the directory is "hot" in filesystem cache.
  *
- * @param startPath Root directory to start crawling from
+ * Supports multiple start paths for crawling multiple directory trees sequentially
+ * with a single shared configuration.
+ *
+ * @param startPaths List of root directories to start crawling from (processed sequentially)
  * @param maxDepth Maximum directory depth to traverse
  * @param followLinks Whether to follow symbolic links
  */
 class CombinedCrawlReader(
-    private val startPath: Path,
+    private val startPaths: List<Path>,
     private val maxDepth: Int,
     private val followLinks: Boolean
 ) : ItemReader<CombinedCrawlItem> {
@@ -35,8 +38,11 @@ class CombinedCrawlReader(
     private var walkCompleted = false
 
     init {
-        log.info("Initializing CombinedCrawlReader with startPath: {}, maxDepth: {}, followLinks: {}",
-            startPath, maxDepth, followLinks)
+        log.info("Initializing CombinedCrawlReader with {} startPaths, maxDepth: {}, followLinks: {}",
+            startPaths.size, maxDepth, followLinks)
+        startPaths.forEachIndexed { index, path ->
+            log.info("  Start path [{}]: {}", index + 1, path)
+        }
         initializeWalk()
     }
 
@@ -116,22 +122,35 @@ class CombinedCrawlReader(
                 emptySet()
             }
 
-            log.info("Starting combined directory+file walk from: {}", startPath)
+            log.info("Starting combined directory+file walk from {} start paths", startPaths.size)
 
-            val visitor = CombinedFileVisitor()
-            Files.walkFileTree(
-                startPath,
-                visitOptions,
-                maxDepth,
-                visitor
-            )
+            // Walk each start path sequentially, adding items to the same queue
+            startPaths.forEachIndexed { index, startPath ->
+                log.info("Walking start path [{}/{}]: {}", index + 1, startPaths.size, startPath)
 
-            visitor.logSummary()
+                val visitor = CombinedFileVisitor()
+                try {
+                    Files.walkFileTree(
+                        startPath,
+                        visitOptions,
+                        maxDepth,
+                        visitor
+                    )
+                    visitor.logSummary()
+                } catch (e: Exception) {
+                    log.error("Error walking start path: {} - {}", startPath, e.message)
+                    // Continue with other paths rather than failing entirely
+                }
+            }
+
             itemIterator = items.iterator()
             walkCompleted = true
 
+            log.info("Completed walking all {} start paths. Total items collected: {}",
+                startPaths.size, items.size)
+
         } catch (e: Exception) {
-            log.error("Critical error during combined walk initialization from startPath: {}", startPath, e)
+            log.error("Critical error during combined walk initialization", e)
             throw e
         }
     }

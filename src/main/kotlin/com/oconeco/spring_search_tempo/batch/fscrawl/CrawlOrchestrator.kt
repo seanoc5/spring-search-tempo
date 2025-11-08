@@ -117,7 +117,7 @@ class CrawlOrchestrator(
         val params = JobParametersBuilder()
             .addString("crawlName", crawl.name)
             .addLong("timestamp", System.currentTimeMillis())
-            .addString("startPath", crawl.startPath)
+            .addString("startPaths", crawl.startPaths.joinToString(","))
             .toJobParameters()
 
         return try {

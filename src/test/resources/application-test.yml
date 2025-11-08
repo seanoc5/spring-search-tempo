@@ -1,0 +1,14 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update  # Auto-update schema for tests
+    show-sql: false
+  batch:
+    job:
+      enabled: false  # Disable batch jobs during tests unless explicitly needed
+  session:
+    jdbc:
+      initialize-schema: always  # Create session tables for tests
+  datasource:
+    url: jdbc:tc:postgresql:18.0:///testdb
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver

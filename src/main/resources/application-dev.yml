@@ -61,39 +61,39 @@ spring:
 #  port: 8089
 
 #todo: merge into `crawler` below
-app:
-  crawl:
-    startPath: ${APP_CRAWL_START:./}
-    maxDepth: ${CRAWL_MAX_DEPTH:10}
-    followLinks: ${CRAWL_FOLLOW_LINKS:false}
-
-# application.yaml
-crawler:
-  defaultPlan: "local-fast"
-  crawls:
-    - name: "local-fast"
-      label: "Local quick scan"
-      startPath: "/opt/work/"
-      rules:
-        SKIP:
-          - "^.*/(\\.git|\\.idea|node_modules|\\.venv)(/.*)?$"
-          - "^.*/(target|build|dist)(/.*)?$"
-        LOCATE:
-          - "^.*/(docs|notes)(/.*)?$"
-        INDEX:
-          - "^.*/(src|lib)(/.*)?$"
-        ANALYSIS:
-          - "^.*/research(/.*)?$"
-
-    - name: "media-archive"
-      label: "NAS media archive"
-      startPath: "/mnt/nas/media"
-      rules:
-        SKIP:
-          - "^.*/(cache|tmp|@Recycle)(/.*)?$"
-        LOCATE:
-          - "^.*/(photos|music|videos)(/.*)?$"
-        INDEX: []
-        ANALYSIS: []
-
-
+#app:
+#  crawl:
+#    startPath: ${APP_CRAWL_START:./}
+#    maxDepth: ${CRAWL_MAX_DEPTH:10}
+#    followLinks: ${CRAWL_FOLLOW_LINKS:false}
+#
+## application.yaml
+#crawler:
+#  defaultPlan: "local-fast"
+#  crawls:
+#    - name: "work"
+#      label: "Minti9 Work"
+#      startPath: "/opt/work/"
+#      rules:
+#        SKIP:
+#          - "^.*/(\\.git|\\.idea|node_modules|\\.venv)(/.*)?$"
+#          - "^.*/(target|build|dist)(/.*)?$"
+#        LOCATE:
+#          - "^.*/(src|lib)(/.*)?$"
+#        INDEX:
+#          - "^.*/(docs|notes)(/.*)?$"
+#        ANALYSIS:
+#          - "^.*/research(/.*)?$"
+#
+#    - name: "media-archive"
+#      label: "NAS media archive"
+#      startPath: "/mnt/nas/media"
+#      rules:
+#        SKIP:
+#          - "^.*/(cache|tmp|@Recycle)(/.*)?$"
+#        LOCATE:
+#          - "^.*/(photos|music|videos)(/.*)?$"
+#        INDEX: []
+#        ANALYSIS: []
+#
+#
