@@ -42,14 +42,10 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 - ✅ REST API endpoints (HATEOAS)
 - ✅ Comprehensive testing (unit, integration, modularity)
 - ✅ Documentation structure (guides, architecture, reference)
+- ✅ **Crawl Configuration System** (YAML-based with pattern matching)
+- ✅ **Pattern Matching Service** (hierarchical IGNORE/LOCATE/INDEX/ANALYZE)
 
 ### In Progress
-
-- 🔄 **Crawl Configuration System**
-  - YAML-based crawl configuration format
-  - Pattern matching for processing levels (IGNORE, LOCATE, INDEX, ANALYZE)
-  - ConfigLoader to parse and validate configurations
-  - Status: Design complete, implementation 40%
 
 - 🔄 **Incremental Crawling**
   - Use `lastModified` timestamps to detect changes
@@ -91,8 +87,8 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 | Task | Priority | Estimated Effort | Target Date |
 |------|----------|------------------|-------------|
-| Crawl Configuration Loader | High | 2 days | 2025-11-09 |
-| Pattern Matching Service | High | 1 day | 2025-11-10 |
+| ~~Crawl Configuration Loader~~ | ~~High~~ | ~~2 days~~ | ✅ 2025-11-07 |
+| ~~Pattern Matching Service~~ | ~~High~~ | ~~1 day~~ | ✅ 2025-11-07 |
 | Incremental Crawl Logic | High | 3 days | 2025-11-13 |
 | PostgreSQL FTS Setup | Medium | 2 days | 2025-11-15 |
 | Search API Endpoints | Medium | 1 day | 2025-11-15 |
@@ -104,7 +100,7 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 - [x] Metadata captured (author, title, dates)
 - [x] Files crawled and stored in database
 - [x] Content chunked at sentence level
-- [ ] Configurable crawl patterns working
+- [x] Configurable crawl patterns working
 - [ ] Incremental crawl detects changes
 - [ ] Full-text search returns ranked results
 - [x] ModularityTest passes

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Spring Search Tempo</title>
+    <link rel="stylesheet" th:href="@{/css/main.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Full-Text Search</h1>
+        <nav>
+            <a th:href="@{/}">Home</a> |
+            <a th:href="@{/search}">Search All</a> |
+            <a th:href="@{/search/files}">Files</a> |
+            <a th:href="@{/search/chunks}">Chunks</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="search-box">
+            <form th:action="@{/search}" method="get">
+                <input type="text"
+                       name="q"
+                       th:value="${query}"
+                       placeholder="Search indexed content..."
+                       class="search-input"
+                       autofocus
+                       required>
+                <button type="submit" class="btn-primary">Search</button>
+            </form>
+            <p class="search-help">
+                <small>
+                    Syntax: "spring kotlin" (AND) | "spring | kotlin" (OR) | "spring & !java" (NOT)
+                </small>
+            </p>
+        </div>
+
+        <div th:if="${error}" class="alert alert-error">
+            <p th:text="${error}">Error message</p>
+        </div>
+
+        <div th:if="${hasResults}">
+            <div class="results-summary">
+                <p>
+                    Found <strong th:text="${totalResults}">0</strong> results
+                    <span th:if="${results.totalPages > 1}">
+                        (Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>)
+                    </span>
+                </p>
+            </div>
+
+            <div class="search-results">
+                <div th:each="result : ${results.content}" class="search-result">
+                    <div class="result-header">
+                        <h3 class="result-title">
+                            <a th:href="@{|/${result.sourceTable}/${result.id}|}" th:text="${result.label}">
+                                Result title
+                            </a>
+                        </h3>
+                        <span class="result-rank" th:text="${#numbers.formatDecimal(result.rank, 1, 4)}">0.5000</span>
+                    </div>
+                    <p class="result-uri" th:text="${result.uri}">file:///path/to/file</p>
+                    <p class="result-snippet" th:utext="${result.snippet}">
+                        Highlighted snippet with <b>matching</b> terms...
+                    </p>
+                    <p class="result-source">
+                        <small>Source: <span th:text="${result.sourceTable}">fs_file</span></small>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div th:if="${results.totalPages > 1}" class="pagination">
+                <a th:if="${results.hasPrevious()}"
+                   th:href="@{/search(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                   class="btn-secondary">
+                    &laquo; Previous
+                </a>
+                <span class="page-info">
+                    Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>
+                </span>
+                <a th:if="${results.hasNext()}"
+                   th:href="@{/search(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                   class="btn-secondary">
+                    Next &raquo;
+                </a>
+            </div>
+        </div>
+
+        <div th:if="${query != null && query != '' && !hasResults && error == null}">
+            <div class="no-results">
+                <p>No results found for "<strong th:text="${query}">query</strong>"</p>
+                <p>Try different keywords or check the search syntax.</p>
+            </div>
+        </div>
+
+        <div th:if="${query == null || query == ''}">
+            <div class="search-intro">
+                <h2>Welcome to Full-Text Search</h2>
+                <p>Search across all indexed files and content chunks using PostgreSQL's powerful full-text search.</p>
+
+                <h3>Search Syntax</h3>
+                <ul>
+                    <li><code>spring kotlin</code> - Find documents containing both "spring" AND "kotlin"</li>
+                    <li><code>spring | kotlin</code> - Find documents containing "spring" OR "kotlin"</li>
+                    <li><code>spring & !java</code> - Find documents with "spring" but NOT "java"</li>
+                    <li><code>"exact phrase"</code> - Find exact phrase matches</li>
+                </ul>
+
+                <h3>Search Scopes</h3>
+                <ul>
+                    <li><strong>All</strong> - Search both files and content chunks (current page)</li>
+                    <li><strong>Files</strong> - Search only file metadata and body text</li>
+                    <li><strong>Chunks</strong> - Search only sentence/paragraph chunks</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Spring Search Tempo</p>
+    </footer>
+</div>
+
+<style>
+    .search-box {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: #f5f5f5;
+        border-radius: 8px;
+    }
+
+    .search-input {
+        width: 70%;
+        padding: 0.75rem;
+        font-size: 1rem;
+        border: 2px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+
+    .search-help {
+        margin-top: 0.5rem;
+        color: #666;
+    }
+
+    .results-summary {
+        margin: 1rem 0;
+        padding: 0.5rem;
+        background: #e8f5e9;
+        border-left: 4px solid #4CAF50;
+    }
+
+    .search-result {
+        margin: 1.5rem 0;
+        padding: 1rem;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .result-title {
+        margin: 0;
+        font-size: 1.2rem;
+    }
+
+    .result-title a {
+        color: #1976D2;
+        text-decoration: none;
+    }
+
+    .result-title a:hover {
+        text-decoration: underline;
+    }
+
+    .result-rank {
+        background: #FFC107;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        font-weight: bold;
+    }
+
+    .result-uri {
+        color: #666;
+        font-size: 0.875rem;
+        margin: 0.25rem 0;
+        word-break: break-all;
+    }
+
+    .result-snippet {
+        margin: 0.5rem 0;
+        line-height: 1.6;
+    }
+
+    .result-snippet b {
+        background: #FFEB3B;
+        font-weight: bold;
+    }
+
+    .result-source {
+        color: #999;
+        font-size: 0.8rem;
+        margin: 0.5rem 0 0 0;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 2rem 0;
+        padding: 1rem;
+        background: #f5f5f5;
+        border-radius: 4px;
+    }
+
+    .no-results {
+        padding: 2rem;
+        text-align: center;
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+    }
+
+    .search-intro {
+        padding: 2rem;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .search-intro h3 {
+        margin-top: 1.5rem;
+    }
+
+    .search-intro code {
+        background: #f5f5f5;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-family: monospace;
+    }
+
+    .alert-error {
+        padding: 1rem;
+        background: #ffebee;
+        border: 1px solid #f44336;
+        border-radius: 4px;
+        color: #c62828;
+    }
+</style>
+</body>
+</html>
