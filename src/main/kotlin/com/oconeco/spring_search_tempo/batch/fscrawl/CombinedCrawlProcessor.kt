@@ -28,7 +28,9 @@ import kotlin.io.path.name
  * 3. Uses lightweight metadata comparison to skip unchanged items
  * 4. Processes all files in the directory while it's "hot" in cache
  *
- * @param startPath Root path for calculating crawl depth
+ * Supports multiple start paths using longest prefix matching for depth calculation.
+ *
+ * @param startPaths List of root paths for calculating crawl depth
  * @param effectivePatterns Merged pattern set for this crawl
  * @param folderRepository Repository for folder lookups/caching
  * @param fileRepository Repository for file lookups/caching
@@ -38,7 +40,7 @@ import kotlin.io.path.name
  * @param textExtractionService Service for text extraction from files
  */
 class CombinedCrawlProcessor(
-    private val startPath: Path,
+    private val startPaths: List<Path>,
     private val effectivePatterns: EffectivePatterns,
     private val folderRepository: FSFolderRepository,
     private val fileRepository: FSFileRepository,
@@ -50,7 +52,7 @@ class CombinedCrawlProcessor(
 
     companion object {
         private val log = LoggerFactory.getLogger(CombinedCrawlProcessor::class.java)
-        private const val MAX_TEXT_EXTRACT_SIZE = 10 * 1024 * 1024 // 10MB limit
+        private const val MAX_TEXT_EXTRACT_SIZE = 100 * 1024 * 1024 // 10MB limit
     }
 
     // Cache for parent folder analysis status (supports hierarchical matching)
@@ -66,7 +68,7 @@ class CombinedCrawlProcessor(
             item.directory, item.files.size)
 
         // Process the folder first
-        val folderDto = processFolder(item.directory) ?: run {
+        val folderDto = processFolder(item.directory, item.files.size) ?: run {
             // Folder is IGNORE or unchanged - skip entire directory including files
             log.debug("Skipping directory and all {} files: {}", item.files.size, item.directory)
             return null
@@ -84,8 +86,10 @@ class CombinedCrawlProcessor(
 
     /**
      * Process a single folder with pattern matching and incremental crawl support.
+     * @param directory The directory path to process
+     * @param fileCount The number of immediate child files in this directory
      */
-    private fun processFolder(directory: Path): FSFolderDTO? {
+    private fun processFolder(directory: Path, fileCount: Int): FSFolderDTO? {
         val uri = directory.toString()
         log.trace("Processing folder: {}", uri)
 
@@ -105,7 +109,7 @@ class CombinedCrawlProcessor(
         if (existingFolder != null) {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFolder.fsLastModified,
-                dbSize = null // Folders don't have meaningful size
+                dbSize = existingFolder.size
             )
 
             if (isUnchanged && existingFolder.status == Status.CURRENT) {
@@ -152,6 +156,7 @@ class CombinedCrawlProcessor(
         dto.label = fsMetadata.name
         dto.crawlDepth = calculateCrawlDepth(directory)
         dto.fsLastModified = fsMetadata.lastModified
+        dto.size = fileCount.toLong()
         dto.analysisStatus = analysisStatus
 
         // Try to read POSIX attributes (owner, group, permissions)
@@ -216,7 +221,7 @@ class CombinedCrawlProcessor(
         if (existingFile != null) {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFile.fsLastModified,
-                dbSize = existingFile.bodySize
+                dbSize = existingFile.size
             )
 
             if (isUnchanged) {
@@ -250,12 +255,14 @@ class CombinedCrawlProcessor(
         dto.type = "FILE"
         dto.crawlDepth = calculateCrawlDepth(file)
         dto.fsLastModified = fsMetadata.lastModified
-        dto.bodySize = fsMetadata.size
+        dto.size = fsMetadata.size
         dto.analysisStatus = analysisStatus
 
         // Set version for optimistic locking
         if (dto.version == null) {
             dto.version = 0L
+        } else {
+            log.debug("File version already set: {}", dto.version)
         }
 
         // Extract text and metadata if status is INDEX or ANALYZE
@@ -350,16 +357,11 @@ class CombinedCrawlProcessor(
     }
 
     /**
-     * Calculate crawl depth relative to start path.
+     * Calculate crawl depth relative to matching start path.
+     * Uses longest prefix match to find the appropriate start path.
      */
     private fun calculateCrawlDepth(path: Path): Int {
-        return try {
-            val relativePath = startPath.relativize(path)
-            relativePath.nameCount
-        } catch (e: Exception) {
-            log.warn("Failed to calculate crawl depth for: {}", path, e)
-            0
-        }
+        return PathUtils.calculateCrawlDepth(path, startPaths)
     }
 
     /**

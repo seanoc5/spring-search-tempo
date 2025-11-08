@@ -12,7 +12,7 @@ class ModularityTest {
 
     @Test
     @Disabled("""
-        Temporarily disabled - batch module processors (FileProcessor, FolderProcessor, ChunkProcessor)
+        Temporarily disabled - batch module processors (CombinedCrawlProcessor, ChunkProcessor)
         directly access base module internals (domain entities, repositories).
 
         Current architecture: Batch module contains Spring Batch ItemProcessors that directly work with

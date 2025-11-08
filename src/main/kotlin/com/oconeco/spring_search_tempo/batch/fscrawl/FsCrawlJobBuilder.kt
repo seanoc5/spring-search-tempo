@@ -54,7 +54,8 @@ class FsCrawlJobBuilder(
      * @return A configured Spring Batch Job
      */
     fun buildJob(crawl: CrawlDefinition): Job {
-        log.info("Building single-pass job for crawl: {} ({})", crawl.name, crawl.label)
+        log.info("Building single-pass job for crawl: {} ({}) with {} start paths",
+            crawl.name, crawl.label, crawl.startPaths.size)
 
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
         val defaults = crawlConfigService.getDefaults()
@@ -66,150 +67,6 @@ class FsCrawlJobBuilder(
             .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks))
             .next(buildChunkingStep(crawl))
             .build()
-    }
-
-    /**
-     * Build a complete batch job using the legacy two-phase approach.
-     * Kept for comparison/rollback purposes (see ADR-004).
-     *
-     * @param crawl The crawl definition to build a job for
-     * @return A configured Spring Batch Job
-     */
-    fun buildTwoPhaseJob(crawl: CrawlDefinition): Job {
-        log.info("Building two-phase job for crawl: {} ({})", crawl.name, crawl.label)
-
-        val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
-        val defaults = crawlConfigService.getDefaults()
-        val maxDepth = crawl.getMaxDepth(defaults)
-        val followLinks = crawl.getFollowLinks(defaults)
-
-        return JobBuilder("fsCrawlJob_twoPhase", jobRepository)
-            .incrementer(RunIdIncrementer())
-            .start(buildFoldersStep(crawl, effectivePatterns, maxDepth, followLinks))
-            .next(buildFilesStep(crawl, effectivePatterns))
-            .next(buildChunkingStep(crawl))
-            .build()
-    }
-
-    /**
-     * Build the folders processing step for a crawl.
-     */
-    private fun buildFoldersStep(
-        crawl: CrawlDefinition,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
-        maxDepth: Int,
-        followLinks: Boolean
-    ): Step {
-        log.info("Building folders step for crawl: {} with maxDepth: {}, followLinks: {}",
-            crawl.name, maxDepth, followLinks)
-
-        val startPath = Path(crawl.startPath)
-
-        return StepBuilder("fsCrawlFolders_${crawl.name}", jobRepository)
-            .chunk<Path, FSFolderDTO>(1000, transactionManager)
-            .reader(createFolderReader(startPath, maxDepth, followLinks))
-            .processor(createFolderProcessor(startPath, effectivePatterns))
-            .writer(createFolderWriter())
-            .build()
-    }
-
-    /**
-     * Create a folder reader for the given parameters.
-     */
-    private fun createFolderReader(
-        startPath: Path,
-        maxDepth: Int,
-        followLinks: Boolean
-    ): ItemReader<Path> {
-        log.debug("Creating FolderReader: startPath={}, maxDepth={}, followLinks={}",
-            startPath, maxDepth, followLinks)
-        return FolderReader(
-            startPath = startPath,
-            maxDepth = maxDepth,
-            followLinks = followLinks
-        )
-    }
-
-    /**
-     * Create a folder processor with pattern matching support.
-     */
-    private fun createFolderProcessor(
-        startPath: Path,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
-    ): ItemProcessor<Path, FSFolderDTO> {
-        log.debug("Creating FolderProcessor with pattern matching")
-        return FolderProcessor(
-            startPath = startPath,
-            folderRepository = fsFolderRepository,
-            folderMapper = folderMapper,
-            patternMatchingService = patternMatchingService,
-            folderPatterns = effectivePatterns.folderPatterns
-        )
-    }
-
-    /**
-     * Create a folder writer.
-     */
-    private fun createFolderWriter(): ItemWriter<FSFolderDTO> {
-        log.debug("Creating FolderWriter")
-        return FolderWriter(folderService = folderService)
-    }
-
-    /**
-     * Build the files processing step for a crawl.
-     */
-    private fun buildFilesStep(
-        crawl: CrawlDefinition,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
-    ): Step {
-        log.info("Building files step for crawl: {}", crawl.name)
-
-        val startPath = Path(crawl.startPath)
-
-        return StepBuilder("fsCrawlFiles_${crawl.name}", jobRepository)
-            .chunk<Path, com.oconeco.spring_search_tempo.base.model.FSFileDTO>(100, transactionManager)
-            .reader(createFileReader())
-            .processor(createFileProcessor(startPath, effectivePatterns))
-            .writer(createFileWriter())
-            .build()
-    }
-
-    /**
-     * Create a file reader that reads files from indexed folders.
-     */
-    private fun createFileReader(): ItemReader<Path> {
-        log.debug("Creating FileReader")
-        return FileReader(
-            folderRepository = fsFolderRepository,
-            batchSize = 100
-        )
-    }
-
-    /**
-     * Create a file processor with pattern matching and text extraction.
-     */
-    private fun createFileProcessor(
-        startPath: Path,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
-    ): ItemProcessor<Path, com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
-        log.debug("Creating FileProcessor with pattern matching and Tika text extraction")
-        return FileProcessor(
-            startPath = startPath,
-            fileRepository = fsFileRepository,
-            folderRepository = fsFolderRepository,
-            fileMapper = fileMapper,
-            patternMatchingService = patternMatchingService,
-            textExtractionService = textExtractionService,
-            filePatterns = effectivePatterns.filePatterns
-        )
-    }
-
-    /**
-     * Create a file writer.
-     */
-    private fun createFileWriter(): ItemWriter<com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
-        log.debug("Creating FileWriter")
-        return FileWriter(fileService = fileService)
     }
 
     /**
@@ -263,15 +120,15 @@ class FsCrawlJobBuilder(
         maxDepth: Int,
         followLinks: Boolean
     ): Step {
-        log.info("Building combined crawl step for: {} (maxDepth={}, followLinks={})",
-            crawl.name, maxDepth, followLinks)
+        log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={})",
+            crawl.name, crawl.startPaths.size, maxDepth, followLinks)
 
-        val startPath = Path(crawl.startPath)
+        val startPaths = crawl.startPaths.map { Path(it) }
 
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
-            .reader(createCombinedReader(startPath, maxDepth, followLinks))
-            .processor(createCombinedProcessor(startPath, effectivePatterns))
+            .reader(createCombinedReader(startPaths, maxDepth, followLinks))
+            .processor(createCombinedProcessor(startPaths, effectivePatterns))
             .writer(createCombinedWriter())
             .build()
     }
@@ -280,14 +137,14 @@ class FsCrawlJobBuilder(
      * Create a combined reader that walks directories and collects files.
      */
     private fun createCombinedReader(
-        startPath: Path,
+        startPaths: List<Path>,
         maxDepth: Int,
         followLinks: Boolean
     ): ItemReader<CombinedCrawlItem> {
-        log.debug("Creating CombinedCrawlReader: startPath={}, maxDepth={}, followLinks={}",
-            startPath, maxDepth, followLinks)
+        log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}",
+            startPaths.size, maxDepth, followLinks)
         return CombinedCrawlReader(
-            startPath = startPath,
+            startPaths = startPaths,
             maxDepth = maxDepth,
             followLinks = followLinks
         )
@@ -297,12 +154,12 @@ class FsCrawlJobBuilder(
      * Create a combined processor that handles both folders and files.
      */
     private fun createCombinedProcessor(
-        startPath: Path,
+        startPaths: List<Path>,
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
     ): ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
         log.debug("Creating CombinedCrawlProcessor with pattern matching and caching")
         return CombinedCrawlProcessor(
-            startPath = startPath,
+            startPaths = startPaths,
             effectivePatterns = effectivePatterns,
             folderRepository = fsFolderRepository,
             fileRepository = fsFileRepository,
