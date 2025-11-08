@@ -8,7 +8,8 @@ spring:
       enabled: true
       name: fsCrawlJob
   datasource:
-    url: ${JDBC_DATABASE_URL:jdbc:postgresql://linyoga:5432/tempo}
+    # note: docker-compose maps port 5432 to 15432 (in case devs have 'real' postgres running bare metal
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:15432/tempo}
     username: ${JDBC_DATABASE_USERNAME:postgres}
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
@@ -31,6 +32,8 @@ spring:
   docker:
     compose:
       lifecycle-management: start-only
+      # comment out (or set false) if you have 'bare metal' postgres running
+      enabled: true
   session:
     jdbc.initialize-schema: always
 #error:

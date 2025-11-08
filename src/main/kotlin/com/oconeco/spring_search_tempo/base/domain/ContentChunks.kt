@@ -107,6 +107,15 @@ class ContentChunks {
     @Column(columnDefinition = "text")
     var conllu: String? = null
 
+    @Column
+    var sentiment: String? = null  // POSITIVE, NEGATIVE, NEUTRAL
+
+    @Column
+    var sentimentScore: Double? = null  // 0.0 to 1.0
+
+    @Column
+    var nlpProcessedAt: OffsetDateTime? = null  // Timestamp of NLP processing
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_chunk_id")
     var parentChunk: ContentChunks? = null
