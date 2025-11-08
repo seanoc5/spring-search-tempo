@@ -48,12 +48,13 @@ class FsCrawlJobBuilder(
 
     /**
      * Build a complete batch job for a specific crawl definition.
+     * Uses single-pass combined crawl strategy (ADR-004).
      *
      * @param crawl The crawl definition to build a job for
      * @return A configured Spring Batch Job
      */
     fun buildJob(crawl: CrawlDefinition): Job {
-        log.info("Building job for crawl: {} ({})", crawl.name, crawl.label)
+        log.info("Building single-pass job for crawl: {} ({})", crawl.name, crawl.label)
 
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
         val defaults = crawlConfigService.getDefaults()
@@ -61,6 +62,28 @@ class FsCrawlJobBuilder(
         val followLinks = crawl.getFollowLinks(defaults)
 
         return JobBuilder("fsCrawlJob", jobRepository)
+            .incrementer(RunIdIncrementer())
+            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks))
+            .next(buildChunkingStep(crawl))
+            .build()
+    }
+
+    /**
+     * Build a complete batch job using the legacy two-phase approach.
+     * Kept for comparison/rollback purposes (see ADR-004).
+     *
+     * @param crawl The crawl definition to build a job for
+     * @return A configured Spring Batch Job
+     */
+    fun buildTwoPhaseJob(crawl: CrawlDefinition): Job {
+        log.info("Building two-phase job for crawl: {} ({})", crawl.name, crawl.label)
+
+        val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
+        val defaults = crawlConfigService.getDefaults()
+        val maxDepth = crawl.getMaxDepth(defaults)
+        val followLinks = crawl.getFollowLinks(defaults)
+
+        return JobBuilder("fsCrawlJob_twoPhase", jobRepository)
             .incrementer(RunIdIncrementer())
             .start(buildFoldersStep(crawl, effectivePatterns, maxDepth, followLinks))
             .next(buildFilesStep(crawl, effectivePatterns))
@@ -228,5 +251,76 @@ class FsCrawlJobBuilder(
     private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
         log.debug("Creating ChunkWriter")
         return ChunkWriter(chunkService = chunkService)
+    }
+
+    /**
+     * Build the combined crawl step (single-pass folders + files).
+     * This step processes directories and their files together in one pass.
+     */
+    private fun buildCombinedCrawlStep(
+        crawl: CrawlDefinition,
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
+        maxDepth: Int,
+        followLinks: Boolean
+    ): Step {
+        log.info("Building combined crawl step for: {} (maxDepth={}, followLinks={})",
+            crawl.name, maxDepth, followLinks)
+
+        val startPath = Path(crawl.startPath)
+
+        return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
+            .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
+            .reader(createCombinedReader(startPath, maxDepth, followLinks))
+            .processor(createCombinedProcessor(startPath, effectivePatterns))
+            .writer(createCombinedWriter())
+            .build()
+    }
+
+    /**
+     * Create a combined reader that walks directories and collects files.
+     */
+    private fun createCombinedReader(
+        startPath: Path,
+        maxDepth: Int,
+        followLinks: Boolean
+    ): ItemReader<CombinedCrawlItem> {
+        log.debug("Creating CombinedCrawlReader: startPath={}, maxDepth={}, followLinks={}",
+            startPath, maxDepth, followLinks)
+        return CombinedCrawlReader(
+            startPath = startPath,
+            maxDepth = maxDepth,
+            followLinks = followLinks
+        )
+    }
+
+    /**
+     * Create a combined processor that handles both folders and files.
+     */
+    private fun createCombinedProcessor(
+        startPath: Path,
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+    ): ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
+        log.debug("Creating CombinedCrawlProcessor with pattern matching and caching")
+        return CombinedCrawlProcessor(
+            startPath = startPath,
+            effectivePatterns = effectivePatterns,
+            folderRepository = fsFolderRepository,
+            fileRepository = fsFileRepository,
+            folderMapper = folderMapper,
+            fileMapper = fileMapper,
+            patternMatchingService = patternMatchingService,
+            textExtractionService = textExtractionService
+        )
+    }
+
+    /**
+     * Create a combined writer that persists folders and files.
+     */
+    private fun createCombinedWriter(): ItemWriter<CombinedCrawlResult> {
+        log.debug("Creating CombinedCrawlWriter")
+        return CombinedCrawlWriter(
+            folderService = folderService,
+            fileService = fileService
+        )
     }
 }
