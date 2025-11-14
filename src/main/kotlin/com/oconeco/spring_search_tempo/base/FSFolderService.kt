@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable
 
 interface FSFolderService {
 
-    fun findAll(filter: String?, pageable: Pageable): Page<FSFolderDTO>
+    fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean = false): Page<FSFolderDTO>
 
     fun `get`(id: Long): FSFolderDTO
 

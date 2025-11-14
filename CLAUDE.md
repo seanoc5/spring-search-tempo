@@ -16,14 +16,16 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 
 ## Current Status
 
-**Active Phase**: Phase 1 - Core Foundation (90% complete)
+**Active Phase**: Phase 1 - Core Foundation (95% complete)
+
+**Just Completed**:
+- SKIP status implementation with persistence and UI filtering
+- Folder-level SKIP optimization (children not enumerated)
+- Apache Tika integration for text extraction from 400+ file formats
 
 **In Progress**:
-- Crawl configuration format and loader
-- Incremental crawl using timestamps
 - PostgreSQL full-text search (FTS) setup
-
-**Just Completed**: Apache Tika integration for text extraction from 400+ file formats
+- Incremental crawl using timestamps
 
 **Next Phase**: NLP integration (Stanford CoreNLP) for linguistic analysis
 
@@ -143,14 +145,20 @@ when (val result = textExtractionService.extractTextAndMetadata(path, maxSize)) 
 
 ### Processing Levels
 
-Files are processed based on pattern matching:
+Files and folders are processed based on hierarchical pattern matching:
 
-- **IGNORE**: Skip entirely (not stored)
+- **SKIP**: Metadata persisted but no further processing
+  - Folders: Metadata saved, children NOT enumerated (performance optimization)
+  - Files: Metadata saved, NO text extraction
+  - Provides audit trail of what was skipped
+  - Hidden from UI by default (toggle to show)
 - **LOCATE**: Store metadata only (path, size, timestamps)
 - **INDEX**: Extract full text + metadata
-- **ANALYZE**: INDEX + sentence-level chunking
+- **ANALYZE**: INDEX + sentence-level chunking + NLP
 
-Configured via `PatternMatchingService` and file patterns.
+**SKIP Optimization**: SKIP folders (like `.git`, `node_modules`) are identified at enumeration time - their contents are never listed from the filesystem, providing significant performance improvement.
+
+Configured via `PatternMatchingService` with folder and file patterns in `application.yml`.
 
 ---
 

@@ -127,7 +127,7 @@ class FsCrawlJobBuilder(
 
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
-            .reader(createCombinedReader(startPaths, maxDepth, followLinks))
+            .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns))
             .processor(createCombinedProcessor(startPaths, effectivePatterns))
             .writer(createCombinedWriter())
             .build()
@@ -135,18 +135,27 @@ class FsCrawlJobBuilder(
 
     /**
      * Create a combined reader that walks directories and collects files.
+     * Passes folder matcher to enable SKIP folder optimization at enumeration time.
      */
     private fun createCombinedReader(
         startPaths: List<Path>,
         maxDepth: Int,
-        followLinks: Boolean
+        followLinks: Boolean,
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
     ): ItemReader<CombinedCrawlItem> {
         log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}",
             startPaths.size, maxDepth, followLinks)
         return CombinedCrawlReader(
             startPaths = startPaths,
             maxDepth = maxDepth,
-            followLinks = followLinks
+            followLinks = followLinks,
+            folderMatcher = { path ->
+                patternMatchingService.determineFolderAnalysisStatus(
+                    path.toString(),
+                    effectivePatterns.folderPatterns,
+                    parentStatus = null
+                )
+            }
         )
     }
 

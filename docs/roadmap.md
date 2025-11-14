@@ -26,7 +26,7 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 ## Current Status (v0.1.0)
 
 **Version**: 0.1.0 - "Foundation"
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-14
 **Active Phase**: ✅ Phase 1 Complete! → Phase 2 Ready to Start
 
 ### Phase 1 - Core Foundation ✅ COMPLETE (100%)
@@ -45,7 +45,9 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 - ✅ Comprehensive testing (unit, integration)
 - ✅ Documentation structure (guides, architecture, reference)
 - ✅ **Crawl Configuration System** - YAML with pattern matching
-- ✅ **Pattern Matching Service** - Hierarchical IGNORE/LOCATE/INDEX/ANALYZE
+- ✅ **Pattern Matching Service** - Hierarchical SKIP/LOCATE/INDEX/ANALYZE
+- ✅ **SKIP Status Implementation** - Metadata persistence with UI filtering
+- ✅ **SKIP Folder Optimization** - Children not enumerated (performance boost)
 - ✅ **Incremental Crawling** - Timestamp-based change detection (90%+ faster)
 - ✅ **PostgreSQL Full-Text Search** - FTS vectors, GIN indexes, ts_rank
 - ✅ **Search API** - REST endpoints with pagination and ranking
@@ -121,6 +123,9 @@ Phase 1 foundation is complete. All success criteria met:
 | PostgreSQL FTS Setup | ✅ Done | 2025-11-07 |
 | Search API Endpoints | ✅ Done | 2025-11-07 |
 | Search Web UI | ✅ Done | 2025-11-07 |
+| SKIP Status Implementation | ✅ Done | 2025-11-14 |
+| SKIP Folder Optimization (Reader) | ✅ Done | 2025-11-14 |
+| SKIP UI Filtering (FSFile & FSFolder) | ✅ Done | 2025-11-14 |
 
 ### Success Criteria - ALL MET ✅
 

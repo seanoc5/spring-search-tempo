@@ -16,12 +16,36 @@
                 <div th:replace="~{fragments/utils::searchFilter(object='fSFolder')}" />
                 <div th:replace="~{fragments/utils::sorting(object='fSFolder', sortOptions=${ {'id,ASC', 'uri,ASC', 'label,ASC'} }, columnClass='offset-lg-4')}" />
             </div>
+            <!-- SKIP filter toggle -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showSkippedToggle"
+                               th:checked="${showSkipped}"
+                               onchange="window.location.href = updateQueryParam('showSkipped', this.checked ? 'true' : 'false')">
+                        <label class="form-check-label" for="showSkippedToggle">
+                            Show skipped items (folders marked as SKIP for exclusion)
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <script>
+                function updateQueryParam(key, value) {
+                    const url = new URL(window.location);
+                    if (value === 'false') {
+                        url.searchParams.delete(key);
+                    } else {
+                        url.searchParams.set(key, value);
+                    }
+                    return url.toString();
+                }
+            </script>
             <div th:if="${fSFolders.empty}">[[#{fSFolder.list.empty}]]</div>
             <div th:if="${!fSFolders.empty}" class="table-responsive">
                 <table class="table table-striped table-hover align-middle">
                     <thead>
                         <tr>
-                            <th scope="col">[[#{fSFolder.id.label}]]</th>
+                            <th scope="col">Name</th>
                             <th scope="col">[[#{fSFolder.crawlDepth.label}]]</th>
                             <th scope="col">[[#{fSFolder.size.label}]]</th>
                             <th scope="col">[[#{fSFolder.version.label}]]</th>
@@ -30,8 +54,13 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="fSFolder : ${fSFolders}">
-                            <td>[[${fSFolder.id}]]</td>
+                        <tr th:each="fSFolder : ${fSFolders}"
+                            th:classappend="${fSFolder.analysisStatus?.name() == 'SKIP'} ? 'table-secondary text-muted' : ''">
+                            <td>
+                                [[${fSFolder.label}]]
+                                <span th:if="${fSFolder.analysisStatus?.name() == 'SKIP'}"
+                                      class="badge bg-secondary ms-2">SKIP</span>
+                            </td>
                             <td>[[${fSFolder.crawlDepth}]]</td>
                             <td>[[${fSFolder.size}]]</td>
                             <td>[[${fSFolder.version}]]</td>

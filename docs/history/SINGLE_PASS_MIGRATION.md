@@ -2,7 +2,7 @@
 
 **Date**: 2025-11-07
 **Status**: ✅ Implemented (Testing Pending)
-**Related**: [ADR-004: Single-Pass Crawl Strategy](docs/architecture/decisions/004-single-pass-crawl-strategy.md)
+**Related**: [ADR-004: Single-Pass Crawl Strategy](../architecture/decisions/004-single-pass-crawl-strategy.md)
 
 ---
 
@@ -435,10 +435,10 @@ If issues arise, can easily revert to two-phase approach:
 
 ## Related Documentation
 
-- [ADR-004: Single-Pass Crawl Strategy](docs/architecture/decisions/004-single-pass-crawl-strategy.md)
-- [Batch Jobs Guide](docs/guides/batch-jobs.md)
-- [Crawl Configuration Guide](docs/guides/crawl-configuration.md)
-- [Module Design](docs/architecture/module-design.md)
+- [ADR-004: Single-Pass Crawl Strategy](../architecture/decisions/004-single-pass-crawl-strategy.md)
+- [Batch Jobs Guide](../guides/batch-jobs.md)
+- [Crawl Configuration Guide](../guides/crawl-configuration.md)
+- [Module Design](../architecture/module-design.md)
 
 ---
 

@@ -29,12 +29,14 @@ class FSFolderController(
     @GetMapping
     fun list(
         @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "showSkipped", required = false, defaultValue = "false") showSkipped: Boolean,
         @SortDefault(sort = ["id"]) @PageableDefault(size = 20) pageable: Pageable,
         model: Model
     ): String {
-        val fSFolders = fSFolderService.findAll(filter, pageable)
+        val fSFolders = fSFolderService.findAll(filter, pageable, showSkipped)
         model.addAttribute("fSFolders", fSFolders)
         model.addAttribute("filter", filter)
+        model.addAttribute("showSkipped", showSkipped)
         model.addAttribute("paginationModel", WebUtils.getPaginationModel(fSFolders))
         return "fSFolder/list"
     }

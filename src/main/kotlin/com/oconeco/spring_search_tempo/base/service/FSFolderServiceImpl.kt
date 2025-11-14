@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
@@ -22,12 +23,21 @@ class FSFolderServiceImpl(
     private val fSFolderMapper: FSFolderMapper
 ) : FSFolderService {
 
-    override fun findAll(filter: String?, pageable: Pageable): Page<FSFolderDTO> {
+    override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFolderDTO> {
         var page: Page<FSFolder>
         if (filter != null) {
-            page = fSFolderRepository.findAllById(filter.toLongOrNull(), pageable)
+            val filterId = filter.toLongOrNull()
+            page = if (showSkipped) {
+                fSFolderRepository.findAllById(filterId, pageable)
+            } else {
+                fSFolderRepository.findByIdAndAnalysisStatusNot(filterId ?: 0L, AnalysisStatus.SKIP, pageable)
+            }
         } else {
-            page = fSFolderRepository.findAll(pageable)
+            page = if (showSkipped) {
+                fSFolderRepository.findAll(pageable)
+            } else {
+                fSFolderRepository.findByAnalysisStatusNot(AnalysisStatus.SKIP, pageable)
+            }
         }
         return PageImpl(page.content
                 .map { fSFolder -> fSFolderMapper.updateFSFolderDTO(fSFolder, FSFolderDTO()) },

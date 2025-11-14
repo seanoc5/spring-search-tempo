@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.service
 
 import org.apache.tika.Tika
 import org.apache.tika.exception.TikaException
+import org.apache.tika.exception.WriteLimitReachedException
 import org.apache.tika.metadata.Metadata
 import org.apache.tika.metadata.TikaCoreProperties
 import org.apache.tika.metadata.DublinCore
@@ -117,6 +118,7 @@ class TextExtractionService {
      * @return TextAndMetadataResult with extracted text and metadata
      */
     fun extractTextAndMetadata(path: Path, maxSize: Long = MAX_STRING_LENGTH.toLong()): TextAndMetadataResult {
+        var textSize = -1
         return try {
             // Check file size before attempting extraction
             val fileSize = path.fileSize()
@@ -141,6 +143,7 @@ class TextExtractionService {
 
             // Extract text content
             val text = handler.toString()
+            textSize = text.length
             val sanitizedText = text.replace("\u0000", "")
 
             // Extract metadata fields using string-based lookups
@@ -200,6 +203,11 @@ class TextExtractionService {
         } catch (e: OutOfMemoryError) {
             logger.error("Out of memory extracting from: {}", path, e)
             TextAndMetadataResult.Failure("Out of memory - file too large or complex")
+
+        } catch (e: WriteLimitReachedException) {
+            val msg = "Text content size(${textSize}) exceeds max limit: ${MAX_STRING_LENGTH} for path:'${path}'"
+            logger.error(msg)
+            TextAndMetadataResult.Failure(msg)
 
         } catch (e: Exception) {
             logger.error("Unexpected error extracting from: {}", path, e)

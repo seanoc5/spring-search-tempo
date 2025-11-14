@@ -52,7 +52,7 @@ class CombinedCrawlProcessor(
 
     companion object {
         private val log = LoggerFactory.getLogger(CombinedCrawlProcessor::class.java)
-        private const val MAX_TEXT_EXTRACT_SIZE = 100 * 1024 * 1024 // 10MB limit
+        private const val MAX_TEXT_EXTRACT_SIZE = 100 * 1024 * 1024 // 10MB limit  10,444,800
     }
 
     // Cache for parent folder analysis status (supports hierarchical matching)
