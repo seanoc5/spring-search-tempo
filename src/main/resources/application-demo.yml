@@ -1,0 +1,39 @@
+server:
+  port: 8085
+
+spring:
+  batch:
+    job:
+      enabled: true
+      name: fsCrawlJob
+
+app:
+  crawl:
+    defaults:
+      max-depth: 5
+      follow-links: false
+      parallel: false
+      folder-patterns:
+        # SKIP: Persist folder metadata but don't crawl children (processing stops here)
+        skip:
+          - ".*/\\.git/.*"
+          - ".*/node_modules/.*"
+          - ".*/skip_folder/.*"    # Custom pattern for demo
+      file-patterns:
+        # SKIP: Persist file metadata only (no text extraction)
+        skip:
+          - ".*\\.(tmp|bak)$"
+
+    crawls:
+      - name: "SKIP_OPT_TEST"
+        label: "SKIP Optimization Test - .git folder"
+        enabled: true
+        start-paths:
+          - "/tmp/skip_optimization_test"
+        max-depth: 10
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.txt$"
