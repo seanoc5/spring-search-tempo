@@ -10,6 +10,9 @@ import org.springframework.batch.item.ItemWriter
  * Writer that persists both folders and files from combined crawl results.
  * Uses batch operations for efficiency when multiple items are written together.
  *
+ * Persists all items including those with SKIP status (metadata only).
+ * SKIP items are stored in the database for audit trail and UI filtering.
+ *
  * @param folderService Service for persisting folders
  * @param fileService Service for persisting files
  */

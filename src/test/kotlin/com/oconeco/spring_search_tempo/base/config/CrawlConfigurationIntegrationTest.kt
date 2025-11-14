@@ -106,8 +106,8 @@ class CrawlConfigurationIntegrationTest {
             parentStatus = null
         )
 
-        assertEquals(AnalysisStatus.IGNORE, gitFolderStatus,
-            ".git folders should be ignored based on default patterns")
+        assertEquals(AnalysisStatus.SKIP, gitFolderStatus,
+            ".git folders should be skipped based on default patterns")
     }
 
     @Test
@@ -122,8 +122,8 @@ class CrawlConfigurationIntegrationTest {
             parentFolderStatus = AnalysisStatus.INDEX
         )
 
-        assertEquals(AnalysisStatus.IGNORE, tmpFileStatus,
-            ".tmp files should be ignored based on default patterns")
+        assertEquals(AnalysisStatus.SKIP, tmpFileStatus,
+            ".tmp files should be skipped based on default patterns")
     }
 
     @Test

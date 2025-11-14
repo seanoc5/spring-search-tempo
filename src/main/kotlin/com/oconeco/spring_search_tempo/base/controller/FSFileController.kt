@@ -36,12 +36,14 @@ class FSFileController(
     @GetMapping
     fun list(
         @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "showSkipped", required = false, defaultValue = "false") showSkipped: Boolean,
         @SortDefault(sort = ["id"]) @PageableDefault(size = 20) pageable: Pageable,
         model: Model
     ): String {
-        val fSFiles = fSFileService.findAll(filter, pageable)
+        val fSFiles = fSFileService.findAll(filter, pageable, showSkipped)
         model.addAttribute("fSFiles", fSFiles)
         model.addAttribute("filter", filter)
+        model.addAttribute("showSkipped", showSkipped)
         model.addAttribute("paginationModel", WebUtils.getPaginationModel(fSFiles))
         return "fSFile/list"
     }

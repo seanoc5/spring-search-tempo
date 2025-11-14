@@ -11,10 +11,11 @@ import java.util.regex.Pattern
  * Service for determining AnalysisStatus based on hierarchical pattern matching.
  *
  * Pattern matching follows these rules:
- * 1. SKIP patterns have highest priority (always exclude if matched)
+ * 1. SKIP patterns have highest priority (matched items persisted with SKIP status, no further processing)
  * 2. For folders: explicit patterns (ANALYZE > INDEX > LOCATE), then inherit from parent
  * 3. For files: explicit patterns, then inherit from parent folder (capped at INDEX for safety)
  * 4. Hierarchical: folder's AnalysisStatus affects all children unless overridden
+ * 5. SKIP folders: children are not crawled at all (processing stops)
  */
 @Service
 class PatternMatchingService {
@@ -36,10 +37,10 @@ class PatternMatchingService {
         patterns: PatternSet,
         parentStatus: AnalysisStatus?
     ): AnalysisStatus {
-        // SKIP has highest priority - always exclude if matched
+        // SKIP has highest priority - persist with SKIP status, no further processing
         if (matchesAny(path, patterns.skip)) {
             logger.debug("Folder {} matched SKIP pattern", path)
-            return AnalysisStatus.IGNORE
+            return AnalysisStatus.SKIP
         }
 
         // Check explicit patterns in priority order: ANALYZE > INDEX > LOCATE
@@ -79,13 +80,13 @@ class PatternMatchingService {
         // Check file-specific SKIP patterns first
         if (matchesAny(path, filePatterns.skip)) {
             logger.debug("File {} matched SKIP pattern", path)
-            return AnalysisStatus.IGNORE
+            return AnalysisStatus.SKIP
         }
 
-        // If parent folder is IGNORE, file should also be ignored
-        if (parentFolderStatus == AnalysisStatus.IGNORE) {
-            logger.debug("File {} ignored due to parent folder status", path)
-            return AnalysisStatus.IGNORE
+        // If parent folder is SKIP, file should also be skipped
+        if (parentFolderStatus == AnalysisStatus.SKIP) {
+            logger.debug("File {} skipped due to parent folder status", path)
+            return AnalysisStatus.SKIP
         }
 
         // Check explicit file patterns: ANALYZE > INDEX > LOCATE
@@ -105,7 +106,7 @@ class PatternMatchingService {
         // No explicit pattern match - inherit from parent folder, but cap at INDEX
         // This prevents automatic ANALYZE of all files in an ANALYZE folder
         val inherited = when (parentFolderStatus) {
-            AnalysisStatus.IGNORE -> AnalysisStatus.IGNORE
+            AnalysisStatus.SKIP -> AnalysisStatus.SKIP
             AnalysisStatus.ANALYZE -> AnalysisStatus.INDEX  // Cap at INDEX for safety
             AnalysisStatus.SEMANTIC -> AnalysisStatus.INDEX  // Cap at INDEX for safety
             else -> parentFolderStatus

@@ -62,6 +62,7 @@ app:
       follow-links: false
       parallel: false
       folder-patterns:
+        # SKIP: Persist folder metadata but don't crawl children (processing stops here)
         skip:
           - ".*/\\.git/.*"
           - ".*/\\.gradle/.*"
@@ -83,34 +84,63 @@ app:
           - "/media/.*"
           - "/lost\\+found/.*"
       file-patterns:
+        # SKIP: Persist file metadata only (no text extraction)
         skip:
           - ".*\\.(lck|tmp|~|bak|bk1|bk2)$"
           - ".*/(deleteme.*|ignoreme.*)"
 
     # List of crawl definitions
+    # Organized by scope: specific content -> user home -> work -> system -> everything else
     crawls:
+      # ===== PHASE 1: USER CONTENT (Specific Directories) =====
+
       - name: "USER_DOCUMENTS"
-        label: "User Docs"
+        label: "User Documents"
         enabled: true
         start-paths:
           - "${user.home}/Documents"
-        max-depth: 15
+        max-depth: 20
         parallel: true
         folder-patterns:
           index:
             - ".*"
         file-patterns:
           analyze:
-            - ".*\\.(adoc|docx?|md|odt|pdf|pptx?|rtf|txt|xlsx?)$"
+            - ".*\\.(md|txt|org|rst|adoc)$"
+            - ".*/README.*$"
+            - ".*/CHANGELOG.*$"
           index:
-            - ".*\\.(csv|txt)$"
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
 
       - name: "USER_PICTURES"
         label: "User Pictures"
         enabled: true
         start-paths:
           - "${user.home}/Pictures"
-        max-depth: 8
+        max-depth: 15
+        folder-patterns:
+          skip:
+            - ".*/\\.thumbnails/.*"
+            - ".*/cache/.*"
+            - ".*/\\.cache/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|heif|tiff|tif|raw|cr2|nef|arw|dng)$"
+            - ".*\\.(ico)$"
+          index:
+            # Sidecar metadata files
+            - ".*\\.(xmp|thm|nfo)$"
+
+      - name: "USER_VIDEOS"
+        label: "User Videos"
+        enabled: true
+        start-paths:
+          - "${user.home}/Videos"
+        max-depth: 10
         folder-patterns:
           skip:
             - ".*/\\.thumbnails/.*"
@@ -119,67 +149,73 @@ app:
             - ".*"
         file-patterns:
           locate:
-            - ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|tiff|raw)$"
+            - ".*\\.(mp4|avi|mov|mkv|flv|wmv|webm|m4v|mpeg|mpg|3gp|ogv)$"
+          index:
+            # Subtitle and metadata files
+            - ".*\\.(srt|sub|vtt|ass|ssa|nfo)$"
 
-      - name: "WORK"
-        label: "Work Projects"
+      - name: "USER_MUSIC"
+        label: "User Music"
         enabled: true
         start-paths:
-          - "/opt/work"
+          - "${user.home}/Music"
         max-depth: 10
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape)$"
+          index:
+            # Playlist and metadata files
+            - ".*\\.(m3u|m3u8|pls|cue|nfo)$"
+
+      # ===== PHASE 2: USER HOME (General) =====
+
+      - name: "USER_HOME_GENERAL"
+        label: "User Home (General)"
+        enabled: true
+        start-paths:
+          - "${user.home}"
+        max-depth: 20
         parallel: true
         folder-patterns:
-          index:
+          skip:
+            # Skip already-crawled specific directories to avoid duplication
+            - "${user.home}/Documents/.*"
+            - "${user.home}/Pictures/.*"
+            - "${user.home}/Videos/.*"
+            - "${user.home}/Music/.*"
+            - "${user.home}/Downloads/.*"
+            - "${user.home}/Desktop/.*"
+            # Skip cache and temp directories
+            - ".*/\\.cache/.*"
+            - ".*/\\.local/share/Trash/.*"
+            - ".*/\\.thumbnails/.*"
+            - ".*/snap/.*/.*"  # Snap app caches
+          locate:
             - ".*"
         file-patterns:
-          index:
-            - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash)$"
-            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
-            - ".*\\.(md|txt|rst|adoc)$"
-            - ".*/Dockerfile$"
-            - ".*/(Makefile|Rakefile|Gemfile|build\\.gradle.*|pom\\.xml)$"
+          skip:
+            # Skip large binaries and installers
+            - ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg|flatpak|snap)$"
           analyze:
-            - ".*\\.(md|txt)$"
-
-      - name: "CONFIG"
-        label: "System Configuration"
-        enabled: false
-        start-paths:
-          - "/etc"
-        max-depth: 3
-        folder-patterns:
-          locate:
-            - ".*"
-        file-patterns:
+            - ".*\\.(md|txt|org|rst|adoc)$"
           index:
-            - ".*\\.(conf|cfg|config|ini)$"
-            - ".*/.*\\.d/.*$"
-
-      - name: "SYSTEM_USR"
-        label: "System /usr Files"
-        enabled: false
-        start-paths:
-          - "/usr"
-        max-depth: 5
-        folder-patterns:
+            # Documents
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            # Code files
+            - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash|fish|zsh)$"
+            # Config files
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+            - ".*/\\.bashrc$"
+            - ".*/\\.zshrc$"
+            - ".*/\\.profile$"
+            - ".*/\\.gitconfig$"
           locate:
-            - ".*"
-        file-patterns:
-          locate:
-            - ".*"
-
-      - name: "SYSTEM_BOOT"
-        label: "System /boot Files"
-        enabled: false
-        start-paths:
-          - "/boot"
-        max-depth: 3
-        folder-patterns:
-          locate:
-            - ".*"
-        file-patterns:
-          locate:
-            - ".*"
+            # Binaries and archives (metadata only)
+            - ".*\\.(zip|tar|gz|bz2|7z|rar|xz)$"
+            - ".*\\.(so|a|o)$"
 
       - name: "USER_DOWNLOADS"
         label: "User Downloads"
@@ -187,6 +223,7 @@ app:
         start-paths:
           - "${user.home}/Downloads"
         max-depth: 5
+        parallel: true
         folder-patterns:
           index:
             - ".*"
@@ -194,7 +231,7 @@ app:
           skip:
             - ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg)$"
           index:
-            - ".*\\.(pdf|txt|md|docx?|xlsx?|csv)$"
+            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|csv)$"
 
       - name: "USER_DESKTOP"
         label: "User Desktop"
@@ -208,4 +245,250 @@ app:
         file-patterns:
           index:
             - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"
+
+      # ===== PHASE 3: WORK =====
+
+      - name: "WORK"
+        label: "Work Projects"
+        enabled: true
+        start-paths:
+          - "/opt/work"
+        max-depth: 12
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            # Source code (comprehensive language support)
+            - ".*\\.(kt|kts|java|scala)$"                     # JVM
+            - ".*\\.(py|pyi)$"                                # Python
+            - ".*\\.(js|ts|jsx|tsx|mjs|cjs|vue|svelte)$"     # JavaScript/TypeScript
+            - ".*\\.(go)$"                                    # Go
+            - ".*\\.(rs)$"                                    # Rust
+            - ".*\\.(c|h|cpp|hpp|cc|cxx|hxx)$"               # C/C++
+            - ".*\\.(rb|rake)$"                              # Ruby
+            - ".*\\.(php)$"                                  # PHP
+            - ".*\\.(sh|bash|zsh|fish)$"                     # Shell
+            - ".*\\.(cs|fs|vb)$"                             # .NET
+            - ".*\\.(swift|m|mm)$"                           # Swift/Objective-C
+            - ".*\\.(lua|r|R|sql|pl|perl)$"                  # Other languages
+
+            # Configuration
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+            - ".*\\.env\\.example$"
+
+            # Build files
+            - ".*/Dockerfile.*$"
+            - ".*/docker-compose.*\\.ya?ml$"
+            - ".*/(Makefile|Rakefile|Gemfile|CMakeLists\\.txt)$"
+            - ".*/(package\\.json|composer\\.json|requirements\\.txt|Pipfile)$"
+            - ".*/(build\\.gradle.*|settings\\.gradle.*|pom\\.xml)$"
+            - ".*/(Cargo\\.toml|Cargo\\.lock|go\\.mod|go\\.sum)$"
+
+            # Documentation
+            - ".*\\.(md|rst|adoc|txt)$"
+
+          analyze:
+            # Deep NLP analysis for documentation
+            - ".*/(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$"
+            - ".*\\.(md|txt|adoc)$"
+
+      # ===== PHASE 4: LOGGING =====
+
+      - name: "SYSTEM_LOGS"
+        label: "System Logs"
+        enabled: false  # Disabled by default - enable when needed
+        start-paths:
+          - "/var/log"
+        max-depth: 8
+        folder-patterns:
+          skip:
+            - ".*/journal/.*"  # Binary systemd journal files
+          index:
+            - ".*"
+        file-patterns:
+          skip:
+            - ".*\\.(gz|bz2|xz)$"  # Skip compressed old logs
+          index:
+            # Text log files
+            - ".*\\.log$"
+            - ".*\\.log\\.[0-9]+$"
+            # Syslog variants
+            - ".*/syslog.*"
+            - ".*/kern\\.log.*"
+            - ".*/auth\\.log.*"
+            - ".*/daemon\\.log.*"
+            - ".*/messages.*"
+
+      # ===== PHASE 5: OS CONFIGS =====
+
+      - name: "SYSTEM_CONFIG"
+        label: "System Configuration (/etc)"
+        enabled: false  # Disabled by default - enable when needed
+        start-paths:
+          - "/etc"
+        max-depth: 5
+        folder-patterns:
+          skip:
+            # Skip sensitive directories
+            - ".*/ssl/.*"
+            - ".*/pki/.*"
+            - ".*/ssh/.*"
+            - ".*/openvpn/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          skip:
+            # Skip secrets and keys
+            - ".*/shadow$"
+            - ".*/shadow-$"
+            - ".*/passwd-$"
+            - ".*/gshadow.*$"
+            - ".*\\.key$"
+            - ".*\\.pem$"
+            - ".*\\.crt$"
+            - ".*\\.pub$"
+          index:
+            # Config files
+            - ".*\\.conf$"
+            - ".*\\.cfg$"
+            - ".*\\.config$"
+            - ".*\\.ini$"
+
+            # Systemd units
+            - ".*\\.service$"
+            - ".*\\.socket$"
+            - ".*\\.timer$"
+            - ".*\\.target$"
+            - ".*\\.mount$"
+
+            # Config directories
+            - ".*/.*\\.d/.*$"
+
+            # Important text configs (no extension)
+            - ".*/hosts$"
+            - ".*/hostname$"
+            - ".*/fstab$"
+            - ".*/crontab.*"
+            - ".*/profile.*"
+            - ".*/bashrc.*"
+            - ".*/resolv\\.conf$"
+            - ".*/environment$"
+            - ".*/apt/sources\\.list.*"
+            - ".*/network/interfaces.*"
+
+      # ===== PHASE 6: SYSTEM DIRECTORIES =====
+
+      - name: "SYSTEM_USR"
+        label: "System /usr"
+        enabled: false  # Disabled by default - very large
+        start-paths:
+          - "/usr"
+        max-depth: 6
+        folder-patterns:
+          skip:
+            - "/usr/lib/.*"     # Binary libraries
+            - "/usr/lib64/.*"
+            - "/usr/libexec/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"  # Metadata only for system files
+          index:
+            # Only index documentation and man pages
+            - "/usr/share/man/.*"
+            - "/usr/share/doc/.*\\.(txt|md|html?)$"
+
+      - name: "SYSTEM_OPT"
+        label: "System /opt"
+        enabled: false
+        start-paths:
+          - "/opt"
+        max-depth: 8
+        folder-patterns:
+          skip:
+            - "/opt/work/.*"  # Already covered by WORK crawl
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"
+
+      - name: "SYSTEM_VAR"
+        label: "System /var"
+        enabled: false
+        start-paths:
+          - "/var"
+        max-depth: 6
+        folder-patterns:
+          skip:
+            - "/var/log/.*"      # Covered by SYSTEM_LOGS
+            - "/var/cache/.*"    # Cache files
+            - "/var/tmp/.*"      # Temp files
+            - "/var/lib/docker/.*"  # Docker storage
+            - "/var/lib/flatpak/.*"
+            - "/var/snap/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"
+
+      - name: "SYSTEM_BOOT"
+        label: "System /boot"
+        enabled: false
+        start-paths:
+          - "/boot"
+        max-depth: 3
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*"
+          index:
+            # Bootloader configs
+            - ".*/grub\\.cfg$"
+            - ".*/grub\\.conf$"
+            - ".*\\.conf$"
+
+      # ===== PHASE 7: EVERYTHING ELSE (Root Filesystem) =====
+
+      - name: "SYSTEM_ROOT"
+        label: "Root Filesystem"
+        enabled: false  # Disabled by default - comprehensive crawl
+        start-paths:
+          - "/"
+        max-depth: 20
+        folder-patterns:
+          skip:
+            # Skip major directories already covered
+            - "/home/sean/.*"         # USER_HOME_GENERAL
+            - "/opt/work/.*"          # WORK
+            - "/etc/.*"               # SYSTEM_CONFIG
+            - "/var/log/.*"           # SYSTEM_LOGS
+            - "/usr/.*"               # SYSTEM_USR
+            - "/boot/.*"              # SYSTEM_BOOT
+
+            # Skip always-excluded system directories
+            - "/proc/.*"
+            - "/sys/.*"
+            - "/dev/.*"
+            - "/tmp/.*"
+            - "/run/.*"
+            - "/mnt/.*"
+            - "/media/.*"
+            - "/lost\\+found/.*"
+            - "/snap/.*"
+
+            # Skip other users' home directories (privacy)
+            - "/home/(?!sean).*"
+            - "/root/.*"
+          locate:
+            - ".*"  # Everything else: metadata only
+        file-patterns:
+          locate:
+            - ".*"
 

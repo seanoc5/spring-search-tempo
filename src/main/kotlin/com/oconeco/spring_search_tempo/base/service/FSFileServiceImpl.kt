@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.FSFileService
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
@@ -27,12 +28,21 @@ class FSFileServiceImpl(
     private val fSFileMapper: FSFileMapper
 ) : FSFileService {
 
-    override fun findAll(filter: String?, pageable: Pageable): Page<FSFileDTO> {
+    override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFileDTO> {
         var page: Page<FSFile>
         if (filter != null) {
-            page = fSFileRepository.findAllById(filter.toLongOrNull(), pageable)
+            val filterId = filter.toLongOrNull()
+            page = if (showSkipped) {
+                fSFileRepository.findAllById(filterId, pageable)
+            } else {
+                fSFileRepository.findByIdAndAnalysisStatusNot(filterId ?: 0L, AnalysisStatus.SKIP, pageable)
+            }
         } else {
-            page = fSFileRepository.findAll(pageable)
+            page = if (showSkipped) {
+                fSFileRepository.findAll(pageable)
+            } else {
+                fSFileRepository.findByAnalysisStatusNot(AnalysisStatus.SKIP, pageable)
+            }
         }
         return PageImpl(page.content
                 .map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },

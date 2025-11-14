@@ -93,8 +93,17 @@ enum class Status {
     FAILED
 }
 
+/**
+ * Analysis status levels for file system objects.
+ *
+ * - SKIP: Item matched skip pattern - metadata persisted but no further processing
+ * - LOCATE: Metadata only (like plocate) - path, size, timestamps
+ * - INDEX: Text extraction and full-text search indexing
+ * - ANALYZE: INDEX + NLP processing (NER, POS, sentiment, parsing)
+ * - SEMANTIC: Reserved for future vector embedding support (Phase 3)
+ */
 enum class AnalysisStatus {
-    IGNORE,
+    SKIP,
     LOCATE,
     INDEX,
     ANALYZE,

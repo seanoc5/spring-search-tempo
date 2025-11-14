@@ -64,17 +64,28 @@ class CombinedCrawlProcessor(
     private val folderCache = mutableMapOf<String, com.oconeco.spring_search_tempo.base.domain.FSFolder?>()
 
     override fun process(item: CombinedCrawlItem): CombinedCrawlResult? {
-        log.debug("Processing combined item: directory={}, files={}",
-            item.directory, item.files.size)
+        log.debug(
+            "Processing combined item: directory={}, files={}",
+            item.directory, item.files.size
+        )
 
         // Process the folder first
         val folderDto = processFolder(item.directory, item.files.size) ?: run {
-            // Folder is IGNORE or unchanged - skip entire directory including files
-            log.debug("Skipping directory and all {} files: {}", item.files.size, item.directory)
+            // Folder is unchanged - skip entire directory including files
+            log.debug("Skipping unchanged directory and all {} files: {}", item.files.size, item.directory)
             return null
         }
 
-        // If folder is being processed, process its files
+        // If folder is SKIP, persist folder metadata but don't process any children
+        if (folderDto.analysisStatus == AnalysisStatus.SKIP) {
+            log.info("Folder marked as SKIP, persisting folder metadata only (no children processed): {}", folderDto.uri)
+            return CombinedCrawlResult(
+                folder = folderDto,
+                files = emptyList()  // No files processed - SKIP stops crawling here
+            )
+        }
+
+        // If folder is being processed normally, process its files
         // Batch lookup existing files in this directory for efficient comparison
         val fileDtos = processFiles(item.files, folderDto.analysisStatus)
 
@@ -117,8 +128,10 @@ class CombinedCrawlProcessor(
                 return null
             }
 
-            log.debug("Folder exists, will update: {} (unchanged={}, status={})",
-                uri, isUnchanged, existingFolder.status)
+            log.debug(
+                "Folder exists, will update: {} (unchanged={}, status={})",
+                uri, isUnchanged, existingFolder.status
+            )
         }
 
         // Determine analysis status using hierarchical pattern matching
@@ -132,10 +145,11 @@ class CombinedCrawlProcessor(
         // Cache this folder's status for its children
         parentStatusCache[uri] = analysisStatus
 
-        // If folder is IGNORE, skip it entirely
-        if (analysisStatus == AnalysisStatus.IGNORE) {
-            log.debug("Folder marked as IGNORE by patterns, skipping: {}", uri)
-            return null
+        // If folder is SKIP, persist metadata but don't process children
+        // Return the DTO so metadata is saved, but children won't be crawled
+        if (analysisStatus == AnalysisStatus.SKIP) {
+            log.debug("Folder marked as SKIP by patterns, persisting metadata only: {}", uri)
+            // Continue to create DTO below - it will be persisted with SKIP status
         }
 
         // Create or update DTO
@@ -162,8 +176,10 @@ class CombinedCrawlProcessor(
         // Try to read POSIX attributes (owner, group, permissions)
         readPosixAttributes(directory, dto)
 
-        log.trace("Processed folder: uri={}, status={}, analysisStatus={}",
-            dto.uri, dto.status, dto.analysisStatus)
+        log.trace(
+            "Processed folder: uri={}, status={}, analysisStatus={}",
+            dto.uri, dto.status, dto.analysisStatus
+        )
 
         return dto
     }
@@ -193,6 +209,8 @@ class CombinedCrawlProcessor(
             val dto = processFile(file, parentFolderStatus)
             if (dto != null) {
                 fileDtos.add(dto)
+            } else {
+                log.info("File {} was skipped", file)
             }
         }
 
@@ -229,8 +247,10 @@ class CombinedCrawlProcessor(
                 return null
             }
 
-            log.debug("File modified, will update: {} (fs_modified={}, db_modified={})",
-                uri, fsMetadata.lastModified, existingFile.fsLastModified)
+            log.debug(
+                "File modified, will update: {} (fs_modified={}, db_modified={})",
+                uri, fsMetadata.lastModified, existingFile.fsLastModified
+            )
         }
 
         // Determine analysis status using file patterns and parent folder status
@@ -239,12 +259,6 @@ class CombinedCrawlProcessor(
             filePatterns = effectivePatterns.filePatterns,
             parentFolderStatus = parentFolderStatus ?: AnalysisStatus.LOCATE
         )
-
-        // If file is IGNORE, skip it
-        if (analysisStatus == AnalysisStatus.IGNORE) {
-            log.trace("File marked as IGNORE by patterns, skipping: {}", uri)
-            return null
-        }
 
         // Create or update DTO
         val dto = FSFileDTO()
@@ -262,19 +276,36 @@ class CombinedCrawlProcessor(
         if (dto.version == null) {
             dto.version = 0L
         } else {
-            log.debug("File version already set: {}", dto.version)
+            log.info("File version already set: {}", dto.version)       // todo -- move to debug
         }
 
-        // Extract text and metadata if status is INDEX or ANALYZE
-        if (analysisStatus == AnalysisStatus.INDEX || analysisStatus == AnalysisStatus.ANALYZE) {
-            extractTextAndMetadata(file, dto)
+        // Extract text and metadata based on analysis status
+        when (analysisStatus) {
+            AnalysisStatus.SKIP -> {
+                log.debug("File marked as SKIP, persisting metadata only (no text extraction): {}", uri)
+                // Metadata already set above - no text extraction
+            }
+            AnalysisStatus.LOCATE -> {
+                log.debug("File marked as LOCATE, metadata only: {}", uri)
+                // Metadata already set above - no text extraction
+            }
+            AnalysisStatus.INDEX, AnalysisStatus.ANALYZE -> {
+                log.debug("Extracting text and metadata for file ({}): {}", analysisStatus, uri)
+                extractTextAndMetadata(file, dto)
+            }
+            AnalysisStatus.SEMANTIC -> {
+                log.debug("File marked as SEMANTIC (future), treating as INDEX for now: {}", uri)
+                extractTextAndMetadata(file, dto)
+            }
         }
 
         // Read POSIX attributes if available
         readPosixAttributes(file, dto)
 
-        log.trace("Processed file: uri={}, status={}, analysisStatus={}, hasText={}",
-            dto.uri, dto.status, dto.analysisStatus, dto.bodyText != null)
+        log.trace(
+            "Processed file: uri={}, status={}, analysisStatus={}, hasText={}",
+            dto.uri, dto.status, dto.analysisStatus, dto.bodyText != null
+        )
 
         return dto
     }
@@ -284,8 +315,10 @@ class CombinedCrawlProcessor(
      */
     private fun extractTextAndMetadata(file: Path, dto: FSFileDTO) {
         if (dto.bodySize != null && dto.bodySize!! > MAX_TEXT_EXTRACT_SIZE) {
-            log.warn("File too large for text extraction ({}MB), skipping: {}",
-                dto.bodySize!! / 1024 / 1024, dto.uri)
+            log.warn(
+                "File too large for text extraction ({}MB), skipping: {}",
+                dto.bodySize!! / 1024 / 1024, dto.uri
+            )
             dto.bodyText = "[File too large for extraction]"
             return
         }
@@ -293,6 +326,7 @@ class CombinedCrawlProcessor(
         when (val result = textExtractionService.extractTextAndMetadata(file, MAX_TEXT_EXTRACT_SIZE.toLong())) {
             is TextAndMetadataResult.Success -> {
                 dto.bodyText = result.text
+                dto.bodySize = result.text.length.toLong()
                 dto.author = result.metadata.author
                 dto.title = result.metadata.title
                 dto.subject = result.metadata.subject
@@ -300,9 +334,9 @@ class CombinedCrawlProcessor(
                 dto.modifiedDate = result.metadata.modifiedDate
                 dto.pageCount = result.metadata.pageCount
 
-                log.trace("Extracted text and metadata from: {} ({} chars)",
-                    dto.uri, result.text.length)
+                log.info("\t\tExtracted text and metadata from: {} ({} chars)", dto.uri, result.text.length)        // todo -- change to debug
             }
+
             is TextAndMetadataResult.Failure -> {
                 dto.bodyText = "[Extraction failed: ${result.error}]"
                 log.warn("Text extraction failed for: {} - {}", dto.uri, result.error)
@@ -322,6 +356,7 @@ class CombinedCrawlProcessor(
                     dto.group = attrs.group()?.name
                     dto.permissions = formatPermissions(attrs)
                 }
+
                 is FSFileDTO -> {
                     dto.owner = attrs.owner()?.name
                     dto.group = attrs.group()?.name

@@ -47,6 +47,7 @@ data class FileSystemMetadata(
                     if (Files.isRegularFile(path)) {
                         path.fileSize()
                     } else {
+                        log.info("Path is not a regular file: {}", path)
                         0L // Directories don't have meaningful size
                     }
                 } catch (e: Exception) {

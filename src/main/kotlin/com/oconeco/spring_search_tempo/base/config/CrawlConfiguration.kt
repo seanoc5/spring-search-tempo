@@ -16,7 +16,12 @@ data class CrawlConfiguration(
 ) {
     /**
      * Merge crawl-specific patterns with global defaults.
+     *
      * SKIP patterns are merged (defaults + crawl-specific).
+     * Items matching SKIP are persisted with metadata only, no further processing.
+     * For folders: children are not crawled (processing stops).
+     * For files: no text extraction occurs.
+     *
      * Other patterns (LOCATE, INDEX, ANALYZE) use crawl-specific only.
      */
     fun getEffectivePatterns(crawl: CrawlDefinition): EffectivePatterns {
@@ -85,7 +90,7 @@ data class CrawlDefinition(
  * Each list contains regex patterns to match against file/folder paths.
  */
 data class PatternSet(
-    var skip: List<String> = emptyList(),     // IGNORE - exclude completely
+    var skip: List<String> = emptyList(),     // SKIP - persist metadata only, no further processing
     var locate: List<String> = emptyList(),   // LOCATE - metadata only (like plocate)
     var index: List<String> = emptyList(),    // INDEX - extract and index text
     var analyze: List<String> = emptyList()   // ANALYZE - full NLP processing

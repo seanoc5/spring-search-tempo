@@ -18,7 +18,7 @@ class PatternMatchingServiceTest {
     }
 
     @Test
-    @DisplayName("Should mark folder as IGNORE when matching skip pattern")
+    @DisplayName("Should mark folder as SKIP when matching skip pattern")
     fun testFolderSkipPattern() {
         val patterns = PatternSet(
             skip = listOf(".*/\\.git/.*", ".*/node_modules/.*"),
@@ -31,7 +31,7 @@ class PatternMatchingServiceTest {
             parentStatus = null
         )
 
-        assertEquals(AnalysisStatus.IGNORE, result)
+        assertEquals(AnalysisStatus.SKIP, result)
     }
 
     @Test
@@ -117,11 +117,11 @@ class PatternMatchingServiceTest {
             parentStatus = null
         )
 
-        assertEquals(AnalysisStatus.IGNORE, result)
+        assertEquals(AnalysisStatus.SKIP, result)
     }
 
     @Test
-    @DisplayName("Should mark file as IGNORE when matching skip pattern")
+    @DisplayName("Should mark file as SKIP when matching skip pattern")
     fun testFileSkipPattern() {
         val patterns = PatternSet(
             skip = listOf(".*\\.(tmp|bak)$"),
@@ -134,12 +134,12 @@ class PatternMatchingServiceTest {
             parentFolderStatus = AnalysisStatus.INDEX
         )
 
-        assertEquals(AnalysisStatus.IGNORE, result)
+        assertEquals(AnalysisStatus.SKIP, result)
     }
 
     @Test
-    @DisplayName("Should mark file as IGNORE when parent folder is IGNORE")
-    fun testFileInheritIgnoreFromParent() {
+    @DisplayName("Should mark file as SKIP when parent folder is SKIP")
+    fun testFileInheritSkipFromParent() {
         val patterns = PatternSet(
             index = listOf(".*\\.txt$")
         )
@@ -147,10 +147,10 @@ class PatternMatchingServiceTest {
         val result = service.determineFileAnalysisStatus(
             path = "/home/user/.git/file.txt",
             filePatterns = patterns,
-            parentFolderStatus = AnalysisStatus.IGNORE
+            parentFolderStatus = AnalysisStatus.SKIP
         )
 
-        assertEquals(AnalysisStatus.IGNORE, result)
+        assertEquals(AnalysisStatus.SKIP, result)
     }
 
     @Test
@@ -297,12 +297,12 @@ class PatternMatchingServiceTest {
             index = listOf(".*/src/.*")
         )
 
-        assertEquals(AnalysisStatus.IGNORE,
+        assertEquals(AnalysisStatus.SKIP,
             service.determineFolderAnalysisStatus(
                 "/project/.gradle/wrapper", patterns, null
             ))
 
-        assertEquals(AnalysisStatus.IGNORE,
+        assertEquals(AnalysisStatus.SKIP,
             service.determineFolderAnalysisStatus(
                 "/project/build/classes", patterns, null
             ))
