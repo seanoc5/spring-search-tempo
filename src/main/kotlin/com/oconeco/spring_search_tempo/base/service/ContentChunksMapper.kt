@@ -50,6 +50,10 @@ interface ContentChunksMapper {
         target = "concept",
         ignore = true
     )
+    @Mapping(
+        target = "ftsVector",
+        ignore = true
+    )
     fun updateContentChunks(
         contentChunksDTO: ContentChunksDTO,
         @MappingTarget contentChunks: ContentChunks,
