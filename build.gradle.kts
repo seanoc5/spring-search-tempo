@@ -107,3 +107,8 @@ tasks.withType<Test> {
         "-Xmx4g"
     )
 }
+
+// Handle duplicate dependencies in bootJar
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

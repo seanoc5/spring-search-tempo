@@ -1,0 +1,316 @@
+app:
+  crawl:
+    # Windows-specific global defaults
+    defaults:
+      max-depth: 10
+      follow-links: false
+      parallel: false
+      folder-patterns:
+        # SKIP: Persist folder metadata but don't crawl children (processing stops here)
+        skip:
+          # Development directories
+          - ".*\\\\.git\\\\.*"
+          - ".*\\\\.gradle\\\\.*"
+          - ".*\\\\.idea\\\\.*"
+          - ".*\\\\build\\\\.*"
+          - ".*\\\\out\\\\.*"
+          - ".*\\\\target\\\\.*"
+          - ".*\\\\dist\\\\.*"
+          - ".*\\\\node_modules\\\\.*"
+          - ".*\\\\vendor\\\\.*"
+          - ".*\\\\packages\\\\.*"
+          # Windows system directories
+          - "[A-Z]:\\\\Windows\\\\.*"
+          - "[A-Z]:\\\\Program Files\\\\.*"
+          - "[A-Z]:\\\\Program Files \\(x86\\)\\\\.*"
+          - "[A-Z]:\\\\ProgramData\\\\.*"
+          - "[A-Z]:\\\\System Volume Information\\\\.*"
+          - "[A-Z]:\\\\\$Recycle\\.Bin\\\\.*"
+          - ".*\\\\AppData\\\\Local\\\\Temp\\\\.*"
+          - ".*\\\\AppData\\\\Local\\\\Microsoft\\\\Windows\\\\.*"
+          - ".*\\\\.cache\\\\.*"
+          - ".*\\\\.thumbnails\\\\.*"
+      file-patterns:
+        # SKIP: Persist file metadata only (no text extraction)
+        skip:
+          - ".*\\.(lck|tmp|~|bak|bk1|bk2)$"
+          - ".*/(?i)(deleteme.*|ignoreme.*)"
+          # Windows-specific temp files
+          - ".*\\.TMP$"
+          - ".*~\\$.*"  # Office temp files
+
+    # Windows-specific crawl definitions
+    crawls:
+      # ===== PHASE 1: USER CONTENT (Specific Directories) =====
+
+      - name: "WIN_USER_DOCUMENTS"
+        label: "Windows User Documents"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Documents"
+        max-depth: 20
+        parallel: true
+        folder-patterns:
+          skip:
+            - ".*\\\\My Music\\\\.*"
+            - ".*\\\\My Pictures\\\\.*"
+            - ".*\\\\My Videos\\\\.*"
+          index:
+            - ".*"
+        file-patterns:
+          analyze:
+            - ".*\\.(md|txt|org|rst|adoc)$"
+            - ".*/(?i)README.*$"
+            - ".*/(?i)CHANGELOG.*$"
+          index:
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+
+      - name: "WIN_USER_PICTURES"
+        label: "Windows User Pictures"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Pictures"
+        max-depth: 15
+        folder-patterns:
+          skip:
+            - ".*\\\\.thumbnails\\\\.*"
+            - ".*\\\\cache\\\\.*"
+            - ".*\\\\.cache\\\\.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|heif|tiff|tif|raw|cr2|nef|arw|dng)$"
+            - ".*\\.(ico)$"
+          index:
+            # Sidecar metadata files
+            - ".*\\.(xmp|thm|nfo)$"
+
+      - name: "WIN_USER_VIDEOS"
+        label: "Windows User Videos"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Videos"
+        max-depth: 10
+        folder-patterns:
+          skip:
+            - ".*\\\\.thumbnails\\\\.*"
+            - ".*\\\\cache\\\\.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(mp4|avi|mov|mkv|flv|wmv|webm|m4v|mpeg|mpg|3gp|ogv)$"
+          index:
+            # Subtitle and metadata files
+            - ".*\\.(srt|sub|vtt|ass|ssa|nfo)$"
+
+      - name: "WIN_USER_MUSIC"
+        label: "Windows User Music"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Music"
+        max-depth: 10
+        folder-patterns:
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(mp3|flac|wav|aac|ogg|m4a|wma|opus|ape)$"
+          index:
+            # Playlist and metadata files
+            - ".*\\.(m3u|m3u8|pls|cue|nfo)$"
+
+      # ===== PHASE 2: USER HOME (General) =====
+
+      - name: "WIN_USER_HOME_GENERAL"
+        label: "Windows User Home (General)"
+        enabled: true
+        start-paths:
+          - "${user.home}"
+        max-depth: 20
+        parallel: true
+        folder-patterns:
+          skip:
+            # Skip already-crawled specific directories to avoid duplication
+            - "${user.home}\\\\Documents\\\\.*"
+            - "${user.home}\\\\Pictures\\\\.*"
+            - "${user.home}\\\\Videos\\\\.*"
+            - "${user.home}\\\\Music\\\\.*"
+            - "${user.home}\\\\Downloads\\\\.*"
+            - "${user.home}\\\\Desktop\\\\.*"
+            # Skip Windows system directories
+            - ".*\\\\AppData\\\\Local\\\\Temp\\\\.*"
+            - ".*\\\\AppData\\\\Local\\\\Microsoft\\\\.*"
+            - ".*\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\.*"
+            - ".*\\\\.cache\\\\.*"
+            - ".*\\\\.thumbnails\\\\.*"
+          locate:
+            - ".*"
+        file-patterns:
+          skip:
+            # Skip large binaries and installers
+            - ".*\\.(iso|exe|msi|dll|sys)$"
+          analyze:
+            - ".*\\.(md|txt|org|rst|adoc)$"
+          index:
+            # Documents
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            # Code files
+            - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|bat|ps1|cmd)$"
+            # Config files
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+          locate:
+            # Binaries and archives (metadata only)
+            - ".*\\.(zip|tar|gz|7z|rar)$"
+
+      - name: "WIN_USER_DOWNLOADS"
+        label: "Windows User Downloads"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Downloads"
+        max-depth: 5
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          skip:
+            - ".*\\.(iso|exe|msi|dll)$"
+          index:
+            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|csv)$"
+
+      - name: "WIN_USER_DESKTOP"
+        label: "Windows User Desktop"
+        enabled: true
+        start-paths:
+          - "${user.home}\\Desktop"
+        max-depth: 5
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"
+
+      # ===== PHASE 3: C:\ DRIVE ROOT =====
+
+      - name: "WIN_C_DRIVE_PROJECTS"
+        label: "C:\\ Drive - Project Directories"
+        enabled: true
+        start-paths:
+          - "C:\\Projects"
+          - "C:\\Dev"
+          - "C:\\Development"
+          - "C:\\workspace"
+          - "C:\\code"
+        max-depth: 12
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            # Source code (comprehensive language support)
+            - ".*\\.(kt|kts|java|scala)$"                     # JVM
+            - ".*\\.(py|pyi)$"                                # Python
+            - ".*\\.(js|ts|jsx|tsx|mjs|cjs|vue|svelte)$"     # JavaScript/TypeScript
+            - ".*\\.(go)$"                                    # Go
+            - ".*\\.(rs)$"                                    # Rust
+            - ".*\\.(c|h|cpp|hpp|cc|cxx|hxx|cs)$"            # C/C++/C#
+            - ".*\\.(rb|rake)$"                              # Ruby
+            - ".*\\.(php)$"                                  # PHP
+            - ".*\\.(bat|cmd|ps1)$"                          # Windows scripts
+            - ".*\\.(vb|fs)$"                                # .NET
+
+            # Configuration
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+            - ".*\\.env\\.example$"
+
+            # Build files
+            - ".*/Dockerfile.*$"
+            - ".*/docker-compose.*\\.ya?ml$"
+            - ".*/(Makefile|package\\.json|composer\\.json|requirements\\.txt)$"
+            - ".*/(build\\.gradle.*|settings\\.gradle.*|pom\\.xml)$"
+            - ".*/(Cargo\\.toml|Cargo\\.lock|go\\.mod|go\\.sum)$"
+
+            # Documentation
+            - ".*\\.(md|rst|adoc|txt)$"
+
+          analyze:
+            # Deep NLP analysis for documentation
+            - ".*/(?i)(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$"
+            - ".*\\.(md|txt|adoc)$"
+
+      - name: "WIN_C_DRIVE_DATA"
+        label: "C:\\ Drive - Data Directories"
+        enabled: false  # Disabled by default - enable if you have data here
+        start-paths:
+          - "C:\\Data"
+          - "C:\\Temp"
+        max-depth: 10
+        folder-patterns:
+          skip:
+            - "C:\\\\Temp\\\\.*"  # Skip temp directory contents
+          locate:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|csv)$"
+          locate:
+            - ".*"
+
+      # ===== PHASE 4: D:\ DRIVE (if exists) =====
+
+      - name: "WIN_D_DRIVE_ALL"
+        label: "D:\\ Drive - All Content"
+        enabled: true
+        start-paths:
+          - "D:\\"
+        max-depth: 12
+        parallel: true
+        folder-patterns:
+          skip:
+            # Skip system directories that might exist on D:
+            - "D:\\\\System Volume Information\\\\.*"
+            - "D:\\\\\$Recycle\\.Bin\\\\.*"
+            - "D:\\\\Windows\\\\.*"
+          index:
+            - ".*"
+        file-patterns:
+          skip:
+            - ".*\\.(iso|exe|msi|dll|sys)$"
+          analyze:
+            - ".*\\.(md|txt|org|rst|adoc)$"
+            - ".*/(?i)(README|CHANGELOG).*$"
+          index:
+            # Documents
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            # Code files
+            - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|bat|ps1|cmd)$"
+            # Config files
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+          locate:
+            # Archives and media (metadata only)
+            - ".*\\.(zip|tar|gz|7z|rar)$"
+            - ".*\\.(mp3|mp4|avi|mkv|jpg|jpeg|png|gif)$"
+
+      # ===== PHASE 5: OneDrive / Cloud Storage =====
+
+      - name: "WIN_ONEDRIVE"
+        label: "OneDrive"
+        enabled: false  # Disabled by default - enable if needed
+        start-paths:
+          - "${user.home}\\OneDrive"
+        max-depth: 20
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          analyze:
+            - ".*\\.(md|txt)$"
+          index:
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
