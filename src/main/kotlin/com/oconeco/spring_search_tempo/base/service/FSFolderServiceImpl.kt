@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Service
 class FSFolderServiceImpl(
     private val fSFolderRepository: FSFolderRepository,
     private val publisher: ApplicationEventPublisher,
-    private val fSFolderMapper: FSFolderMapper
+    @Qualifier("FSFolderMapperImpl") private val fSFolderMapper: FSFolderMapper
 ) : FSFolderService {
 
     override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFolderDTO> {

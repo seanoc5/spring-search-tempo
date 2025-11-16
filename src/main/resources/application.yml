@@ -1,5 +1,6 @@
 server:
   port: 8085
+
 spring:
   batch:
     jdbc:
@@ -32,6 +33,7 @@ spring:
       lifecycle-management: start-only
   session:
     jdbc.initialize-schema: embedded
+
 error:
   handling:
     http-status-in-json-response: true
@@ -80,8 +82,8 @@ app:
           - "/proc/.*"
           - "/sys/.*"
           - "/dev/.*"
-          - "/mnt/.*"
-          - "/media/.*"
+#          - "/mnt/.*"
+#          - "/media/.*"
           - "/lost\\+found/.*"
       file-patterns:
         # SKIP: Persist file metadata only (no text extraction)
@@ -424,7 +426,7 @@ app:
         max-depth: 6
         folder-patterns:
           skip:
-            - "/var/log/.*"      # Covered by SYSTEM_LOGS
+#            - "/var/log/.*"      # Covered by SYSTEM_LOGS
             - "/var/cache/.*"    # Cache files
             - "/var/tmp/.*"      # Temp files
             - "/var/lib/docker/.*"  # Docker storage

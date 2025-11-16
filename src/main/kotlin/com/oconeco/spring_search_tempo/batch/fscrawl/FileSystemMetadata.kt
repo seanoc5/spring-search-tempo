@@ -19,6 +19,7 @@ import kotlin.io.path.name
  */
 data class FileSystemMetadata(
     val name: String,
+    val path: Path,
     val size: Long,
     val lastModified: OffsetDateTime?
 ) {
@@ -47,7 +48,7 @@ data class FileSystemMetadata(
                     if (Files.isRegularFile(path)) {
                         path.fileSize()
                     } else {
-                        log.info("Path is not a regular file: {}", path)
+                        log.debug("[{}] Path is not a regular file", path)
                         0L // Directories don't have meaningful size
                     }
                 } catch (e: Exception) {
@@ -61,7 +62,7 @@ data class FileSystemMetadata(
                     OffsetDateTime.ofInstant(
                         fileTime.toInstant(),
                         ZoneId.systemDefault()
-                    )
+                    ).truncatedTo(java.time.temporal.ChronoUnit.MILLIS)  // Truncate to milliseconds for reliable comparison
                 } catch (e: Exception) {
                     log.warn("Failed to get last modified time for: {}", path, e)
                     null
@@ -69,6 +70,7 @@ data class FileSystemMetadata(
 
                 FileSystemMetadata(
                     name = name,
+                    path = path,
                     size = size,
                     lastModified = lastModified
                 )
@@ -87,6 +89,11 @@ data class FileSystemMetadata(
      * 2. Size must match for files (quick check before expensive timestamp comparison)
      * 3. Last modified timestamp must match exactly
      *
+     * NOTE: Timestamps are truncated to MILLISECONDS (3 decimal places) for reliable comparison.
+     *       While PostgreSQL stores microseconds, JDBC/JPA can introduce rounding differences
+     *       at the microsecond level. Millisecond precision is more than sufficient for
+     *       detecting file modifications.
+     *
      * @param dbLastModified Last modified timestamp from database
      * @param dbSize Size from database (for files)
      * @return true if metadata indicates no changes
@@ -94,25 +101,30 @@ data class FileSystemMetadata(
     fun isUnchanged(dbLastModified: OffsetDateTime?, dbSize: Long?): Boolean {
         // If we don't have filesystem lastModified, can't determine staleness
         if (lastModified == null) {
+            log.warn("Filesystem last modified time is null for path: {}", name)
             return false
         }
 
         // If DB doesn't have lastModified, treat as changed (needs update)
         if (dbLastModified == null) {
+            log.warn("Database last modified time is null for path: {}", name)
             return false
         }
 
         // For files, size mismatch is quick indicator of change
         if (size > 0 && dbSize != null && size != dbSize) {
-            log.trace("Size mismatch: fs={}, db={}", size, dbSize)
+            log.info("Size mismatch: fs={}, db={}", size, dbSize)
             return false
         }
 
         // Timestamp comparison (primary staleness check)
-        val timestampMatches = lastModified.isEqual(dbLastModified)
+        // Truncate both to milliseconds to handle PostgreSQL/JDBC rounding differences
+        val fsTruncated = lastModified.truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+        val dbTruncated = dbLastModified.truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+        val timestampMatches = fsTruncated.isEqual(dbTruncated)
 
         if (!timestampMatches) {
-            log.trace("Timestamp mismatch: fs={}, db={}", lastModified, dbLastModified)
+            log.info("\t\tTimestamp mismatch for {}: fs={}, db={}", name, fsTruncated, dbTruncated)
         }
 
         return timestampMatches
