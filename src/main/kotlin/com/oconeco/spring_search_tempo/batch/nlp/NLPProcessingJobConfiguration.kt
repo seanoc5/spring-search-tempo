@@ -1,9 +1,9 @@
 package com.oconeco.spring_search_tempo.batch.nlp
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
-import com.oconeco.spring_search_tempo.base.repos.ContentChunksRepository
-import com.oconeco.spring_search_tempo.base.service.ContentChunksMapper
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
+import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
+import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
 import com.oconeco.spring_search_tempo.base.service.NLPService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -38,8 +38,8 @@ import org.springframework.transaction.PlatformTransactionManager
 class NLPProcessingJobConfiguration(
     private val jobRepository: JobRepository,
     private val transactionManager: PlatformTransactionManager,
-    private val contentChunksRepository: ContentChunksRepository,
-    private val contentChunksMapper: ContentChunksMapper,
+    private val contentChunksRepository: ContentChunkRepository,
+    private val contentChunksMapper: ContentChunkMapper,
     private val nlpService: NLPService,
     private val objectMapper: ObjectMapper
 ) {
@@ -65,7 +65,7 @@ class NLPProcessingJobConfiguration(
     @Bean
     fun nlpProcessingStep(): Step {
         return StepBuilder("nlpProcessingStep", jobRepository)
-            .chunk<ContentChunksDTO, ContentChunksDTO>(CHUNK_SIZE, transactionManager)
+            .chunk<ContentChunkDTO, ContentChunkDTO>(CHUNK_SIZE, transactionManager)
             .reader(nlpChunkReader())
             .processor(nlpChunkProcessor())
             .writer(nlpChunkWriter())
@@ -77,8 +77,8 @@ class NLPProcessingJobConfiguration(
      * Reads chunks where nlpProcessedAt is null and text is not null.
      */
     @Bean
-    fun nlpChunkReader(): RepositoryItemReader<ContentChunksDTO> {
-        val reader = RepositoryItemReader<ContentChunksDTO>()
+    fun nlpChunkReader(): RepositoryItemReader<ContentChunkDTO> {
+        val reader = RepositoryItemReader<ContentChunkDTO>()
         reader.setRepository(contentChunksRepository)
         reader.setMethodName("findByNlpProcessedAtIsNullAndTextIsNotNull")
         reader.setPageSize(CHUNK_SIZE)
@@ -90,7 +90,7 @@ class NLPProcessingJobConfiguration(
      * Processor for NLP analysis.
      */
     @Bean
-    fun nlpChunkProcessor(): ItemProcessor<ContentChunksDTO, ContentChunksDTO> {
+    fun nlpChunkProcessor(): ItemProcessor<ContentChunkDTO, ContentChunkDTO> {
         return NLPChunkProcessor(nlpService, objectMapper, contentChunksMapper)
     }
 
@@ -99,7 +99,7 @@ class NLPProcessingJobConfiguration(
      * Converts DTOs back to entities and saves them.
      */
     @Bean
-    fun nlpChunkWriter(): ItemWriter<ContentChunksDTO> {
+    fun nlpChunkWriter(): ItemWriter<ContentChunkDTO> {
         return ItemWriter { chunks ->
             chunks.forEach { dto ->
                 // Find the entity and update it

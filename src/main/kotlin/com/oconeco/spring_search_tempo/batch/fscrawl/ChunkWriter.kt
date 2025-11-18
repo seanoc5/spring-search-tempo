@@ -1,22 +1,22 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.ContentChunksService
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
+import com.oconeco.spring_search_tempo.base.ContentChunkService
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.Chunk
 import org.springframework.batch.item.ItemWriter
 
 /**
- * ItemWriter that saves ContentChunks to the database.
+ * ItemWriter that saves ContentChunk to the database.
  *
  * Processes lists of chunks (from ChunkProcessor) and saves them using
- * the ContentChunksService.
+ * the ContentChunkService.
  *
  * @param chunkService Service for persisting ContentChunks
  */
 class ChunkWriter(
-    private val chunkService: ContentChunksService
-) : ItemWriter<List<ContentChunksDTO>> {
+    private val chunkService: ContentChunkService
+) : ItemWriter<List<ContentChunkDTO>> {
 
     companion object {
         private val log = LoggerFactory.getLogger(ChunkWriter::class.java)
@@ -24,7 +24,7 @@ class ChunkWriter(
 
     private var totalChunksSaved = 0
 
-    override fun write(chunk: Chunk<out List<ContentChunksDTO>>) {
+    override fun write(chunk: Chunk<out List<ContentChunkDTO>>) {
         var batchChunksSaved = 0
 
         chunk.items.forEach { chunkList ->

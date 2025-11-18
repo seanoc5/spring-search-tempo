@@ -40,7 +40,7 @@ class FsCrawlJobBuilder(
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
-    private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunksService
+    private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -70,13 +70,13 @@ class FsCrawlJobBuilder(
     }
 
     /**
-     * Build the chunking step that splits file bodyText into ContentChunks.
+     * Build the chunking step that splits file bodyText into ContentChunk.
      */
     private fun buildChunkingStep(crawl: CrawlDefinition): Step {
         log.info("Building chunking step for crawl: {}", crawl.name)
 
         return StepBuilder("fsCrawlChunks_${crawl.name}", jobRepository)
-            .chunk<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(10, transactionManager)
+            .chunk<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>>(10, transactionManager)
             .reader(createChunkReader())
             .processor(createChunkProcessor())
             .writer(createChunkWriter())
@@ -97,15 +97,15 @@ class FsCrawlJobBuilder(
     /**
      * Create a chunk processor that splits text into sentences.
      */
-    private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
+    private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>> {
         log.debug("Creating ChunkProcessor")
         return ChunkProcessor()
     }
 
     /**
-     * Create a chunk writer that saves ContentChunks.
+     * Create a chunk writer that saves ContentChunk.
      */
-    private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>> {
+    private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>> {
         log.debug("Creating ChunkWriter")
         return ChunkWriter(chunkService = chunkService)
     }

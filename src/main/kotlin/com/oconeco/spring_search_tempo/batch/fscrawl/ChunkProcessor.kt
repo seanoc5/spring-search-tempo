@@ -1,26 +1,26 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 
 /**
- * ItemProcessor that splits FSFileDTO bodyText into sentence-level ContentChunks.
+ * ItemProcessor that splits FSFileDTO bodyText into sentence-level ContentChunk.
  *
  * For Phase 1, uses simple regex-based sentence splitting. Phase 2 will enhance
  * this with Stanford CoreNLP for linguistic analysis.
  *
  * Processing steps:
  * 1. Split bodyText into sentences using regex patterns
- * 2. Create ContentChunksDTO for each sentence
+ * 2. Create ContentChunkDTO for each sentence
  * 3. Track start/end positions within the source text
  * 4. Link chunks to their parent FSFile (concept)
  * 5. Set chunk metadata (type, number, length)
  *
- * @return List of ContentChunksDTO, one per sentence (or null if no bodyText)
+ * @return List of ContentChunkDTO, one per sentence (or null if no bodyText)
  */
-class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
+class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunkDTO>> {
 
     companion object {
         private val log = LoggerFactory.getLogger(ChunkProcessor::class.java)
@@ -41,7 +41,7 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
 
     private var totalChunksCreated = 0
 
-    override fun process(item: FSFileDTO): List<ContentChunksDTO>? {
+    override fun process(item: FSFileDTO): List<ContentChunkDTO>? {
         val bodyText = item.bodyText
         if (bodyText.isNullOrBlank()) {
             log.debug("Skipping file {} - no bodyText", item.uri)
@@ -76,10 +76,10 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
      *
      * @param text The text to split
      * @param fileId The FSFile ID to link chunks to
-     * @return List of ContentChunksDTO representing sentences
+     * @return List of ContentChunkDTO representing sentences
      */
-    private fun splitIntoSentences(text: String, fileId: Long): List<ContentChunksDTO> {
-        val chunks = mutableListOf<ContentChunksDTO>()
+    private fun splitIntoSentences(text: String, fileId: Long): List<ContentChunkDTO> {
+        val chunks = mutableListOf<ContentChunkDTO>()
 
         // Split into sentences
         val sentences = text.split(SENTENCE_BOUNDARY_REGEX)
@@ -128,8 +128,8 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
         fileId: Long,
         startOffset: Int,
         startChunkNumber: Int
-    ): List<ContentChunksDTO> {
-        val chunks = mutableListOf<ContentChunksDTO>()
+    ): List<ContentChunkDTO> {
+        val chunks = mutableListOf<ContentChunkDTO>()
 
         // Try to split at paragraph breaks first
         val paragraphs = text.split(Regex("\n\n+"))
@@ -208,7 +208,7 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
     }
 
     /**
-     * Creates a ContentChunksDTO with the specified parameters.
+     * Creates a ContentChunkDTO with the specified parameters.
      */
     private fun createChunk(
         text: String,
@@ -217,8 +217,8 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunksDTO>> {
         startPosition: Long,
         endPosition: Long,
         chunkType: String = "Sentence"
-    ): ContentChunksDTO {
-        return ContentChunksDTO().apply {
+    ): ContentChunkDTO {
+        return ContentChunkDTO().apply {
             this.text = text
             this.concept = fileId
             this.chunkNumber = chunkNumber

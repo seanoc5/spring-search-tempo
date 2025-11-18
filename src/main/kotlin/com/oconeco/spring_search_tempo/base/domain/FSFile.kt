@@ -51,7 +51,7 @@ class FSFile : FSObject() {
     var pageCount: Int? = null
 
     @OneToMany(mappedBy = "concept")
-    var contentChunk = mutableSetOf<ContentChunks>()
+    var contentChunks = mutableSetOf<ContentChunk>()
 
     /**
      * PostgreSQL tsvector for full-text search.
@@ -68,7 +68,7 @@ class FSFile : FSObject() {
      * TODO: Implement chunking strategy for documents with body_text > 1MB
      *       Currently, only the first ~250K characters are indexed. For complete indexing
      *       of large documents, implement:
-     *       1. Split large body_text into overlapping chunks in ContentChunks table
+     *       1. Split large body_text into overlapping chunks in ContentChunk table
      *       2. Index each chunk's fts_vector separately
      *       3. Aggregate search results across all chunks for the file
      *       See: docs/guides/fts-large-document-chunking.md (to be created)

@@ -2,14 +2,14 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
         layout:decorate="~{layout}">
     <head>
-        <title>[[#{contentChunks.add.headline}]]</title>
+        <title>[[#{contentChunk.add.headline}]]</title>
     </head>
     <body>
         <div layout:fragment="content">
             <div class="d-flex flex-wrap mb-4">
-                <h1 class="flex-grow-1">[[#{contentChunks.add.headline}]]</h1>
+                <h1 class="flex-grow-1">[[#{contentChunk.add.headline}]]</h1>
                 <div>
-                    <a th:href="@{/contentChunkss}" class="btn btn-secondary">[[#{contentChunks.add.back}]]</a>
+                    <a th:href="@{/contentChunks}" class="btn btn-secondary">[[#{contentChunk.add.back}]]</a>
                 </div>
             </div>
             <div th:replace="~{fragments/forms::globalErrors('contentChunks')}" />
@@ -37,7 +37,7 @@
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='conllu', type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parentChunk', type='select')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='concept', type='select')}" />
-                <input type="submit" th:value="#{contentChunks.add.headline}" class="btn btn-primary mt-4" />
+                <input type="submit" th:value="#{contentChunk.add.headline}" class="btn btn-primary mt-4" />
             </form>
         </div>
     </body>

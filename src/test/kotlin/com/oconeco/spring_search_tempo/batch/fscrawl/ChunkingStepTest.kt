@@ -1,6 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
-import com.oconeco.spring_search_tempo.base.ContentChunksService
+import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.junit.jupiter.api.Test
@@ -28,7 +28,7 @@ import org.springframework.transaction.PlatformTransactionManager
  * Expected behavior:
  * - ChunkReader loads FSFile entities with bodyText from the database
  * - ChunkProcessor splits each file's text into sentence-level chunks
- * - ChunkWriter persists ContentChunks to the database
+ * - ChunkWriter persists ContentChunk to the database
  *
  * Prerequisites:
  * - Database must contain FSFile records with non-null bodyText
@@ -52,7 +52,7 @@ class ChunkingStepTest {
     lateinit var fileService: FSFileService
 
     @Autowired
-    lateinit var chunkService: ContentChunksService
+    lateinit var chunkService: ContentChunkService
 
     /**
      * Wire the test job to JobLauncherTestUtils.
@@ -141,7 +141,7 @@ class ChunkingStepTest {
         }
 
         @Bean
-        fun chunkWriter(chunkService: ContentChunksService): ChunkWriter {
+        fun chunkWriter(chunkService: ContentChunkService): ChunkWriter {
             return ChunkWriter(chunkService)
         }
 
@@ -154,7 +154,7 @@ class ChunkingStepTest {
             chunkWriter: ChunkWriter
         ): Step {
             return StepBuilder("chunkingTestStep", jobRepository)
-                .chunk<FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunksDTO>>(
+                .chunk<FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>>(
                     10,
                     transactionManager
                 )

@@ -2,19 +2,19 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
         layout:decorate="~{layout}">
     <head>
-        <title>[[#{contentChunks.edit.headline}]]</title>
+        <title>[[#{contentChunk.edit.headline}]]</title>
     </head>
     <body>
         <div layout:fragment="content">
             <div class="d-flex flex-wrap mb-4">
-                <h1 class="flex-grow-1">[[#{contentChunks.edit.headline}]]</h1>
+                <h1 class="flex-grow-1">[[#{contentChunk.edit.headline}]]</h1>
                 <div>
-                    <a th:href="@{/contentChunkss}" class="btn btn-secondary">[[#{contentChunks.edit.back}]]</a>
+                    <a th:href="@{/contentChunks}" class="btn btn-secondary">[[#{contentChunk.edit.back}]]</a>
                 </div>
             </div>
             <div th:replace="~{fragments/forms::globalErrors('contentChunks')}" />
             <form th:action="${requestUri}" method="post" novalidate="">
-                <input type="submit" th:value="#{contentChunks.edit.headline}" class="btn btn-primary mt-4 mb-4" />
+                <input type="submit" th:value="#{contentChunk.edit.headline}" class="btn btn-primary mt-4 mb-4" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='id', disabled=true, type='number')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='chunkNumber', required=true, type='number')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='chunkType')}" />
@@ -39,7 +39,7 @@
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='conllu', type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='parentChunk', type='select')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='concept', type='select')}" />
-                <input type="submit" th:value="#{contentChunks.edit.headline}" class="btn btn-primary mt-4" />
+                <input type="submit" th:value="#{contentChunk.edit.headline}" class="btn btn-primary mt-4" />
             </form>
         </div>
     </body>

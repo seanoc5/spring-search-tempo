@@ -1,8 +1,8 @@
 package com.oconeco.spring_search_tempo.batch.nlp
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
-import com.oconeco.spring_search_tempo.base.service.ContentChunksMapper
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
+import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
 import com.oconeco.spring_search_tempo.base.service.NLPService
 import com.oconeco.spring_search_tempo.base.service.NamedEntity
 import com.oconeco.spring_search_tempo.base.service.NLPAnalysisResult
@@ -29,7 +29,7 @@ class NLPChunkProcessorTest {
 
     private lateinit var nlpService: NLPService
     private lateinit var objectMapper: ObjectMapper
-    private lateinit var mapper: ContentChunksMapper
+    private lateinit var mapper: ContentChunkMapper
     private lateinit var processor: NLPChunkProcessor
 
     @BeforeEach
@@ -43,7 +43,7 @@ class NLPChunkProcessorTest {
     @Test
     fun `should process chunk with NLP analysis`() {
         // Given
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = "Apple Inc. announced new products in California."
         }
@@ -91,7 +91,7 @@ class NLPChunkProcessorTest {
     @Test
     fun `should skip chunk with null text`() {
         // Given
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = null
         }
@@ -106,7 +106,7 @@ class NLPChunkProcessorTest {
     @Test
     fun `should skip chunk with blank text`() {
         // Given
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = "   "
         }
@@ -121,7 +121,7 @@ class NLPChunkProcessorTest {
     @Test
     fun `should skip already processed chunk`() {
         // Given
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = "Some text"
             nlpProcessedAt = java.time.OffsetDateTime.now()
@@ -138,7 +138,7 @@ class NLPChunkProcessorTest {
     fun `should skip very long text chunks`() {
         // Given
         val longText = "word ".repeat(10000) // >10,000 chars
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = longText
         }
@@ -155,7 +155,7 @@ class NLPChunkProcessorTest {
     @Test
     fun `should handle NLP service errors gracefully`() {
         // Given
-        val chunk = ContentChunksDTO().apply {
+        val chunk = ContentChunkDTO().apply {
             id = 1L
             text = "Some text"
         }

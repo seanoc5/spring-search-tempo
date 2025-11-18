@@ -1,8 +1,8 @@
 package com.oconeco.spring_search_tempo.base.controller
 
-import com.oconeco.spring_search_tempo.base.ContentChunksService
+import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.FSFileService
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import jakarta.validation.Valid
@@ -18,77 +18,77 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes
 
 
 @Controller
-@RequestMapping("/contentChunkss")
-class ContentChunksController(
-    private val contentChunksService: ContentChunksService,
+@RequestMapping("/contentChunks")
+class ContentChunkController(
+    private val contentChunkService: ContentChunkService,
     private val fSFileService: FSFileService
 ) {
 
     @ModelAttribute
     fun prepareContext(model: Model) {
-        model.addAttribute("parentChunkValues", contentChunksService.getContentChunksValues())
+        model.addAttribute("parentChunkValues", contentChunkService.getContentChunkValues())
         model.addAttribute("conceptValues", fSFileService.getFSFileValues())
     }
 
     @GetMapping
     fun list(model: Model): String {
-        model.addAttribute("contentChunkses", contentChunksService.findAll())
-        return "contentChunks/list"
+        model.addAttribute("contentChunks", contentChunkService.findAll())
+        return "contentChunk/list"
     }
 
     @GetMapping("/add")
-    fun add(@ModelAttribute("contentChunks") contentChunksDTO: ContentChunksDTO): String =
-            "contentChunks/add"
+    fun add(@ModelAttribute("contentChunks") contentChunkDTO: ContentChunkDTO): String =
+            "contentChunk/add"
 
     @PostMapping("/add")
     fun add(
-        @ModelAttribute("contentChunks") @Valid contentChunksDTO: ContentChunksDTO,
+        @ModelAttribute("contentChunks") @Valid contentChunkDTO: ContentChunkDTO,
         bindingResult: BindingResult,
         redirectAttributes: RedirectAttributes
     ): String {
         if (bindingResult.hasErrors()) {
-            return "contentChunks/add"
+            return "contentChunk/add"
         }
-        contentChunksService.create(contentChunksDTO)
+        contentChunkService.create(contentChunkDTO)
         redirectAttributes.addFlashAttribute(WebUtils.MSG_SUCCESS,
-                WebUtils.getMessage("contentChunks.create.success"))
-        return "redirect:/contentChunkss"
+                WebUtils.getMessage("contentChunk.create.success"))
+        return "redirect:/contentChunks"
     }
 
     @GetMapping("/edit/{id}")
     fun edit(@PathVariable(name = "id") id: Long, model: Model): String {
-        model.addAttribute("contentChunks", contentChunksService.get(id))
-        return "contentChunks/edit"
+        model.addAttribute("contentChunks", contentChunkService.get(id))
+        return "contentChunk/edit"
     }
 
     @PostMapping("/edit/{id}")
     fun edit(
         @PathVariable(name = "id") id: Long,
-        @ModelAttribute("contentChunks") @Valid contentChunksDTO: ContentChunksDTO,
+        @ModelAttribute("contentChunks") @Valid contentChunkDTO: ContentChunkDTO,
         bindingResult: BindingResult,
         redirectAttributes: RedirectAttributes
     ): String {
         if (bindingResult.hasErrors()) {
-            return "contentChunks/edit"
+            return "contentChunk/edit"
         }
-        contentChunksService.update(id, contentChunksDTO)
+        contentChunkService.update(id, contentChunkDTO)
         redirectAttributes.addFlashAttribute(WebUtils.MSG_SUCCESS,
-                WebUtils.getMessage("contentChunks.update.success"))
-        return "redirect:/contentChunkss"
+                WebUtils.getMessage("contentChunk.update.success"))
+        return "redirect:/contentChunks"
     }
 
     @PostMapping("/delete/{id}")
     fun delete(@PathVariable(name = "id") id: Long, redirectAttributes: RedirectAttributes):
             String {
         try {
-            contentChunksService.delete(id)
+            contentChunkService.delete(id)
             redirectAttributes.addFlashAttribute(WebUtils.MSG_INFO,
-                    WebUtils.getMessage("contentChunks.delete.success"))
+                    WebUtils.getMessage("contentChunk.delete.success"))
         } catch (referencedException: ReferencedException) {
             redirectAttributes.addFlashAttribute(WebUtils.MSG_ERROR,
                     WebUtils.getMessage(referencedException.key!!, referencedException.params))
         }
-        return "redirect:/contentChunkss"
+        return "redirect:/contentChunks"
     }
 
 }

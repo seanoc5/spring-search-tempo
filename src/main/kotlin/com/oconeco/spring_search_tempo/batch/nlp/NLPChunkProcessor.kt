@@ -1,6 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.nlp
 
-import com.oconeco.spring_search_tempo.base.model.ContentChunksDTO
+import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.service.NLPService
 import com.oconeco.spring_search_tempo.base.service.NamedEntity
 import com.oconeco.spring_search_tempo.base.service.POSTag
@@ -24,20 +24,20 @@ import java.time.OffsetDateTime
  *
  * @param nlpService Service for NLP operations
  * @param objectMapper For JSON serialization of results
- * @param mapper ContentChunks mapper (not used here, kept for consistency)
+ * @param mapper ContentChunk mapper (not used here, kept for consistency)
  */
 class NLPChunkProcessor(
     private val nlpService: NLPService,
     private val objectMapper: ObjectMapper,
-    private val mapper: com.oconeco.spring_search_tempo.base.service.ContentChunksMapper
-) : ItemProcessor<ContentChunksDTO, ContentChunksDTO> {
+    private val mapper: com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
+) : ItemProcessor<ContentChunkDTO, ContentChunkDTO> {
 
     companion object {
         private val log = LoggerFactory.getLogger(NLPChunkProcessor::class.java)
         private const val MAX_TEXT_LENGTH = 10000  // Skip very long chunks
     }
 
-    override fun process(item: ContentChunksDTO): ContentChunksDTO? {
+    override fun process(item: ContentChunkDTO): ContentChunkDTO? {
         val text = item.text
 
         // Skip if no text or already processed
