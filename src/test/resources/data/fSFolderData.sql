@@ -11,6 +11,8 @@ INSERT INTO fsfolder (
     owner,
     "group",
     permissions,
+    status,
+    analysis_status,
     date_created,
     last_updated
 ) VALUES (
@@ -26,6 +28,8 @@ INSERT INTO fsfolder (
     'Sed faucibus turpis in eu mi bibendum neque.',
     'Ullamcorper eget nulla facilisi etiam dignissim diam.',
     'Nam liber tempor cum soluta nobis eleifend option congue nihil imperdiet doming id quod mazim placerat facer possim assum.',
+    'CURRENT',
+    'INDEX',
     '2024-09-02 14:30:00',
     '2024-09-02 14:30:00'
 );
@@ -43,6 +47,8 @@ INSERT INTO fsfolder (
     owner,
     "group",
     permissions,
+    status,
+    analysis_status,
     date_created,
     last_updated
 ) VALUES (
@@ -58,6 +64,8 @@ INSERT INTO fsfolder (
     'Dolor sit amet consectetur adipiscing elit.',
     'Tortor consequat id porta nibh venenatis cras sed.',
     'Donec pretium vulputate sapien nec sagittis aliquam malesuada.',
+    'CURRENT',
+    'INDEX',
     '2024-09-03 14:30:00',
     '2024-09-03 14:30:00'
 );

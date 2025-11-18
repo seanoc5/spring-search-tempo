@@ -13,6 +13,8 @@ INSERT INTO fsfile (
     permissions,
     body_text,
     body_size,
+    status,
+    analysis_status,
     date_created,
     last_updated
 ) VALUES (
@@ -30,6 +32,8 @@ INSERT INTO fsfile (
     'Nam liber tempor cum soluta nobis eleifend option congue nihil imperdiet doming id quod mazim placerat facer possim assum.',
     'Sed faucibus turpis in eu mi bibendum neque.',
     55,
+    'CURRENT',
+    'INDEX',
     '2024-09-02 14:30:00',
     '2024-09-02 14:30:00'
 );
@@ -49,6 +53,8 @@ INSERT INTO fsfile (
     permissions,
     body_text,
     body_size,
+    status,
+    analysis_status,
     date_created,
     last_updated
 ) VALUES (
@@ -66,6 +72,8 @@ INSERT INTO fsfile (
     'Donec pretium vulputate sapien nec sagittis aliquam malesuada.',
     'Dolor sit amet consectetur adipiscing elit.',
     56,
+    'CURRENT',
+    'INDEX',
     '2024-09-03 14:30:00',
     '2024-09-03 14:30:00'
 );

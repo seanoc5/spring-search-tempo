@@ -181,8 +181,8 @@ class CrawlConfigurationIntegrationTest {
             filePatterns = effectivePatterns.filePatterns,
             parentFolderStatus = AnalysisStatus.INDEX
         )
-        assertEquals(AnalysisStatus.ANALYZE, pdfStatus,
-            "PDF files should be analyzed in USER_DOCUMENTS crawl")
+        assertEquals(AnalysisStatus.INDEX, pdfStatus,
+            "PDF files should be indexed in USER_DOCUMENTS crawl")
 
         // Test text file analysis
         val txtStatus = patternMatchingService.determineFileAnalysisStatus(
@@ -218,8 +218,8 @@ class CrawlConfigurationIntegrationTest {
         val docsCrawl = crawlConfigService.getCrawlByName("USER_DOCUMENTS")!!
 
         val effectiveMaxDepth = docsCrawl.getMaxDepth(defaults)
-        assertEquals(15, effectiveMaxDepth,
-            "USER_DOCUMENTS should override default maxDepth to 15")
+        assertEquals(20, effectiveMaxDepth,
+            "USER_DOCUMENTS should override default maxDepth to 20")
     }
 
     @Test
@@ -235,9 +235,9 @@ class CrawlConfigurationIntegrationTest {
     @Test
     @DisplayName("Should handle disabled crawls")
     fun testDisabledCrawl() {
-        val configCrawl = crawlConfigService.getCrawlByName("CONFIG")
-        assertNotNull(configCrawl, "CONFIG crawl should exist")
-        assertFalse(configCrawl!!.enabled, "CONFIG crawl should be disabled")
+        val configCrawl = crawlConfigService.getCrawlByName("SYSTEM_CONFIG")
+        assertNotNull(configCrawl, "SYSTEM_CONFIG crawl should exist")
+        assertFalse(configCrawl!!.enabled, "SYSTEM_CONFIG crawl should be disabled")
 
         val enabledCrawls = crawlConfigService.getEnabledCrawls()
         assertFalse(enabledCrawls.contains(configCrawl),
