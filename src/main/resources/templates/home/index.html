@@ -9,6 +9,17 @@
             <h1 class="mb-4">[[#{home.index.headline}]]</h1>
             <p class="mb-5">[(#{home.index.text})]</p>
             <div class="col-md-4 mb-5">
+                <h4 class="mb-3">Crawl Management</h4>
+                <div class="list-group">
+                    <a th:href="@{/crawlConfigs}" class="list-group-item list-group-item-action">
+                        <strong>Crawl Configurations</strong> - Manage and run crawls
+                    </a>
+                    <a th:href="@{/crawlConfigs/jobRuns}" class="list-group-item list-group-item-action">
+                        Job Run History - View crawl execution history
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-4 mb-5">
                 <h4 class="mb-3">[[#{home.index.exploreEntities}]]</h4>
                 <div class="list-group">
                     <a th:href="@{/fSFiles}" class="list-group-item list-group-item-action">[[#{fSFile.list.headline}]]</a>

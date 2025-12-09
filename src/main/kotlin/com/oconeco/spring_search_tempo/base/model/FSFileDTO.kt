@@ -67,4 +67,6 @@ class FSFileDTO {
 
     var pageCount: Int? = null
 
+    var jobRunId: Long? = null
+
 }

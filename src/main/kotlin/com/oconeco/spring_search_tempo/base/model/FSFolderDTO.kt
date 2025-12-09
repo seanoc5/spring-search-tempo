@@ -41,4 +41,6 @@ class FSFolderDTO {
 
     var fsLastModified: OffsetDateTime? = null
 
+    var jobRunId: Long? = null
+
 }

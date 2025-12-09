@@ -301,8 +301,7 @@ class CombinedCrawlProcessor(
         // Read POSIX attributes if available
         readPosixAttributes(file, dto)
 
-        log.info(
-            "\t\tProcessed file: uri={}, status={}, analysisStatus={}, hasText={}",
+        log.debug("\t\tProcessed file: uri={}, status={}, analysisStatus={}, hasText={}",
             dto.uri, dto.status, dto.analysisStatus, dto.bodyText != null
         )
 

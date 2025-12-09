@@ -1,0 +1,99 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Job Run History</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
+                    <li class="breadcrumb-item active">Job Run History</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">Job Run History</h1>
+            </div>
+
+            <div th:if="${!jobRuns.empty || filter != null}" class="row">
+                <div th:replace="~{fragments/utils::searchFilter(object='jobRun')}" />
+                <div th:replace="~{fragments/utils::sorting(object='jobRun', sortOptions=${ {'startTime,DESC', 'startTime,ASC', 'runStatus,ASC'} }, columnClass='offset-lg-4')}" />
+            </div>
+
+            <div th:if="${jobRuns.empty}">No job runs found.</div>
+            <div th:if="${!jobRuns.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th scope="col">Run ID</th>
+                            <th scope="col">Configuration</th>
+                            <th scope="col">Job Name</th>
+                            <th scope="col">Start Time</th>
+                            <th scope="col">Finish Time</th>
+                            <th scope="col">Duration</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Files</th>
+                            <th scope="col">Folders</th>
+                            <th scope="col">Total Items</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="jobRun : ${jobRuns}">
+                            <td>[[${jobRun.id}]]</td>
+                            <td>
+                                <a th:if="${jobRun.crawlConfig != null}"
+                                   th:href="@{/crawlConfigs/{id}(id=${jobRun.crawlConfig})}">
+                                    Config #[[${jobRun.crawlConfig}]]
+                                </a>
+                                <span th:if="${jobRun.crawlConfig == null}">-</span>
+                            </td>
+                            <td>[[${jobRun.jobName}]]</td>
+                            <td>[[${#temporals.format(jobRun.startTime, 'yyyy-MM-dd HH:mm:ss')}]]</td>
+                            <td>
+                                <span th:if="${jobRun.finishTime != null}">
+                                    [[${#temporals.format(jobRun.finishTime, 'yyyy-MM-dd HH:mm:ss')}]]
+                                </span>
+                                <span th:if="${jobRun.finishTime == null}">-</span>
+                            </td>
+                            <td>
+                                <span th:if="${jobRun.finishTime != null && jobRun.startTime != null}">
+                                    [[${T(java.time.Duration).between(jobRun.startTime, jobRun.finishTime).toMinutes()}]] min
+                                </span>
+                                <span th:if="${jobRun.finishTime == null}">-</span>
+                            </td>
+                            <td>
+                                <span th:switch="${jobRun.runStatus.name()}">
+                                    <span th:case="'RUNNING'" class="badge bg-primary">Running</span>
+                                    <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
+                                    <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
+                                    <span th:case="'CANCELLED'" class="badge bg-warning">Cancelled</span>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="small">
+                                    <strong>Discovered:</strong> [[${jobRun.filesDiscovered}]]<br/>
+                                    <strong>New:</strong> [[${jobRun.filesNew}]] |
+                                    <strong>Updated:</strong> [[${jobRun.filesUpdated}]]<br/>
+                                    <strong>Skipped:</strong> [[${jobRun.filesSkipped}]] |
+                                    <strong>Errors:</strong> [[${jobRun.filesError}]]
+                                </div>
+                            </td>
+                            <td>
+                                <div class="small">
+                                    <strong>Discovered:</strong> [[${jobRun.foldersDiscovered}]]<br/>
+                                    <strong>New:</strong> [[${jobRun.foldersNew}]] |
+                                    <strong>Updated:</strong> [[${jobRun.foldersUpdated}]]<br/>
+                                    <strong>Skipped:</strong> [[${jobRun.foldersSkipped}]]
+                                </div>
+                            </td>
+                            <td>[[${jobRun.totalItems}]]</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </div>
+    </body>
+</html>

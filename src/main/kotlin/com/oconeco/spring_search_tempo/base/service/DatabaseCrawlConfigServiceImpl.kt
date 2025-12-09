@@ -1,0 +1,74 @@
+package com.oconeco.spring_search_tempo.base.service
+
+import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
+import com.oconeco.spring_search_tempo.base.domain.CrawlConfig
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
+import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.Pageable
+import org.springframework.stereotype.Service
+
+@Service
+class DatabaseCrawlConfigServiceImpl(
+    private val crawlConfigRepository: CrawlConfigRepository,
+    private val crawlConfigMapper: CrawlConfigMapper
+) : DatabaseCrawlConfigService {
+
+    override fun findAll(filter: String?, pageable: Pageable): Page<CrawlConfigDTO> {
+        val page: Page<CrawlConfig> = if (filter != null) {
+            val filterId = filter.toLongOrNull()
+            crawlConfigRepository.findAllById(filterId, pageable)
+        } else {
+            crawlConfigRepository.findAll(pageable)
+        }
+        return PageImpl(
+            page.content.map { crawlConfig ->
+                crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+            },
+            pageable,
+            page.totalElements
+        )
+    }
+
+    override fun findAllEnabled(): List<CrawlConfigDTO> {
+        return crawlConfigRepository.findByEnabled(true)
+            .map { crawlConfig ->
+                crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+            }
+    }
+
+    override fun get(id: Long): CrawlConfigDTO = crawlConfigRepository.findById(id)
+        .map { crawlConfig ->
+            crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+        }
+        .orElseThrow { NotFoundException() }
+
+    override fun getByName(name: String): CrawlConfigDTO? {
+        val crawlConfig = crawlConfigRepository.findByName(name) ?: return null
+        return crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+    }
+
+    override fun create(crawlConfigDTO: CrawlConfigDTO): Long {
+        val crawlConfig = CrawlConfig()
+        crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        return crawlConfigRepository.save(crawlConfig).id!!
+    }
+
+    override fun update(id: Long, crawlConfigDTO: CrawlConfigDTO) {
+        val crawlConfig = crawlConfigRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        crawlConfigRepository.save(crawlConfig)
+    }
+
+    override fun delete(id: Long) {
+        val crawlConfig = crawlConfigRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        crawlConfigRepository.delete(crawlConfig)
+    }
+
+    override fun nameExists(name: String): Boolean = crawlConfigRepository.existsByName(name)
+
+}

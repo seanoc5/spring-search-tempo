@@ -40,7 +40,8 @@ class FsCrawlJobBuilder(
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
-    private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService
+    private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
+    private val jobRunTrackingListener: JobRunTrackingListener
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -64,6 +65,7 @@ class FsCrawlJobBuilder(
 
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(jobRunTrackingListener)
             .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks))
             .next(buildChunkingStep(crawl))
             .build()
@@ -125,11 +127,15 @@ class FsCrawlJobBuilder(
 
         val startPaths = crawl.startPaths.map { Path(it) }
 
+        val writer = createCombinedWriter()
+
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
             .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns))
             .processor(createCombinedProcessor(startPaths, effectivePatterns))
-            .writer(createCombinedWriter())
+            .writer(writer)
+            .listener(CrawlStepListener())
+            .listener(writer) // Writer is also a step listener
             .build()
     }
 

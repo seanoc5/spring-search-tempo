@@ -83,6 +83,9 @@ abstract class SaveableObject {
     @Column(nullable = false)
     var lastUpdated: OffsetDateTime? = null
 
+    @Column
+    var jobRunId: Long? = null
+
 }
 
 enum class Status {
