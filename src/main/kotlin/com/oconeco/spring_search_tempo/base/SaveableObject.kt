@@ -67,7 +67,7 @@ abstract class SaveableObject {
     var size: Long? = null
 
     @Column(nullable = false)
-    var version: Long? = null
+    var version: Long? = 0L
 
     @Column
     var archived: Boolean? = null

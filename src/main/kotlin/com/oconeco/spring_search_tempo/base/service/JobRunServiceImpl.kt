@@ -95,6 +95,7 @@ class JobRunServiceImpl(
             this.runStatus = RunStatus.RUNNING
             this.status = Status.IN_PROGRESS
             this.uri = "job-run:$jobName:${System.currentTimeMillis()}"
+            this.version = 0L
         }
 
         val savedJobRun = jobRunRepository.save(jobRun)
