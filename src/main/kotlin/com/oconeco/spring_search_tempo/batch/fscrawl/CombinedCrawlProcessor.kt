@@ -113,7 +113,9 @@ class CombinedCrawlProcessor(
 
         // Check if folder exists in DB (use cache)
         val existingFolder = folderCache.getOrPut(uri) {
-            folderRepository.findByUri(uri)
+            val existing = folderRepository.findByUri(uri)
+            log.debug("\t\tFound existing folder: {}", existing)
+            existing
         }
 
         // Incremental crawl: check if folder is unchanged
@@ -124,11 +126,11 @@ class CombinedCrawlProcessor(
             )
 
             if (isUnchanged && existingFolder.status == Status.CURRENT) {
-                log.info("\t\tFolder unchanged, skipping: {}", uri)
+                log.info("\t\t.... Folder unchanged, skipping: {}", uri)
                 return null
             }
 
-            log.info("\t\t[{}] Folder exists, will update, (unchanged={}, status={})", uri, isUnchanged, existingFolder.status
+            log.info("\t\t++++ [{}] Folder exists, will update, (unchanged={}, status={})", uri, isUnchanged, existingFolder.status
             )
         }
 
@@ -205,9 +207,10 @@ class CombinedCrawlProcessor(
         for (file in files) {
             val dto = processFile(file, parentFolderStatus)
             if (dto != null) {
+                log.info("\t\t++++ File {} will be persisted", file)
                 fileDtos.add(dto)
             } else {
-                log.info("\t\tFile {} was skipped (maybe already current or skipped by pattern) ", file)
+                log.info("\t\t.... File {} was skipped (maybe already current or skipped by pattern) ", file)
             }
         }
 
@@ -242,7 +245,7 @@ class CombinedCrawlProcessor(
             )
 
             if (isUnchanged) {
-                log.info("\t\tFile unchanged, skipping: {}", uri)
+                log.debug("\t\tFile unchanged, skipping: {}", uri)
                 return null
             }
 

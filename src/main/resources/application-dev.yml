@@ -59,7 +59,6 @@ spring:
 #      show-details: always
 #server:
 #  port: 8089
-
 #todo: merge into `crawler` below
 #app:
 #  crawl:

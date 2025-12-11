@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable
 
 interface FSFileService {
 
+    fun count(): Long
+
     fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean = false): Page<FSFileDTO>
 
     fun `get`(id: Long): FSFileDTO

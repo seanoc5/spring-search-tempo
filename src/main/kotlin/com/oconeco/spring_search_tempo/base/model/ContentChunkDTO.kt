@@ -80,4 +80,10 @@ class ContentChunkDTO {
 
     var concept: Long? = null
 
+    /**
+     * Email message parent (alternative to FSFile concept).
+     * A ContentChunk belongs to either an FSFile OR an EmailMessage, not both.
+     */
+    var emailMessage: Long? = null
+
 }

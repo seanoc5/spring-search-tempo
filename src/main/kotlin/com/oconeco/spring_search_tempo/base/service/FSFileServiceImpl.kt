@@ -28,6 +28,8 @@ class FSFileServiceImpl(
     private val fSFileMapper: FSFileMapper
 ) : FSFileService {
 
+    override fun count(): Long = fSFileRepository.count()
+
     override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFileDTO> {
         var page: Page<FSFile>
         if (filter != null) {

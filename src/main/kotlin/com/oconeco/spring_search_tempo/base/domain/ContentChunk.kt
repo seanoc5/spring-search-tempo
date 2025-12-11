@@ -153,6 +153,14 @@ class ContentChunk {
     @JoinColumn(name = "concept_id")
     var concept: FSFile? = null
 
+    /**
+     * Email message parent (alternative to FSFile concept).
+     * A ContentChunk belongs to either an FSFile OR an EmailMessage, not both.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "email_message_id")
+    var emailMessage: EmailMessage? = null
+
     @CreatedDate
     @Column(
         nullable = false,

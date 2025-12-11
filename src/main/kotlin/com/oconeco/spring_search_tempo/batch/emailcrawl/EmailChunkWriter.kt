@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.batch.fscrawl
+package com.oconeco.spring_search_tempo.batch.emailcrawl
 
 import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
@@ -6,20 +6,21 @@ import org.slf4j.LoggerFactory
 import org.springframework.batch.item.Chunk
 import org.springframework.batch.item.ItemWriter
 
+
 /**
- * ItemWriter that saves ContentChunk to the database.
+ * ItemWriter that saves ContentChunks for email messages to the database.
  *
- * Processes lists of chunks (from ChunkProcessor) and saves them using
+ * Processes lists of chunks (from EmailChunkProcessor) and saves them using
  * the ContentChunkService.
  *
  * @param chunkService Service for persisting ContentChunks
  */
-class ChunkWriter(
+class EmailChunkWriter(
     private val chunkService: ContentChunkService
 ) : ItemWriter<List<ContentChunkDTO>> {
 
     companion object {
-        private val log = LoggerFactory.getLogger(ChunkWriter::class.java)
+        private val log = LoggerFactory.getLogger(EmailChunkWriter::class.java)
     }
 
     private var totalChunksSaved = 0
@@ -28,7 +29,7 @@ class ChunkWriter(
         var batchChunksSaved = 0
 
         chunk.items.forEach { chunkList ->
-            // Each item is a list of chunks from a single file
+            // Each item is a list of chunks from a single email
             chunkList.forEach { chunkDTO ->
                 try {
                     chunkService.create(chunkDTO)
@@ -36,9 +37,9 @@ class ChunkWriter(
                     totalChunksSaved++
                 } catch (e: Exception) {
                     log.error(
-                        "Error saving chunk {} for file {}: {}",
+                        "Error saving chunk {} for email {}: {}",
                         chunkDTO.chunkNumber,
-                        chunkDTO.concept,
+                        chunkDTO.emailMessage,
                         e.message,
                         e
                     )
@@ -47,7 +48,7 @@ class ChunkWriter(
         }
 
         if (batchChunksSaved > 0) {
-            log.debug("ChunkWriter: Saved {} chunks (total: {})", batchChunksSaved, totalChunksSaved)
+            log.debug("EmailChunkWriter: Saved {} chunks (total: {})", batchChunksSaved, totalChunksSaved)
         }
     }
 }

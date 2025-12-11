@@ -3,9 +3,11 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteContentChunk
+import com.oconeco.spring_search_tempo.base.events.BeforeDeleteEmailMessage
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
+import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
@@ -20,9 +22,12 @@ import org.springframework.stereotype.Service
 class ContentChunkServiceImpl(
     private val contentChunkRepository: ContentChunkRepository,
     private val fSFileRepository: FSFileRepository,
+    private val emailMessageRepository: EmailMessageRepository,
     private val publisher: ApplicationEventPublisher,
     private val contentChunkMapper: ContentChunkMapper
 ) : ContentChunkService {
+
+    override fun count(): Long = contentChunkRepository.count()
 
     override fun findAll(): List<ContentChunkDTO> {
         val contentChunks = contentChunkRepository.findAll(Sort.by("id"))
@@ -38,7 +43,7 @@ class ContentChunkServiceImpl(
     override fun create(contentChunkDTO: ContentChunkDTO): Long {
         val contentChunk = ContentChunk()
         contentChunkMapper.updateContentChunk(contentChunkDTO, contentChunk,
-                contentChunkRepository, fSFileRepository)
+                contentChunkRepository, fSFileRepository, emailMessageRepository)
         return contentChunkRepository.save(contentChunk).id!!
     }
 
@@ -46,7 +51,7 @@ class ContentChunkServiceImpl(
         val contentChunk = contentChunkRepository.findById(id)
                 .orElseThrow { NotFoundException() }
         contentChunkMapper.updateContentChunk(contentChunkDTO, contentChunk,
-                contentChunkRepository, fSFileRepository)
+                contentChunkRepository, fSFileRepository, emailMessageRepository)
         contentChunkRepository.save(contentChunk)
     }
 
@@ -81,6 +86,17 @@ class ContentChunkServiceImpl(
         if (conceptContentChunk != null) {
             referencedException.key = "fSFile.contentChunk.concept.referenced"
             referencedException.addParam(conceptContentChunk.id)
+            throw referencedException
+        }
+    }
+
+    @EventListener(BeforeDeleteEmailMessage::class)
+    fun on(event: BeforeDeleteEmailMessage) {
+        val referencedException = ReferencedException()
+        val emailMessageContentChunk = contentChunkRepository.findFirstByEmailMessageId(event.id)
+        if (emailMessageContentChunk != null) {
+            referencedException.key = "emailMessage.contentChunk.emailMessage.referenced"
+            referencedException.addParam(emailMessageContentChunk.id)
             throw referencedException
         }
     }

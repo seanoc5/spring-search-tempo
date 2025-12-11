@@ -16,6 +16,8 @@ class DatabaseCrawlConfigServiceImpl(
     private val crawlConfigMapper: CrawlConfigMapper
 ) : DatabaseCrawlConfigService {
 
+    override fun count(): Long = crawlConfigRepository.count()
+
     override fun findAll(filter: String?, pageable: Pageable): Page<CrawlConfigDTO> {
         val page: Page<CrawlConfig> = if (filter != null) {
             val filterId = filter.toLongOrNull()

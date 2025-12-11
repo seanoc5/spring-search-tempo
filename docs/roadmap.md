@@ -99,33 +99,33 @@ Phase 1 foundation is complete. All success criteria met:
 
 ### Completed Tasks
 
-| Component | Status | Completion Date |
-|-----------|--------|-----------------|
-| Domain Model & JPA Entities | ✅ Done | 2025-10-20 |
-| Repository Layer | ✅ Done | 2025-10-22 |
-| Service Layer with DTOs | ✅ Done | 2025-10-25 |
-| Spring Modulith Setup | ✅ Done | 2025-11-06 |
-| Apache Tika Integration | ✅ Done | 2025-11-07 |
-| Metadata Extraction | ✅ Done | 2025-11-07 |
-| File System Crawl Job | ✅ Done | 2025-11-05 |
-| Content Chunking (Sentences) | ✅ Done | 2025-11-06 |
-| Basic Web UI | ✅ Done | 2025-10-28 |
-| REST API with HATEOAS | ✅ Done | 2025-10-30 |
-| Security (Basic Auth) | ✅ Done | 2025-10-26 |
+| Component                    | Status | Completion Date |
+|------------------------------|--------|-----------------|
+| Domain Model & JPA Entities  | ✅ Done | 2025-10-20      |
+| Repository Layer             | ✅ Done | 2025-10-22      |
+| Service Layer with DTOs      | ✅ Done | 2025-10-25      |
+| Spring Modulith Setup        | ✅ Done | 2025-11-06      |
+| Apache Tika Integration      | ✅ Done | 2025-11-07      |
+| Metadata Extraction          | ✅ Done | 2025-11-07      |
+| File System Crawl Job        | ✅ Done | 2025-11-05      |
+| Content Chunking (Sentences) | ✅ Done | 2025-11-06      |
+| Basic Web UI                 | ✅ Done | 2025-10-28      |
+| REST API with HATEOAS        | ✅ Done | 2025-10-30      |
+| Security (Basic Auth)        | ✅ Done | 2025-10-26      |
 
 ### All Tasks Completed ✅
 
-| Task | Status | Completion Date |
-|------|--------|-----------------|
-| Crawl Configuration Loader | ✅ Done | 2025-11-07 |
-| Pattern Matching Service | ✅ Done | 2025-11-07 |
-| Incremental Crawl Logic | ✅ Done | 2025-11-07 |
-| PostgreSQL FTS Setup | ✅ Done | 2025-11-07 |
-| Search API Endpoints | ✅ Done | 2025-11-07 |
-| Search Web UI | ✅ Done | 2025-11-07 |
-| SKIP Status Implementation | ✅ Done | 2025-11-14 |
-| SKIP Folder Optimization (Reader) | ✅ Done | 2025-11-14 |
-| SKIP UI Filtering (FSFile & FSFolder) | ✅ Done | 2025-11-14 |
+| Task                                  | Status | Completion Date |
+|---------------------------------------|--------|-----------------|
+| Crawl Configuration Loader            | ✅ Done | 2025-11-07      |
+| Pattern Matching Service              | ✅ Done | 2025-11-07      |
+| Incremental Crawl Logic               | ✅ Done | 2025-11-07      |
+| PostgreSQL FTS Setup                  | ✅ Done | 2025-11-07      |
+| Search API Endpoints                  | ✅ Done | 2025-11-07      |
+| Search Web UI                         | ✅ Done | 2025-11-07      |
+| SKIP Status Implementation            | ✅ Done | 2025-11-14      |
+| SKIP Folder Optimization (Reader)     | ✅ Done | 2025-11-14      |
+| SKIP UI Filtering (FSFile & FSFolder) | ✅ Done | 2025-11-14      |
 
 ### Success Criteria - ALL MET ✅
 
@@ -641,9 +641,9 @@ Features are prioritized based on:
 
 ## Changelog
 
-| Date | Change | Author |
-|------|--------|--------|
-| 2025-11-07 | Initial roadmap created | Sean |
+| Date       | Change                  | Author |
+|------------|-------------------------|--------|
+| 2025-11-07 | Initial roadmap created | Sean   |
 
 ---
 

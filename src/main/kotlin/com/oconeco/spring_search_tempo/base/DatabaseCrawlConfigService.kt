@@ -6,6 +6,8 @@ import org.springframework.data.domain.Pageable
 
 interface DatabaseCrawlConfigService {
 
+    fun count(): Long
+
     fun findAll(filter: String?, pageable: Pageable): Page<CrawlConfigDTO>
 
     fun findAllEnabled(): List<CrawlConfigDTO>

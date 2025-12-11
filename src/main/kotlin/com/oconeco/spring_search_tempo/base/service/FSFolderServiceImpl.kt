@@ -24,6 +24,8 @@ class FSFolderServiceImpl(
     @Qualifier("FSFolderMapperImpl") private val fSFolderMapper: FSFolderMapper
 ) : FSFolderService {
 
+    override fun count(): Long = fSFolderRepository.count()
+
     override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFolderDTO> {
         var page: Page<FSFolder>
         if (filter != null) {

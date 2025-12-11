@@ -5,6 +5,8 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 
 interface ContentChunkService {
 
+    fun count(): Long
+
     fun findAll(): List<ContentChunkDTO>
 
     fun `get`(id: Long): ContentChunkDTO

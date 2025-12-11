@@ -12,6 +12,8 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
 
     fun findFirstByConceptId(id: Long): ContentChunk?
 
+    fun findFirstByEmailMessageId(id: Long): ContentChunk?
+
     /**
      * Find chunks that have not been NLP processed yet and have text.
      * Used by NLP batch job to find chunks to process.
