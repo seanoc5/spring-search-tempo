@@ -49,6 +49,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect")
     implementation("org.webjars:bootstrap:5.3.8")
+    implementation("org.webjars.npm:bootstrap-icons:1.11.3")
     implementation("org.webjars.npm:htmx.org:2.0.7")
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
 
@@ -65,6 +66,12 @@ dependencies {
         // Can be selective about which models to include
     }
 
+    // Email crawling - Jakarta Mail for IMAP/SMTP
+    implementation("com.sun.mail:jakarta.mail:2.0.1")
+
+    // HTML text extraction (for email body processing)
+    implementation("org.jsoup:jsoup:1.18.1")
+
     kapt("org.mapstruct:mapstruct-processor:1.6.3")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
@@ -78,6 +85,9 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.springframework.batch:spring-batch-test")
+
+    // GreenMail for IMAP testing
+    testImplementation("com.icegreen:greenmail-junit5:2.0.1")
 }
 
 kapt {

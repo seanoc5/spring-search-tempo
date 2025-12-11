@@ -2,34 +2,176 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
         layout:decorate="~{layout}">
     <head>
-        <title>[[#{home.index.headline}]]</title>
+        <title>[[#{nav.dashboard}]]</title>
     </head>
     <body>
         <div layout:fragment="content">
-            <h1 class="mb-4">[[#{home.index.headline}]]</h1>
-            <p class="mb-5">[(#{home.index.text})]</p>
-            <div class="col-md-4 mb-5">
-                <h4 class="mb-3">Crawl Management</h4>
-                <div class="list-group">
-                    <a th:href="@{/crawlConfigs}" class="list-group-item list-group-item-action">
-                        <strong>Crawl Configurations</strong> - Manage and run crawls
-                    </a>
-                    <a th:href="@{/crawlConfigs/jobRuns}" class="list-group-item list-group-item-action">
-                        Job Run History - View crawl execution history
-                    </a>
+            <!-- Page Header -->
+            <div class="page-header">
+                <h1><i class="bi bi-speedometer2 me-2"></i>[[#{nav.dashboard}]]</h1>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-row">
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="dashboard-card-title">Files Indexed</div>
+                            <div class="dashboard-card-value" th:text="${fileCount} ?: '0'">0</div>
+                        </div>
+                        <i class="bi bi-file-earmark dashboard-card-icon text-primary"></i>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="dashboard-card-title">Folders Scanned</div>
+                            <div class="dashboard-card-value" th:text="${folderCount} ?: '0'">0</div>
+                        </div>
+                        <i class="bi bi-folder dashboard-card-icon text-warning"></i>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="dashboard-card-title">Content Chunks</div>
+                            <div class="dashboard-card-value" th:text="${chunkCount} ?: '0'">0</div>
+                        </div>
+                        <i class="bi bi-puzzle dashboard-card-icon text-success"></i>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="dashboard-card-title">Crawl Configs</div>
+                            <div class="dashboard-card-value" th:text="${configCount} ?: '0'">0</div>
+                        </div>
+                        <i class="bi bi-gear-wide-connected dashboard-card-icon text-info"></i>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-4 mb-5">
-                <h4 class="mb-3">[[#{home.index.exploreEntities}]]</h4>
-                <div class="list-group">
-                    <a th:href="@{/fSFiles}" class="list-group-item list-group-item-action">[[#{fSFile.list.headline}]]</a>
-                    <a th:href="@{/contentChunks}" class="list-group-item list-group-item-action">[[#{contentChunk.list.headline}]]</a>
-                    <a th:href="@{/fSFolders}" class="list-group-item list-group-item-action">[[#{fSFolder.list.headline}]]</a>
-                    <a th:href="@{/annotations}" class="list-group-item list-group-item-action">[[#{annotation.list.headline}]]</a>
-                    <a th:href="@{/springUsers}" class="list-group-item list-group-item-action">[[#{springUser.list.headline}]]</a>
-                    <a th:href="@{/springRoles}" class="list-group-item list-group-item-action">[[#{springRole.list.headline}]]</a>
+
+            <!-- Main Dashboard Content -->
+            <div class="row">
+                <!-- Quick Actions -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-lightning me-2"></i>Quick Actions
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="quick-actions">
+                                <a th:href="@{/crawlConfigs}" class="btn btn-primary">
+                                    <i class="bi bi-play-circle me-1"></i>Run Crawl
+                                </a>
+                                <a th:href="@{/search}" class="btn btn-outline-primary">
+                                    <i class="bi bi-search me-1"></i>Search Files
+                                </a>
+                                <a th:href="@{/fSFiles}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-file-earmark me-1"></i>Browse Files
+                                </a>
+                                <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-clock-history me-1"></i>View Job History
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-activity me-2"></i>Recent Activity
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div th:if="${recentJobRuns != null and !recentJobRuns.empty}">
+                                <div th:each="job : ${recentJobRuns}" class="activity-item">
+                                    <div class="activity-icon"
+                                         th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bg-success-subtle text-success' :
+                                                         (${job.runStatus?.name() == 'FAILED'} ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info')">
+                                        <i class="bi"
+                                           th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bi-check' :
+                                                          (${job.runStatus?.name() == 'FAILED'} ? 'bi-x' : 'bi-arrow-repeat')"></i>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="fw-medium" th:text="${job.jobName}">Crawl Job</div>
+                                        <small class="text-muted">
+                                            <span th:text="${job.filesDiscovered}">0</span> files,
+                                            <span th:text="${job.foldersDiscovered}">0</span> folders
+                                        </small>
+                                    </div>
+                                    <div class="activity-time" th:if="${job.startTime != null}"
+                                         th:text="${#temporals.format(job.startTime, 'MMM d, HH:mm')}">
+                                        Jan 1, 12:00
+                                    </div>
+                                </div>
+                            </div>
+                            <div th:if="${recentJobRuns == null or recentJobRuns.empty}" class="text-muted">
+                                <i class="bi bi-inbox me-2"></i>No recent activity.
+                                <a th:href="@{/crawlConfigs}">Start a crawl</a> to see activity here.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- System Status -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-info-circle me-2"></i>System Information
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p class="mb-2"><strong>Application:</strong> [[#{app.title}]]</p>
+                                    <p class="mb-2"><strong>Version:</strong> 0.0.1-SNAPSHOT</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="mb-2"><strong>Spring Boot:</strong> 3.5.x</p>
+                                    <p class="mb-2"><strong>Database:</strong> PostgreSQL</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="mb-2"><strong>Text Extraction:</strong> Apache Tika 2.9.1</p>
+                                    <p class="mb-2"><strong>Status:</strong>
+                                        <span class="badge bg-success">Running</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Panel Content -->
+        <div layout:fragment="details">
+            <h6 class="fw-semibold mb-3">Dashboard Overview</h6>
+            <p class="small text-muted">
+                This dashboard provides a quick overview of your Spring Search Tempo instance.
+            </p>
+            <hr>
+            <h6 class="fw-semibold mb-2">Getting Started</h6>
+            <ol class="small ps-3">
+                <li class="mb-2">Configure crawl settings in <strong>Configurations</strong></li>
+                <li class="mb-2">Run a crawl to index your files</li>
+                <li class="mb-2">Use <strong>Search</strong> to find content</li>
+                <li class="mb-2">Browse indexed <strong>Files</strong> and <strong>Folders</strong></li>
+            </ol>
+            <hr>
+            <h6 class="fw-semibold mb-2">Need Help?</h6>
+            <p class="small text-muted mb-0">
+                Check the <a href="https://github.com/oconeco/spring-search-tempo" target="_blank">documentation</a>
+                for detailed guides and API reference.
+            </p>
         </div>
     </body>
 </html>

@@ -6,52 +6,258 @@
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico">
         <link th:href="@{/webjars/bootstrap/5.3.8/css/bootstrap.min.css}" rel="stylesheet" />
+        <link th:href="@{/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css}" rel="stylesheet" />
         <link th:href="@{/css/app.css}" rel="stylesheet" />
         <script th:src="@{/webjars/bootstrap/5.3.8/js/bootstrap.bundle.min.js}" defer></script>
         <script th:src="@{/webjars/htmx.org/2.0.7/dist/htmx.min.js}" defer></script>
         <script th:src="@{/js/app.js}" defer></script>
     </head>
-    <body hx-boost="true">
-        <header class="bg-light">
-            <div class="container">
-                <nav class="navbar navbar-light navbar-expand-md">
-                    <a th:href="@{/}" class="navbar-brand">
-                        <img th:src="@{/images/logo.png}" th:alt="#{app.title}" width="30" height="30" class="d-inline-block align-top" />
-                        <span class="ps-1">[[#{app.title}]]</span>
-                    </a>
-                    <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbarToggle"
-                            th:aria-label="#{navigation.toggle}" aria-controls="navbarToggle" aria-expanded="false">
-                        <span class="navbar-toggler-icon"></span>
+    <body hx-boost="true" class="admin-dashboard">
+        <!-- Top Header Bar -->
+        <header class="admin-header bg-dark text-white">
+            <div class="d-flex align-items-center justify-content-between h-100 px-3">
+                <!-- Left: Logo/Brand -->
+                <a th:href="@{/}" class="d-flex align-items-center text-white text-decoration-none">
+                    <img th:src="@{/images/logo.png}" th:alt="#{app.title}" width="32" height="32" class="me-2" />
+                    <span class="fw-semibold fs-5 d-none d-sm-inline">[[#{app.title}]]</span>
+                </a>
+
+                <!-- Right: User Menu -->
+                <div class="dropdown">
+                    <button type="button" class="btn btn-dark dropdown-toggle d-flex align-items-center"
+                            data-bs-toggle="dropdown" aria-expanded="false" id="userMenuDropdown">
+                        <i class="bi bi-person-circle fs-4 me-2"></i>
+                        <span class="d-none d-md-inline" th:text="${#authentication?.name} ?: 'User'">User</span>
                     </button>
-                    <div class="collapse navbar-collapse" id="navbarToggle">
-                        <ul class="navbar-nav ms-auto">
-                            <li class="navbar-item">
-                                <a th:href="@{/}" class="nav-link">[[#{navigation.home}]]</a>
-                            </li>
-                            <li class="navbar-item dropdown">
-                                <button type="button" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" id="navbarEntitiesLink"
-                                        aria-expanded="false">[[#{navigation.entities}]]</button>
-                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarEntitiesLink">
-                                    <li><a th:href="@{/fSFiles}" class="dropdown-item">[[#{fSFile.list.headline}]]</a></li>
-                                    <li><a th:href="@{/contentChunks}" class="dropdown-item">[[#{contentChunk.list.headline}]]</a></li>
-                                    <li><a th:href="@{/fSFolders}" class="dropdown-item">[[#{fSFolder.list.headline}]]</a></li>
-                                    <li><a th:href="@{/annotations}" class="dropdown-item">[[#{annotation.list.headline}]]</a></li>
-                                    <li><a th:href="@{/springUsers}" class="dropdown-item">[[#{springUser.list.headline}]]</a></li>
-                                    <li><a th:href="@{/springRoles}" class="dropdown-item">[[#{springRole.list.headline}]]</a></li>
-                                </ul>
-                            </li>
-                        </ul>
-                    </div>
-                </nav>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuDropdown">
+                        <li>
+                            <a th:href="@{/profile}" class="dropdown-item">
+                                <i class="bi bi-person me-2"></i>[[#{nav.profile}]]
+                            </a>
+                        </li>
+                        <li>
+                            <a th:href="@{/settings}" class="dropdown-item">
+                                <i class="bi bi-gear me-2"></i>[[#{nav.settings}]]
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form th:action="@{/logout}" method="post" class="d-inline">
+                                <button type="submit" class="dropdown-item">
+                                    <i class="bi bi-box-arrow-right me-2"></i>[[#{nav.logout}]]
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </header>
-        <main class="my-5">
-            <div class="container">
-                <p th:if="${MSG_SUCCESS}" class="alert alert-success mb-4" role="alert">[[${MSG_SUCCESS}]]</p>
-                <p th:if="${MSG_INFO}" class="alert alert-info mb-4" role="alert">[[${MSG_INFO}]]</p>
-                <p th:if="${MSG_ERROR}" class="alert alert-danger mb-4" role="alert">[[${MSG_ERROR}]]</p>
-                <div layout:fragment="content" />
+
+        <!-- Main Container with Sidebar and Content -->
+        <div class="admin-container">
+            <!-- Left Sidebar Navigation -->
+            <aside class="admin-sidebar bg-light" id="sidebarNav">
+                <nav class="sidebar-nav">
+                    <!-- Toggle button for mobile -->
+                    <button class="btn btn-sm btn-outline-secondary d-lg-none sidebar-toggle-close mb-3"
+                            type="button" onclick="toggleSidebar()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+
+                    <!-- Dashboard -->
+                    <div class="nav-section">
+                        <a th:href="@{/}" class="nav-item" th:classappend="${#requestURI == '/'} ? 'active' : ''">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>[[#{nav.dashboard}]]</span>
+                        </a>
+                    </div>
+
+                    <!-- Crawl Management -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">[[#{nav.section.crawl}]]</div>
+                        <a th:href="@{/crawlConfigs}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/crawlConfigs')} ? 'active' : ''">
+                            <i class="bi bi-gear-wide-connected"></i>
+                            <span>[[#{nav.crawlConfigs}]]</span>
+                        </a>
+                        <a th:href="@{/crawlConfigs/jobRuns}" class="nav-item"
+                           th:classappend="${#httpServletRequest.requestURI == '/crawlConfigs/jobRuns'} ? 'active' : ''">
+                            <i class="bi bi-clock-history"></i>
+                            <span>[[#{nav.jobRuns}]]</span>
+                        </a>
+                    </div>
+
+                    <!-- Search -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">[[#{nav.section.search}]]</div>
+                        <a th:href="@{/search}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/search')} ? 'active' : ''">
+                            <i class="bi bi-search"></i>
+                            <span>[[#{nav.search}]]</span>
+                        </a>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">[[#{nav.section.content}]]</div>
+                        <a th:href="@{/fSFiles}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/fSFiles')} ? 'active' : ''">
+                            <i class="bi bi-file-earmark"></i>
+                            <span>[[#{fSFile.list.headline}]]</span>
+                        </a>
+                        <a th:href="@{/fSFolders}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/fSFolders')} ? 'active' : ''">
+                            <i class="bi bi-folder"></i>
+                            <span>[[#{fSFolder.list.headline}]]</span>
+                        </a>
+                        <a th:href="@{/contentChunks}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/contentChunks')} ? 'active' : ''">
+                            <i class="bi bi-puzzle"></i>
+                            <span>[[#{contentChunk.list.headline}]]</span>
+                        </a>
+                        <a th:href="@{/annotations}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/annotations')} ? 'active' : ''">
+                            <i class="bi bi-tag"></i>
+                            <span>[[#{annotation.list.headline}]]</span>
+                        </a>
+                    </div>
+
+                    <!-- Administration -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">[[#{nav.section.admin}]]</div>
+                        <a th:href="@{/springUsers}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/springUsers')} ? 'active' : ''">
+                            <i class="bi bi-people"></i>
+                            <span>[[#{springUser.list.headline}]]</span>
+                        </a>
+                        <a th:href="@{/springRoles}" class="nav-item"
+                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/springRoles')} ? 'active' : ''">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>[[#{springRole.list.headline}]]</span>
+                        </a>
+                    </div>
+                </nav>
+
+                <!-- Sidebar collapse button (desktop) -->
+                <button class="sidebar-collapse-btn d-none d-lg-flex" type="button" onclick="collapseSidebar()">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+            </aside>
+
+            <!-- Mobile sidebar toggle button -->
+            <button class="btn btn-dark sidebar-toggle d-lg-none" type="button" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+
+            <!-- Main Content Area -->
+            <main class="admin-main">
+                <div class="admin-content-wrapper">
+                    <!-- Center: Main Content -->
+                    <div class="admin-content">
+                        <!-- Alert Messages -->
+                        <div th:if="${MSG_SUCCESS}" class="alert alert-success alert-dismissible fade show" role="alert">
+                            [[${MSG_SUCCESS}]]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <div th:if="${MSG_INFO}" class="alert alert-info alert-dismissible fade show" role="alert">
+                            [[${MSG_INFO}]]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <div th:if="${MSG_ERROR}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                            [[${MSG_ERROR}]]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+                            [[${message}]]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                            [[${error}]]
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+
+                        <!-- Page Content -->
+                        <div layout:fragment="content" />
+                    </div>
+
+                    <!-- Right: Contextual Panel (expandable) -->
+                    <aside class="admin-details" id="detailsPanel">
+                        <div class="details-header">
+                            <h6 class="mb-0">[[#{nav.details}]]</h6>
+                            <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleDetailsPanel()">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="details-content" layout:fragment="details">
+                            <!-- Default content when no details fragment provided -->
+                            <div class="text-muted small">
+                                <p><i class="bi bi-info-circle me-2"></i>[[#{nav.details.hint}]]</p>
+                                <hr>
+                                <p class="fw-semibold">[[#{nav.details.suggestions}]]</p>
+                                <ul class="ps-3">
+                                    <li>[[#{nav.details.suggestion1}]]</li>
+                                    <li>[[#{nav.details.suggestion2}]]</li>
+                                    <li>[[#{nav.details.suggestion3}]]</li>
+                                    <li>[[#{nav.details.suggestion4}]]</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Details panel toggle button -->
+                    <button class="details-toggle-btn" type="button" onclick="toggleDetailsPanel()" title="Toggle details panel">
+                        <i class="bi bi-layout-sidebar-reverse"></i>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Footer -->
+        <footer class="admin-footer bg-light border-top">
+            <div class="d-flex justify-content-between align-items-center px-3 py-2">
+                <small class="text-muted">
+                    <span th:if="${pageRenderTime}">
+                        [[#{footer.rendered}]] [[${pageRenderTime}]]ms |
+                    </span>
+                    [[#{footer.powered}]] <a href="https://oconeco.com" target="_blank" class="text-decoration-none">Oconeco</a> [[#{footer.opensource}]]
+                </small>
+                <small class="text-muted">
+                    <span th:text="${#dates.format(#dates.createNow(), 'yyyy')}">2024</span> &copy; [[#{app.title}]]
+                </small>
             </div>
-        </main>
+        </footer>
+
+        <!-- Dashboard JavaScript -->
+        <script th:inline="javascript">
+            // Sidebar toggle for mobile
+            function toggleSidebar() {
+                const sidebar = document.getElementById('sidebarNav');
+                sidebar.classList.toggle('show');
+            }
+
+            // Sidebar collapse for desktop
+            function collapseSidebar() {
+                const body = document.body;
+                body.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('sidebarCollapsed', body.classList.contains('sidebar-collapsed'));
+            }
+
+            // Details panel toggle
+            function toggleDetailsPanel() {
+                const body = document.body;
+                body.classList.toggle('details-open');
+                localStorage.setItem('detailsOpen', body.classList.contains('details-open'));
+            }
+
+            // Restore sidebar/details state on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                    document.body.classList.add('sidebar-collapsed');
+                }
+                if (localStorage.getItem('detailsOpen') === 'true') {
+                    document.body.classList.add('details-open');
+                }
+            });
+        </script>
     </body>
 </html>

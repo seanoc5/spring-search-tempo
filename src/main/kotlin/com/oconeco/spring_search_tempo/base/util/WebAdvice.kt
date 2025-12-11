@@ -15,3 +15,12 @@ class WebAdvice {
     fun getRequestUri(request: HttpServletRequest): String = request.requestURI
 
 }
+
+//
+//@ControllerAdvice
+//class GlobalAttributesAdvice {
+//    @ModelAttribute("contextPath")
+//    fun contextPath(request: HttpServletRequest): String {
+//        return request.contextPath
+//    }
+//}
