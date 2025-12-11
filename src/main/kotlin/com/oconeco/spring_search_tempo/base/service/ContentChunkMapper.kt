@@ -21,6 +21,14 @@ import org.mapstruct.ReportingPolicy
 )
 interface ContentChunkMapper {
 
+    /**
+     * Map entity to DTO.
+     */
+    @Mapping(target = "parentChunk", source = "parentChunk.id")
+    @Mapping(target = "concept", source = "concept.id")
+    @Mapping(target = "emailMessage", source = "emailMessage.id")
+    fun toDto(contentChunk: ContentChunk): ContentChunkDTO
+
     @Mapping(
         target = "parentChunk",
         ignore = true

@@ -222,6 +222,21 @@ pg_dump -h localhost -p 5433 -U postgres -d spring_search_tempo \
 ./gradlew bootRun --args='--spring.batch.job.enabled=false'
 ```
 
+### NLP Processing
+
+```bash
+# Trigger NLP processing via REST API
+curl -X POST http://localhost:8089/api/nlp/process
+
+# Check NLP status
+curl http://localhost:8089/api/nlp/status
+
+# Disable NLP auto-trigger (in application.yml or command line)
+./gradlew bootRun --args='--app.nlp.auto-trigger=false'
+```
+
+NLP processing runs automatically after file crawl by default. See [NLP Processing Guide](../guides/nlp-processing.md).
+
 ### Clear Batch Metadata
 
 ```bash
@@ -552,6 +567,7 @@ git diff --staged
 | Run specific test | `./gradlew test --tests TestName` |
 | Module verification | `./gradlew test --tests ModularityTest` |
 | Coverage report | `./gradlew test jacocoTestReport` |
+| Trigger NLP | `curl -X POST http://localhost:8089/api/nlp/process` |
 
 ## See Also
 

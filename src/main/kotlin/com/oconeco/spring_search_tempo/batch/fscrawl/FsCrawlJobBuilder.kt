@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
+import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -41,7 +42,8 @@ class FsCrawlJobBuilder(
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
-    private val jobRunTrackingListener: JobRunTrackingListener
+    private val jobRunTrackingListener: JobRunTrackingListener,
+    private val nlpAutoTriggerListener: NLPAutoTriggerListener
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -66,6 +68,7 @@ class FsCrawlJobBuilder(
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
             .listener(jobRunTrackingListener)
+            .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
             .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks))
             .next(buildChunkingStep(crawl))
             .build()

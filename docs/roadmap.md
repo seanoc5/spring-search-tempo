@@ -23,11 +23,11 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 ---
 
-## Current Status (v0.1.0)
+## Current Status (v0.1.5)
 
-**Version**: 0.1.0 - "Foundation"
-**Last Updated**: 2025-11-14
-**Active Phase**: ✅ Phase 1 Complete! → Phase 2 Ready to Start
+**Version**: 0.1.5 - "Foundation + NLP Infrastructure"
+**Last Updated**: 2025-12-11
+**Active Phase**: Phase 2 - NLP Integration (80% complete)
 
 ### Phase 1 - Core Foundation ✅ COMPLETE (100%)
 
@@ -87,7 +87,36 @@ Phase 1 foundation is complete. All success criteria met:
 - [x] Configurable crawl patterns
 - [x] Incremental crawl working
 
-**Next**: Phase 2 - Advanced NLP Integration (Stanford CoreNLP)
+**Next**: Complete Phase 2 integration work (auto-triggering, search integration, UI)
+
+---
+
+### Phase 2 - NLP Integration 🔄 IN PROGRESS (80%)
+
+**Infrastructure Complete:**
+- ✅ Stanford CoreNLP 4.5.5 dependency added
+- ✅ `NLPService` interface + `StanfordNLPService` implementation
+- ✅ Named Entity Recognition (NER) - Person, Organization, Location, Date, etc.
+- ✅ Part-of-Speech (POS) tagging with lemmatization
+- ✅ Sentiment analysis (sentence + document level)
+- ✅ `NLPProcessingJobConfiguration` batch job
+- ✅ `NLPChunkProcessor` for processing ContentChunks
+- ✅ ContentChunk entity fields for NLP storage (namedEntities, nouns, verbs, sentiment, etc.)
+- ✅ Email crawling infrastructure (IMAP service, entities, batch jobs)
+
+**Triggering & API Complete:**
+- ✅ `NLPAutoTriggerListener` - Auto-triggers NLP job after successful file crawl
+- ✅ `NLPJobLauncher` - Service for launching NLP job programmatically
+- ✅ REST API: `POST /api/nlp/process` - Manual NLP trigger
+- ✅ REST API: `GET /api/nlp/status` - NLP status check
+- ✅ UI endpoint: `POST /nlp/process` - Web UI trigger
+- ✅ Configurable auto-trigger via `app.nlp.auto-trigger` (default: true)
+
+**Integration Remaining:**
+- [ ] Add NLP fields to FTS vector (searchable entities, nouns, verbs)
+- [ ] Search UI filters by sentiment, entity type
+- [ ] Complete email crawl integration with CrawlOrchestrator
+- [ ] Email-to-NLP pipeline
 
 ---
 
@@ -144,58 +173,71 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-## Phase 2: Advanced NLP Integration (Next - Q1 2025)
+## Phase 2: Advanced NLP Integration (IN PROGRESS - 70%)
 
 **Goal**: Add linguistic analysis capabilities using Stanford CoreNLP for richer search and understanding.
 
 **Timeline**: 2025-11-15 to 2026-01-15 (2 months)
 
-### Planned Features
+### Completed Tasks ✅
 
-#### 2.1 Stanford CoreNLP Setup
-- [ ] Add CoreNLP dependencies (models for English)
-- [ ] Create NLPService for linguistic analysis
-- [ ] Configure pipeline (tokenization, POS tagging, NER, parsing)
-- [ ] Implement batch processing integration
-- [ ] **Effort**: 3 days
-- [ ] **Target**: 2025-11-20
+#### 2.1 Stanford CoreNLP Setup ✅ DONE
+- [x] Add CoreNLP dependencies (models for English)
+- [x] Create NLPService for linguistic analysis
+- [x] Configure pipeline (tokenization, POS tagging, NER, parsing, sentiment)
+- [x] Implement batch processing integration
+- **Completed**: 2025-12-01
 
-#### 2.2 Named Entity Recognition (NER)
-- [ ] Extract entities: Person, Organization, Location, Date
-- [ ] Store entities in database (NER table)
-- [ ] Link entities to content chunks
-- [ ] Create entity search endpoints
-- [ ] **Effort**: 5 days
-- [ ] **Target**: 2025-11-27
+#### 2.2 Named Entity Recognition (NER) ✅ DONE
+- [x] Extract entities: Person, Organization, Location, Date, Money, etc.
+- [x] Store entities in database (JSON field on ContentChunk)
+- [x] Link entities to content chunks via NLPChunkProcessor
+- [ ] Create entity search endpoints (REMAINING)
+- **Completed**: 2025-12-05
 
-#### 2.3 Part-of-Speech Tagging
-- [ ] Tag tokens with POS labels
-- [ ] Store POS annotations on chunks
-- [ ] Enable grammatical pattern search
-- [ ] **Effort**: 3 days
-- [ ] **Target**: 2025-12-02
+#### 2.3 Part-of-Speech Tagging ✅ DONE
+- [x] Tag tokens with POS labels
+- [x] Store POS annotations on chunks (tokenAnnotations JSON field)
+- [x] Extract and store nouns/verbs for quick access
+- [ ] Enable grammatical pattern search (REMAINING)
+- **Completed**: 2025-12-05
 
-#### 2.4 Dependency Parsing
-- [ ] Generate dependency parse trees
-- [ ] Store parse information (JSON or custom format)
+#### 2.4 Dependency Parsing ✅ Infrastructure Ready
+- [x] Parse tree infrastructure (parseTree, parseUd, parseNpvp, conllu fields)
+- [ ] Generate and store dependency parse trees
 - [ ] Enable syntax-based search
-- [ ] **Effort**: 4 days
-- [ ] **Target**: 2025-12-08
+- **Status**: Fields ready, processing not yet implemented
 
-#### 2.5 Sentence Sentiment Analysis
-- [ ] Analyze sentiment per sentence/chunk
-- [ ] Store sentiment scores
-- [ ] Filter search by sentiment
-- [ ] **Effort**: 2 days
-- [ ] **Target**: 2025-12-12
+#### 2.5 Sentence Sentiment Analysis ✅ DONE
+- [x] Analyze sentiment per sentence/chunk
+- [x] Store sentiment scores (sentiment, sentimentScore fields)
+- [ ] Filter search by sentiment (REMAINING - UI work)
+- **Completed**: 2025-12-05
 
-#### 2.6 Browser Data Integration
+#### 2.6 Email Crawling Infrastructure ✅ DONE
+- [x] EmailAccount, EmailFolder, EmailMessage entities
+- [x] ImapConnectionService (Gmail, WorkMail, generic IMAP)
+- [x] EmailQuickSync batch job
+- [x] EmailTextExtractionService (HTML body processing)
+- [ ] Integration with CrawlOrchestrator (REMAINING)
+- **Completed**: 2025-12-10
+
+#### 2.7 Browser Data Integration (DEFERRED)
 - [ ] Firefox bookmark indexing
 - [ ] Firefox history indexing
-- [ ] Chrome/Edge support (via similar APIs)
-- [ ] Batch job for periodic sync
-- [ ] **Effort**: 5 days
-- [ ] **Target**: 2025-12-20
+- [ ] Chrome/Edge support
+- **Status**: Deferred to Phase 2.5 or Phase 3
+
+### Remaining Tasks for Phase 2 Completion
+
+| Task | Priority | Effort | Description |
+|------|----------|--------|-------------|
+| ~~NLP Auto-Trigger~~ | ~~High~~ | ~~2-3h~~ | ~~Event listener to start NLP job after crawl~~ ✅ Done |
+| NLP Search Integration | High | 4-5h | Add NLP fields to FTS, sentiment filters |
+| Email Orchestrator Integration | Medium | 3-4h | Wire email jobs to CrawlOrchestrator |
+| Dependency Parse Processing | Medium | 3-4h | Extract and store parse trees |
+| Entity Search API | Medium | 2-3h | REST endpoints for entity queries |
+| NLP Results UI | Low | 3-4h | Display sentiment, entities in search results |
 
 ### Technical Considerations
 
@@ -643,10 +685,11 @@ Features are prioritized based on:
 
 | Date       | Change                  | Author |
 |------------|-------------------------|--------|
+| 2025-12-11 | Updated Phase 2 status - NLP/Email infrastructure complete | Claude |
 | 2025-11-07 | Initial roadmap created | Sean   |
 
 ---
 
-**Last Updated**: 2025-11-07
-**Version**: 1.0
+**Last Updated**: 2025-12-11
+**Version**: 1.1
 **Status**: Living Document
