@@ -27,7 +27,7 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 **Version**: 0.1.5 - "Foundation + NLP Infrastructure"
 **Last Updated**: 2025-12-11
-**Active Phase**: Phase 2 - NLP Integration (80% complete)
+**Active Phase**: Phase 2 - NLP Integration (90% complete)
 
 ### Phase 1 - Core Foundation ✅ COMPLETE (100%)
 
@@ -91,7 +91,7 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-### Phase 2 - NLP Integration 🔄 IN PROGRESS (80%)
+### Phase 2 - NLP Integration 🔄 IN PROGRESS (90%)
 
 **Infrastructure Complete:**
 - ✅ Stanford CoreNLP 4.5.5 dependency added
@@ -113,8 +113,9 @@ Phase 1 foundation is complete. All success criteria met:
 - ✅ Configurable auto-trigger via `app.nlp.auto-trigger` (default: true)
 
 **Integration Remaining:**
-- [ ] Add NLP fields to FTS vector (searchable entities, nouns, verbs)
-- [ ] Search UI filters by sentiment, entity type
+- [x] Add NLP fields to FTS vector (searchable nouns, verbs) ✅ 2025-12-11
+- [x] REST API sentiment filter for chunk search ✅ 2025-12-11
+- [ ] Search UI filters by sentiment, entity type (UI work)
 - [ ] Complete email crawl integration with CrawlOrchestrator
 - [ ] Email-to-NLP pipeline
 
@@ -173,7 +174,7 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-## Phase 2: Advanced NLP Integration (IN PROGRESS - 70%)
+## Phase 2: Advanced NLP Integration (IN PROGRESS - 90%)
 
 **Goal**: Add linguistic analysis capabilities using Stanford CoreNLP for richer search and understanding.
 
@@ -233,7 +234,7 @@ Phase 1 foundation is complete. All success criteria met:
 | Task | Priority | Effort | Description |
 |------|----------|--------|-------------|
 | ~~NLP Auto-Trigger~~ | ~~High~~ | ~~2-3h~~ | ~~Event listener to start NLP job after crawl~~ ✅ Done |
-| NLP Search Integration | High | 4-5h | Add NLP fields to FTS, sentiment filters |
+| ~~NLP Search Integration~~ | ~~High~~ | ~~4-5h~~ | ~~Add NLP fields to FTS, sentiment filters~~ ✅ Done |
 | Email Orchestrator Integration | Medium | 3-4h | Wire email jobs to CrawlOrchestrator |
 | Dependency Parse Processing | Medium | 3-4h | Extract and store parse trees |
 | Entity Search API | Medium | 2-3h | REST endpoints for entity queries |

@@ -45,6 +45,16 @@ interface FullTextSearchService {
      * @return Page of chunk search results
      */
     fun searchChunks(query: String, pageable: Pageable): Page<ChunkSearchResult>
+
+    /**
+     * Search content_chunks with optional sentiment filter.
+     *
+     * @param query Search query
+     * @param sentiment Optional sentiment filter: "POSITIVE", "NEGATIVE", "NEUTRAL", or null for all
+     * @param pageable Pagination and sorting parameters
+     * @return Page of chunk search results with NLP data
+     */
+    fun searchChunks(query: String, sentiment: String?, pageable: Pageable): Page<ChunkSearchResult>
 }
 
 /**
@@ -74,7 +84,7 @@ data class FileSearchResult(
 )
 
 /**
- * Chunk-specific search result with chunk context.
+ * Chunk-specific search result with chunk context and NLP data.
  */
 data class ChunkSearchResult(
     val id: Long,
@@ -83,7 +93,10 @@ data class ChunkSearchResult(
     val chunkNumber: Int,
     val chunkType: String?,
     val snippet: String,
-    val rank: Float
+    val rank: Float,
+    val sentiment: String? = null,
+    val sentimentScore: Double? = null,
+    val namedEntities: String? = null
 )
 
 @Service
@@ -236,9 +249,16 @@ class FullTextSearchServiceImpl(
     }
 
     override fun searchChunks(query: String, pageable: Pageable): Page<ChunkSearchResult> {
-        val sanitizedQuery = sanitizeQuery(query)
+        return searchChunks(query, null, pageable)
+    }
 
-        log.debug("Searching chunks for: {} (sanitized: {})", query, sanitizedQuery)
+    override fun searchChunks(query: String, sentiment: String?, pageable: Pageable): Page<ChunkSearchResult> {
+        val sanitizedQuery = sanitizeQuery(query)
+        val validSentiment = validateSentiment(sentiment)
+
+        log.debug("Searching chunks for: {} (sanitized: {}), sentiment: {}", query, sanitizedQuery, validSentiment)
+
+        val sentimentCondition = if (validSentiment != null) "AND c.sentiment = :sentiment" else ""
 
         val sql = """
             SELECT
@@ -250,25 +270,39 @@ class FullTextSearchServiceImpl(
                 ts_headline('english', COALESCE(c.text, ''),
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
-                ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank
+                ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank,
+                c.sentiment,
+                c.sentiment_score,
+                c.named_entities
             FROM content_chunks c
             LEFT JOIN fs_file f ON c.concept_id = f.id
             WHERE c.fts_vector @@ to_tsquery('english', :query)
+            $sentimentCondition
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
         """.trimIndent()
 
         val countSql = """
-            SELECT COUNT(*) FROM content_chunks
-            WHERE fts_vector @@ to_tsquery('english', :query)
+            SELECT COUNT(*) FROM content_chunks c
+            WHERE c.fts_vector @@ to_tsquery('english', :query)
+            $sentimentCondition
         """.trimIndent()
 
         try {
-            val results = entityManager.createNativeQuery(sql)
+            val resultsQuery = entityManager.createNativeQuery(sql)
                 .setParameter("query", sanitizedQuery)
                 .setParameter("limit", pageable.pageSize)
                 .setParameter("offset", pageable.offset)
-                .resultList
+
+            val countQuery = entityManager.createNativeQuery(countSql)
+                .setParameter("query", sanitizedQuery)
+
+            if (validSentiment != null) {
+                resultsQuery.setParameter("sentiment", validSentiment)
+                countQuery.setParameter("sentiment", validSentiment)
+            }
+
+            val results = resultsQuery.resultList
                 .map { row ->
                     val cols = row as Array<*>
                     ChunkSearchResult(
@@ -278,20 +312,31 @@ class FullTextSearchServiceImpl(
                         chunkNumber = (cols[3] as Number).toInt(),
                         chunkType = cols[4] as String?,
                         snippet = cols[5] as String,
-                        rank = (cols[6] as Number).toFloat()
+                        rank = (cols[6] as Number).toFloat(),
+                        sentiment = cols[7] as String?,
+                        sentimentScore = (cols[8] as Number?)?.toDouble(),
+                        namedEntities = cols[9] as String?
                     )
                 }
 
-            val total = (entityManager.createNativeQuery(countSql)
-                .setParameter("query", sanitizedQuery)
-                .singleResult as Number).toLong()
+            val total = (countQuery.singleResult as Number).toLong()
 
             return PageImpl(results, pageable, total)
 
         } catch (e: Exception) {
-            log.error("Error searching chunks for query: {}", query, e)
+            log.error("Error searching chunks for query: {}, sentiment: {}", query, sentiment, e)
             throw SearchException("Failed to search chunks: ${e.message}", e)
         }
+    }
+
+    /**
+     * Validate sentiment filter value.
+     * @return Validated sentiment or null if invalid/empty
+     */
+    private fun validateSentiment(sentiment: String?): String? {
+        if (sentiment.isNullOrBlank()) return null
+        val normalized = sentiment.uppercase().trim()
+        return if (normalized in listOf("POSITIVE", "NEGATIVE", "NEUTRAL")) normalized else null
     }
 
     /**

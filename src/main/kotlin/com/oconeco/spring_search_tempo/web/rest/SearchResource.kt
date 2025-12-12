@@ -16,11 +16,12 @@ import org.springframework.web.bind.annotation.*
  * REST API for full-text search operations.
  *
  * Provides endpoints for searching indexed content with PostgreSQL FTS.
+ * Search includes NLP-enhanced ranking using named entities, nouns, and verbs.
  *
  * Endpoints:
  * - GET /api/search?q={query} - Search all content (files + chunks)
  * - GET /api/search/files?q={query} - Search files only
- * - GET /api/search/chunks?q={query} - Search chunks only
+ * - GET /api/search/chunks?q={query}&sentiment={filter} - Search chunks with optional sentiment filter
  * - GET /api/search/suggest?q={query} - Get search suggestions (future)
  * - GET /api/search/stats - Get search statistics (future)
  *
@@ -30,6 +31,8 @@ import org.springframework.web.bind.annotation.*
  * - OR operator: "spring | kotlin"
  * - NOT operator: "spring & !java"
  * - Phrase search: "\"exact phrase\""
+ *
+ * Sentiment filter values: POSITIVE, NEGATIVE, NEUTRAL (case-insensitive)
  */
 @RestController
 @RequestMapping("/api/search")
@@ -67,15 +70,26 @@ class SearchResource(
 
     /**
      * Search only in the content_chunks table.
-     * Returns chunk-specific information including chunk number and type.
+     * Returns chunk-specific information including chunk number, type, and NLP data.
+     *
+     * NLP-enhanced features:
+     * - Results ranked by named entities (highest), nouns, text, and verbs (lowest)
+     * - Returns sentiment analysis (POSITIVE/NEGATIVE/NEUTRAL) and score
+     * - Returns named entities extracted from the chunk
+     * - Optional sentiment filter to narrow results
+     *
+     * @param q Search query
+     * @param sentiment Optional filter: POSITIVE, NEGATIVE, NEUTRAL (case-insensitive)
+     * @param pageable Pagination parameters
      */
     @GetMapping("/chunks", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun searchChunks(
         @RequestParam q: String,
+        @RequestParam(required = false) sentiment: String?,
         @PageableDefault(size = 20, sort = ["rank"], direction = Sort.Direction.DESC)
         pageable: Pageable
     ): ResponseEntity<Page<ChunkSearchResult>> {
-        val results = searchService.searchChunks(q, pageable)
+        val results = searchService.searchChunks(q, sentiment, pageable)
         return ResponseEntity.ok(results)
     }
 

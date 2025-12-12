@@ -179,6 +179,70 @@ After NLP processing, ContentChunk entities are enriched with:
 | `sentimentScore` | Double | 0.0 (very negative) to 1.0 (very positive) |
 | `nlpProcessedAt` | OffsetDateTime | Timestamp when NLP processing completed |
 
+## NLP-Enhanced Full-Text Search
+
+NLP-extracted data is automatically included in PostgreSQL full-text search (FTS). The `fts_vector` column on ContentChunk combines:
+
+| Weight | Field | Description |
+|--------|-------|-------------|
+| A (highest) | `nouns` | Key concepts - most valuable for precise search |
+| B (high) | `verbs` | Action words |
+| C (normal) | `text` | Original chunk text |
+
+This weighting means searching for "report analysis" will rank chunks containing these nouns higher than chunks where these words appear in regular text.
+
+### Searching with Sentiment Filter
+
+The REST API supports filtering search results by sentiment:
+
+```bash
+# Search for "crisis" in NEGATIVE sentiment chunks
+curl "http://localhost:8089/api/search/chunks?q=crisis&sentiment=NEGATIVE"
+
+# Search for "growth" in POSITIVE sentiment chunks
+curl "http://localhost:8089/api/search/chunks?q=growth&sentiment=POSITIVE"
+
+# Search without sentiment filter (all results)
+curl "http://localhost:8089/api/search/chunks?q=growth"
+```
+
+### Search Response with NLP Data
+
+The chunk search endpoint returns NLP data:
+
+```json
+{
+  "content": [
+    {
+      "id": 12345,
+      "fileUri": "/path/to/document.pdf",
+      "fileLabel": "Annual Report 2024",
+      "chunkNumber": 3,
+      "chunkType": "Sentence",
+      "snippet": "The company experienced significant <b>growth</b> in Q4...",
+      "rank": 0.85,
+      "sentiment": "POSITIVE",
+      "sentimentScore": 0.78,
+      "namedEntities": "[{\"text\":\"Q4\",\"type\":\"DATE\"}]"
+    }
+  ],
+  "totalElements": 42
+}
+```
+
+### Database Migration
+
+For existing databases, run the migration script to update the FTS vector:
+
+```bash
+psql -h localhost -p 5433 -U postgres -d spring_search_tempo -f docs/sql/003-add-nlp-to-fts.sql
+```
+
+This migration:
+1. Drops and recreates the `fts_vector` column with NLP field weights
+2. Adds indexes on `sentiment` and `nlp_processed_at` columns
+3. Creates a `search_chunks_with_sentiment()` PostgreSQL function
+
 ## Processing Flow
 
 1. **Reader**: Fetches ContentChunks where `nlpProcessedAt IS NULL AND text IS NOT NULL`
