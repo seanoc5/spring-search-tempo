@@ -6,6 +6,8 @@ spring:
   batch:
     job:
       enabled: false  # Disable batch jobs during tests unless explicitly needed
+    jdbc:
+      initialize-schema: always  # Create batch tables for tests
   session:
     jdbc:
       initialize-schema: always  # Create session tables for tests
