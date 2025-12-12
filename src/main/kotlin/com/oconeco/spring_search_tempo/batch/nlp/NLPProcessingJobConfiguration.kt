@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.batch.nlp
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
@@ -30,6 +31,10 @@ import org.springframework.transaction.PlatformTransactionManager
  * - Sentiment analysis
  *
  * Processing is done in chunks to handle large datasets efficiently.
+ *
+ * IMPORTANT: Only chunks from files/emails with analysisStatus of ANALYZE or SEMANTIC
+ * are processed. Files with lower analysis levels (SKIP, LOCATE, INDEX) are not
+ * processed for NLP even if they have content chunks.
  */
 @Configuration
 class NLPProcessingJobConfiguration(
@@ -44,6 +49,13 @@ class NLPProcessingJobConfiguration(
     companion object {
         private val log = LoggerFactory.getLogger(NLPProcessingJobConfiguration::class.java)
         private const val CHUNK_SIZE = 10  // Process 10 chunks at a time
+
+        /**
+         * Analysis status levels that qualify for NLP processing.
+         * ANALYZE: Full NLP analysis (NER, POS, sentiment)
+         * SEMANTIC: ANALYZE + future vector embeddings
+         */
+        val NLP_ELIGIBLE_STATUSES = listOf(AnalysisStatus.ANALYZE, AnalysisStatus.SEMANTIC)
     }
 
     /**
@@ -72,14 +84,24 @@ class NLPProcessingJobConfiguration(
 
     /**
      * Reader for content chunks that need NLP processing.
-     * Reads ContentChunk entities where nlpProcessedAt is null and text is not null.
+     *
+     * Only reads ContentChunk entities where:
+     * - nlpProcessedAt is null (not yet processed)
+     * - text is not null (has content to analyze)
+     * - Parent file/email has analysisStatus of ANALYZE or SEMANTIC
+     *
+     * This ensures NLP processing only runs on content that has been explicitly
+     * marked for deep analysis, not on files that are only being indexed.
      */
     @Bean
     fun nlpChunkReader(): RepositoryItemReader<ContentChunk> {
         val reader = RepositoryItemReader<ContentChunk>()
         reader.setRepository(contentChunksRepository)
-        reader.setMethodName("findByNlpProcessedAtIsNullAndTextIsNotNull")
+        reader.setMethodName("findChunksForNlpProcessing")
+        reader.setArguments(listOf(NLP_ELIGIBLE_STATUSES))
         reader.setPageSize(CHUNK_SIZE)
+        // Note: Sort is handled in the @Query itself (ORDER BY c.id ASC)
+        // but RepositoryItemReader requires a sort map for pagination
         reader.setSort(mapOf("id" to Sort.Direction.ASC))
         return reader
     }
