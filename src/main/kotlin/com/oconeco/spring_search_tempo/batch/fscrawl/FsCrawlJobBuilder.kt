@@ -42,6 +42,7 @@ class FsCrawlJobBuilder(
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
+    private val crawlCleanupListener: CrawlCleanupListener,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val nlpAutoTriggerListener: NLPAutoTriggerListener
 ) {
@@ -54,11 +55,12 @@ class FsCrawlJobBuilder(
      * Uses single-pass combined crawl strategy (ADR-004).
      *
      * @param crawl The crawl definition to build a job for
+     * @param forceFullRecrawl When true, skip timestamp checks and re-process all items
      * @return A configured Spring Batch Job
      */
-    fun buildJob(crawl: CrawlDefinition): Job {
-        log.info("Building single-pass job for crawl: {} ({}) with {} start paths",
-            crawl.name, crawl.label, crawl.startPaths.size)
+    fun buildJob(crawl: CrawlDefinition, forceFullRecrawl: Boolean = false): Job {
+        log.info("Building single-pass job for crawl: {} ({}) with {} start paths, forceFullRecrawl={}",
+            crawl.name, crawl.label, crawl.startPaths.size, forceFullRecrawl)
 
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
         val defaults = crawlConfigService.getDefaults()
@@ -67,31 +69,36 @@ class FsCrawlJobBuilder(
 
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(crawlCleanupListener)  // Cleanup listener runs first (beforeJob order)
             .listener(jobRunTrackingListener)
             .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
-            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks))
+            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl))
             .next(buildChunkingStep(crawl))
             .build()
     }
 
     /**
      * Build the chunking step that splits file bodyText into ContentChunk.
+     * The ChunkReader is registered as a listener to get jobRunId from the step context.
      */
     private fun buildChunkingStep(crawl: CrawlDefinition): Step {
         log.info("Building chunking step for crawl: {}", crawl.name)
 
+        val reader = createChunkReader()
+
         return StepBuilder("fsCrawlChunks_${crawl.name}", jobRepository)
             .chunk<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>>(10, transactionManager)
-            .reader(createChunkReader())
+            .reader(reader)
             .processor(createChunkProcessor())
             .writer(createChunkWriter())
+            .listener(reader)  // Register reader as listener to get jobRunId
             .build()
     }
 
     /**
-     * Create a chunk reader that reads FSFiles with bodyText.
+     * Create a chunk reader that reads FSFiles with bodyText for the current job run.
      */
-    private fun createChunkReader(): ItemReader<com.oconeco.spring_search_tempo.base.model.FSFileDTO> {
+    private fun createChunkReader(): ChunkReader {
         log.debug("Creating ChunkReader")
         return ChunkReader(
             fileService = fileService,
@@ -108,11 +115,11 @@ class FsCrawlJobBuilder(
     }
 
     /**
-     * Create a chunk writer that saves ContentChunk.
+     * Create a chunk writer that saves ContentChunk and marks files as chunked.
      */
     private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>> {
         log.debug("Creating ChunkWriter")
-        return ChunkWriter(chunkService = chunkService)
+        return ChunkWriter(chunkService = chunkService, fileService = fileService)
     }
 
     /**
@@ -123,10 +130,11 @@ class FsCrawlJobBuilder(
         crawl: CrawlDefinition,
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
         maxDepth: Int,
-        followLinks: Boolean
+        followLinks: Boolean,
+        forceFullRecrawl: Boolean = false
     ): Step {
-        log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={})",
-            crawl.name, crawl.startPaths.size, maxDepth, followLinks)
+        log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={}, forceFullRecrawl={})",
+            crawl.name, crawl.startPaths.size, maxDepth, followLinks, forceFullRecrawl)
 
         val startPaths = crawl.startPaths.map { Path(it) }
 
@@ -135,7 +143,7 @@ class FsCrawlJobBuilder(
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
             .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns))
-            .processor(createCombinedProcessor(startPaths, effectivePatterns))
+            .processor(createCombinedProcessor(startPaths, effectivePatterns, forceFullRecrawl))
             .writer(writer)
             .listener(CrawlStepListener())
             .listener(writer) // Writer is also a step listener
@@ -173,9 +181,10 @@ class FsCrawlJobBuilder(
      */
     private fun createCombinedProcessor(
         startPaths: List<Path>,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
+        forceFullRecrawl: Boolean = false
     ): ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
-        log.debug("Creating CombinedCrawlProcessor with pattern matching and caching")
+        log.debug("Creating CombinedCrawlProcessor with pattern matching and caching (forceFullRecrawl={})", forceFullRecrawl)
         return CombinedCrawlProcessor(
             startPaths = startPaths,
             effectivePatterns = effectivePatterns,
@@ -184,7 +193,8 @@ class FsCrawlJobBuilder(
             folderMapper = folderMapper,
             fileMapper = fileMapper,
             patternMatchingService = patternMatchingService,
-            textExtractionService = textExtractionService
+            textExtractionService = textExtractionService,
+            forceFullRecrawl = forceFullRecrawl
         )
     }
 

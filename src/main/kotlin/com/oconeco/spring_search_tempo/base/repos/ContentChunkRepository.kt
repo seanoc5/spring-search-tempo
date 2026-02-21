@@ -5,7 +5,9 @@ import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 
 interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
@@ -54,5 +56,23 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
         analysisStatuses: List<AnalysisStatus>,
         pageable: Pageable
     ): Page<ContentChunk>
+
+    /**
+     * Delete all content chunks belonging to files that were crawled by a specific crawl config.
+     * Must be called before deleting FSFiles due to foreign key constraints.
+     *
+     * @param crawlConfigId The crawl config whose chunks should be deleted
+     * @return The number of chunks deleted
+     */
+    @Modifying
+    @Query("""
+        DELETE FROM ContentChunk c
+        WHERE c.concept.id IN (
+            SELECT f.id FROM FSFile f WHERE f.jobRunId IN (
+                SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
+            )
+        )
+    """)
+    fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
 
 }

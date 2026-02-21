@@ -171,6 +171,14 @@ class ContentChunk {
     @JoinColumn(name = "email_message_id")
     var emailMessage: EmailMessage? = null
 
+    /**
+     * Browser bookmark parent (alternative to FSFile/EmailMessage).
+     * A ContentChunk belongs to exactly one of: FSFile, EmailMessage, or BrowserBookmark.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "browser_bookmark_id")
+    var browserBookmark: BrowserBookmark? = null
+
     @CreatedDate
     @Column(
         nullable = false,

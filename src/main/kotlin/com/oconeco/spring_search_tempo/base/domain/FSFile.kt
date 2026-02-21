@@ -50,6 +50,13 @@ class FSFile : FSObject() {
     @Column
     var pageCount: Int? = null
 
+    /**
+     * Timestamp when this file was last chunked into ContentChunks.
+     * Used to determine if re-chunking is needed (when lastUpdated > chunkedAt).
+     */
+    @Column
+    var chunkedAt: java.time.OffsetDateTime? = null
+
     @OneToMany(mappedBy = "concept")
     var contentChunks = mutableSetOf<ContentChunk>()
 

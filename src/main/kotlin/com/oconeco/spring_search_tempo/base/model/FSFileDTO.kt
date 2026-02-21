@@ -69,4 +69,10 @@ class FSFileDTO {
 
     var jobRunId: Long? = null
 
+    /**
+     * Timestamp when this file was last chunked into ContentChunks.
+     * Used to determine if re-chunking is needed.
+     */
+    var chunkedAt: java.time.OffsetDateTime? = null
+
 }

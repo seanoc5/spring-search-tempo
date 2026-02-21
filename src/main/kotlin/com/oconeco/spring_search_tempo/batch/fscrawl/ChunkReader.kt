@@ -3,15 +3,24 @@ package com.oconeco.spring_search_tempo.batch.fscrawl
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.StepExecution
+import org.springframework.batch.core.StepExecutionListener
 import org.springframework.batch.item.ItemReader
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 
 /**
- * ItemReader that reads FSFileDTO entities with non-null bodyText for chunking.
+ * ItemReader that reads FSFileDTO entities needing chunking.
  *
- * Uses service layer pagination to efficiently process files in batches, avoiding loading
- * all files into memory at once.
+ * Only reads files where:
+ * - They belong to the current job run (scoped to this crawl)
+ * - bodyText is not null, AND
+ * - chunkedAt is null (never chunked) OR lastUpdated > chunkedAt (modified since chunking)
+ *
+ * This prevents re-processing already-chunked files and scopes chunking to files
+ * from the current crawl job only.
+ *
+ * Implements StepExecutionListener to get the jobRunId from the step execution context.
  *
  * @param fileService Service for accessing FSFile entities
  * @param pageSize Number of files to load per page (default 50)
@@ -19,7 +28,7 @@ import org.springframework.data.domain.Sort
 class ChunkReader(
     private val fileService: FSFileService,
     private val pageSize: Int = 50
-) : ItemReader<FSFileDTO> {
+) : ItemReader<FSFileDTO>, StepExecutionListener {
 
     companion object {
         private val log = LoggerFactory.getLogger(ChunkReader::class.java)
@@ -31,6 +40,16 @@ class ChunkReader(
     private var totalFilesProcessed = 0
     private var initialized = false
     private var totalFiles: Long = 0
+    private var jobRunId: Long? = null
+
+    override fun beforeStep(stepExecution: StepExecution) {
+        // Get jobRunId from job execution context (set by JobRunTrackingListener)
+        jobRunId = stepExecution.jobExecution.executionContext
+            .getLong(JobRunTrackingListener.JOB_RUN_ID_KEY, -1L)
+            .takeIf { it > 0 }
+
+        log.info("ChunkReader initialized with jobRunId: {}", jobRunId)
+    }
 
     override fun read(): FSFileDTO? {
         if (!initialized) {
@@ -62,22 +81,40 @@ class ChunkReader(
     private fun initialize() {
         log.info("Initializing ChunkReader...")
 
-        // Get first page to determine total count
-        val firstPage = fileService.findFilesWithBodyText(
+        if (jobRunId == null) {
+            log.warn("No jobRunId available - chunking will be skipped. This may happen if the crawl step failed.")
+            totalFiles = 0
+            initialized = true
+            return
+        }
+
+        // Get first page to determine total count - only files from this job run needing chunking
+        val firstPage = fileService.findFilesNeedingChunkingByJobRunId(
+            jobRunId!!,
             PageRequest.of(0, pageSize, Sort.by("id"))
         )
         totalFiles = firstPage.totalElements
 
-        log.info("Found {} files with bodyText to chunk", totalFiles)
+        if (totalFiles == 0L) {
+            log.info("No files need chunking for job run {} (all files are up-to-date or have no text)", jobRunId)
+        } else {
+            log.info("Found {} files needing chunking for job run {} (new or modified since last chunking)", totalFiles, jobRunId)
+        }
 
         initialized = true
         loadNextPage()
     }
 
     private fun loadNextPage() {
+        if (jobRunId == null) {
+            currentPageData = emptyList()
+            return
+        }
+
         log.debug("Loading page {} with page size {}", currentPage, pageSize)
 
-        val page = fileService.findFilesWithBodyText(
+        val page = fileService.findFilesNeedingChunkingByJobRunId(
+            jobRunId!!,
             PageRequest.of(currentPage, pageSize, Sort.by("id"))
         )
 

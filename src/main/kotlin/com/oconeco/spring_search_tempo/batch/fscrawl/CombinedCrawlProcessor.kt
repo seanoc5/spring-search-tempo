@@ -38,6 +38,7 @@ import kotlin.io.path.name
  * @param fileMapper Mapper for file DTO conversion
  * @param patternMatchingService Service for determining analysis status
  * @param textExtractionService Service for text extraction from files
+ * @param forceFullRecrawl When true, skip timestamp checks and re-process all items
  */
 class CombinedCrawlProcessor(
     private val startPaths: List<Path>,
@@ -47,7 +48,8 @@ class CombinedCrawlProcessor(
     private val folderMapper: FSFolderMapper,
     private val fileMapper: FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
-    private val textExtractionService: TextExtractionService
+    private val textExtractionService: TextExtractionService,
+    private val forceFullRecrawl: Boolean = false
 ) : ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
 
     companion object {
@@ -118,20 +120,23 @@ class CombinedCrawlProcessor(
             existing
         }
 
-        // Incremental crawl: check if folder is unchanged
+        // Incremental crawl: check if folder is unchanged (skip check when forceFullRecrawl=true)
         if (existingFolder != null) {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFolder.fsLastModified,
                 dbSize = existingFolder.size
             )
 
-            if (isUnchanged && existingFolder.status == Status.CURRENT) {
+            if (!forceFullRecrawl && isUnchanged && existingFolder.status == Status.CURRENT) {
                 log.info("\t\t.... Folder unchanged, skipping: {}", uri)
                 return null
             }
 
-            log.info("\t\t++++ [{}] Folder exists, will update, (unchanged={}, status={})", uri, isUnchanged, existingFolder.status
-            )
+            if (forceFullRecrawl) {
+                log.info("\t\t++++ [{}] Folder exists, forcing recrawl (forceFullRecrawl=true)", uri)
+            } else {
+                log.info("\t\t++++ [{}] Folder exists, will update, (unchanged={}, status={})", uri, isUnchanged, existingFolder.status)
+            }
         }
 
         // Determine analysis status using hierarchical pattern matching
@@ -235,7 +240,7 @@ class CombinedCrawlProcessor(
         // Check if file exists in DB (use cache)
         val existingFile = fileCache[uri]
 
-        // Incremental crawl: check if file is unchanged
+        // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
             log.info("File does not exist in DB, will process: {}", uri)
         } else {
@@ -244,14 +249,17 @@ class CombinedCrawlProcessor(
                 dbSize = existingFile.size
             )
 
-            if (isUnchanged) {
+            if (!forceFullRecrawl && isUnchanged) {
                 log.debug("\t\tFile unchanged, skipping: {}", uri)
                 return null
             }
 
-            log.info("\t\tFile modified, will update: {} (fs_modified={}, db_modified={})",
-                uri, fsMetadata.lastModified, existingFile.fsLastModified
-            )
+            if (forceFullRecrawl) {
+                log.info("\t\tFile exists, forcing recrawl (forceFullRecrawl=true): {}", uri)
+            } else {
+                log.info("\t\tFile modified, will update: {} (fs_modified={}, db_modified={})",
+                    uri, fsMetadata.lastModified, existingFile.fsLastModified)
+            }
         }
 
         // Determine analysis status using file patterns and parent folder status

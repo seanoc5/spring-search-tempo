@@ -18,9 +18,12 @@ import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 
 
 @Service
+@Transactional
 class FSFileServiceImpl(
     private val fSFileRepository: FSFileRepository,
     private val fSFolderRepository: FSFolderRepository,
@@ -28,8 +31,10 @@ class FSFileServiceImpl(
     private val fSFileMapper: FSFileMapper
 ) : FSFileService {
 
+    @Transactional(readOnly = true)
     override fun count(): Long = fSFileRepository.count()
 
+    @Transactional(readOnly = true)
     override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFileDTO> {
         var page: Page<FSFile>
         if (filter != null) {
@@ -51,6 +56,7 @@ class FSFileServiceImpl(
                 pageable, page.totalElements)
     }
 
+    @Transactional(readOnly = true)
     override fun `get`(id: Long): FSFileDTO = fSFileRepository.findById(id)
             .map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) }
             .orElseThrow { NotFoundException() }
@@ -75,17 +81,73 @@ class FSFileServiceImpl(
         fSFileRepository.delete(fSFile)
     }
 
+    @Transactional(readOnly = true)
     override fun uriExists(uri: String?): Boolean = fSFileRepository.existsByUri(uri)
 
+    @Transactional(readOnly = true)
     override fun getFSFileValues(): Map<Long, Long> = fSFileRepository.findAll(Sort.by("id"))
             .stream()
             .collect(CustomCollectors.toSortedMap(FSFile::id, FSFile::id))
 
+    @Transactional(readOnly = true)
     override fun findFilesWithBodyText(pageable: Pageable): Page<FSFileDTO> {
         val page = fSFileRepository.findByBodyTextIsNotNull(pageable)
         return PageImpl(page.content
                 .map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
                 pageable, page.totalElements)
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByJobRunId(jobRunId: Long): Long =
+        fSFileRepository.countByJobRunId(jobRunId)
+
+    @Transactional(readOnly = true)
+    override fun countByCrawlConfigId(crawlConfigId: Long, includeSkipped: Boolean): Long =
+        if (includeSkipped) {
+            fSFileRepository.countByCrawlConfigId(crawlConfigId)
+        } else {
+            fSFileRepository.countByCrawlConfigIdAndAnalysisStatusNot(crawlConfigId, AnalysisStatus.SKIP)
+        }
+
+    @Transactional(readOnly = true)
+    override fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable, showSkipped: Boolean): Page<FSFileDTO> {
+        val page = if (showSkipped) {
+            fSFileRepository.findByCrawlConfigId(crawlConfigId, pageable)
+        } else {
+            fSFileRepository.findByCrawlConfigIdAndAnalysisStatusNot(crawlConfigId, AnalysisStatus.SKIP, pageable)
+        }
+        return PageImpl(
+            page.content.map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
+            pageable,
+            page.totalElements
+        )
+    }
+
+    @Transactional(readOnly = true)
+    override fun findFilesNeedingChunking(pageable: Pageable): Page<FSFileDTO> {
+        val page = fSFileRepository.findFilesNeedingChunking(pageable)
+        return PageImpl(
+            page.content.map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
+            pageable,
+            page.totalElements
+        )
+    }
+
+    @Transactional(readOnly = true)
+    override fun findFilesNeedingChunkingByJobRunId(jobRunId: Long, pageable: Pageable): Page<FSFileDTO> {
+        val page = fSFileRepository.findFilesNeedingChunkingByJobRunId(jobRunId, pageable)
+        return PageImpl(
+            page.content.map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
+            pageable,
+            page.totalElements
+        )
+    }
+
+    override fun markAsChunked(fileId: Long) {
+        val file = fSFileRepository.findById(fileId)
+            .orElseThrow { NotFoundException("File not found: $fileId") }
+        file.chunkedAt = OffsetDateTime.now()
+        fSFileRepository.save(file)
     }
 
     @EventListener(BeforeDeleteFSFolder::class)

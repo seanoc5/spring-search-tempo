@@ -16,9 +16,11 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 
 @Service
+@Transactional
 class ContentChunkServiceImpl(
     private val contentChunkRepository: ContentChunkRepository,
     private val fSFileRepository: FSFileRepository,
@@ -27,14 +29,17 @@ class ContentChunkServiceImpl(
     private val contentChunkMapper: ContentChunkMapper
 ) : ContentChunkService {
 
+    @Transactional(readOnly = true)
     override fun count(): Long = contentChunkRepository.count()
 
+    @Transactional(readOnly = true)
     override fun findAll(): List<ContentChunkDTO> {
         val contentChunks = contentChunkRepository.findAll(Sort.by("id"))
         return contentChunks.map { contentChunk ->
                 contentChunkMapper.updateContentChunkDTO(contentChunk, ContentChunkDTO()) }
     }
 
+    @Transactional(readOnly = true)
     override fun `get`(id: Long): ContentChunkDTO = contentChunkRepository.findById(id)
             .map { contentChunk -> contentChunkMapper.updateContentChunkDTO(contentChunk,
             ContentChunkDTO()) }
@@ -62,6 +67,7 @@ class ContentChunkServiceImpl(
         contentChunkRepository.delete(contentChunk)
     }
 
+    @Transactional(readOnly = true)
     override fun getContentChunkValues(): Map<Long, Long> =
             contentChunkRepository.findAll(Sort.by("id"))
             .stream()
