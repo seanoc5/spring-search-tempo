@@ -1,0 +1,29 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>400 - Bad Request</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="text-center py-5">
+                <h1 class="display-1 text-danger">400</h1>
+                <h2 class="mb-4">Bad Request</h2>
+                <p class="lead text-muted" th:if="${message}" th:text="${message}">The request could not be processed.</p>
+                <p class="text-muted small" th:if="${path}">Path: <code th:text="${path}"></code></p>
+                <div th:if="${errors}" class="mt-4">
+                    <div class="alert alert-danger text-start" role="alert">
+                        <strong>Validation Errors:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li th:each="error : ${errors}" th:text="${error.key + ': ' + error.value}"></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button onclick="history.back()" class="btn btn-primary">Go Back</button>
+                    <a th:href="@{/}" class="btn btn-secondary ms-2">Go Home</a>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

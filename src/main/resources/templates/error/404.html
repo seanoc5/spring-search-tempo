@@ -1,0 +1,21 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>404 - Not Found</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <div class="text-center py-5">
+                <h1 class="display-1 text-muted">404</h1>
+                <h2 class="mb-4">Resource Not Found</h2>
+                <p class="lead text-muted" th:if="${message}" th:text="${message}">The requested resource was not found.</p>
+                <p class="text-muted small" th:if="${path}">Path: <code th:text="${path}"></code></p>
+                <div class="mt-4">
+                    <a th:href="@{/}" class="btn btn-primary">Go Home</a>
+                    <button onclick="history.back()" class="btn btn-secondary ms-2">Go Back</button>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
