@@ -72,6 +72,9 @@ dependencies {
     // HTML text extraction (for email body processing)
     implementation("org.jsoup:jsoup:1.18.1")
 
+    // SQLite JDBC driver for reading Firefox places.sqlite
+    implementation("org.xerial:sqlite-jdbc:3.45.1.0")
+
     kapt("org.mapstruct:mapstruct-processor:1.6.3")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")

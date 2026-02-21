@@ -223,7 +223,7 @@ app:
         label: "User Downloads"
         enabled: true
         start-paths:
-          - "${user.home}/Downloads"
+          - "/opt/Downloads"
         max-depth: 5
         parallel: true
         folder-patterns:

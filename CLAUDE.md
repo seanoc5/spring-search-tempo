@@ -16,7 +16,7 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 
 ## Current Status
 
-**Active Phase**: Phase 2 - NLP Integration (80% complete)
+**Active Phase**: Phase 2 - NLP Integration (90% complete)
 
 **Phase 1 Complete** (100%):
 - File system crawling with pattern-based processing levels
@@ -395,6 +395,6 @@ Default credentials: `user` / `password` (basic auth)
 
 ---
 
-**Last Updated**: 2025-12-11
-**Version**: 0.1.5-SNAPSHOT
+**Last Updated**: 2026-02-21
+**Version**: 0.1.9
 **Project Lead**: Sean (learning Spring Modulith)

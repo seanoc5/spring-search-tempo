@@ -8,6 +8,9 @@
         <link th:href="@{/webjars/bootstrap/5.3.8/css/bootstrap.min.css}" rel="stylesheet" />
         <link th:href="@{/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css}" rel="stylesheet" />
         <link th:href="@{/css/app.css}" rel="stylesheet" />
+        <!-- CSRF token for HTMX requests -->
+        <meta name="_csrf" th:content="${_csrf.token}"/>
+        <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
         <script th:src="@{/webjars/bootstrap/5.3.8/js/bootstrap.bundle.min.js}" defer></script>
         <script th:src="@{/webjars/htmx.org/2.0.7/dist/htmx.min.js}" defer></script>
         <script th:src="@{/js/app.js}" defer></script>
@@ -66,7 +69,7 @@
 
                     <!-- Dashboard -->
                     <div class="nav-section">
-                        <a th:href="@{/}" class="nav-item" th:classappend="${#requestURI == '/'} ? 'active' : ''">
+                        <a th:href="@{/}" class="nav-item" th:classappend="${requestUri == '/'} ? 'active' : ''">
                             <i class="bi bi-speedometer2"></i>
                             <span>[[#{nav.dashboard}]]</span>
                         </a>
@@ -76,12 +79,12 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.crawl}]]</div>
                         <a th:href="@{/crawlConfigs}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/crawlConfigs')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/crawlConfigs')} ? 'active' : ''">
                             <i class="bi bi-gear-wide-connected"></i>
                             <span>[[#{nav.crawlConfigs}]]</span>
                         </a>
                         <a th:href="@{/crawlConfigs/jobRuns}" class="nav-item"
-                           th:classappend="${#httpServletRequest.requestURI == '/crawlConfigs/jobRuns'} ? 'active' : ''">
+                           th:classappend="${requestUri == '/crawlConfigs/jobRuns'} ? 'active' : ''">
                             <i class="bi bi-clock-history"></i>
                             <span>[[#{nav.jobRuns}]]</span>
                         </a>
@@ -91,7 +94,7 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.search}]]</div>
                         <a th:href="@{/search}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/search')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/search')} ? 'active' : ''">
                             <i class="bi bi-search"></i>
                             <span>[[#{nav.search}]]</span>
                         </a>
@@ -101,22 +104,22 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.content}]]</div>
                         <a th:href="@{/fSFiles}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/fSFiles')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/fSFiles')} ? 'active' : ''">
                             <i class="bi bi-file-earmark"></i>
                             <span>[[#{fSFile.list.headline}]]</span>
                         </a>
                         <a th:href="@{/fSFolders}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/fSFolders')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/fSFolders')} ? 'active' : ''">
                             <i class="bi bi-folder"></i>
                             <span>[[#{fSFolder.list.headline}]]</span>
                         </a>
                         <a th:href="@{/contentChunks}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/contentChunks')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/contentChunks')} ? 'active' : ''">
                             <i class="bi bi-puzzle"></i>
                             <span>[[#{contentChunk.list.headline}]]</span>
                         </a>
                         <a th:href="@{/annotations}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/annotations')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/annotations')} ? 'active' : ''">
                             <i class="bi bi-tag"></i>
                             <span>[[#{annotation.list.headline}]]</span>
                         </a>
@@ -126,12 +129,12 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.admin}]]</div>
                         <a th:href="@{/springUsers}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/springUsers')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/springUsers')} ? 'active' : ''">
                             <i class="bi bi-people"></i>
                             <span>[[#{springUser.list.headline}]]</span>
                         </a>
                         <a th:href="@{/springRoles}" class="nav-item"
-                           th:classappend="${#strings.startsWith(#httpServletRequest.requestURI, '/springRoles')} ? 'active' : ''">
+                           th:classappend="${#strings.startsWith(requestUri, '/springRoles')} ? 'active' : ''">
                             <i class="bi bi-shield-lock"></i>
                             <span>[[#{springRole.list.headline}]]</span>
                         </a>
@@ -256,6 +259,15 @@
                 }
                 if (localStorage.getItem('detailsOpen') === 'true') {
                     document.body.classList.add('details-open');
+                }
+
+                // Configure HTMX to include CSRF token in all requests
+                const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
+                const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
+                if (csrfToken && csrfHeader) {
+                    document.body.addEventListener('htmx:configRequest', function(evt) {
+                        evt.detail.headers[csrfHeader] = csrfToken;
+                    });
                 }
             });
         </script>
