@@ -41,6 +41,12 @@ class FSFolderController(
         return "fSFolder/list"
     }
 
+    @GetMapping("/{id}")
+    fun view(@PathVariable(name = "id") id: Long, model: Model): String {
+        model.addAttribute("fSFolder", fSFolderService.get(id))
+        return "fSFolder/view"
+    }
+
     @GetMapping("/add")
     fun add(@ModelAttribute("fSFolder") fSFolderDTO: FSFolderDTO): String = "fSFolder/add"
 

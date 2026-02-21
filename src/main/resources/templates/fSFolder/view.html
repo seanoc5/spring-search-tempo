@@ -1,0 +1,140 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Folder Details</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/fSFolders}">Folders</a></li>
+                    <li class="breadcrumb-item active">[[${fSFolder.label ?: fSFolder.uri}]]</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">[[${fSFolder.label ?: 'Folder Details'}]]</h1>
+                <div>
+                    <a th:href="@{/fSFolders/edit/{id}(id=${fSFolder.id})}" class="btn btn-secondary me-2">Edit</a>
+                    <a th:href="@{/fSFolders}" class="btn btn-outline-secondary">Back to List</a>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Path Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">URI:</dt>
+                                <dd class="col-sm-9"><code>[[${fSFolder.uri}]]</code></dd>
+
+                                <dt class="col-sm-3">Label:</dt>
+                                <dd class="col-sm-9">[[${fSFolder.label ?: '-'}]]</dd>
+
+                                <dt class="col-sm-3">Description:</dt>
+                                <dd class="col-sm-9">[[${fSFolder.description ?: '-'}]]</dd>
+
+                                <dt class="col-sm-3">Type:</dt>
+                                <dd class="col-sm-9">[[${fSFolder.type ?: '-'}]]</dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">File System Attributes</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">Owner:</dt>
+                                <dd class="col-sm-9">[[${fSFolder.owner ?: '-'}]]</dd>
+
+                                <dt class="col-sm-3">Group:</dt>
+                                <dd class="col-sm-9">[[${fSFolder.group ?: '-'}]]</dd>
+
+                                <dt class="col-sm-3">Permissions:</dt>
+                                <dd class="col-sm-9"><code>[[${fSFolder.permissions ?: '-'}]]</code></dd>
+
+                                <dt class="col-sm-3">Last Modified:</dt>
+                                <dd class="col-sm-9">
+                                    <span th:if="${fSFolder.fsLastModified != null}">
+                                        [[${#temporals.format(fSFolder.fsLastModified, 'yyyy-MM-dd HH:mm:ss')}]]
+                                    </span>
+                                    <span th:if="${fSFolder.fsLastModified == null}">-</span>
+                                </dd>
+
+                                <dt class="col-sm-3">Size (children):</dt>
+                                <dd class="col-sm-9">[[${fSFolder.size ?: '-'}]]</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Status</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5">Status:</dt>
+                                <dd class="col-sm-7">
+                                    <span th:switch="${fSFolder.status?.name()}">
+                                        <span th:case="'NEW'" class="badge bg-info">New</span>
+                                        <span th:case="'CURRENT'" class="badge bg-success">Current</span>
+                                        <span th:case="'STALE'" class="badge bg-warning">Stale</span>
+                                        <span th:case="'DELETED'" class="badge bg-danger">Deleted</span>
+                                        <span th:case="*" class="badge bg-secondary">[[${fSFolder.status}]]</span>
+                                    </span>
+                                </dd>
+
+                                <dt class="col-sm-5">Analysis:</dt>
+                                <dd class="col-sm-7">
+                                    <span th:switch="${fSFolder.analysisStatus?.name()}">
+                                        <span th:case="'SKIP'" class="badge bg-secondary">Skip</span>
+                                        <span th:case="'LOCATE'" class="badge bg-info">Locate</span>
+                                        <span th:case="'INDEX'" class="badge bg-primary">Index</span>
+                                        <span th:case="'ANALYZE'" class="badge bg-success">Analyze</span>
+                                        <span th:case="'SEMANTIC'" class="badge bg-warning">Semantic</span>
+                                        <span th:case="*" class="badge bg-secondary">[[${fSFolder.analysisStatus}]]</span>
+                                    </span>
+                                </dd>
+
+                                <dt class="col-sm-5">Archived:</dt>
+                                <dd class="col-sm-7">
+                                    <span th:if="${fSFolder.archived}" class="badge bg-secondary">Yes</span>
+                                    <span th:unless="${fSFolder.archived}">No</span>
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Metadata</h5>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5">ID:</dt>
+                                <dd class="col-sm-7">[[${fSFolder.id}]]</dd>
+
+                                <dt class="col-sm-5">Version:</dt>
+                                <dd class="col-sm-7">[[${fSFolder.version}]]</dd>
+
+                                <dt class="col-sm-5">Crawl Depth:</dt>
+                                <dd class="col-sm-7">[[${fSFolder.crawlDepth ?: '-'}]]</dd>
+
+                                <dt class="col-sm-5">Job Run ID:</dt>
+                                <dd class="col-sm-7">[[${fSFolder.jobRunId ?: '-'}]]</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

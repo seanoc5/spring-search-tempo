@@ -43,4 +43,6 @@ class FSFolderDTO {
 
     var jobRunId: Long? = null
 
+    var jobRunLabel: String? = null
+
 }

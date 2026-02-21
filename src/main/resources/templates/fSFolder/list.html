@@ -14,11 +14,11 @@
             </div>
             <div th:if="${!fSFolders.empty || filter != null}" class="row">
                 <div th:replace="~{fragments/utils::searchFilter(object='fSFolder')}" />
-                <div th:replace="~{fragments/utils::sorting(object='fSFolder', sortOptions=${ {'id,ASC', 'uri,ASC', 'label,ASC'} }, columnClass='offset-lg-4')}" />
+                <div th:replace="~{fragments/utils::sorting(object='fSFolder', sortOptions=${ {'id,ASC', 'label,ASC', 'uri,ASC', 'owner,ASC', 'fsLastModified,DESC', 'analysisStatus,ASC'} }, columnClass='offset-lg-4')}" />
             </div>
-            <!-- SKIP filter toggle -->
+            <!-- Filters row -->
             <div class="row mb-3">
-                <div class="col-12">
+                <div class="col-md-6">
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="showSkippedToggle"
                                th:checked="${showSkipped}"
@@ -26,6 +26,21 @@
                         <label class="form-check-label" for="showSkippedToggle">
                             Show skipped items (folders marked as SKIP for exclusion)
                         </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center justify-content-end">
+                        <label class="me-2 text-muted small">Display columns:</label>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Column display toggle">
+                            <input type="radio" class="btn-check" name="columnDisplay" id="showName" value="name" autocomplete="off">
+                            <label class="btn btn-outline-secondary" for="showName">Name</label>
+
+                            <input type="radio" class="btn-check" name="columnDisplay" id="showUri" value="uri" autocomplete="off">
+                            <label class="btn btn-outline-secondary" for="showUri">Path</label>
+
+                            <input type="radio" class="btn-check" name="columnDisplay" id="showBoth" value="both" autocomplete="off" checked>
+                            <label class="btn btn-outline-secondary" for="showBoth">Both</label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -39,32 +54,85 @@
                     }
                     return url.toString();
                 }
+
+                // Column display toggle persistence
+                document.addEventListener('DOMContentLoaded', function() {
+                    const saved = localStorage.getItem('fsFolderColumnDisplay') || 'both';
+                    const radio = document.querySelector(`input[name="columnDisplay"][value="${saved}"]`);
+                    if (radio) radio.checked = true;
+                    applyColumnDisplay(saved);
+
+                    document.querySelectorAll('input[name="columnDisplay"]').forEach(function(radio) {
+                        radio.addEventListener('change', function() {
+                            localStorage.setItem('fsFolderColumnDisplay', this.value);
+                            applyColumnDisplay(this.value);
+                        });
+                    });
+                });
+
+                function applyColumnDisplay(mode) {
+                    const nameCol = document.querySelectorAll('.col-name');
+                    const uriCol = document.querySelectorAll('.col-uri');
+
+                    nameCol.forEach(el => el.style.display = (mode === 'uri') ? 'none' : '');
+                    uriCol.forEach(el => el.style.display = (mode === 'name') ? 'none' : '');
+                }
             </script>
             <div th:if="${fSFolders.empty}">[[#{fSFolder.list.empty}]]</div>
             <div th:if="${!fSFolders.empty}" class="table-responsive">
                 <table class="table table-striped table-hover align-middle">
                     <thead>
                         <tr>
-                            <th scope="col">Name</th>
+                            <th scope="col" class="col-name">[[#{fSFolder.label.label}]]</th>
+                            <th scope="col" class="col-uri">[[#{fSFolder.uri.label}]]</th>
                             <th scope="col">[[#{fSFolder.crawlDepth.label}]]</th>
                             <th scope="col">[[#{fSFolder.size.label}]]</th>
-                            <th scope="col">[[#{fSFolder.version.label}]]</th>
-                            <th scope="col">[[#{fSFolder.archived.label}]]</th>
+                            <th scope="col">[[#{fSFolder.owner.label}]]</th>
+                            <th scope="col">[[#{fSFolder.group.label}]]</th>
+                            <th scope="col">[[#{fSFolder.jobRun.label}]]</th>
+                            <th scope="col">[[#{fSFolder.analysisStatus.label}]]</th>
+                            <th scope="col">[[#{fSFolder.fsLastModified.label}]]</th>
                             <th><!-- --></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr th:each="fSFolder : ${fSFolders}"
                             th:classappend="${fSFolder.analysisStatus?.name() == 'SKIP'} ? 'table-secondary text-muted' : ''">
-                            <td>
-                                [[${fSFolder.label}]]
+                            <td class="col-name">
+                                <a th:href="@{/fSFolders/{id}(id=${fSFolder.id})}" class="text-decoration-none">
+                                    [[${fSFolder.label}]]
+                                </a>
                                 <span th:if="${fSFolder.analysisStatus?.name() == 'SKIP'}"
                                       class="badge bg-secondary ms-2">SKIP</span>
                             </td>
+                            <td class="col-uri">
+                                <a th:href="@{/fSFolders/{id}(id=${fSFolder.id})}" class="text-decoration-none">
+                                    <code class="small" th:text="${fSFolder.uri}"></code>
+                                </a>
+                            </td>
                             <td>[[${fSFolder.crawlDepth}]]</td>
                             <td>[[${fSFolder.size}]]</td>
-                            <td>[[${fSFolder.version}]]</td>
-                            <td>[[${fSFolder.archived}]]</td>
+                            <td><span th:if="${fSFolder.owner}" class="text-truncate" style="max-width: 100px; display: inline-block;" th:title="${fSFolder.owner}">[[${fSFolder.owner}]]</span></td>
+                            <td><span th:if="${fSFolder.group}" class="text-truncate" style="max-width: 80px; display: inline-block;" th:title="${fSFolder.group}">[[${fSFolder.group}]]</span></td>
+                            <td>
+                                <span th:if="${fSFolder.jobRunLabel}" th:text="${fSFolder.jobRunLabel}" class="badge bg-info text-dark"></span>
+                                <span th:unless="${fSFolder.jobRunLabel}" class="text-muted">-</span>
+                            </td>
+                            <td>
+                                <span th:if="${fSFolder.analysisStatus}"
+                                      th:class="${'badge ' +
+                                          (fSFolder.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
+                                           fSFolder.analysisStatus.name() == 'LOCATE' ? 'bg-light text-dark' :
+                                           fSFolder.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
+                                           fSFolder.analysisStatus.name() == 'ANALYZE' ? 'bg-success' :
+                                           fSFolder.analysisStatus.name() == 'SEMANTIC' ? 'bg-warning text-dark' : 'bg-secondary')}"
+                                      th:text="${fSFolder.analysisStatus}"></span>
+                            </td>
+                            <td>
+                                <span th:if="${fSFolder.fsLastModified}"
+                                      th:text="${#temporals.format(fSFolder.fsLastModified, 'yyyy-MM-dd HH:mm')}"
+                                      class="small text-nowrap"></span>
+                            </td>
                             <td>
                                 <div class="float-end text-nowrap">
                                     <a th:href="@{/fSFolders/edit/{id}(id=${fSFolder.id})}" class="btn btn-sm btn-secondary">[[#{fSFolder.list.edit}]]</a>

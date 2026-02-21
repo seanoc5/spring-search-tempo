@@ -23,4 +23,24 @@ interface FSFolderService {
 
     fun getFSFolderValues(): Map<Long, Long>
 
+    /**
+     * Count folders owned by a specific job run.
+     */
+    fun countByJobRunId(jobRunId: Long): Long
+
+    /**
+     * Count folders owned by job runs belonging to a crawl config.
+     * @param crawlConfigId The crawl config ID
+     * @param includeSkipped If true, includes SKIP status folders; otherwise excludes them
+     */
+    fun countByCrawlConfigId(crawlConfigId: Long, includeSkipped: Boolean = false): Long
+
+    /**
+     * Find folders owned by job runs belonging to a crawl config.
+     * @param crawlConfigId The crawl config ID
+     * @param pageable Pagination parameters
+     * @param showSkipped If true, includes SKIP status folders; otherwise excludes them
+     */
+    fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable, showSkipped: Boolean = false): Page<FSFolderDTO>
+
 }
