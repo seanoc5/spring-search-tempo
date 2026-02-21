@@ -14,9 +14,11 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 
 @Service
+@Transactional
 class SpringUserServiceImpl(
     private val springUserRepository: SpringUserRepository,
     private val publisher: ApplicationEventPublisher,
@@ -24,6 +26,7 @@ class SpringUserServiceImpl(
     private val springUserMapper: SpringUserMapper
 ) : SpringUserService {
 
+    @Transactional(readOnly = true)
     override fun findAll(filter: String?, pageable: Pageable): Page<SpringUserDTO> {
         var page: Page<SpringUser>
         if (filter != null) {
@@ -37,6 +40,7 @@ class SpringUserServiceImpl(
                 pageable, page.totalElements)
     }
 
+    @Transactional(readOnly = true)
     override fun `get`(id: Long): SpringUserDTO = springUserRepository.findById(id)
             .map { springUser -> springUserMapper.updateSpringUserDTO(springUser, SpringUserDTO()) }
             .orElseThrow { NotFoundException() }
@@ -61,8 +65,10 @@ class SpringUserServiceImpl(
         springUserRepository.delete(springUser)
     }
 
+    @Transactional(readOnly = true)
     override fun labelExists(label: String?): Boolean = springUserRepository.existsByLabel(label)
 
+    @Transactional(readOnly = true)
     override fun getSpringUserValues(): Map<Long, Long> =
             springUserRepository.findAll(Sort.by("id"))
             .stream()

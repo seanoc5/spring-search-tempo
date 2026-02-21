@@ -9,14 +9,17 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 
 @Service
+@Transactional
 class AnnotationServiceImpl(
     private val annotationRepository: AnnotationRepository,
     private val annotationMapper: AnnotationMapper
 ) : AnnotationService {
 
+    @Transactional(readOnly = true)
     override fun findAll(filter: String?, pageable: Pageable): Page<AnnotationDTO> {
         var page: Page<Annotation>
         if (filter != null) {
@@ -30,6 +33,7 @@ class AnnotationServiceImpl(
                 pageable, page.totalElements)
     }
 
+    @Transactional(readOnly = true)
     override fun `get`(id: Long): AnnotationDTO = annotationRepository.findById(id)
             .map { annotation -> annotationMapper.updateAnnotationDTO(annotation, AnnotationDTO()) }
             .orElseThrow { NotFoundException() }
@@ -53,6 +57,7 @@ class AnnotationServiceImpl(
         annotationRepository.delete(annotation)
     }
 
+    @Transactional(readOnly = true)
     override fun labelExists(label: String?): Boolean = annotationRepository.existsByLabel(label)
 
 }

@@ -13,15 +13,18 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 
 @Service
+@Transactional
 class SpringRoleServiceImpl(
     private val springRoleRepository: SpringRoleRepository,
     private val springUserRepository: SpringUserRepository,
     private val springRoleMapper: SpringRoleMapper
 ) : SpringRoleService {
 
+    @Transactional(readOnly = true)
     override fun findAll(pageable: Pageable): Page<SpringRoleDTO> {
         val page = springRoleRepository.findAll(pageable)
         return PageImpl(page.content
@@ -30,6 +33,7 @@ class SpringRoleServiceImpl(
                 pageable, page.totalElements)
     }
 
+    @Transactional(readOnly = true)
     override fun `get`(id: Long): SpringRoleDTO = springRoleRepository.findById(id)
             .map { springRole -> springRoleMapper.updateSpringRoleDTO(springRole, SpringRoleDTO()) }
             .orElseThrow { NotFoundException() }
@@ -53,6 +57,7 @@ class SpringRoleServiceImpl(
         springRoleRepository.delete(springRole)
     }
 
+    @Transactional(readOnly = true)
     override fun labelExists(label: String?): Boolean = springRoleRepository.existsByLabel(label)
 
     @EventListener(BeforeDeleteSpringUser::class)
