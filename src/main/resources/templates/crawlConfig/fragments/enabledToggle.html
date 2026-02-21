@@ -1,0 +1,9 @@
+<button xmlns:th="http://www.thymeleaf.org"
+        type="button"
+        th:class="${enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+        th:text="${enabled} ? 'Enabled' : 'Disabled'"
+        th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${id})}"
+        hx-swap="outerHTML"
+        th:title="${enabled} ? 'Click to disable' : 'Click to enable'"
+        style="cursor: pointer;">
+</button>

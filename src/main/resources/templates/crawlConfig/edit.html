@@ -1,0 +1,151 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Edit Crawl Configuration</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</a></li>
+                    <li class="breadcrumb-item active">Edit</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">Edit Configuration</h1>
+                <div>
+                    <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </div>
+
+            <form th:action="@{/crawlConfigs/{id}/edit(id=${crawlConfig.id})}" th:object="${crawlConfig}" method="post" novalidate="">
+                <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger mb-4">
+                    <p th:each="err : ${#fields.globalErrors()}" th:text="${err}" class="mb-0"></p>
+                </div>
+                <!-- Hidden fields -->
+                <input type="hidden" th:field="*{id}" />
+                <input type="hidden" th:field="*{version}" />
+                <input type="hidden" th:field="*{uri}" />
+
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Basic Settings</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Name *</label>
+                                    <input type="text" class="form-control" id="name" th:field="*{name}"
+                                           th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'" required />
+                                    <div class="invalid-feedback" th:if="${#fields.hasErrors('name')}" th:errors="*{name}"></div>
+                                    <small class="text-muted">Unique identifier (e.g., USER_DOCS)</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="displayLabel" class="form-label">Display Label</label>
+                                    <input type="text" class="form-control" id="displayLabel" th:field="*{displayLabel}" />
+                                    <small class="text-muted">User-friendly name shown in UI</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Description</label>
+                                    <textarea class="form-control" id="description" th:field="*{description}" rows="2"></textarea>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enabled" th:field="*{enabled}" />
+                                        <label class="form-check-label" for="enabled">Enabled</label>
+                                    </div>
+                                    <small class="text-muted">Disabled configs cannot be run</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Crawl Settings</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="maxDepth" class="form-label">Max Depth</label>
+                                    <input type="number" class="form-control" id="maxDepth" th:field="*{maxDepth}" min="1" max="100" />
+                                    <small class="text-muted">Maximum directory depth to traverse</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="followLinks" th:field="*{followLinks}" />
+                                        <label class="form-check-label" for="followLinks">Follow Symbolic Links</label>
+                                    </div>
+                                    <small class="text-muted">Enable to follow symlinks (required if start paths are symlinks)</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="parallel" th:field="*{parallel}" />
+                                        <label class="form-check-label" for="parallel">Parallel Processing</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Start Paths</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="startPathsText" class="form-label">Directories to Crawl</label>
+                                    <textarea class="form-control font-monospace" id="startPathsText" name="startPathsText"
+                                              th:text="${startPathsText}" rows="6" placeholder="/home/user/Documents&#10;/opt/data"></textarea>
+                                    <small class="text-muted">One path per line. Paths can be absolute directories or symlinks (enable Follow Symbolic Links for symlinks).</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Advanced</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted">ID</label>
+                                            <input type="text" class="form-control-plaintext" th:value="*{id}" readonly />
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted">Version</label>
+                                            <input type="text" class="form-control-plaintext" th:value="*{version}" readonly />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="archived" th:field="*{archived}" />
+                                        <label class="form-check-label" for="archived">Archived</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-4">
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </body>
+</html>

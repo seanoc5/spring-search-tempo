@@ -24,4 +24,6 @@ interface DatabaseCrawlConfigService {
 
     fun nameExists(name: String): Boolean
 
+    fun toggleEnabled(id: Long): Boolean
+
 }

@@ -73,4 +73,12 @@ class DatabaseCrawlConfigServiceImpl(
 
     override fun nameExists(name: String): Boolean = crawlConfigRepository.existsByName(name)
 
+    override fun toggleEnabled(id: Long): Boolean {
+        val crawlConfig = crawlConfigRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        crawlConfig.enabled = !crawlConfig.enabled
+        crawlConfigRepository.save(crawlConfig)
+        return crawlConfig.enabled
+    }
+
 }

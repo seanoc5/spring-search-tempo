@@ -38,6 +38,7 @@
                             <th scope="col">Label</th>
                             <th scope="col">Start Paths</th>
                             <th scope="col">Status</th>
+                            <th scope="col">Files</th>
                             <th scope="col">Last Run</th>
                             <th><!-- Actions --></th>
                         </tr>
@@ -53,8 +54,19 @@
                                 </span>
                             </td>
                             <td>
-                                <span th:if="${crawlConfig.enabled}" class="badge bg-success">Enabled</span>
-                                <span th:unless="${crawlConfig.enabled}" class="badge bg-secondary">Disabled</span>
+                                <button type="button"
+                                        th:class="${crawlConfig.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+                                        th:text="${crawlConfig.enabled} ? 'Enabled' : 'Disabled'"
+                                        th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${crawlConfig.id})}"
+                                        hx-swap="outerHTML"
+                                        th:title="${crawlConfig.enabled} ? 'Click to disable' : 'Click to enable'"
+                                        style="cursor: pointer;">
+                                </button>
+                            </td>
+                            <td>
+                                <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}"
+                                   th:text="${fileCounts[crawlConfig.id] ?: 0}"
+                                   class="text-decoration-none">0</a>
                             </td>
                             <td>
                                 <!-- TODO: Display last run time -->
