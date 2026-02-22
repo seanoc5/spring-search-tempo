@@ -50,7 +50,13 @@ data class CrawlDefaults(
     var followLinks: Boolean = false,
     var parallel: Boolean = false,
     var folderPatterns: PatternSet = PatternSet(),
-    var filePatterns: PatternSet = PatternSet()
+    var filePatterns: PatternSet = PatternSet(),
+    /**
+     * Default hours threshold for "recent crawl" skip logic.
+     * If a folder was crawled by another config within this many hours,
+     * the current crawl can skip that subtree.
+     */
+    var recentCrawlSkipHours: Int = 24
 )
 
 /**

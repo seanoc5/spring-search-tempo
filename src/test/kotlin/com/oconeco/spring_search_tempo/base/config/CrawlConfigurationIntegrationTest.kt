@@ -233,15 +233,24 @@ class CrawlConfigurationIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should handle disabled crawls")
-    fun testDisabledCrawl() {
+    @DisplayName("Should filter enabled vs disabled crawls correctly")
+    fun testEnabledDisabledCrawlFiltering() {
+        // All system crawls are now enabled for full-system indexing
         val configCrawl = crawlConfigService.getCrawlByName("SYSTEM_CONFIG")
         assertNotNull(configCrawl, "SYSTEM_CONFIG crawl should exist")
-        assertFalse(configCrawl!!.enabled, "SYSTEM_CONFIG crawl should be disabled")
+        assertTrue(configCrawl!!.enabled, "SYSTEM_CONFIG crawl should be enabled (full-system indexing)")
 
         val enabledCrawls = crawlConfigService.getEnabledCrawls()
-        assertFalse(enabledCrawls.contains(configCrawl),
-            "Disabled crawls should not appear in enabled crawls list")
+        assertTrue(enabledCrawls.contains(configCrawl),
+            "Enabled crawls should appear in enabled crawls list")
+
+        // Verify getEnabledCrawls only returns enabled ones
+        val allCrawls = crawlConfigService.getAllCrawls()
+        val disabledCrawls = allCrawls.filter { !it.enabled }
+        for (disabled in disabledCrawls) {
+            assertFalse(enabledCrawls.contains(disabled),
+                "Disabled crawls should not appear in enabled crawls list: ${disabled.name}")
+        }
     }
 
     @Test

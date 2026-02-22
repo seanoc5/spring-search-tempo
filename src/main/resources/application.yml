@@ -63,6 +63,10 @@ app:
       max-depth: 10
       follow-links: false
       parallel: false
+      # Hours threshold for "recent crawl" skip logic.
+      # If a folder was crawled by another config within this many hours,
+      # the current crawl can skip that subtree (only at crawl config root dirs).
+      recent-crawl-skip-hours: 24
       folder-patterns:
         # SKIP: Persist folder metadata but don't crawl children (processing stops here)
         skip:
@@ -300,7 +304,7 @@ app:
 
       - name: "SYSTEM_LOGS"
         label: "System Logs"
-        enabled: false  # Disabled by default - enable when needed
+        enabled: true  # Full system indexing
         start-paths:
           - "/var/log"
         max-depth: 8
@@ -327,7 +331,7 @@ app:
 
       - name: "SYSTEM_CONFIG"
         label: "System Configuration (/etc)"
-        enabled: false  # Disabled by default - enable when needed
+        enabled: true  # Full system indexing
         start-paths:
           - "/etc"
         max-depth: 5
@@ -384,7 +388,7 @@ app:
 
       - name: "SYSTEM_USR"
         label: "System /usr"
-        enabled: false  # Disabled by default - very large
+        enabled: true  # Full system indexing - large but important
         start-paths:
           - "/usr"
         max-depth: 6
@@ -405,7 +409,7 @@ app:
 
       - name: "SYSTEM_OPT"
         label: "System /opt"
-        enabled: false
+        enabled: true  # Full system indexing
         start-paths:
           - "/opt"
         max-depth: 8
@@ -420,7 +424,7 @@ app:
 
       - name: "SYSTEM_VAR"
         label: "System /var"
-        enabled: false
+        enabled: true  # Full system indexing
         start-paths:
           - "/var"
         max-depth: 6
@@ -440,7 +444,7 @@ app:
 
       - name: "SYSTEM_BOOT"
         label: "System /boot"
-        enabled: false
+        enabled: true  # Full system indexing
         start-paths:
           - "/boot"
         max-depth: 3
@@ -460,7 +464,7 @@ app:
 
       - name: "SYSTEM_ROOT"
         label: "Root Filesystem"
-        enabled: false  # Disabled by default - comprehensive crawl
+        enabled: true  # Full system indexing - catches anything missed
         start-paths:
           - "/"
         max-depth: 20

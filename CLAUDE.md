@@ -6,9 +6,21 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 
 ## Project Overview
 
-**Spring Search Tempo** is a Spring Boot 3.5 Kotlin application providing a full-text search engine template for local file system crawling, extensible to other data sources (browser history, emails).
+**Spring Search Tempo** is a **Spotlight-style full-system search engine** - like macOS Spotlight or Windows Search, but open and extensible. The goal is to index **all real content** across files, emails, bookmarks, and more.
 
-**Target**: Developers building search applications, personal knowledge management, or enterprise content discovery.
+**Design Philosophy**:
+- Index **everything readable** on the system (not just user docs)
+- **Initial crawl** is heavy (hours for full system) - that's expected
+- **Incremental updates** are fast (only changed files)
+- Multi-source: files, email, browser, calendar (planned)
+
+**Processing Strategy**:
+| Level | What | Examples |
+|-------|------|----------|
+| SKIP | Exclude entirely | `/proc`, `/sys`, caches, `node_modules`, `.git` |
+| LOCATE | Metadata only | Images, videos, audio, archives, binaries |
+| INDEX | Full text + metadata | Documents, code, configs, logs, emails |
+| ANALYZE | INDEX + NLP | Key docs needing entity extraction, sentiment |
 
 **Tech Stack**: Spring Boot 3.5.7, Kotlin 1.9.25, PostgreSQL 18, Apache Tika 2.9.1, Spring Batch, Spring Modulith
 
@@ -22,20 +34,22 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 - File system crawling with pattern-based processing levels
 - Apache Tika text extraction (400+ formats)
 - PostgreSQL full-text search with GIN indexes
-- Incremental crawl using timestamps
+- Incremental crawl using timestamps (size + lastModified comparison)
 - SKIP folder optimization (children not enumerated)
+- **Overlapping crawl detection** - skip subtrees recently crawled by other configs
 
 **Phase 2 Implemented**:
 - Stanford CoreNLP service (NER, POS, sentiment, dependency parsing)
 - NLP batch job (`NLPProcessingJobConfiguration`)
 - ContentChunk NLP fields (namedEntities, nouns, verbs, sentiment, etc.)
 - Email crawling infrastructure (IMAP service, entities, batch jobs)
+- Firefox bookmark/history integration
 - **NLP auto-trigger after file crawl** (configurable via `app.nlp.auto-trigger`)
 - **REST API for manual NLP triggering** (`POST /api/nlp/process`)
 
 **Phase 2 Remaining**:
 - Add NLP results to search (sentiment filters, entity search)
-- Complete email crawl integration with orchestrator
+- Complete email crawl orchestration
 - UI enhancements for NLP results display
 
 **Next Phase**: Semantic search with pgvector embeddings
@@ -179,6 +193,24 @@ Files and folders are processed based on hierarchical pattern matching:
 **SKIP Optimization**: SKIP folders (like `.git`, `node_modules`) are identified at enumeration time - their contents are never listed from the filesystem, providing significant performance improvement.
 
 Configured via `PatternMatchingService` with folder and file patterns in `application.yml`.
+
+### Overlapping Crawl Detection
+
+Multiple crawl configs can overlap (e.g., `/home/sean/Documents` and `/home/sean/`). The system handles this intelligently:
+
+- **Same config re-runs**: Never skipped (allows aggressive re-crawling)
+- **Different config overlap**: If a parent crawl encounters a child config's root that was recently crawled, skip that subtree
+- **Freshness threshold**: Configurable per-config (`freshnessHours`, default 24)
+
+```kotlin
+// RecentCrawlSkipChecker checks at crawl config roots only
+when (val result = recentCrawlChecker.shouldSkipFolder(dir)) {
+    is SkipSubtree -> return FileVisitResult.SKIP_SUBTREE  // Another config handled this
+    is NotRecentlyCrawled -> // Continue processing
+}
+```
+
+**Key files**: `RecentCrawlSkipChecker.kt`, `CombinedCrawlReader.kt`, `FsCrawlJobBuilder.kt`
 
 ### NLP Processing
 
@@ -396,5 +428,5 @@ Default credentials: `user` / `password` (basic auth)
 ---
 
 **Last Updated**: 2026-02-21
-**Version**: 0.1.9
-**Project Lead**: Sean (learning Spring Modulith)
+**Version**: 0.2.0
+**Project Lead**: Sean

@@ -31,7 +31,7 @@ class BasicSecurityConfig {
     @Throws(Exception::class)
     fun basicFilterChain(http: HttpSecurity): SecurityFilterChain =
             http.cors(Customizer.withDefaults())
-            .csrf { csrf -> csrf.ignoringRequestMatchers("/home", "/api/**", "/actuator/**") }
+            .csrf { csrf -> csrf.ignoringRequestMatchers("/home", "/api/**", "/actuator/**", "/crawlConfigs/*/run", "/crawlConfigs/*/toggle-enabled") }
             .authorizeHttpRequests { authorize -> authorize
                 .requestMatchers(HttpMethod.GET, "/springUsers").hasAuthority(UserRoles.LOGIN)
                 .anyRequest().permitAll() }
