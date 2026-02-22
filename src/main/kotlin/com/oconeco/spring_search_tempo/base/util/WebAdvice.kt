@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.ModelAttribute
 class WebAdvice {
 
     @ModelAttribute("requestUri")
-    fun getRequestUri(request: HttpServletRequest): String = request.requestURI
+    fun getRequestUri(request: HttpServletRequest?): String = request?.requestURI ?: "/"
 
 }
 

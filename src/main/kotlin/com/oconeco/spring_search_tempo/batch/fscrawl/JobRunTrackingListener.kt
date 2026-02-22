@@ -56,6 +56,7 @@ class JobRunTrackingListener(
                 var filesUpdated = 0L
                 var filesSkipped = 0L
                 var filesError = 0L
+                var filesAccessDenied = 0L
                 var foldersDiscovered = 0L
                 var foldersNew = 0L
                 var foldersUpdated = 0L
@@ -67,6 +68,7 @@ class JobRunTrackingListener(
                     filesUpdated += stepExecution.executionContext.getLong("filesUpdated", 0L)
                     filesSkipped += stepExecution.executionContext.getLong("filesSkipped", 0L)
                     filesError += stepExecution.executionContext.getLong("filesError", 0L)
+                    filesAccessDenied += stepExecution.executionContext.getLong("filesAccessDenied", 0L)
                     foldersDiscovered += stepExecution.executionContext.getLong("foldersDiscovered", 0L)
                     foldersNew += stepExecution.executionContext.getLong("foldersNew", 0L)
                     foldersUpdated += stepExecution.executionContext.getLong("foldersUpdated", 0L)
@@ -81,6 +83,7 @@ class JobRunTrackingListener(
                     filesUpdated = filesUpdated,
                     filesSkipped = filesSkipped,
                     filesError = filesError,
+                    filesAccessDenied = filesAccessDenied,
                     foldersDiscovered = foldersDiscovered,
                     foldersNew = foldersNew,
                     foldersUpdated = foldersUpdated,

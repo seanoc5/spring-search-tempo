@@ -39,6 +39,7 @@ interface JobRunService {
         filesUpdated: Long? = null,
         filesSkipped: Long? = null,
         filesError: Long? = null,
+        filesAccessDenied: Long? = null,
         foldersDiscovered: Long? = null,
         foldersNew: Long? = null,
         foldersUpdated: Long? = null,
@@ -49,5 +50,11 @@ interface JobRunService {
      * Complete a job run.
      */
     fun completeJobRun(jobRunId: Long, runStatus: RunStatus, errorMessage: String? = null)
+
+    /**
+     * Add a warning message to a job run.
+     * Warnings are appended (newline-separated) if there are existing warnings.
+     */
+    fun addWarning(jobRunId: Long, warningMessage: String)
 
 }

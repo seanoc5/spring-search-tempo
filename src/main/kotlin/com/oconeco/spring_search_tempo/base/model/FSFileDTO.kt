@@ -75,4 +75,20 @@ class FSFileDTO {
      */
     var chunkedAt: java.time.OffsetDateTime? = null
 
+    /**
+     * Transient flag indicating text extraction failed due to permission issues.
+     * Used during batch processing to track access denied files.
+     * Not persisted to database.
+     */
+    @Transient
+    var accessDenied: Boolean = false
+
+    /**
+     * Transient flag indicating text extraction failed due to other errors
+     * (not permission-related, e.g., parser crash, corrupted file).
+     * Not persisted to database.
+     */
+    @Transient
+    var extractionError: Boolean = false
+
 }

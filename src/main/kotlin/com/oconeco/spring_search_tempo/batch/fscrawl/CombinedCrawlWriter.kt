@@ -96,6 +96,16 @@ class CombinedCrawlWriter(
 
                     // Track statistics
                     incrementFileCounter(isNew, file.analysisStatus)
+
+                    // Track access denied (informational, not an error)
+                    if (file.accessDenied) {
+                        incrementFileAccessDenied()
+                    }
+
+                    // Track actual extraction errors (parser failures, etc.)
+                    if (file.extractionError) {
+                        incrementFileError()
+                    }
                 } catch (e: Exception) {
                     log.error("Failed to save file: {}", file.uri, e)
                     incrementFileError()
@@ -142,5 +152,12 @@ class CombinedCrawlWriter(
 
         val context = currentStepExecution.executionContext
         context.putLong("filesError", context.getLong("filesError", 0) + 1)
+    }
+
+    private fun incrementFileAccessDenied() {
+        if (!::currentStepExecution.isInitialized) return
+
+        val context = currentStepExecution.executionContext
+        context.putLong("filesAccessDenied", context.getLong("filesAccessDenied", 0) + 1)
     }
 }

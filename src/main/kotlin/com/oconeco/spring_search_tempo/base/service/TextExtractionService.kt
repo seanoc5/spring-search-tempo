@@ -11,6 +11,8 @@ import org.apache.tika.sax.BodyContentHandler
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.IOException
+import java.nio.file.AccessDeniedException
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import kotlin.io.path.fileSize
 import kotlin.io.path.inputStream
@@ -74,6 +76,16 @@ class TextExtractionService {
         } catch (e: TikaException) {
             logger.warn("Tika failed to parse file: {}", path, e)
             TextExtractionResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
+
+        } catch (e: AccessDeniedException) {
+            // Permission denied is expected when crawling system directories - use WARN not ERROR
+            logger.warn("Access denied reading file (permission issue): {}", path)
+            TextExtractionResult.Failure("Access denied: ${e.message ?: path.toString()}")
+
+        } catch (e: NoSuchFileException) {
+            // File disappeared between discovery and extraction - use WARN not ERROR
+            logger.warn("File not found (may have been deleted): {}", path)
+            TextExtractionResult.Failure("File not found: ${e.message ?: path.toString()}")
 
         } catch (e: IOException) {
             logger.error("I/O error reading file: {}", path, e)
@@ -195,6 +207,16 @@ class TextExtractionService {
         } catch (e: TikaException) {
             logger.warn("Tika failed to parse file: {}", path, e)
             TextAndMetadataResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
+
+        } catch (e: AccessDeniedException) {
+            // Permission denied is expected when crawling system directories - use WARN not ERROR
+            logger.warn("Access denied reading file (permission issue): {}", path)
+            TextAndMetadataResult.Failure("Access denied: ${e.message ?: path.toString()}")
+
+        } catch (e: NoSuchFileException) {
+            // File disappeared between discovery and extraction - use WARN not ERROR
+            logger.warn("File not found (may have been deleted): {}", path)
+            TextAndMetadataResult.Failure("File not found: ${e.message ?: path.toString()}")
 
         } catch (e: IOException) {
             logger.error("I/O error reading file: {}", path, e)

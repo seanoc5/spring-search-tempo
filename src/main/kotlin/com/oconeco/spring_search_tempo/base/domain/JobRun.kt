@@ -55,6 +55,13 @@ class JobRun : SaveableObject() {
     @Column
     var filesError: Long = 0
 
+    /**
+     * Count of files that couldn't be read due to permission issues.
+     * This is informational, not an error - expected when crawling system directories.
+     */
+    @Column
+    var filesAccessDenied: Long = 0
+
     @Column
     var foldersDiscovered: Long = 0
 
@@ -72,6 +79,13 @@ class JobRun : SaveableObject() {
 
     @Column(columnDefinition = "text")
     var errorMessage: String? = null
+
+    /**
+     * Warning messages for non-fatal issues (e.g., missing start paths).
+     * Stored as newline-separated strings.
+     */
+    @Column(columnDefinition = "text")
+    var warningMessage: String? = null
 
 }
 

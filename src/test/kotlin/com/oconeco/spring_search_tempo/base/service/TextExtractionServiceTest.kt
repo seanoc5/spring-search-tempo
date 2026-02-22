@@ -109,7 +109,10 @@ class TextExtractionServiceTest {
         // Verify
         assertTrue(result is TextExtractionResult.Failure)
         val failure = result as TextExtractionResult.Failure
-        assertTrue(failure.error.contains("I/O error") || failure.error.contains("error"))
+        // File not found is now handled specifically with a clearer message
+        assertTrue(failure.error.contains("File not found") ||
+                   failure.error.contains("I/O error") ||
+                   failure.error.contains("error"))
     }
 
     @Test
@@ -324,7 +327,10 @@ class TextExtractionServiceTest {
         // Verify
         assertTrue(result is TextAndMetadataResult.Failure)
         val failure = result as TextAndMetadataResult.Failure
-        assertTrue(failure.error.contains("I/O error") || failure.error.contains("error"))
+        // File not found is now handled specifically with a clearer message
+        assertTrue(failure.error.contains("File not found") ||
+                   failure.error.contains("I/O error") ||
+                   failure.error.contains("error"))
     }
 
     @Test

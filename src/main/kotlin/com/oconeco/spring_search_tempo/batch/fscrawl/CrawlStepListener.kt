@@ -34,6 +34,7 @@ class CrawlStepListener : StepExecutionListener {
         stepExecution.executionContext.putLong("filesUpdated", 0L)
         stepExecution.executionContext.putLong("filesSkipped", 0L)
         stepExecution.executionContext.putLong("filesError", 0L)
+        stepExecution.executionContext.putLong("filesAccessDenied", 0L)
         stepExecution.executionContext.putLong("foldersDiscovered", 0L)
         stepExecution.executionContext.putLong("foldersNew", 0L)
         stepExecution.executionContext.putLong("foldersUpdated", 0L)

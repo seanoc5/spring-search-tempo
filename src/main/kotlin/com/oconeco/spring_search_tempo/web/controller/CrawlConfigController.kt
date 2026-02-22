@@ -53,8 +53,20 @@ class CrawlConfigController(
             config.id!! to fileService.countByCrawlConfigId(config.id!!, includeSkipped = false)
         }
 
+        // Build folder count map for each config (excludes SKIP by default)
+        val folderCountsMap = crawlConfigs.content.associate { config ->
+            config.id!! to folderService.countByCrawlConfigId(config.id!!, includeSkipped = false)
+        }
+
+        // Build last run map for each config
+        val lastRunMap = crawlConfigs.content.mapNotNull { config ->
+            jobRunService.getLatestRunForConfig(config.id!!)?.let { config.id!! to it }
+        }.toMap()
+
         model.addAttribute("crawlConfigs", crawlConfigs)
         model.addAttribute("fileCounts", fileCountsMap)
+        model.addAttribute("folderCounts", folderCountsMap)
+        model.addAttribute("lastRuns", lastRunMap)
         model.addAttribute("filter", filter)
         model.addAttribute("page", crawlConfigs)
         return "crawlConfig/list"
@@ -148,7 +160,13 @@ class CrawlConfigController(
             val crawlDefinition = configConverter.toDefinition(crawlConfig)
 
             // Build the job dynamically from the crawl config
-            val job = jobBuilder.buildJob(crawlDefinition, forceFullRecrawl)
+            // Pass crawl config ID and freshnessHours for recent crawl skip logic
+            val job = jobBuilder.buildJob(
+                crawl = crawlDefinition,
+                forceFullRecrawl = forceFullRecrawl,
+                crawlConfigId = id,
+                freshnessHours = crawlConfig.freshnessHours
+            )
 
             // Create job parameters with crawl config ID and timestamp for uniqueness
             val jobParams = JobParametersBuilder()
@@ -232,6 +250,99 @@ class CrawlConfigController(
         model.addAttribute("page", folders)
         model.addAttribute("showSkipped", showSkipped)
         return "crawlConfig/folders"
+    }
+
+    /**
+     * Run multiple crawl configurations.
+     */
+    @PostMapping("/run-selected")
+    fun runSelectedCrawls(
+        @RequestParam(name = "selectedIds") selectedIds: List<Long>,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        if (selectedIds.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "No configurations selected")
+            return "redirect:/crawlConfigs"
+        }
+
+        val started = mutableListOf<String>()
+        val errors = mutableListOf<String>()
+
+        for (id in selectedIds) {
+            try {
+                val crawlConfig = crawlConfigService.get(id)
+                if (!crawlConfig.enabled) {
+                    errors.add("${crawlConfig.displayLabel ?: crawlConfig.name} (disabled)")
+                    continue
+                }
+
+                val crawlDefinition = configConverter.toDefinition(crawlConfig)
+                val job = jobBuilder.buildJob(
+                    crawl = crawlDefinition,
+                    forceFullRecrawl = false,
+                    crawlConfigId = id,
+                    freshnessHours = crawlConfig.freshnessHours
+                )
+
+                val jobParams = JobParametersBuilder()
+                    .addString(JobRunTrackingListener.CRAWL_CONFIG_ID_KEY, id.toString())
+                    .addString(CrawlCleanupListener.DELETE_EXISTING_DATA_KEY, "false")
+                    .addLong("timestamp", Instant.now().toEpochMilli())
+                    .toJobParameters()
+
+                jobLauncher.run(job, jobParams)
+                started.add(crawlConfig.displayLabel ?: crawlConfig.name ?: "Config #$id")
+            } catch (e: Exception) {
+                errors.add("Config #$id: ${e.message}")
+            }
+        }
+
+        if (started.isNotEmpty()) {
+            redirectAttributes.addFlashAttribute("message",
+                "Started crawl jobs: ${started.joinToString(", ")}")
+        }
+        if (errors.isNotEmpty()) {
+            redirectAttributes.addFlashAttribute("error",
+                "Failed to start: ${errors.joinToString(", ")}")
+        }
+
+        return "redirect:/crawlConfigs"
+    }
+
+    /**
+     * Toggle enabled status for multiple crawl configurations.
+     */
+    @PostMapping("/toggle-selected")
+    fun toggleSelectedCrawls(
+        @RequestParam(name = "selectedIds") selectedIds: List<Long>,
+        @RequestParam(name = "enable") enable: Boolean,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        if (selectedIds.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "No configurations selected")
+            return "redirect:/crawlConfigs"
+        }
+
+        val updated = mutableListOf<String>()
+        for (id in selectedIds) {
+            try {
+                val crawlConfig = crawlConfigService.get(id)
+                if (crawlConfig.enabled != enable) {
+                    crawlConfigService.toggleEnabled(id)
+                    updated.add(crawlConfig.displayLabel ?: crawlConfig.name ?: "Config #$id")
+                }
+            } catch (e: Exception) {
+                // Skip configs that don't exist
+            }
+        }
+
+        if (updated.isNotEmpty()) {
+            val action = if (enable) "Enabled" else "Disabled"
+            redirectAttributes.addFlashAttribute("message",
+                "$action: ${updated.joinToString(", ")}")
+        }
+
+        return "redirect:/crawlConfigs"
     }
 
 }

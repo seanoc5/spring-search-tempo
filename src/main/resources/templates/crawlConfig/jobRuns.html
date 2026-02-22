@@ -43,10 +43,21 @@
                         <tr th:each="jobRun : ${jobRuns}">
                             <td>[[${jobRun.id}]]</td>
                             <td>
-                                <a th:if="${jobRun.crawlConfig != null}"
-                                   th:href="@{/crawlConfigs/{id}(id=${jobRun.crawlConfig})}">
-                                    Config #[[${jobRun.crawlConfig}]]
-                                </a>
+                                <th:block th:if="${jobRun.crawlConfig != null}">
+                                    <a th:href="@{/crawlConfigs/{id}(id=${jobRun.crawlConfig})}">
+                                        <strong th:text="${jobRun.crawlConfigDisplayLabel ?: 'Config #' + jobRun.crawlConfig}"></strong>
+                                    </a>
+                                    <div class="small text-muted">
+                                        <span>ID: [[${jobRun.crawlConfig}]]</span>
+                                    </div>
+                                    <div th:if="${jobRun.crawlConfigStartPaths != null and !jobRun.crawlConfigStartPaths.empty}"
+                                         class="small text-muted" style="max-width: 300px;">
+                                        <th:block th:each="path, stat : ${jobRun.crawlConfigStartPaths}">
+                                            <code th:text="${path}" style="font-size: 0.75em;"></code>
+                                            <br th:if="${!stat.last}" />
+                                        </th:block>
+                                    </div>
+                                </th:block>
                                 <span th:if="${jobRun.crawlConfig == null}">-</span>
                             </td>
                             <td>[[${jobRun.jobName}]]</td>
@@ -66,18 +77,39 @@
                             <td>
                                 <span th:switch="${jobRun.runStatus.name()}">
                                     <span th:case="'RUNNING'" class="badge bg-primary">Running</span>
-                                    <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
+                                    <span th:case="'COMPLETED'" class="badge"
+                                          th:classappend="${jobRun.warningMessage != null} ? 'bg-warning text-dark' : 'bg-success'"
+                                          th:text="${jobRun.warningMessage != null ? 'Completed (Warnings)' : 'Completed'}"></span>
                                     <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
                                     <span th:case="'CANCELLED'" class="badge bg-warning">Cancelled</span>
                                 </span>
+                                <!-- Warning indicator -->
+                                <div th:if="${jobRun.warningMessage != null}" class="mt-1">
+                                    <span class="badge bg-warning text-dark" data-bs-toggle="tooltip"
+                                          th:title="${jobRun.warningMessage}">
+                                        <i class="bi bi-exclamation-triangle"></i> Warnings
+                                    </span>
+                                </div>
+                                <!-- Error message display -->
+                                <div th:if="${jobRun.errorMessage != null}" class="mt-1">
+                                    <span class="badge bg-danger" data-bs-toggle="tooltip"
+                                          th:title="${jobRun.errorMessage}">
+                                        <i class="bi bi-x-circle"></i> Error
+                                    </span>
+                                </div>
                             </td>
                             <td>
                                 <div class="small">
                                     <strong>Discovered:</strong> [[${jobRun.filesDiscovered}]]<br/>
                                     <strong>New:</strong> [[${jobRun.filesNew}]] |
                                     <strong>Updated:</strong> [[${jobRun.filesUpdated}]]<br/>
-                                    <strong>Skipped:</strong> [[${jobRun.filesSkipped}]] |
-                                    <strong>Errors:</strong> [[${jobRun.filesError}]]
+                                    <strong>Skipped:</strong> [[${jobRun.filesSkipped}]]
+                                    <span th:if="${jobRun.filesAccessDenied > 0}" class="text-muted">
+                                        | <strong>No Access:</strong> [[${jobRun.filesAccessDenied}]]
+                                    </span>
+                                    <span th:if="${jobRun.filesError > 0}" class="text-danger">
+                                        | <strong>Errors:</strong> [[${jobRun.filesError}]]
+                                    </span>
                                 </div>
                             </td>
                             <td>

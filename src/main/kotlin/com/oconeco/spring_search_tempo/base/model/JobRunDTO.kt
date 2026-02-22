@@ -36,6 +36,12 @@ class JobRunDTO {
 
     var crawlConfig: Long? = null
 
+    /** Display label from the associated CrawlConfig */
+    var crawlConfigDisplayLabel: String? = null
+
+    /** Start paths from the associated CrawlConfig */
+    var crawlConfigStartPaths: List<String>? = null
+
     var jobName: String? = null
 
     var springBatchJobInstanceId: String? = null
@@ -58,6 +64,12 @@ class JobRunDTO {
 
     var filesError: Long = 0
 
+    /**
+     * Count of files that couldn't be read due to permission issues.
+     * This is informational, not an error - expected when crawling system directories.
+     */
+    var filesAccessDenied: Long = 0
+
     var foldersDiscovered: Long = 0
 
     var foldersNew: Long = 0
@@ -69,5 +81,11 @@ class JobRunDTO {
     var totalItems: Long = 0
 
     var errorMessage: String? = null
+
+    /**
+     * Warning messages for non-fatal issues (e.g., missing start paths).
+     * Stored as newline-separated strings.
+     */
+    var warningMessage: String? = null
 
 }

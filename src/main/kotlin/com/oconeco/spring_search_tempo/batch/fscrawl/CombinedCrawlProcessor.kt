@@ -80,7 +80,7 @@ class CombinedCrawlProcessor(
 
         // If folder is SKIP, persist folder metadata but don't process any children
         if (folderDto.analysisStatus == AnalysisStatus.SKIP) {
-            log.info("Folder marked as SKIP, persisting folder metadata only (no children processed): {}", folderDto.uri)
+            log.info(".... Folder marked as SKIP, persisting folder metadata only (no children processed): {}", folderDto.uri)
             return CombinedCrawlResult(
                 folder = folderDto,
                 files = emptyList()  // No files processed - SKIP stops crawling here
@@ -321,13 +321,23 @@ class CombinedCrawlProcessor(
 
     /**
      * Extract text and metadata from a file using Tika.
+     * Includes pre-read check for file accessibility.
      */
     private fun extractTextAndMetadata(file: Path, dto: FSFileDTO) {
+        // Pre-read check: verify file is readable before attempting extraction
+        if (!Files.isReadable(file)) {
+            log.warn("File not readable (permission denied), skipping extraction: {}", file)
+            dto.bodyText = "[Access denied: file not readable]"
+            dto.accessDenied = true
+            return
+        }
+
         if (dto.bodySize != null && dto.bodySize!! > MAX_TEXT_EXTRACT_SIZE) {
             log.warn("File too large for text extraction ({}MB), skipping: {}",
                 dto.bodySize!! / 1024 / 1024, dto.uri
             )
             dto.bodyText = "[File too large for extraction]"
+            // File too large is not an error or access denied - just a limitation
             return
         }
 
@@ -347,6 +357,12 @@ class CombinedCrawlProcessor(
 
             is TextAndMetadataResult.Failure -> {
                 dto.bodyText = "[Extraction failed: ${result.error}]"
+                // Distinguish access denied from other errors
+                if (result.error.contains("Access denied") || result.error.contains("File not found")) {
+                    dto.accessDenied = true
+                } else {
+                    dto.extractionError = true
+                }
                 log.warn("Text extraction failed for: {} - {}", dto.uri, result.error)
             }
         }

@@ -22,11 +22,12 @@ class JobRunServiceImpl(
 ) : JobRunService {
 
     override fun findAll(filter: String?, pageable: Pageable): Page<JobRunDTO> {
+        // Use JOIN FETCH to eagerly load CrawlConfig and avoid LazyInitializationException
         val page: Page<JobRun> = if (filter != null) {
             val filterId = filter.toLongOrNull()
-            jobRunRepository.findAllById(filterId, pageable)
+            jobRunRepository.findByIdWithCrawlConfig(filterId, pageable)
         } else {
-            jobRunRepository.findAll(pageable)
+            jobRunRepository.findAllWithCrawlConfig(pageable)
         }
         return PageImpl(
             page.content.map { jobRun ->
@@ -109,6 +110,7 @@ class JobRunServiceImpl(
         filesUpdated: Long?,
         filesSkipped: Long?,
         filesError: Long?,
+        filesAccessDenied: Long?,
         foldersDiscovered: Long?,
         foldersNew: Long?,
         foldersUpdated: Long?,
@@ -122,6 +124,7 @@ class JobRunServiceImpl(
         filesUpdated?.let { jobRun.filesUpdated = it }
         filesSkipped?.let { jobRun.filesSkipped = it }
         filesError?.let { jobRun.filesError = it }
+        filesAccessDenied?.let { jobRun.filesAccessDenied = it }
         foldersDiscovered?.let { jobRun.foldersDiscovered = it }
         foldersNew?.let { jobRun.foldersNew = it }
         foldersUpdated?.let { jobRun.foldersUpdated = it }
@@ -145,6 +148,20 @@ class JobRunServiceImpl(
             else -> Status.IN_PROGRESS
         }
         jobRun.errorMessage = errorMessage
+
+        jobRunRepository.save(jobRun)
+    }
+
+    override fun addWarning(jobRunId: Long, warningMessage: String) {
+        val jobRun = jobRunRepository.findById(jobRunId)
+            .orElseThrow { NotFoundException("JobRun not found: $jobRunId") }
+
+        // Append to existing warnings or set new
+        jobRun.warningMessage = if (jobRun.warningMessage.isNullOrBlank()) {
+            warningMessage
+        } else {
+            "${jobRun.warningMessage}\n$warningMessage"
+        }
 
         jobRunRepository.save(jobRun)
     }
