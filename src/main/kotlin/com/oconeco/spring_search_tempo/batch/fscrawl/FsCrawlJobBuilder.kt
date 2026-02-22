@@ -1,12 +1,15 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
+import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
+import com.oconeco.spring_search_tempo.base.service.StartPathValidator
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
@@ -44,7 +47,8 @@ class FsCrawlJobBuilder(
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
     private val crawlCleanupListener: CrawlCleanupListener,
     private val jobRunTrackingListener: JobRunTrackingListener,
-    private val nlpAutoTriggerListener: NLPAutoTriggerListener
+    private val nlpAutoTriggerListener: NLPAutoTriggerListener,
+    private val jobRunService: JobRunService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -56,23 +60,40 @@ class FsCrawlJobBuilder(
      *
      * @param crawl The crawl definition to build a job for
      * @param forceFullRecrawl When true, skip timestamp checks and re-process all items
+     * @param crawlConfigId Optional database ID of the CrawlConfig entity (enables recent crawl skip logic)
+     * @param freshnessHours Hours threshold for recent crawl skip (null = use default from config)
      * @return A configured Spring Batch Job
      */
-    fun buildJob(crawl: CrawlDefinition, forceFullRecrawl: Boolean = false): Job {
-        log.info("Building single-pass job for crawl: {} ({}) with {} start paths, forceFullRecrawl={}",
-            crawl.name, crawl.label, crawl.startPaths.size, forceFullRecrawl)
+    fun buildJob(
+        crawl: CrawlDefinition,
+        forceFullRecrawl: Boolean = false,
+        crawlConfigId: Long? = null,
+        freshnessHours: Int? = null
+    ): Job {
+        log.info("Building single-pass job for crawl: {} ({}) with {} start paths, forceFullRecrawl={}, crawlConfigId={}, freshnessHours={}",
+            crawl.name, crawl.label, crawl.startPaths.size, forceFullRecrawl, crawlConfigId, freshnessHours)
 
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
         val defaults = crawlConfigService.getDefaults()
         val maxDepth = crawl.getMaxDepth(defaults)
         val followLinks = crawl.getFollowLinks(defaults)
 
+        // Determine effective freshness hours (param > config default)
+        val effectiveFreshnessHours = freshnessHours ?: defaults.recentCrawlSkipHours
+
+        // Create start paths for validation and crawling
+        val startPaths = crawl.startPaths.map { Path(it) }
+
+        // Create path validation listener to check and warn about invalid paths
+        val pathValidationListener = PathValidationListener(startPaths, jobRunService)
+
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
             .listener(crawlCleanupListener)  // Cleanup listener runs first (beforeJob order)
-            .listener(jobRunTrackingListener)
+            .listener(jobRunTrackingListener)  // Creates JobRun record
+            .listener(pathValidationListener)  // Validates paths and records warnings (needs jobRunId)
             .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
-            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl))
+            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, effectiveFreshnessHours))
             .next(buildChunkingStep(crawl))
             .build()
     }
@@ -131,10 +152,12 @@ class FsCrawlJobBuilder(
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
         maxDepth: Int,
         followLinks: Boolean,
-        forceFullRecrawl: Boolean = false
+        forceFullRecrawl: Boolean = false,
+        crawlConfigId: Long? = null,
+        freshnessHours: Int = 24
     ): Step {
-        log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={}, forceFullRecrawl={})",
-            crawl.name, crawl.startPaths.size, maxDepth, followLinks, forceFullRecrawl)
+        log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={}, forceFullRecrawl={}, crawlConfigId={}, freshnessHours={})",
+            crawl.name, crawl.startPaths.size, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, freshnessHours)
 
         val startPaths = crawl.startPaths.map { Path(it) }
 
@@ -142,7 +165,7 @@ class FsCrawlJobBuilder(
 
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
-            .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns))
+            .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns, crawlConfigId, freshnessHours))
             .processor(createCombinedProcessor(startPaths, effectivePatterns, forceFullRecrawl))
             .writer(writer)
             .listener(CrawlStepListener())
@@ -153,15 +176,33 @@ class FsCrawlJobBuilder(
     /**
      * Create a combined reader that walks directories and collects files.
      * Passes folder matcher to enable SKIP folder optimization at enumeration time.
+     * Optionally creates a RecentCrawlSkipChecker if crawlConfigId is provided.
      */
     private fun createCombinedReader(
         startPaths: List<Path>,
         maxDepth: Int,
         followLinks: Boolean,
-        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+        effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
+        crawlConfigId: Long? = null,
+        freshnessHours: Int = 24
     ): ItemReader<CombinedCrawlItem> {
-        log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}",
-            startPaths.size, maxDepth, followLinks)
+        log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}, crawlConfigId={}, freshnessHours={}",
+            startPaths.size, maxDepth, followLinks, crawlConfigId, freshnessHours)
+
+        // Create recent crawl checker only if we have a crawl config ID
+        val recentCrawlChecker = if (crawlConfigId != null) {
+            log.info("Creating RecentCrawlSkipChecker for crawlConfigId={}, freshnessHours={}",
+                crawlConfigId, freshnessHours)
+            RecentCrawlSkipChecker(
+                fsFolderRepository = fsFolderRepository,
+                currentCrawlConfigId = crawlConfigId,
+                freshnessHours = freshnessHours
+            )
+        } else {
+            log.debug("No crawlConfigId provided, recent crawl skip checking disabled")
+            null
+        }
+
         return CombinedCrawlReader(
             startPaths = startPaths,
             maxDepth = maxDepth,
@@ -172,7 +213,8 @@ class FsCrawlJobBuilder(
                     effectivePatterns.folderPatterns,
                     parentStatus = null
                 )
-            }
+            },
+            recentCrawlChecker = recentCrawlChecker
         )
     }
 
