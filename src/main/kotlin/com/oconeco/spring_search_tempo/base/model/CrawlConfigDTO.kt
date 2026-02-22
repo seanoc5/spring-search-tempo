@@ -63,4 +63,10 @@ class CrawlConfigDTO {
 
     var filePatternsAnalyze: String? = null
 
+    /**
+     * Hours threshold for considering folders "recently crawled" by this config.
+     * Null means use system default.
+     */
+    var freshnessHours: Int? = null
+
 }

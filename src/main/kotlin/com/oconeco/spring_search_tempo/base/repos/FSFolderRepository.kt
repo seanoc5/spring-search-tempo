@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.OffsetDateTime
 
 
 interface FSFolderRepository : JpaRepository<FSFolder, Long> {
@@ -123,5 +124,51 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
         )
     """)
     fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
+
+    /**
+     * Find recent crawl info for a folder by URI.
+     * Returns [crawlConfigId, analysisStatus, lastUpdated] if the folder exists
+     * and was updated after the threshold time.
+     *
+     * Used by overlapping crawl detection to skip subtrees already crawled
+     * by another config within the freshness window.
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, f.analysisStatus, f.lastUpdated
+        FROM FSFolder f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE f.uri = :uri
+        AND f.lastUpdated >= :threshold
+    """)
+    fun findRecentCrawlInfo(
+        @Param("uri") uri: String,
+        @Param("threshold") threshold: OffsetDateTime
+    ): Array<Any?>?
+
+    /**
+     * Check if a folder is a crawl config root that was recently crawled.
+     * Used to detect when a parent crawl encounters a child crawl's start path.
+     *
+     * Returns [crawlConfigId, analysisStatus, lastUpdated] if this folder URI matches
+     * a crawl config's start path and was crawled by that config within the threshold.
+     *
+     * Uses native SQL because PostgreSQL array ANY() syntax is not supported in JPQL.
+     */
+    @Query(
+        value = """
+            SELECT cc.id, f.analysis_status, f.last_updated
+            FROM fsfolder f
+            JOIN job_run jr ON f.job_run_id = jr.id
+            JOIN crawl_config cc ON jr.crawl_config_id = cc.id
+            WHERE f.uri = :uri
+            AND f.last_updated >= :threshold
+            AND :uri = ANY(cc.start_paths)
+        """,
+        nativeQuery = true
+    )
+    fun findRecentCrawlConfigRootInfo(
+        @Param("uri") uri: String,
+        @Param("threshold") threshold: OffsetDateTime
+    ): Array<Any?>?
 
 }

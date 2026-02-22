@@ -64,4 +64,13 @@ class CrawlConfig : SaveableObject() {
     @OneToMany(mappedBy = "crawlConfig")
     var jobRuns: MutableSet<JobRun> = mutableSetOf()
 
+    /**
+     * Hours threshold for considering folders "recently crawled" by this config.
+     * When another crawl encounters a folder that was crawled by this config
+     * within this many hours, it can skip re-processing that subtree.
+     * Default: null (use system default from app.crawl.defaults.recent-crawl-skip-hours)
+     */
+    @Column
+    var freshnessHours: Int? = null
+
 }
