@@ -153,7 +153,7 @@ class CombinedCrawlProcessor(
         // If folder is SKIP, persist metadata but don't process children
         // Return the DTO so metadata is saved, but children won't be crawled
         if (analysisStatus == AnalysisStatus.SKIP) {
-            log.info("\t\tFolder marked as SKIP by patterns, persisting metadata only: {}", uri)
+            log.debug("\t\tFolder marked as SKIP by patterns, persisting metadata only: {}", uri)
             // Continue to create DTO below - it will be persisted with SKIP status
         }
 
@@ -228,7 +228,7 @@ class CombinedCrawlProcessor(
      */
     private fun processFile(file: Path, parentFolderStatus: AnalysisStatus?): FSFileDTO? {
         val uri = file.toString()
-        log.info("\t\tProcessing file: {}", uri)
+        log.debug("\t\tProcessing file: {}", uri)
 
         // Extract lightweight filesystem metadata
         val fsMetadata = FileSystemMetadata.fromPath(file)
@@ -242,7 +242,7 @@ class CombinedCrawlProcessor(
 
         // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
-            log.info("\t\tFile does not exist in DB, will process: {}", uri)
+            log.info("\t\t++++ File does not exist in DB, will process: {}", uri)
         } else {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFile.fsLastModified,
