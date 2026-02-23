@@ -1,0 +1,162 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Email Account Details</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailAccounts}">Email Accounts</a></li>
+            <li class="breadcrumb-item active">[[${emailAccount.email}]]</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-envelope me-2"></i>[[${emailAccount.email}]]
+        </h1>
+        <div class="d-flex align-items-center gap-2">
+            <a th:href="@{/emailAccounts/{id}/edit(id=${emailAccount.id})}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            <form th:action="@{/emailAccounts/{id}/sync(id=${emailAccount.id})}" method="post" class="d-inline">
+                <button type="submit" class="btn btn-primary" th:disabled="${!emailAccount.enabled}">
+                    <i class="bi bi-arrow-repeat me-1"></i>Sync Now
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${message}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${error}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Account Settings</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Email:</dt>
+                        <dd class="col-sm-8">[[${emailAccount.email}]]</dd>
+
+                        <dt class="col-sm-4">Label:</dt>
+                        <dd class="col-sm-8">[[${emailAccount.label ?: '-'}]]</dd>
+
+                        <dt class="col-sm-4">Provider:</dt>
+                        <dd class="col-sm-8">
+                            <span class="badge bg-secondary">[[${emailAccount.provider}]]</span>
+                        </dd>
+
+                        <dt class="col-sm-4">IMAP Host:</dt>
+                        <dd class="col-sm-8">[[${emailAccount.imapHost ?: 'Default for provider'}]]</dd>
+
+                        <dt class="col-sm-4">IMAP Port:</dt>
+                        <dd class="col-sm-8">[[${emailAccount.imapPort ?: '993'}]]</dd>
+
+                        <dt class="col-sm-4">SSL:</dt>
+                        <dd class="col-sm-8">[[${emailAccount.useSsl ? 'Yes' : 'No'}]]</dd>
+
+                        <dt class="col-sm-4">Status:</dt>
+                        <dd class="col-sm-8">
+                            <span th:if="${emailAccount.enabled}" class="badge bg-success">Enabled</span>
+                            <span th:unless="${emailAccount.enabled}" class="badge bg-secondary">Disabled</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Sync Status</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Last Quick Sync:</dt>
+                        <dd class="col-sm-7">
+                            <span th:if="${emailAccount.lastQuickSyncAt}">
+                                [[${#temporals.format(emailAccount.lastQuickSyncAt, 'yyyy-MM-dd HH:mm:ss')}]]
+                            </span>
+                            <span th:unless="${emailAccount.lastQuickSyncAt}" class="text-muted">Never</span>
+                        </dd>
+
+                        <dt class="col-sm-5">Last Full Sync:</dt>
+                        <dd class="col-sm-7">
+                            <span th:if="${emailAccount.lastFullSyncAt}">
+                                [[${#temporals.format(emailAccount.lastFullSyncAt, 'yyyy-MM-dd HH:mm:ss')}]]
+                                <span class="text-muted small">
+                                    ([[${emailAccount.lastFullSyncFolderCount}]] folders)
+                                </span>
+                            </span>
+                            <span th:unless="${emailAccount.lastFullSyncAt}" class="text-muted">Never</span>
+                        </dd>
+
+                        <dt class="col-sm-5">Inbox Last UID:</dt>
+                        <dd class="col-sm-7">[[${emailAccount.inboxLastSyncUid ?: '-'}]]</dd>
+
+                        <dt class="col-sm-5">Sent Last UID:</dt>
+                        <dd class="col-sm-7">[[${emailAccount.sentLastSyncUid ?: '-'}]]</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Status Card -->
+    <div th:if="${emailAccount.lastError}" class="card border-danger mb-4">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>Last Error
+                <span th:if="${emailAccount.lastErrorAt}" class="float-end small">
+                    [[${#temporals.format(emailAccount.lastErrorAt, 'yyyy-MM-dd HH:mm:ss')}]]
+                </span>
+            </h5>
+        </div>
+        <div class="card-body">
+            <pre class="mb-2" style="white-space: pre-wrap;">[[${emailAccount.lastError}]]</pre>
+            <form th:action="@{/emailAccounts/{id}/clearError(id=${emailAccount.id})}" method="post">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Clear Error
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Actions</h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex gap-2 flex-wrap">
+                <form th:action="@{/emailAccounts/{id}/sync(id=${emailAccount.id})}" method="post">
+                    <button type="submit" class="btn btn-primary" th:disabled="${!emailAccount.enabled}">
+                        <i class="bi bi-arrow-repeat me-1"></i>Run Quick Sync
+                    </button>
+                </form>
+                <a th:href="@{/emailAccounts/{id}/edit(id=${emailAccount.id})}" class="btn btn-outline-secondary">
+                    <i class="bi bi-pencil me-1"></i>Edit Account
+                </a>
+                <form th:action="@{/emailAccounts/{id}/delete(id=${emailAccount.id})}" method="post"
+                      onsubmit="return confirm('Are you sure you want to delete this email account?');">
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

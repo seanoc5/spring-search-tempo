@@ -1,0 +1,134 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Edit Email Account</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailAccounts}">Email Accounts</a></li>
+            <li class="breadcrumb-item"><a th:href="@{/emailAccounts/{id}(id=${emailAccount.id})}">[[${emailAccount.email}]]</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4"><i class="bi bi-pencil me-2"></i>Edit Email Account</h1>
+
+    <form th:action="@{/emailAccounts/{id}/edit(id=${emailAccount.id})}" th:object="${emailAccount}" method="post">
+        <input type="hidden" th:field="*{id}">
+        <input type="hidden" th:field="*{uri}">
+        <input type="hidden" th:field="*{version}">
+        <input type="hidden" th:field="*{inboxLastSyncUid}">
+        <input type="hidden" th:field="*{sentLastSyncUid}">
+
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Account Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email Address *</label>
+                            <input type="email" class="form-control" id="email" th:field="*{email}"
+                                   th:classappend="${#fields.hasErrors('email')} ? 'is-invalid'" required>
+                            <div th:if="${#fields.hasErrors('email')}" class="invalid-feedback">
+                                <span th:errors="*{email}"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="label" class="form-label">Label</label>
+                            <input type="text" class="form-control" id="label" th:field="*{label}"
+                                   placeholder="e.g., Personal Gmail, Work Email">
+                            <div class="form-text">Optional friendly name for this account</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="provider" class="form-label">Provider *</label>
+                            <select class="form-select" id="provider" th:field="*{provider}" required>
+                                <option value="">-- Select Provider --</option>
+                                <option th:each="p : ${providers}" th:value="${p}" th:text="${p}"></option>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="imapHost" class="form-label">IMAP Host</label>
+                                    <input type="text" class="form-control" id="imapHost" th:field="*{imapHost}"
+                                           placeholder="e.g., imap.example.com">
+                                    <div class="form-text">Leave blank to use provider default</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="imapPort" class="form-label">IMAP Port</label>
+                                    <input type="number" class="form-control" id="imapPort" th:field="*{imapPort}"
+                                           placeholder="993">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="useSsl" th:field="*{useSsl}">
+                            <label class="form-check-label" for="useSsl">Use SSL/TLS</label>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
+                            <label class="form-check-label" for="enabled">Enabled</label>
+                            <div class="form-text">Disabled accounts won't be synced</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Save Changes
+                    </button>
+                    <a th:href="@{/emailAccounts/{id}(id=${emailAccount.id})}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Sync State</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0 small">
+                            <dt class="col-6">Last Quick Sync:</dt>
+                            <dd class="col-6">
+                                <span th:if="${emailAccount.lastQuickSyncAt}">
+                                    [[${#temporals.format(emailAccount.lastQuickSyncAt, 'MM-dd HH:mm')}]]
+                                </span>
+                                <span th:unless="${emailAccount.lastQuickSyncAt}" class="text-muted">Never</span>
+                            </dd>
+                            <dt class="col-6">Last Full Sync:</dt>
+                            <dd class="col-6">
+                                <span th:if="${emailAccount.lastFullSyncAt}">
+                                    [[${#temporals.format(emailAccount.lastFullSyncAt, 'MM-dd HH:mm')}]]
+                                </span>
+                                <span th:unless="${emailAccount.lastFullSyncAt}" class="text-muted">Never</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div th:if="${emailAccount.lastError}" class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Last Error</h6>
+                    </div>
+                    <div class="card-body small">
+                        [[${#strings.abbreviate(emailAccount.lastError, 200)}]]
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>

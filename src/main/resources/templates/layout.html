@@ -88,6 +88,11 @@
                             <i class="bi bi-clock-history"></i>
                             <span>[[#{nav.jobRuns}]]</span>
                         </a>
+                        <a th:href="@{/emailAccounts}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailAccounts')} ? 'active' : ''">
+                            <i class="bi bi-envelope"></i>
+                            <span>Email Accounts</span>
+                        </a>
                     </div>
 
                     <!-- Search -->
