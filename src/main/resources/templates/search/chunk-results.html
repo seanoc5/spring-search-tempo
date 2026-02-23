@@ -3,6 +3,15 @@
         layout:decorate="~{layout}">
     <head>
         <title>Chunk Search</title>
+        <style>
+            .entity-badge { font-size: 0.75em; }
+            .entity-PERSON { background-color: #0d6efd !important; }
+            .entity-ORGANIZATION { background-color: #6f42c1 !important; }
+            .entity-LOCATION { background-color: #198754 !important; }
+            .entity-DATE { background-color: #fd7e14 !important; }
+            .entity-MONEY { background-color: #20c997 !important; }
+            .entity-MISC { background-color: #6c757d !important; }
+        </style>
     </head>
     <body>
         <div layout:fragment="content">
@@ -41,7 +50,7 @@
             <div class="card mb-4">
                 <div class="card-body">
                     <form th:action="@{/search/chunks}" method="get" class="row g-3">
-                        <div class="col-md-10">
+                        <div class="col-md-8">
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                                 <input type="text"
@@ -51,6 +60,20 @@
                                        class="form-control form-control-lg"
                                        autofocus>
                             </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select name="sentiment" class="form-select form-select-lg">
+                                <option value="">All Sentiments</option>
+                                <option value="POSITIVE" th:selected="${sentiment == 'POSITIVE'}">
+                                    Positive
+                                </option>
+                                <option value="NEUTRAL" th:selected="${sentiment == 'NEUTRAL'}">
+                                    Neutral
+                                </option>
+                                <option value="NEGATIVE" th:selected="${sentiment == 'NEGATIVE'}">
+                                    Negative
+                                </option>
+                            </select>
                         </div>
                         <div class="col-md-2">
                             <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
@@ -112,9 +135,9 @@
                                 </p>
                                 <!-- Named Entities (if present) -->
                                 <div th:if="${result.namedEntities != null && result.namedEntities != ''}" class="mt-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-tags me-1"></i>Named Entities:
-                                        <span th:text="${result.namedEntities}">entities</span>
+                                    <small>
+                                        <i class="bi bi-tags me-1 text-muted"></i>
+                                        <span class="entities-container" th:data-entities="${result.namedEntities}"></span>
                                     </small>
                                 </div>
                             </div>
@@ -131,7 +154,7 @@
                 <!-- Pagination -->
                 <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
                     <a th:if="${results.hasPrevious()}"
-                       th:href="@{/search/chunks(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                       th:href="@{/search/chunks(q=${query}, sentiment=${sentiment}, page=${results.number - 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         <i class="bi bi-chevron-left me-1"></i>Previous
                     </a>
@@ -140,7 +163,7 @@
                         Page [[${results.number + 1}]] of [[${results.totalPages}]]
                     </span>
                     <a th:if="${results.hasNext()}"
-                       th:href="@{/search/chunks(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                       th:href="@{/search/chunks(q=${query}, sentiment=${sentiment}, page=${results.number + 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         Next<i class="bi bi-chevron-right ms-1"></i>
                     </a>
@@ -186,5 +209,46 @@
                 </div>
             </div>
         </div>
+
+        <script th:inline="javascript">
+            document.addEventListener('DOMContentLoaded', function() {
+                const typeColors = {
+                    'PERSON': 'entity-PERSON',
+                    'ORGANIZATION': 'entity-ORGANIZATION',
+                    'LOCATION': 'entity-LOCATION',
+                    'DATE': 'entity-DATE',
+                    'MONEY': 'entity-MONEY'
+                };
+
+                document.querySelectorAll('.entities-container').forEach(container => {
+                    const entitiesJson = container.dataset.entities;
+                    if (!entitiesJson) return;
+
+                    try {
+                        const entities = JSON.parse(entitiesJson);
+                        if (entities.length === 0) return;
+
+                        // Group by type and deduplicate
+                        const byType = {};
+                        entities.forEach(e => {
+                            if (!byType[e.type]) byType[e.type] = new Set();
+                            byType[e.type].add(e.text);
+                        });
+
+                        let html = '';
+                        Object.keys(byType).sort().forEach(type => {
+                            const colorClass = typeColors[type] || 'entity-MISC';
+                            byType[type].forEach(text => {
+                                html += `<span class="badge ${colorClass} entity-badge me-1">${text}</span>`;
+                            });
+                        });
+
+                        container.innerHTML = html;
+                    } catch (e) {
+                        container.textContent = entitiesJson;
+                    }
+                });
+            });
+        </script>
     </body>
 </html>

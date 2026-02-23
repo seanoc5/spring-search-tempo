@@ -20,28 +20,59 @@
                             <th scope="col">[[#{contentChunk.id.label}]]</th>
                             <th scope="col">[[#{contentChunk.chunkNumber.label}]]</th>
                             <th scope="col">[[#{contentChunk.chunkType.label}]]</th>
+                            <th scope="col">Sentiment</th>
+                            <th scope="col">NLP Status</th>
                             <th scope="col">[[#{contentChunk.createdAt.label}]]</th>
-                            <th scope="col">[[#{contentChunk.endPosition.label}]]</th>
-                            <th scope="col">[[#{contentChunk.lastModifiedDate.label}]]</th>
-                            <th scope="col">[[#{contentChunk.parentType.label}]]</th>
                             <th><!-- --></th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="contentChunks : ${contentChunks}">
-                            <td>[[${contentChunks.id}]]</td>
-                            <td>[[${contentChunks.chunkNumber}]]</td>
-                            <td>[[${contentChunks.chunkType}]]</td>
-                            <td>[[${contentChunks.createdAt}]]</td>
-                            <td>[[${contentChunks.endPosition}]]</td>
-                            <td>[[${contentChunks.lastModifiedDate}]]</td>
-                            <td>[[${contentChunks.parentType}]]</td>
+                        <tr th:each="chunk : ${contentChunks}">
+                            <td>
+                                <a th:href="@{/contentChunks/{id}(id=${chunk.id})}" class="text-decoration-none">
+                                    [[${chunk.id}]]
+                                </a>
+                            </td>
+                            <td>[[${chunk.chunkNumber}]]</td>
+                            <td>
+                                <span th:if="${chunk.chunkType}" class="badge bg-light text-dark">[[${chunk.chunkType}]]</span>
+                            </td>
+                            <td>
+                                <span th:if="${chunk.sentiment}" class="badge"
+                                      th:classappend="${chunk.sentiment == 'POSITIVE' ? 'bg-success' : (chunk.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                                    <i class="bi bi-emoji-smile me-1" th:if="${chunk.sentiment == 'POSITIVE'}"></i>
+                                    <i class="bi bi-emoji-frown me-1" th:if="${chunk.sentiment == 'NEGATIVE'}"></i>
+                                    <i class="bi bi-emoji-neutral me-1" th:if="${chunk.sentiment == 'NEUTRAL'}"></i>
+                                    [[${chunk.sentiment}]]
+                                </span>
+                                <span th:unless="${chunk.sentiment}" class="text-muted">-</span>
+                            </td>
+                            <td>
+                                <span th:if="${chunk.nlpProcessedAt}" class="badge bg-success">
+                                    <i class="bi bi-check-circle me-1"></i>Done
+                                </span>
+                                <span th:unless="${chunk.nlpProcessedAt}" class="badge bg-secondary">
+                                    <i class="bi bi-hourglass me-1"></i>Pending
+                                </span>
+                            </td>
+                            <td>
+                                <span th:if="${chunk.createdAt}">
+                                    [[${#temporals.format(chunk.createdAt, 'MM-dd HH:mm')}]]
+                                </span>
+                            </td>
                             <td>
                                 <div class="float-end text-nowrap">
-                                    <a th:href="@{/contentChunks/edit/{id}(id=${contentChunks.id})}" class="btn btn-sm btn-secondary">[[#{contentChunk.list.edit}]]</a>
-                                    <form th:action="@{/contentChunks/delete/{id}(id=${contentChunks.id})}"
+                                    <a th:href="@{/contentChunks/{id}(id=${chunk.id})}" class="btn btn-sm btn-outline-secondary" title="View">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a th:href="@{/contentChunks/edit/{id}(id=${chunk.id})}" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form th:action="@{/contentChunks/delete/{id}(id=${chunk.id})}"
                                             th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-secondary">[[#{contentChunk.list.delete}]]</button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
                                     </form>
                                 </div>
                             </td>

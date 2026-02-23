@@ -78,17 +78,19 @@ class SearchController(
     @GetMapping("/chunks")
     fun searchChunks(
         @RequestParam(required = false) q: String?,
+        @RequestParam(required = false) sentiment: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         model: Model
     ): String {
         model.addAttribute("query", q ?: "")
+        model.addAttribute("sentiment", sentiment ?: "")
         model.addAttribute("searchType", "chunks")
 
         if (!q.isNullOrBlank()) {
             try {
                 val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "rank"))
-                val results = searchService.searchChunks(q, pageable)
+                val results = searchService.searchChunks(q, sentiment, pageable)
 
                 model.addAttribute("results", results)
                 model.addAttribute("totalResults", results.totalElements)

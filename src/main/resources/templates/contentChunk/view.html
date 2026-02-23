@@ -1,0 +1,311 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Content Chunk Details</title>
+    <style>
+        .entity-badge { font-size: 0.85em; }
+        .entity-PERSON { background-color: #0d6efd !important; }
+        .entity-ORGANIZATION { background-color: #6f42c1 !important; }
+        .entity-LOCATION { background-color: #198754 !important; }
+        .entity-DATE { background-color: #fd7e14 !important; }
+        .entity-MONEY { background-color: #20c997 !important; }
+        .entity-MISC { background-color: #6c757d !important; }
+        .parse-tree { font-family: monospace; white-space: pre-wrap; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/contentChunks}">Content Chunks</a></li>
+            <li class="breadcrumb-item active">Chunk #[[${contentChunk.id}]]</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-puzzle me-2"></i>Chunk #[[${contentChunk.chunkNumber}]]
+            <span th:if="${contentChunk.chunkType}" class="badge bg-secondary fs-6 ms-2">[[${contentChunk.chunkType}]]</span>
+        </h1>
+        <div class="d-flex align-items-center gap-2">
+            <a th:href="@{/contentChunks/edit/{id}(id=${contentChunk.id})}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+        </div>
+    </div>
+
+    <!-- Text Content Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-text-paragraph me-2"></i>Text Content</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-0" style="white-space: pre-wrap;" th:text="${contentChunk.text}">Chunk text content...</p>
+        </div>
+        <div class="card-footer text-muted small">
+            <span th:if="${contentChunk.textLength}">[[${contentChunk.textLength}]] characters</span>
+            <span th:if="${contentChunk.startPosition != null}">
+                | Position: [[${contentChunk.startPosition}]] - [[${contentChunk.endPosition}]]
+            </span>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Sentiment Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-emoji-smile me-2"></i>Sentiment</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div th:if="${contentChunk.sentiment}">
+                        <div class="display-4 mb-2">
+                            <i th:if="${contentChunk.sentiment == 'POSITIVE'}" class="bi bi-emoji-smile text-success"></i>
+                            <i th:if="${contentChunk.sentiment == 'NEGATIVE'}" class="bi bi-emoji-frown text-danger"></i>
+                            <i th:if="${contentChunk.sentiment == 'NEUTRAL'}" class="bi bi-emoji-neutral text-info"></i>
+                        </div>
+                        <span class="badge fs-5"
+                              th:classappend="${contentChunk.sentiment == 'POSITIVE' ? 'bg-success' : (contentChunk.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                            [[${contentChunk.sentiment}]]
+                        </span>
+                        <div th:if="${contentChunk.sentimentScore}" class="mt-2 text-muted">
+                            Score: [[${#numbers.formatDecimal(contentChunk.sentimentScore, 1, 2)}]]
+                        </div>
+                    </div>
+                    <div th:unless="${contentChunk.sentiment}" class="text-muted">
+                        <i class="bi bi-hourglass me-1"></i>Not analyzed
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NLP Status Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cpu me-2"></i>NLP Status</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-6">Processed:</dt>
+                        <dd class="col-6">
+                            <span th:if="${contentChunk.nlpProcessedAt}" class="badge bg-success">
+                                <i class="bi bi-check-circle me-1"></i>Yes
+                            </span>
+                            <span th:unless="${contentChunk.nlpProcessedAt}" class="badge bg-secondary">
+                                <i class="bi bi-hourglass me-1"></i>Pending
+                            </span>
+                        </dd>
+                        <dt th:if="${contentChunk.nlpProcessedAt}" class="col-6">When:</dt>
+                        <dd th:if="${contentChunk.nlpProcessedAt}" class="col-6 small">
+                            [[${#temporals.format(contentChunk.nlpProcessedAt, 'yyyy-MM-dd HH:mm')}]]
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metadata Card -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Metadata</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0 small">
+                        <dt class="col-5">ID:</dt>
+                        <dd class="col-7">[[${contentChunk.id}]]</dd>
+                        <dt class="col-5">Concept:</dt>
+                        <dd class="col-7">[[${contentChunk.concept ?: '-'}]]</dd>
+                        <dt class="col-5">Parent:</dt>
+                        <dd class="col-7">[[${contentChunk.parentChunk ?: '-'}]]</dd>
+                        <dt class="col-5">Created:</dt>
+                        <dd class="col-7">
+                            <span th:if="${contentChunk.createdAt}">
+                                [[${#temporals.format(contentChunk.createdAt, 'MM-dd HH:mm')}]]
+                            </span>
+                            <span th:unless="${contentChunk.createdAt}">-</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Named Entities Card -->
+    <div th:if="${contentChunk.namedEntities != null && contentChunk.namedEntities != ''}" class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-tags me-2"></i>Named Entities</h5>
+        </div>
+        <div class="card-body">
+            <div id="namedEntitiesContainer">
+                <!-- Entities will be parsed and displayed via JavaScript -->
+                <span class="text-muted">Loading entities...</span>
+            </div>
+            <script th:inline="javascript">
+                document.addEventListener('DOMContentLoaded', function() {
+                    const container = document.getElementById('namedEntitiesContainer');
+                    const entitiesJson = /*[[${contentChunk.namedEntities}]]*/ '[]';
+
+                    try {
+                        const entities = JSON.parse(entitiesJson);
+                        if (entities.length === 0) {
+                            container.innerHTML = '<span class="text-muted">No entities found</span>';
+                            return;
+                        }
+
+                        // Group by type
+                        const byType = {};
+                        entities.forEach(e => {
+                            if (!byType[e.type]) byType[e.type] = [];
+                            byType[e.type].push(e.text);
+                        });
+
+                        let html = '';
+                        const typeColors = {
+                            'PERSON': 'entity-PERSON',
+                            'ORGANIZATION': 'entity-ORGANIZATION',
+                            'LOCATION': 'entity-LOCATION',
+                            'DATE': 'entity-DATE',
+                            'MONEY': 'entity-MONEY'
+                        };
+
+                        Object.keys(byType).sort().forEach(type => {
+                            const colorClass = typeColors[type] || 'entity-MISC';
+                            const uniqueEntities = [...new Set(byType[type])];
+                            uniqueEntities.forEach(text => {
+                                html += `<span class="badge ${colorClass} entity-badge me-1 mb-1">${type}: ${text}</span>`;
+                            });
+                        });
+
+                        container.innerHTML = html;
+                    } catch (e) {
+                        container.innerHTML = '<span class="text-muted">Unable to parse entities</span>';
+                    }
+                });
+            </script>
+        </div>
+    </div>
+
+    <!-- Nouns & Verbs Card -->
+    <div th:if="${contentChunk.nouns != null || contentChunk.verbs != null}" class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-spellcheck me-2"></i>Key Terms</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div th:if="${contentChunk.nouns}" class="col-md-6">
+                    <h6><i class="bi bi-box me-1"></i>Nouns</h6>
+                    <div>
+                        <span th:each="noun : ${#strings.arraySplit(contentChunk.nouns, ',')}"
+                              class="badge bg-primary me-1 mb-1">[[${#strings.trim(noun)}]]</span>
+                    </div>
+                </div>
+                <div th:if="${contentChunk.verbs}" class="col-md-6">
+                    <h6><i class="bi bi-lightning me-1"></i>Verbs</h6>
+                    <div>
+                        <span th:each="verb : ${#strings.arraySplit(contentChunk.verbs, ',')}"
+                              class="badge bg-success me-1 mb-1">[[${#strings.trim(verb)}]]</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependency Parse Card (Collapsible) -->
+    <div th:if="${contentChunk.parseTree != null || contentChunk.parseUd != null || contentChunk.conllu != null}" class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#parseCollapse" role="button">
+                    <i class="bi bi-diagram-3 me-2"></i>Dependency Parse
+                    <i class="bi bi-chevron-down ms-2"></i>
+                </a>
+            </h5>
+        </div>
+        <div class="collapse" id="parseCollapse">
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="parseTab" role="tablist">
+                    <li th:if="${contentChunk.parseTree}" class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#constituencyTab" type="button">Constituency</button>
+                    </li>
+                    <li th:if="${contentChunk.parseUd}" class="nav-item">
+                        <button class="nav-link" th:classappend="${contentChunk.parseTree == null ? 'active' : ''}"
+                                data-bs-toggle="tab" data-bs-target="#udTab" type="button">Dependencies</button>
+                    </li>
+                    <li th:if="${contentChunk.conllu}" class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#conlluTab" type="button">CoNLL-U</button>
+                    </li>
+                </ul>
+                <div class="tab-content p-3 border border-top-0">
+                    <div th:if="${contentChunk.parseTree}" class="tab-pane fade show active" id="constituencyTab">
+                        <pre class="parse-tree mb-0" th:text="${contentChunk.parseTree}"></pre>
+                    </div>
+                    <div th:if="${contentChunk.parseUd}" class="tab-pane fade" th:classappend="${contentChunk.parseTree == null ? 'show active' : ''}" id="udTab">
+                        <pre class="parse-tree mb-0" th:text="${contentChunk.parseUd}"></pre>
+                    </div>
+                    <div th:if="${contentChunk.conllu}" class="tab-pane fade" id="conlluTab">
+                        <pre class="parse-tree mb-0" th:text="${contentChunk.conllu}"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Token Annotations (Collapsible) -->
+    <div th:if="${contentChunk.tokenAnnotations != null && contentChunk.tokenAnnotations != ''}" class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#tokensCollapse" role="button">
+                    <i class="bi bi-list-ul me-2"></i>Token Annotations (POS)
+                    <i class="bi bi-chevron-down ms-2"></i>
+                </a>
+            </h5>
+        </div>
+        <div class="collapse" id="tokensCollapse">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped" id="tokensTable">
+                        <thead>
+                            <tr>
+                                <th>Token</th>
+                                <th>POS Tag</th>
+                                <th>Lemma</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <script th:inline="javascript">
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const tokensJson = /*[[${contentChunk.tokenAnnotations}]]*/ '[]';
+                        const tbody = document.querySelector('#tokensTable tbody');
+
+                        try {
+                            const tokens = JSON.parse(tokensJson);
+                            tokens.forEach(t => {
+                                const row = document.createElement('tr');
+                                row.innerHTML = `<td>${t.token}</td><td><code>${t.tag}</code></td><td>${t.lemma}</td>`;
+                                tbody.appendChild(row);
+                            });
+                        } catch (e) {
+                            tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Unable to parse tokens</td></tr>';
+                        }
+                    });
+                </script>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex gap-2">
+        <a th:href="@{/contentChunks}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to List
+        </a>
+        <a th:href="@{/contentChunks/edit/{id}(id=${contentChunk.id})}" class="btn btn-outline-primary">
+            <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+    </div>
+</div>
+</body>
+</html>

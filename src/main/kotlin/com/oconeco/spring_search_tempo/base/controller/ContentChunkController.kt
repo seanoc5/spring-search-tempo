@@ -36,6 +36,12 @@ class ContentChunkController(
         return "contentChunk/list"
     }
 
+    @GetMapping("/{id}")
+    fun view(@PathVariable(name = "id") id: Long, model: Model): String {
+        model.addAttribute("contentChunk", contentChunkService.get(id))
+        return "contentChunk/view"
+    }
+
     @GetMapping("/add")
     fun add(@ModelAttribute("contentChunks") contentChunkDTO: ContentChunkDTO): String =
             "contentChunk/add"
