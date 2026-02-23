@@ -53,6 +53,14 @@ class ChunkReader(
             .getLong(JobRunTrackingListener.JOB_RUN_ID_KEY, -1L)
             .takeIf { it > 0 }
 
+        // Explicitly initialize folder stats to 0 to prevent accumulation from other steps.
+        // The chunking step doesn't process folders, so these must be zero.
+        // Without this, JobRunTrackingListener.afterJob() may sum stale/inherited values.
+        stepExecution.executionContext.putLong("foldersDiscovered", 0L)
+        stepExecution.executionContext.putLong("foldersNew", 0L)
+        stepExecution.executionContext.putLong("foldersUpdated", 0L)
+        stepExecution.executionContext.putLong("foldersSkipped", 0L)
+
         if (processAll) {
             log.info("ChunkReader initialized in processAll mode - will chunk ALL files needing chunking")
         } else {

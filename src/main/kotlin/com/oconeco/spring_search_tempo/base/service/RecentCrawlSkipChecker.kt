@@ -81,7 +81,9 @@ class RecentCrawlSkipChecker(
     private fun checkForRecentCrawlConfigRoot(uri: String): RecentCrawlCheckResult {
         try {
             val recentInfo = fsFolderRepository.findRecentCrawlConfigRootInfo(uri, threshold)
-                ?: return RecentCrawlCheckResult.NotRecentlyCrawled
+            if (recentInfo == null || recentInfo.isEmpty()) {
+                return RecentCrawlCheckResult.NotRecentlyCrawled
+            }
 
             // Native query returns Object[] - handle type conversion
             val otherCrawlConfigId = when (val id = recentInfo[0]) {
