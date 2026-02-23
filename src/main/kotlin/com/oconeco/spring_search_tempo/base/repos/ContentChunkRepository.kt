@@ -74,4 +74,69 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     """)
     fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
 
+    /**
+     * Find chunks containing a specific named entity text.
+     * Uses PostgreSQL JSONB containment to search the named_entities JSON array.
+     *
+     * @param entityText The entity text to search for (case-sensitive)
+     * @param pageable Pagination parameters
+     * @return Page of ContentChunk entities containing the entity
+     */
+    @Query(
+        value = """
+            SELECT * FROM content_chunks c
+            WHERE c.named_entities IS NOT NULL
+              AND CAST(c.named_entities AS jsonb) @> CAST(?1 AS jsonb)
+            ORDER BY c.id DESC
+        """,
+        countQuery = """
+            SELECT COUNT(*) FROM content_chunks c
+            WHERE c.named_entities IS NOT NULL
+              AND CAST(c.named_entities AS jsonb) @> CAST(?1 AS jsonb)
+        """,
+        nativeQuery = true
+    )
+    fun findByNamedEntityText(
+        entityJson: String,
+        pageable: Pageable
+    ): Page<ContentChunk>
+
+    /**
+     * Find chunks containing named entities of a specific type.
+     * Uses PostgreSQL JSONB path query to filter by entity type.
+     *
+     * @param entityType The entity type (PERSON, ORGANIZATION, LOCATION, DATE, MONEY, etc.)
+     * @param pageable Pagination parameters
+     * @return Page of ContentChunk entities containing entities of that type
+     */
+    @Query(
+        value = """
+            SELECT * FROM content_chunks c
+            WHERE c.named_entities IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(CAST(c.named_entities AS jsonb)) elem
+                  WHERE elem->>'type' = ?1
+              )
+            ORDER BY c.id DESC
+        """,
+        countQuery = """
+            SELECT COUNT(*) FROM content_chunks c
+            WHERE c.named_entities IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(CAST(c.named_entities AS jsonb)) elem
+                  WHERE elem->>'type' = ?1
+              )
+        """,
+        nativeQuery = true
+    )
+    fun findByNamedEntityType(
+        entityType: String,
+        pageable: Pageable
+    ): Page<ContentChunk>
+
+    /**
+     * Count chunks that have named entities (NLP processed).
+     */
+    fun countByNamedEntitiesIsNotNull(): Long
+
 }
