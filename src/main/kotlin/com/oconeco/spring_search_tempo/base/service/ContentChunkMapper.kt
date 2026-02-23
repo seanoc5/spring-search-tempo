@@ -72,6 +72,10 @@ interface ContentChunkMapper {
         target = "ftsVector",
         ignore = true
     )
+    @Mapping(
+        target = "embedding",
+        ignore = true
+    )
     fun updateContentChunk(
         contentChunkDTO: ContentChunkDTO,
         @MappingTarget contentChunk: ContentChunk,

@@ -45,8 +45,23 @@ class ContentChunkDTO {
 
     var tokenAnnotations: String? = null
 
-    @Size(max = 255)
-    var vectorEmbedding: String? = null
+    /**
+     * Vector embedding as float array (1024 dimensions for mxbai-embed-large).
+     * Null when embedding hasn't been generated yet.
+     */
+    var embedding: FloatArray? = null
+
+    /**
+     * Timestamp when embedding was generated.
+     */
+    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
+    var embeddingGeneratedAt: OffsetDateTime? = null
+
+    /**
+     * Name of the embedding model used.
+     */
+    @Size(max = 100)
+    var embeddingModel: String? = null
 
     var verbs: String? = null
 

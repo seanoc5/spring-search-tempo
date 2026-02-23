@@ -79,7 +79,7 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.crawl}]]</div>
                         <a th:href="@{/crawlConfigs}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/crawlConfigs')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/crawlConfigs')} ? 'active' : ''">
                             <i class="bi bi-gear-wide-connected"></i>
                             <span>[[#{nav.crawlConfigs}]]</span>
                         </a>
@@ -94,7 +94,7 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.search}]]</div>
                         <a th:href="@{/search}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/search')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/search')} ? 'active' : ''">
                             <i class="bi bi-search"></i>
                             <span>[[#{nav.search}]]</span>
                         </a>
@@ -104,22 +104,22 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.content}]]</div>
                         <a th:href="@{/fSFiles}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/fSFiles')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/fSFiles')} ? 'active' : ''">
                             <i class="bi bi-file-earmark"></i>
                             <span>[[#{fSFile.list.headline}]]</span>
                         </a>
                         <a th:href="@{/fSFolders}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/fSFolders')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/fSFolders')} ? 'active' : ''">
                             <i class="bi bi-folder"></i>
                             <span>[[#{fSFolder.list.headline}]]</span>
                         </a>
                         <a th:href="@{/contentChunks}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/contentChunks')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/contentChunks')} ? 'active' : ''">
                             <i class="bi bi-puzzle"></i>
                             <span>[[#{contentChunk.list.headline}]]</span>
                         </a>
                         <a th:href="@{/annotations}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/annotations')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/annotations')} ? 'active' : ''">
                             <i class="bi bi-tag"></i>
                             <span>[[#{annotation.list.headline}]]</span>
                         </a>
@@ -129,12 +129,12 @@
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.admin}]]</div>
                         <a th:href="@{/springUsers}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/springUsers')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/springUsers')} ? 'active' : ''">
                             <i class="bi bi-people"></i>
                             <span>[[#{springUser.list.headline}]]</span>
                         </a>
                         <a th:href="@{/springRoles}" class="nav-item"
-                           th:classappend="${#strings.startsWith(requestUri, '/springRoles')} ? 'active' : ''">
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/springRoles')} ? 'active' : ''">
                             <i class="bi bi-shield-lock"></i>
                             <span>[[#{springRole.list.headline}]]</span>
                         </a>

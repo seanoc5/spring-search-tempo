@@ -62,16 +62,18 @@ class FsCrawlJobBuilder(
      * @param forceFullRecrawl When true, skip timestamp checks and re-process all items
      * @param crawlConfigId Optional database ID of the CrawlConfig entity (enables recent crawl skip logic)
      * @param freshnessHours Hours threshold for recent crawl skip (null = use default from config)
+     * @param chunkProcessAll When true, chunk ALL files needing chunking regardless of job run (for backfill)
      * @return A configured Spring Batch Job
      */
     fun buildJob(
         crawl: CrawlDefinition,
         forceFullRecrawl: Boolean = false,
         crawlConfigId: Long? = null,
-        freshnessHours: Int? = null
+        freshnessHours: Int? = null,
+        chunkProcessAll: Boolean = false
     ): Job {
-        log.info("Building single-pass job for crawl: {} ({}) with {} start paths, forceFullRecrawl={}, crawlConfigId={}, freshnessHours={}",
-            crawl.name, crawl.label, crawl.startPaths.size, forceFullRecrawl, crawlConfigId, freshnessHours)
+        log.info("Building single-pass job for crawl: {} ({}) with {} start paths, forceFullRecrawl={}, crawlConfigId={}, freshnessHours={}, chunkProcessAll={}",
+            crawl.name, crawl.label, crawl.startPaths.size, forceFullRecrawl, crawlConfigId, freshnessHours, chunkProcessAll)
 
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
         val defaults = crawlConfigService.getDefaults()
@@ -94,18 +96,21 @@ class FsCrawlJobBuilder(
             .listener(pathValidationListener)  // Validates paths and records warnings (needs jobRunId)
             .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
             .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, effectiveFreshnessHours))
-            .next(buildChunkingStep(crawl))
+            .next(buildChunkingStep(crawl, chunkProcessAll))
             .build()
     }
 
     /**
      * Build the chunking step that splits file bodyText into ContentChunk.
      * The ChunkReader is registered as a listener to get jobRunId from the step context.
+     *
+     * @param crawl The crawl definition
+     * @param processAll When true, process ALL files needing chunking regardless of job run
      */
-    private fun buildChunkingStep(crawl: CrawlDefinition): Step {
-        log.info("Building chunking step for crawl: {}", crawl.name)
+    private fun buildChunkingStep(crawl: CrawlDefinition, processAll: Boolean = false): Step {
+        log.info("Building chunking step for crawl: {} (processAll={})", crawl.name, processAll)
 
-        val reader = createChunkReader()
+        val reader = createChunkReader(processAll)
 
         return StepBuilder("fsCrawlChunks_${crawl.name}", jobRepository)
             .chunk<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>>(10, transactionManager)
@@ -117,13 +122,16 @@ class FsCrawlJobBuilder(
     }
 
     /**
-     * Create a chunk reader that reads FSFiles with bodyText for the current job run.
+     * Create a chunk reader that reads FSFiles with bodyText.
+     *
+     * @param processAll When true, reads ALL files needing chunking; when false, only current job run
      */
-    private fun createChunkReader(): ChunkReader {
-        log.debug("Creating ChunkReader")
+    private fun createChunkReader(processAll: Boolean = false): ChunkReader {
+        log.debug("Creating ChunkReader (processAll={})", processAll)
         return ChunkReader(
             fileService = fileService,
-            pageSize = 50
+            pageSize = 50,
+            processAll = processAll
         )
     }
 

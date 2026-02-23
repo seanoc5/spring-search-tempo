@@ -141,6 +141,112 @@
                     </div>
                 </div>
 
+                <!-- Pattern Configuration Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-regex me-2"></i>Pattern Configuration
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-4">
+                            <h6 class="alert-heading"><i class="bi bi-info-circle me-1"></i>Pattern Hierarchy</h6>
+                            <p class="mb-2">Files and folders are matched against patterns in order of priority:</p>
+                            <ol class="mb-2">
+                                <li><strong>SKIP</strong> - Metadata only (no children enumerated for folders, no text extraction for files)</li>
+                                <li><strong>LOCATE</strong> - Store metadata only (path, size, timestamps)</li>
+                                <li><strong>INDEX</strong> - Extract full text and metadata</li>
+                                <li><strong>ANALYZE</strong> - INDEX + sentence-level chunking + NLP</li>
+                            </ol>
+                            <p class="mb-0"><small>Use Java regex syntax. One pattern per line. Global defaults (from application.yml) are merged with these patterns.</small></p>
+                        </div>
+
+                        <div class="row">
+                            <!-- Folder Patterns -->
+                            <div class="col-lg-6">
+                                <h6 class="text-muted mb-3"><i class="bi bi-folder me-1"></i>Folder Patterns</h6>
+
+                                <div class="mb-3">
+                                    <label for="folderPatternsSkipText" class="form-label">
+                                        <span class="badge bg-secondary me-1">SKIP</span> Folders
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="folderPatternsSkipText" name="folderPatternsSkipText"
+                                              th:text="${folderPatternsSkipText}" rows="3" placeholder=".*/\.cache/.*&#10;.*/temp/.*"></textarea>
+                                    <small class="text-muted">Metadata saved, children NOT enumerated</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="folderPatternsLocateText" class="form-label">
+                                        <span class="badge bg-info me-1">LOCATE</span> Folders
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="folderPatternsLocateText" name="folderPatternsLocateText"
+                                              th:text="${folderPatternsLocateText}" rows="3" placeholder=".*"></textarea>
+                                    <small class="text-muted">Metadata only, children enumerated</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="folderPatternsIndexText" class="form-label">
+                                        <span class="badge bg-primary me-1">INDEX</span> Folders
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="folderPatternsIndexText" name="folderPatternsIndexText"
+                                              th:text="${folderPatternsIndexText}" rows="3" placeholder=".*"></textarea>
+                                    <small class="text-muted">Full processing of folder contents</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="folderPatternsAnalyzeText" class="form-label">
+                                        <span class="badge bg-success me-1">ANALYZE</span> Folders
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="folderPatternsAnalyzeText" name="folderPatternsAnalyzeText"
+                                              th:text="${folderPatternsAnalyzeText}" rows="3" placeholder=".*/(docs|documentation)/.*"></textarea>
+                                    <small class="text-muted">Deep analysis with NLP</small>
+                                </div>
+                            </div>
+
+                            <!-- File Patterns -->
+                            <div class="col-lg-6">
+                                <h6 class="text-muted mb-3"><i class="bi bi-file-earmark me-1"></i>File Patterns</h6>
+
+                                <div class="mb-3">
+                                    <label for="filePatternsSkipText" class="form-label">
+                                        <span class="badge bg-secondary me-1">SKIP</span> Files
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="filePatternsSkipText" name="filePatternsSkipText"
+                                              th:text="${filePatternsSkipText}" rows="3" placeholder=".*\.(tmp|bak|~)$"></textarea>
+                                    <small class="text-muted">Metadata saved, no text extraction</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="filePatternsLocateText" class="form-label">
+                                        <span class="badge bg-info me-1">LOCATE</span> Files
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="filePatternsLocateText" name="filePatternsLocateText"
+                                              th:text="${filePatternsLocateText}" rows="3" placeholder=".*\.(jpg|png|gif|mp4)$"></textarea>
+                                    <small class="text-muted">Metadata only (images, videos, etc.)</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="filePatternsIndexText" class="form-label">
+                                        <span class="badge bg-primary me-1">INDEX</span> Files
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="filePatternsIndexText" name="filePatternsIndexText"
+                                              th:text="${filePatternsIndexText}" rows="3" placeholder=".*\.(pdf|docx?|txt)$"></textarea>
+                                    <small class="text-muted">Extract text and metadata</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="filePatternsAnalyzeText" class="form-label">
+                                        <span class="badge bg-success me-1">ANALYZE</span> Files
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="filePatternsAnalyzeText" name="filePatternsAnalyzeText"
+                                              th:text="${filePatternsAnalyzeText}" rows="3" placeholder=".*\.(md|txt|rst)$&#10;.*/README.*$"></textarea>
+                                    <small class="text-muted">Full text + chunking + NLP</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="d-flex gap-2 mb-4">
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                     <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}" class="btn btn-outline-secondary">Cancel</a>

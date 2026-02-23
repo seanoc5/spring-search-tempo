@@ -113,8 +113,40 @@ class ContentChunk {
     @Column(columnDefinition = "text")
     var tokenAnnotations: String? = null
 
+    /**
+     * Vector embedding for semantic search using pgvector.
+     *
+     * Model: mxbai-embed-large (1024 dimensions)
+     * Use cosine distance (<=> operator) for similarity search.
+     *
+     * Example native query:
+     * ```sql
+     * SELECT id, text, embedding <=> :queryVector AS distance
+     * FROM content_chunks
+     * WHERE embedding IS NOT NULL
+     * ORDER BY embedding <=> :queryVector
+     * LIMIT 10
+     * ```
+     *
+     * NOTE: Currently read-only (insertable=false, updatable=false) until Phase 3
+     * embedding generation is implemented with proper Hibernate type support.
+     */
+    @Column(name = "embedding", columnDefinition = "vector(1024)", insertable = false, updatable = false)
+    var embedding: FloatArray? = null
+
+    /**
+     * Timestamp when embedding was generated.
+     * Useful for tracking stale embeddings that need regeneration.
+     */
     @Column
-    var vectorEmbedding: String? = null
+    var embeddingGeneratedAt: OffsetDateTime? = null
+
+    /**
+     * Name of the embedding model used.
+     * E.g., "mxbai-embed-large", "nomic-embed-text"
+     */
+    @Column(length = 100)
+    var embeddingModel: String? = null
 
     @Column(columnDefinition = "text")
     var verbs: String? = null

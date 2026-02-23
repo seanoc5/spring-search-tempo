@@ -42,6 +42,9 @@ dependencies {
 
     runtimeOnly("org.postgresql:postgresql")
 
+    // pgvector support for vector embeddings
+    implementation("com.pgvector:pgvector:0.1.6")
+
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.session:spring-session-jdbc")
     implementation("io.github.wimdeblauwe:error-handling-spring-boot-starter:4.6.0")

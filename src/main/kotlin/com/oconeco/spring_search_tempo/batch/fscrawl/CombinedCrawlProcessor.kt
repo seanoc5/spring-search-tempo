@@ -212,7 +212,7 @@ class CombinedCrawlProcessor(
         for (file in files) {
             val dto = processFile(file, parentFolderStatus)
             if (dto != null) {
-                log.info("\t\t++++ File {} will be persisted", file)
+                log.debug("\t\t++++ File {} will be persisted", file)
                 fileDtos.add(dto)
             } else {
                 log.info("\t\t.... File {} was skipped (maybe already current or skipped by pattern) ", file)
@@ -242,7 +242,7 @@ class CombinedCrawlProcessor(
 
         // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
-            log.info("File does not exist in DB, will process: {}", uri)
+            log.info("\t\tFile does not exist in DB, will process: {}", uri)
         } else {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFile.fsLastModified,
@@ -352,7 +352,7 @@ class CombinedCrawlProcessor(
                 dto.modifiedDate = result.metadata.modifiedDate
                 dto.pageCount = result.metadata.pageCount
 
-                log.info("\t\tExtracted text and metadata from: {} ({} chars)", dto.uri, result.text.length)        // todo -- change to debug
+                log.debug("\t\tExtracted text and metadata from: {} ({} chars)", dto.uri, result.text.length)        // todo -- change to debug
             }
 
             is TextAndMetadataResult.Failure -> {

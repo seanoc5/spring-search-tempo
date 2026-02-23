@@ -48,6 +48,12 @@
                                 </label>
                             </div>
                             <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="chunkProcessAll" id="chunkProcessAll" value="true">
+                                <label class="form-check-label" for="chunkProcessAll" title="Chunk ALL files needing chunking (backfill mode)">
+                                    Chunk all files
+                                </label>
+                            </div>
+                            <div class="form-check">
                                 <input class="form-check-input border-danger" type="checkbox" name="deleteExistingData" id="deleteExistingData" value="true">
                                 <label class="form-check-label text-danger" for="deleteExistingData">
                                     Delete existing data
@@ -164,7 +170,89 @@
 
                         <dt class="col-sm-3">Parallel:</dt>
                         <dd class="col-sm-9">[[${crawlConfig.parallel}]]</dd>
+
+                        <dt class="col-sm-3">Freshness Hours:</dt>
+                        <dd class="col-sm-9">[[${crawlConfig.freshnessHours ?: 'Default (24)'}]]</dd>
                     </dl>
+                </div>
+            </div>
+
+            <!-- Pattern Configuration (Collapsible) -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <a class="text-decoration-none" data-bs-toggle="collapse" href="#patternConfig" role="button" aria-expanded="false" aria-controls="patternConfig">
+                            <i class="bi bi-regex me-2"></i>Pattern Configuration
+                            <i class="bi bi-chevron-down float-end"></i>
+                        </a>
+                    </h5>
+                </div>
+                <div class="collapse" id="patternConfig">
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Folder Patterns -->
+                            <div class="col-lg-6">
+                                <h6 class="text-muted mb-3"><i class="bi bi-folder me-1"></i>Folder Patterns</h6>
+
+                                <div th:if="${crawlConfig.folderPatternsSkip != null}" class="mb-3">
+                                    <strong><span class="badge bg-secondary">SKIP</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsSkip}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.folderPatternsLocate != null}" class="mb-3">
+                                    <strong><span class="badge bg-info">LOCATE</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsLocate}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.folderPatternsIndex != null}" class="mb-3">
+                                    <strong><span class="badge bg-primary">INDEX</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsIndex}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.folderPatternsAnalyze != null}" class="mb-3">
+                                    <strong><span class="badge bg-success">ANALYZE</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsAnalyze}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.folderPatternsSkip == null && crawlConfig.folderPatternsLocate == null && crawlConfig.folderPatternsIndex == null && crawlConfig.folderPatternsAnalyze == null}" class="text-muted">
+                                    <em>No folder patterns configured (using defaults)</em>
+                                </div>
+                            </div>
+
+                            <!-- File Patterns -->
+                            <div class="col-lg-6">
+                                <h6 class="text-muted mb-3"><i class="bi bi-file-earmark me-1"></i>File Patterns</h6>
+
+                                <div th:if="${crawlConfig.filePatternsSkip != null}" class="mb-3">
+                                    <strong><span class="badge bg-secondary">SKIP</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsSkip}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.filePatternsLocate != null}" class="mb-3">
+                                    <strong><span class="badge bg-info">LOCATE</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsLocate}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.filePatternsIndex != null}" class="mb-3">
+                                    <strong><span class="badge bg-primary">INDEX</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsIndex}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.filePatternsAnalyze != null}" class="mb-3">
+                                    <strong><span class="badge bg-success">ANALYZE</span></strong>
+                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsAnalyze}"></code></pre>
+                                </div>
+
+                                <div th:if="${crawlConfig.filePatternsSkip == null && crawlConfig.filePatternsLocate == null && crawlConfig.filePatternsIndex == null && crawlConfig.filePatternsAnalyze == null}" class="text-muted">
+                                    <em>No file patterns configured (using defaults)</em>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-secondary mt-3 mb-0">
+                            <small><i class="bi bi-info-circle me-1"></i>Global default patterns (from application.yml) are merged with these config-specific patterns. SKIP patterns accumulate; other levels follow priority order.</small>
+                        </div>
+                    </div>
                 </div>
             </div>
 

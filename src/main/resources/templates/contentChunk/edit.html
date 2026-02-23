@@ -27,7 +27,8 @@
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='startPosition', type='number')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='text', required=true, type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='tokenAnnotations', type='textarea')}" />
-                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='vectorEmbedding')}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='embeddingModel', disabled=true)}" />
+                <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='embeddingGeneratedAt', disabled=true)}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='verbs', type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='solrIndexedAt')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='contentChunks', field='textLength', type='number')}" />

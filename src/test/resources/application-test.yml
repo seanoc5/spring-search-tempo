@@ -1,4 +1,7 @@
 spring:
+  sql:
+    init:
+      mode: always  # Run schema.sql to enable pgvector extension
   jpa:
     hibernate:
       ddl-auto: update  # Auto-update schema for tests
@@ -9,6 +12,121 @@ spring:
   session:
     jdbc:
       initialize-schema: always  # Create session tables for tests
-  datasource:
-    url: jdbc:tc:postgresql:18.0:///testdb
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  # Note: Datasource is provided by @ServiceConnection container in TestContainersConfig
+
+# Test crawl configurations (mimics production configs for integration tests)
+app:
+  crawl:
+    crawls:
+      - name: "USER_DOCUMENTS"
+        label: "User Documents"
+        enabled: true
+        start-paths:
+          - "${user.home}/Documents"
+        max-depth: 20
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          analyze:
+            - ".*\\.(md|txt|org|rst|adoc)$"
+            - ".*/README.*$"
+            - ".*/CHANGELOG.*$"
+          index:
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+
+      - name: "USER_PICTURES"
+        label: "User Pictures"
+        enabled: true
+        start-paths:
+          - "${user.home}/Pictures"
+        max-depth: 15
+        folder-patterns:
+          skip:
+            - ".*/\\.thumbnails/.*"
+            - ".*/cache/.*"
+            - ".*/\\.cache/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          locate:
+            - ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|heif|tiff|tif|raw|cr2|nef|arw|dng)$"
+            - ".*\\.(ico)$"
+          index:
+            - ".*\\.(xmp|thm|nfo)$"
+
+      - name: "WORK"
+        label: "Work Projects"
+        enabled: true
+        start-paths:
+          - "/opt/work"
+        max-depth: 12
+        parallel: true
+        folder-patterns:
+          index:
+            - ".*"
+        file-patterns:
+          index:
+            - ".*\\.(kt|kts|java|scala)$"
+            - ".*\\.(py|pyi)$"
+            - ".*\\.(js|ts|jsx|tsx|mjs|cjs|vue|svelte)$"
+            - ".*\\.(go)$"
+            - ".*\\.(rs)$"
+            - ".*\\.(c|h|cpp|hpp|cc|cxx|hxx)$"
+            - ".*\\.(rb|rake)$"
+            - ".*\\.(php)$"
+            - ".*\\.(sh|bash|zsh|fish)$"
+            - ".*\\.(cs|fs|vb)$"
+            - ".*\\.(swift|m|mm)$"
+            - ".*\\.(lua|r|R|sql|pl|perl)$"
+            - ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+            - ".*\\.env\\.example$"
+            - ".*/Dockerfile.*$"
+            - ".*/docker-compose.*\\.ya?ml$"
+            - ".*/(Makefile|Rakefile|Gemfile|CMakeLists\\.txt)$"
+            - ".*/(package\\.json|composer\\.json|requirements\\.txt|Pipfile)$"
+            - ".*/(build\\.gradle.*|settings\\.gradle.*|pom\\.xml)$"
+            - ".*/(Cargo\\.toml|Cargo\\.lock|go\\.mod|go\\.sum)$"
+            - ".*\\.(md|rst|adoc|txt)$"
+          analyze:
+            - ".*/README.*$"
+            - ".*/CONTRIBUTING.*$"
+            - ".*/CHANGELOG.*$"
+            - ".*/LICENSE.*$"
+            - ".*/AUTHORS.*$"
+            - ".*/NOTICE.*$"
+            - ".*/TODO.*$"
+            - ".*\\.(md|txt|adoc)$"
+
+      - name: "SYSTEM_CONFIG"
+        label: "System Configuration (/etc)"
+        enabled: true
+        start-paths:
+          - "/etc"
+        max-depth: 5
+        folder-patterns:
+          skip:
+            - ".*/ssl/.*"
+            - ".*/pki/.*"
+            - ".*/ssh/.*"
+            - ".*/openvpn/.*"
+          locate:
+            - ".*"
+        file-patterns:
+          skip:
+            - ".*/shadow$"
+            - ".*/shadow-$"
+            - ".*/passwd-$"
+            - ".*/gshadow.*$"
+            - ".*\\.key$"
+            - ".*\\.pem$"
+            - ".*\\.crt$"
+            - ".*\\.pub$"
+          index:
+            - ".*\\.conf$"
+            - ".*\\.cfg$"
+            - ".*\\.config$"
+            - ".*\\.ini$"

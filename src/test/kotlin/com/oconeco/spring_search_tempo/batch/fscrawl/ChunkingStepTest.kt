@@ -16,6 +16,9 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
+import com.oconeco.spring_search_tempo.base.config.TestContainersConfig
+import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 import org.springframework.transaction.PlatformTransactionManager
 
@@ -39,10 +42,13 @@ import org.springframework.transaction.PlatformTransactionManager
         "spring.batch.job.enabled=false", // Disable auto-run
         "spring.batch.jdbc.initialize-schema=always", // Initialize Spring Batch schema
         "spring.jpa.hibernate.ddl-auto=update", // Allow schema updates for test
-        "spring.main.allow-bean-definition-overriding=true"
+        "spring.main.allow-bean-definition-overriding=true",
+        "spring.sql.init.mode=always"  // Enable pgvector extension
     ]
 )
 @SpringBatchTest
+@ActiveProfiles("test")
+@Import(TestContainersConfig::class)
 class ChunkingStepTest {
 
     @Autowired

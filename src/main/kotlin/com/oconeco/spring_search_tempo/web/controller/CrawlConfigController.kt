@@ -1,5 +1,7 @@
 package com.oconeco.spring_search_tempo.web.controller
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
@@ -37,7 +39,8 @@ class CrawlConfigController(
     private val folderService: FSFolderService,
     private val jobLauncher: JobLauncher,
     private val jobBuilder: FsCrawlJobBuilder,
-    private val configConverter: CrawlConfigConverter
+    private val configConverter: CrawlConfigConverter,
+    private val objectMapper: ObjectMapper
 ) {
 
     @GetMapping
@@ -110,6 +113,17 @@ class CrawlConfigController(
         val startPathsText = crawlConfig.startPaths?.joinToString("\n") ?: ""
         model.addAttribute("crawlConfig", crawlConfig)
         model.addAttribute("startPathsText", startPathsText)
+
+        // Convert JSON pattern arrays to newline-separated text for textareas
+        model.addAttribute("folderPatternsSkipText", jsonToText(crawlConfig.folderPatternsSkip))
+        model.addAttribute("folderPatternsLocateText", jsonToText(crawlConfig.folderPatternsLocate))
+        model.addAttribute("folderPatternsIndexText", jsonToText(crawlConfig.folderPatternsIndex))
+        model.addAttribute("folderPatternsAnalyzeText", jsonToText(crawlConfig.folderPatternsAnalyze))
+        model.addAttribute("filePatternsSkipText", jsonToText(crawlConfig.filePatternsSkip))
+        model.addAttribute("filePatternsLocateText", jsonToText(crawlConfig.filePatternsLocate))
+        model.addAttribute("filePatternsIndexText", jsonToText(crawlConfig.filePatternsIndex))
+        model.addAttribute("filePatternsAnalyzeText", jsonToText(crawlConfig.filePatternsAnalyze))
+
         return "crawlConfig/edit"
     }
 
@@ -118,6 +132,14 @@ class CrawlConfigController(
         @PathVariable(name = "id") id: Long,
         @ModelAttribute("crawlConfig") @Valid crawlConfigDTO: CrawlConfigDTO,
         @RequestParam(name = "startPathsText", required = false) startPathsText: String?,
+        @RequestParam(name = "folderPatternsSkipText", required = false) folderPatternsSkipText: String?,
+        @RequestParam(name = "folderPatternsLocateText", required = false) folderPatternsLocateText: String?,
+        @RequestParam(name = "folderPatternsIndexText", required = false) folderPatternsIndexText: String?,
+        @RequestParam(name = "folderPatternsAnalyzeText", required = false) folderPatternsAnalyzeText: String?,
+        @RequestParam(name = "filePatternsSkipText", required = false) filePatternsSkipText: String?,
+        @RequestParam(name = "filePatternsLocateText", required = false) filePatternsLocateText: String?,
+        @RequestParam(name = "filePatternsIndexText", required = false) filePatternsIndexText: String?,
+        @RequestParam(name = "filePatternsAnalyzeText", required = false) filePatternsAnalyzeText: String?,
         bindingResult: BindingResult,
         model: Model,
         redirectAttributes: RedirectAttributes
@@ -129,8 +151,26 @@ class CrawlConfigController(
             ?.filter { it.isNotBlank() }
             ?: emptyList()
 
+        // Convert pattern text areas to JSON arrays
+        crawlConfigDTO.folderPatternsSkip = textToJson(folderPatternsSkipText)
+        crawlConfigDTO.folderPatternsLocate = textToJson(folderPatternsLocateText)
+        crawlConfigDTO.folderPatternsIndex = textToJson(folderPatternsIndexText)
+        crawlConfigDTO.folderPatternsAnalyze = textToJson(folderPatternsAnalyzeText)
+        crawlConfigDTO.filePatternsSkip = textToJson(filePatternsSkipText)
+        crawlConfigDTO.filePatternsLocate = textToJson(filePatternsLocateText)
+        crawlConfigDTO.filePatternsIndex = textToJson(filePatternsIndexText)
+        crawlConfigDTO.filePatternsAnalyze = textToJson(filePatternsAnalyzeText)
+
         if (bindingResult.hasErrors()) {
             model.addAttribute("startPathsText", startPathsText)
+            model.addAttribute("folderPatternsSkipText", folderPatternsSkipText)
+            model.addAttribute("folderPatternsLocateText", folderPatternsLocateText)
+            model.addAttribute("folderPatternsIndexText", folderPatternsIndexText)
+            model.addAttribute("folderPatternsAnalyzeText", folderPatternsAnalyzeText)
+            model.addAttribute("filePatternsSkipText", filePatternsSkipText)
+            model.addAttribute("filePatternsLocateText", filePatternsLocateText)
+            model.addAttribute("filePatternsIndexText", filePatternsIndexText)
+            model.addAttribute("filePatternsAnalyzeText", filePatternsAnalyzeText)
             return "crawlConfig/edit"
         }
 
@@ -151,6 +191,7 @@ class CrawlConfigController(
         @PathVariable(name = "id") id: Long,
         @RequestParam(name = "forceFullRecrawl", required = false, defaultValue = "false") forceFullRecrawl: Boolean,
         @RequestParam(name = "deleteExistingData", required = false, defaultValue = "false") deleteExistingData: Boolean,
+        @RequestParam(name = "chunkProcessAll", required = false, defaultValue = "false") chunkProcessAll: Boolean,
         redirectAttributes: RedirectAttributes
     ): String {
         val crawlConfig = crawlConfigService.get(id)
@@ -165,7 +206,8 @@ class CrawlConfigController(
                 crawl = crawlDefinition,
                 forceFullRecrawl = forceFullRecrawl,
                 crawlConfigId = id,
-                freshnessHours = crawlConfig.freshnessHours
+                freshnessHours = crawlConfig.freshnessHours,
+                chunkProcessAll = chunkProcessAll
             )
 
             // Create job parameters with crawl config ID and timestamp for uniqueness
@@ -181,6 +223,7 @@ class CrawlConfigController(
             val options = mutableListOf<String>()
             if (forceFullRecrawl) options.add("force full recrawl")
             if (deleteExistingData) options.add("delete existing data")
+            if (chunkProcessAll) options.add("chunk all files")
             val optionsText = if (options.isNotEmpty()) " (${options.joinToString(", ")})" else ""
 
             redirectAttributes.addFlashAttribute("message",
@@ -343,6 +386,33 @@ class CrawlConfigController(
         }
 
         return "redirect:/crawlConfigs"
+    }
+
+    /**
+     * Convert a JSON array string to newline-separated text for textarea display.
+     */
+    private fun jsonToText(json: String?): String {
+        if (json.isNullOrBlank()) return ""
+        return try {
+            val patterns: List<String> = objectMapper.readValue(json, object : TypeReference<List<String>>() {})
+            patterns.joinToString("\n")
+        } catch (e: Exception) {
+            // If JSON parsing fails, return as-is (might be raw text)
+            json
+        }
+    }
+
+    /**
+     * Convert newline-separated text from textarea to JSON array string.
+     */
+    private fun textToJson(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        val patterns = text
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        if (patterns.isEmpty()) return null
+        return objectMapper.writeValueAsString(patterns)
     }
 
 }

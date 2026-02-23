@@ -1,4 +1,7 @@
 spring:
+  sql:
+    init:
+      mode: always  # Run schema.sql to enable pgvector extension
   jpa:
     hibernate:
       ddl-auto: create-drop  # Auto-create schema for tests

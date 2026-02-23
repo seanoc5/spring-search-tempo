@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.base.service
 import org.apache.tika.Tika
 import org.apache.tika.exception.TikaException
 import org.apache.tika.exception.WriteLimitReachedException
+import org.apache.tika.exception.ZeroByteFileException
 import org.apache.tika.metadata.Metadata
 import org.apache.tika.metadata.TikaCoreProperties
 import org.apache.tika.metadata.DublinCore
@@ -54,6 +55,10 @@ class TextExtractionService {
         return try {
             // Check file size before attempting extraction
             val fileSize = path.fileSize()
+            if (fileSize == 0L) {
+                logger.debug("Skipping empty file (0 bytes): {}", path)
+                return TextExtractionResult.Success("")
+            }
             if (fileSize > maxSize) {
                 logger.warn("File {} exceeds max size ({} > {}), skipping text extraction",
                     path, fileSize, maxSize)
@@ -72,6 +77,11 @@ class TextExtractionService {
 
             logger.debug("Successfully extracted {} characters from: {}", sanitized.length, path)
             TextExtractionResult.Success(sanitized)
+
+        } catch (e: ZeroByteFileException) {
+            // Empty file - not an error, just no content to extract
+            logger.debug("Empty file (0 bytes): {}", path)
+            TextExtractionResult.Success("")
 
         } catch (e: TikaException) {
             logger.warn("Tika failed to parse file: {}", path, e)
@@ -134,6 +144,10 @@ class TextExtractionService {
         return try {
             // Check file size before attempting extraction
             val fileSize = path.fileSize()
+            if (fileSize == 0L) {
+                logger.debug("Skipping empty file (0 bytes): {}", path)
+                return TextAndMetadataResult.Success("", FileMetadata())
+            }
             if (fileSize > maxSize) {
                 logger.warn("File {} exceeds max size ({} > {}), skipping extraction",
                     path, fileSize, maxSize)
@@ -203,6 +217,11 @@ class TextExtractionService {
                 sanitizedText.length, path)
 
             TextAndMetadataResult.Success(sanitizedText, extractedMetadata)
+
+        } catch (e: ZeroByteFileException) {
+            // Empty file - not an error, just no content to extract
+            logger.debug("Empty file (0 bytes): {}", path)
+            TextAndMetadataResult.Success("", FileMetadata())
 
         } catch (e: TikaException) {
             logger.warn("Tika failed to parse file: {}", path, e)

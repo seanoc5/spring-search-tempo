@@ -50,10 +50,9 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
               OR
               (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :analysisStatuses)
           )
-        ORDER BY c.id ASC
     """)
     fun findChunksForNlpProcessing(
-        analysisStatuses: List<AnalysisStatus>,
+        @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>,
         pageable: Pageable
     ): Page<ContentChunk>
 

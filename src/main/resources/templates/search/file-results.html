@@ -1,147 +1,163 @@
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Search - Spring Search Tempo</title>
-    <link rel="stylesheet" th:href="@{/css/main.css}">
-</head>
-<body>
-<div class="container">
-    <header>
-        <h1>File Search</h1>
-        <nav>
-            <a th:href="@{/}">Home</a> |
-            <a th:href="@{/search}">Search All</a> |
-            <a th:href="@{/search/files}" class="active">Files</a> |
-            <a th:href="@{/search/chunks}">Chunks</a>
-        </nav>
-    </header>
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>File Search</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/search}">Search</a></li>
+                    <li class="breadcrumb-item active">Files</li>
+                </ol>
+            </nav>
 
-    <main>
-        <div class="search-box">
-            <form th:action="@{/search/files}" method="get">
-                <input type="text"
-                       name="q"
-                       th:value="${query}"
-                       placeholder="Search files..."
-                       class="search-input"
-                       autofocus
-                       required>
-                <button type="submit" class="btn-primary">Search Files</button>
-            </form>
-            <p class="search-help">
-                <small>
-                    Searching in file metadata and content only
-                </small>
-            </p>
-        </div>
-
-        <div th:if="${error}" class="alert alert-error">
-            <p th:text="${error}">Error message</p>
-        </div>
-
-        <div th:if="${hasResults}">
-            <div class="results-summary">
-                <p>
-                    Found <strong th:text="${totalResults}">0</strong> files
-                    <span th:if="${results.totalPages > 1}">
-                        (Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>)
-                    </span>
-                </p>
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1"><i class="bi bi-file-earmark-text me-2"></i>File Search</h1>
             </div>
 
-            <div class="search-results">
-                <div th:each="result : ${results.content}" class="search-result file-result">
-                    <div class="result-header">
-                        <h3 class="result-title">
-                            <a th:href="@{|/fsFile/${result.id}|}" th:text="${result.label}">
-                                File name
-                            </a>
-                        </h3>
-                        <span class="result-rank" th:text="${#numbers.formatDecimal(result.rank, 1, 4)}">0.5000</span>
-                    </div>
+            <!-- Search Tabs -->
+            <ul class="nav nav-tabs mb-4">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search(q=${query})}">
+                        <i class="bi bi-collection me-1"></i>All
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" th:href="@{/search/files(q=${query})}">
+                        <i class="bi bi-file-earmark me-1"></i>Files
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/chunks(q=${query})}">
+                        <i class="bi bi-text-paragraph me-1"></i>Chunks
+                    </a>
+                </li>
+            </ul>
 
-                    <div class="file-metadata">
-                        <span th:if="${result.contentType}" class="metadata-item">
-                            <strong>Type:</strong> <span th:text="${result.contentType}">text/plain</span>
-                        </span>
-                        <span th:if="${result.author}" class="metadata-item">
-                            <strong>Author:</strong> <span th:text="${result.author}">Author name</span>
-                        </span>
-                        <span th:if="${result.title}" class="metadata-item">
-                            <strong>Title:</strong> <span th:text="${result.title}">Document title</span>
-                        </span>
+            <!-- Search Box -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form th:action="@{/search/files}" method="get" class="row g-3">
+                        <div class="col-md-10">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text"
+                                       name="q"
+                                       th:value="${query}"
+                                       placeholder="Search files..."
+                                       class="form-control form-control-lg"
+                                       autofocus>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
+                        </div>
+                    </form>
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Searching in file metadata and content only
                     </div>
+                </div>
+            </div>
 
-                    <p class="result-uri" th:text="${result.uri}">file:///path/to/file</p>
-                    <p class="result-snippet" th:utext="${result.snippet}">
-                        Highlighted snippet with <b>matching</b> terms...
+            <!-- Error Alert -->
+            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>[[${error}]]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <!-- Results -->
+            <div th:if="${hasResults}">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">
+                        Found <strong th:text="${totalResults}">0</strong> files
+                        <span th:if="${results.totalPages > 1}">
+                            (Page [[${results.number + 1}]] of [[${results.totalPages}]])
+                        </span>
+                    </span>
+                </div>
+
+                <div class="list-group mb-4">
+                    <div th:each="result : ${results.content}" class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">
+                                    <a th:href="@{|/fSFile/${result.id}|}"
+                                       th:text="${result.label}" class="text-decoration-none">
+                                        File name
+                                    </a>
+                                </h5>
+                                <!-- File Metadata -->
+                                <div class="mb-2">
+                                    <span th:if="${result.contentType}" class="badge bg-light text-dark me-2">
+                                        <i class="bi bi-file-earmark me-1"></i>[[${result.contentType}]]
+                                    </span>
+                                    <span th:if="${result.author}" class="badge bg-light text-dark me-2">
+                                        <i class="bi bi-person me-1"></i>[[${result.author}]]
+                                    </span>
+                                    <span th:if="${result.title}" class="badge bg-light text-dark">
+                                        <i class="bi bi-bookmark me-1"></i>[[${result.title}]]
+                                    </span>
+                                </div>
+                                <p class="mb-1 text-muted small text-break" th:text="${result.uri}">file:///path/to/file</p>
+                                <p class="mb-1" th:utext="${result.snippet}">
+                                    Highlighted snippet with <b>matching</b> terms...
+                                </p>
+                            </div>
+                            <div class="ms-3 text-end">
+                                <span class="badge bg-warning text-dark" th:text="${#numbers.formatDecimal(result.rank, 1, 3)}">0.500</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
+                    <a th:if="${results.hasPrevious()}"
+                       th:href="@{/search/files(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-chevron-left me-1"></i>Previous
+                    </a>
+                    <span th:unless="${results.hasPrevious()}"></span>
+                    <span class="text-muted">
+                        Page [[${results.number + 1}]] of [[${results.totalPages}]]
+                    </span>
+                    <a th:if="${results.hasNext()}"
+                       th:href="@{/search/files(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                       class="btn btn-outline-secondary">
+                        Next<i class="bi bi-chevron-right ms-1"></i>
+                    </a>
+                    <span th:unless="${results.hasNext()}"></span>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div th:if="${query != null && query != '' && !hasResults && error == null}">
+                <div class="alert alert-warning">
+                    <i class="bi bi-search me-2"></i>
+                    No files found for "<strong th:text="${query}">query</strong>"
+                    <p class="mb-0 mt-2">
+                        Try different keywords or search in
+                        <a th:href="@{/search/chunks(q=${query})}">content chunks</a>.
                     </p>
                 </div>
             </div>
 
-            <!-- Pagination -->
-            <div th:if="${results.totalPages > 1}" class="pagination">
-                <a th:if="${results.hasPrevious()}"
-                   th:href="@{/search/files(q=${query}, page=${results.number - 1}, size=${results.size})}"
-                   class="btn-secondary">
-                    &laquo; Previous
-                </a>
-                <span class="page-info">
-                    Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>
-                </span>
-                <a th:if="${results.hasNext()}"
-                   th:href="@{/search/files(q=${query}, page=${results.number + 1}, size=${results.size})}"
-                   class="btn-secondary">
-                    Next &raquo;
-                </a>
+            <!-- Welcome / Help -->
+            <div th:if="${query == null || query == ''}">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>File Search</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Search across all indexed files including their metadata and content.</p>
+                        <p>Results include file-specific information like author, title, and content type.</p>
+                    </div>
+                </div>
             </div>
         </div>
-
-        <div th:if="${query != null && query != '' && !hasResults && error == null}">
-            <div class="no-results">
-                <p>No files found for "<strong th:text="${query}">query</strong>"</p>
-                <p>Try different keywords or search in <a th:href="@{/search/chunks(q=${query})}">content chunks</a>.</p>
-            </div>
-        </div>
-
-        <div th:if="${query == null || query == ''}">
-            <div class="search-intro">
-                <h2>File Search</h2>
-                <p>Search across all indexed files including their metadata and content.</p>
-                <p>Results include file-specific information like author, title, and content type.</p>
-            </div>
-        </div>
-    </main>
-
-    <footer>
-        <p>&copy; 2025 Spring Search Tempo</p>
-    </footer>
-</div>
-
-<style>
-    .active {
-        font-weight: bold;
-        color: #4CAF50;
-    }
-
-    .file-metadata {
-        margin: 0.5rem 0;
-        padding: 0.5rem;
-        background: #f5f5f5;
-        border-radius: 4px;
-        font-size: 0.875rem;
-    }
-
-    .metadata-item {
-        display: inline-block;
-        margin-right: 1rem;
-    }
-
-    .file-result {
-        border-left: 4px solid #2196F3;
-    }
-</style>
-</body>
+    </body>
 </html>

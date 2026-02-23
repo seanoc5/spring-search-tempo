@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional
 interface FullTextSearchService {
 
     /**
-     * Search across both fs_file and content_chunks tables.
+     * Search across both fsfile and content_chunks tables.
      *
      * @param query Search query (supports & for AND, | for OR, ! for NOT, phrase:"exact phrase")
      * @param pageable Pagination and sorting parameters
@@ -29,7 +29,7 @@ interface FullTextSearchService {
     fun searchAll(query: String, pageable: Pageable): Page<SearchResult>
 
     /**
-     * Search only in fs_file table.
+     * Search only in fsfile table.
      *
      * @param query Search query
      * @param pageable Pagination and sorting parameters
@@ -114,11 +114,11 @@ class FullTextSearchServiceImpl(
 
         log.debug("Searching all content for: {} (sanitized: {})", query, sanitizedQuery)
 
-        // Combined search across fs_file and content_chunks
+        // Combined search across fsfile and content_chunks
         val sql = """
-            -- Search in fs_file
+            -- Search in fsfile
             SELECT
-                'fs_file' as source_table,
+                'fsfile' as source_table,
                 f.id,
                 f.uri,
                 f.label,
@@ -126,7 +126,7 @@ class FullTextSearchServiceImpl(
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
                 ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank
-            FROM fs_file f
+            FROM fsfile f
             WHERE f.fts_vector @@ to_tsquery('english', :query)
 
             UNION ALL
@@ -142,7 +142,7 @@ class FullTextSearchServiceImpl(
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
                 ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank
             FROM content_chunks c
-            LEFT JOIN fs_file f ON c.concept_id = f.id
+            LEFT JOIN fsfile f ON c.concept_id = f.id
             WHERE c.fts_vector @@ to_tsquery('english', :query)
 
             ORDER BY rank DESC
@@ -151,7 +151,7 @@ class FullTextSearchServiceImpl(
 
         val countSql = """
             SELECT COUNT(*) FROM (
-                SELECT 1 FROM fs_file WHERE fts_vector @@ to_tsquery('english', :query)
+                SELECT 1 FROM fsfile WHERE fts_vector @@ to_tsquery('english', :query)
                 UNION ALL
                 SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)
             ) combined
@@ -205,14 +205,14 @@ class FullTextSearchServiceImpl(
                 f.author,
                 f.title,
                 f.content_type
-            FROM fs_file f
+            FROM fsfile f
             WHERE f.fts_vector @@ to_tsquery('english', :query)
             ORDER BY rank DESC
             LIMIT :limit OFFSET :offset
         """.trimIndent()
 
         val countSql = """
-            SELECT COUNT(*) FROM fs_file
+            SELECT COUNT(*) FROM fsfile
             WHERE fts_vector @@ to_tsquery('english', :query)
         """.trimIndent()
 
@@ -275,7 +275,7 @@ class FullTextSearchServiceImpl(
                 c.sentiment_score,
                 c.named_entities
             FROM content_chunks c
-            LEFT JOIN fs_file f ON c.concept_id = f.id
+            LEFT JOIN fsfile f ON c.concept_id = f.id
             WHERE c.fts_vector @@ to_tsquery('english', :query)
             $sentimentCondition
             ORDER BY rank DESC

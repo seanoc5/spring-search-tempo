@@ -12,22 +12,27 @@ import org.springframework.data.domain.Sort
 /**
  * ItemReader that reads FSFileDTO entities needing chunking.
  *
- * Only reads files where:
+ * By default (processAll=false), only reads files where:
  * - They belong to the current job run (scoped to this crawl)
  * - bodyText is not null, AND
  * - chunkedAt is null (never chunked) OR lastUpdated > chunkedAt (modified since chunking)
  *
- * This prevents re-processing already-chunked files and scopes chunking to files
- * from the current crawl job only.
+ * When processAll=true, reads ALL files needing chunking regardless of job run.
+ * This is useful for:
+ * - Backfilling chunks for files indexed before chunking was integrated
+ * - Recovery after failed chunking steps
+ * - One-time catchup processing
  *
  * Implements StepExecutionListener to get the jobRunId from the step execution context.
  *
  * @param fileService Service for accessing FSFile entities
  * @param pageSize Number of files to load per page (default 50)
+ * @param processAll When true, process ALL files needing chunking regardless of job run
  */
 class ChunkReader(
     private val fileService: FSFileService,
-    private val pageSize: Int = 50
+    private val pageSize: Int = 50,
+    private val processAll: Boolean = false
 ) : ItemReader<FSFileDTO>, StepExecutionListener {
 
     companion object {
@@ -48,7 +53,11 @@ class ChunkReader(
             .getLong(JobRunTrackingListener.JOB_RUN_ID_KEY, -1L)
             .takeIf { it > 0 }
 
-        log.info("ChunkReader initialized with jobRunId: {}", jobRunId)
+        if (processAll) {
+            log.info("ChunkReader initialized in processAll mode - will chunk ALL files needing chunking")
+        } else {
+            log.info("ChunkReader initialized with jobRunId: {}", jobRunId)
+        }
     }
 
     override fun read(): FSFileDTO? {
@@ -79,26 +88,37 @@ class ChunkReader(
     }
 
     private fun initialize() {
-        log.info("Initializing ChunkReader...")
+        log.info("Initializing ChunkReader (processAll={})...", processAll)
 
-        if (jobRunId == null) {
-            log.warn("No jobRunId available - chunking will be skipped. This may happen if the crawl step failed.")
-            totalFiles = 0
-            initialized = true
-            return
-        }
+        val pageable = PageRequest.of(0, pageSize, Sort.by("id"))
 
-        // Get first page to determine total count - only files from this job run needing chunking
-        val firstPage = fileService.findFilesNeedingChunkingByJobRunId(
-            jobRunId!!,
-            PageRequest.of(0, pageSize, Sort.by("id"))
-        )
-        totalFiles = firstPage.totalElements
+        if (processAll) {
+            // Process ALL files needing chunking, regardless of job run
+            val firstPage = fileService.findFilesNeedingChunking(pageable)
+            totalFiles = firstPage.totalElements
 
-        if (totalFiles == 0L) {
-            log.info("No files need chunking for job run {} (all files are up-to-date or have no text)", jobRunId)
+            if (totalFiles == 0L) {
+                log.info("No files need chunking globally (all files are up-to-date or have no text)")
+            } else {
+                log.info("Found {} files needing chunking globally (processAll mode)", totalFiles)
+            }
         } else {
-            log.info("Found {} files needing chunking for job run {} (new or modified since last chunking)", totalFiles, jobRunId)
+            // Scoped to current job run
+            if (jobRunId == null) {
+                log.warn("No jobRunId available - chunking will be skipped. This may happen if the crawl step failed.")
+                totalFiles = 0
+                initialized = true
+                return
+            }
+
+            val firstPage = fileService.findFilesNeedingChunkingByJobRunId(jobRunId!!, pageable)
+            totalFiles = firstPage.totalElements
+
+            if (totalFiles == 0L) {
+                log.info("No files need chunking for job run {} (all files are up-to-date or have no text)", jobRunId)
+            } else {
+                log.info("Found {} files needing chunking for job run {} (new or modified since last chunking)", totalFiles, jobRunId)
+            }
         }
 
         initialized = true
@@ -106,17 +126,19 @@ class ChunkReader(
     }
 
     private fun loadNextPage() {
-        if (jobRunId == null) {
+        if (!processAll && jobRunId == null) {
             currentPageData = emptyList()
             return
         }
 
         log.debug("Loading page {} with page size {}", currentPage, pageSize)
 
-        val page = fileService.findFilesNeedingChunkingByJobRunId(
-            jobRunId!!,
-            PageRequest.of(currentPage, pageSize, Sort.by("id"))
-        )
+        val pageable = PageRequest.of(currentPage, pageSize, Sort.by("id"))
+        val page = if (processAll) {
+            fileService.findFilesNeedingChunking(pageable)
+        } else {
+            fileService.findFilesNeedingChunkingByJobRunId(jobRunId!!, pageable)
+        }
 
         currentPageData = page.content
         currentIndex = 0

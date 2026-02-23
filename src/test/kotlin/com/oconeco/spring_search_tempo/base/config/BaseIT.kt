@@ -46,7 +46,7 @@ abstract class BaseIT {
     companion object {
 
         @ServiceConnection
-        val postgreSQLContainer = PostgreSQLContainer("postgres:18.0")
+        val postgreSQLContainer = PostgreSQLContainer("pgvector/pgvector:pg17")
 
         const val LOGIN = "login"
 

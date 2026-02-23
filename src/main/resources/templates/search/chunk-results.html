@@ -1,156 +1,190 @@
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chunk Search - Spring Search Tempo</title>
-    <link rel="stylesheet" th:href="@{/css/main.css}">
-</head>
-<body>
-<div class="container">
-    <header>
-        <h1>Content Chunk Search</h1>
-        <nav>
-            <a th:href="@{/}">Home</a> |
-            <a th:href="@{/search}">Search All</a> |
-            <a th:href="@{/search/files}">Files</a> |
-            <a th:href="@{/search/chunks}" class="active">Chunks</a>
-        </nav>
-    </header>
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Chunk Search</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/search}">Search</a></li>
+                    <li class="breadcrumb-item active">Chunks</li>
+                </ol>
+            </nav>
 
-    <main>
-        <div class="search-box">
-            <form th:href="@{/search/chunks}" method="get">
-                <input type="text"
-                       name="q"
-                       th:value="${query}"
-                       placeholder="Search content chunks..."
-                       class="search-input"
-                       autofocus
-                       required>
-                <button type="submit" class="btn-primary">Search Chunks</button>
-            </form>
-            <p class="search-help">
-                <small>
-                    Searching at sentence/paragraph level for precise matches
-                </small>
-            </p>
-        </div>
-
-        <div th:if="${error}" class="alert alert-error">
-            <p th:text="${error}">Error message</p>
-        </div>
-
-        <div th:if="${hasResults}">
-            <div class="results-summary">
-                <p>
-                    Found <strong th:text="${totalResults}">0</strong> content chunks
-                    <span th:if="${results.totalPages > 1}">
-                        (Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>)
-                    </span>
-                </p>
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1"><i class="bi bi-text-paragraph me-2"></i>Content Chunk Search</h1>
             </div>
 
-            <div class="search-results">
-                <div th:each="result : ${results.content}" class="search-result chunk-result">
-                    <div class="result-header">
-                        <h3 class="result-title">
-                            <a th:href="@{|/contentChunks/${result.id}|}" th:text="${result.fileLabel ?: 'Chunk #' + result.chunkNumber}">
-                                Chunk title
-                            </a>
-                        </h3>
-                        <span class="result-rank" th:text="${#numbers.formatDecimal(result.rank, 1, 4)}">0.5000</span>
-                    </div>
+            <!-- Search Tabs -->
+            <ul class="nav nav-tabs mb-4">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search(q=${query})}">
+                        <i class="bi bi-collection me-1"></i>All
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/files(q=${query})}">
+                        <i class="bi bi-file-earmark me-1"></i>Files
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" th:href="@{/search/chunks(q=${query})}">
+                        <i class="bi bi-text-paragraph me-1"></i>Chunks
+                    </a>
+                </li>
+            </ul>
 
-                    <div class="chunk-metadata">
-                        <span class="metadata-item">
-                            <strong>Chunk:</strong> #<span th:text="${result.chunkNumber}">1</span>
-                        </span>
-                        <span th:if="${result.chunkType}" class="metadata-item">
-                            <strong>Type:</strong> <span th:text="${result.chunkType}">Sentence</span>
-                        </span>
-                        <span th:if="${result.fileLabel}" class="metadata-item">
-                            <strong>File:</strong>
-                            <a th:href="@{|/fsFile/${result.fileUri}|}" th:text="${result.fileLabel}">
-                                file.txt
-                            </a>
-                        </span>
+            <!-- Search Box -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form th:action="@{/search/chunks}" method="get" class="row g-3">
+                        <div class="col-md-10">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text"
+                                       name="q"
+                                       th:value="${query}"
+                                       placeholder="Search content chunks..."
+                                       class="form-control form-control-lg"
+                                       autofocus>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
+                        </div>
+                    </form>
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Searching at sentence/paragraph level for precise matches
                     </div>
+                </div>
+            </div>
 
-                    <p th:if="${result.fileUri}" class="result-uri" th:text="${result.fileUri}">file:///path/to/file</p>
-                    <p class="result-snippet" th:utext="${result.snippet}">
-                        Highlighted snippet with <b>matching</b> terms...
+            <!-- Error Alert -->
+            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>[[${error}]]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <!-- Results -->
+            <div th:if="${hasResults}">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">
+                        Found <strong th:text="${totalResults}">0</strong> content chunks
+                        <span th:if="${results.totalPages > 1}">
+                            (Page [[${results.number + 1}]] of [[${results.totalPages}]])
+                        </span>
+                    </span>
+                </div>
+
+                <div class="list-group mb-4">
+                    <div th:each="result : ${results.content}" class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">
+                                    <a th:href="@{|/contentChunks/${result.id}|}"
+                                       th:text="${result.fileLabel ?: 'Chunk #' + result.chunkNumber}" class="text-decoration-none">
+                                        Chunk title
+                                    </a>
+                                </h5>
+                                <!-- Chunk Metadata -->
+                                <div class="mb-2">
+                                    <span class="badge bg-secondary me-2">
+                                        <i class="bi bi-hash me-1"></i>Chunk [[${result.chunkNumber}]]
+                                    </span>
+                                    <span th:if="${result.chunkType}" class="badge bg-light text-dark me-2">
+                                        [[${result.chunkType}]]
+                                    </span>
+                                    <span th:if="${result.sentiment}" class="badge me-2"
+                                          th:classappend="${result.sentiment == 'POSITIVE' ? 'bg-success' : (result.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                                        <i class="bi bi-emoji-smile me-1" th:if="${result.sentiment == 'POSITIVE'}"></i>
+                                        <i class="bi bi-emoji-frown me-1" th:if="${result.sentiment == 'NEGATIVE'}"></i>
+                                        <i class="bi bi-emoji-neutral me-1" th:if="${result.sentiment == 'NEUTRAL'}"></i>
+                                        [[${result.sentiment}]]
+                                    </span>
+                                </div>
+                                <p th:if="${result.fileUri}" class="mb-1 text-muted small text-break" th:text="${result.fileUri}">file:///path/to/file</p>
+                                <p class="mb-1" th:utext="${result.snippet}">
+                                    Highlighted snippet with <b>matching</b> terms...
+                                </p>
+                                <!-- Named Entities (if present) -->
+                                <div th:if="${result.namedEntities != null && result.namedEntities != ''}" class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-tags me-1"></i>Named Entities:
+                                        <span th:text="${result.namedEntities}">entities</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="ms-3 text-end">
+                                <span class="badge bg-warning text-dark" th:text="${#numbers.formatDecimal(result.rank, 1, 3)}">0.500</span>
+                                <div th:if="${result.sentimentScore != null}" class="mt-1 small text-muted">
+                                    Score: [[${#numbers.formatDecimal(result.sentimentScore, 1, 2)}]]
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pagination -->
+                <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
+                    <a th:if="${results.hasPrevious()}"
+                       th:href="@{/search/chunks(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-chevron-left me-1"></i>Previous
+                    </a>
+                    <span th:unless="${results.hasPrevious()}"></span>
+                    <span class="text-muted">
+                        Page [[${results.number + 1}]] of [[${results.totalPages}]]
+                    </span>
+                    <a th:if="${results.hasNext()}"
+                       th:href="@{/search/chunks(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                       class="btn btn-outline-secondary">
+                        Next<i class="bi bi-chevron-right ms-1"></i>
+                    </a>
+                    <span th:unless="${results.hasNext()}"></span>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div th:if="${query != null && query != '' && !hasResults && error == null}">
+                <div class="alert alert-warning">
+                    <i class="bi bi-search me-2"></i>
+                    No content chunks found for "<strong th:text="${query}">query</strong>"
+                    <p class="mb-0 mt-2">
+                        Try different keywords or search in
+                        <a th:href="@{/search/files(q=${query})}">files</a>.
                     </p>
                 </div>
             </div>
 
-            <!-- Pagination -->
-            <div th:if="${results.totalPages > 1}" class="pagination">
-                <a th:if="${results.hasPrevious()}"
-                   th:href="@{/search/chunks(q=${query}, page=${results.number - 1}, size=${results.size})}"
-                   class="btn-secondary">
-                    &laquo; Previous
-                </a>
-                <span class="page-info">
-                    Page <span th:text="${results.number + 1}">1</span> of <span th:text="${results.totalPages}">1</span>
-                </span>
-                <a th:if="${results.hasNext()}"
-                   th:href="@{/search/chunks(q=${query}, page=${results.number + 1}, size=${results.size})}"
-                   class="btn-secondary">
-                    Next &raquo;
-                </a>
+            <!-- Welcome / Help -->
+            <div th:if="${query == null || query == ''}">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Content Chunk Search</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Search at the sentence or paragraph level for precise content matches.</p>
+                        <p>Useful for finding specific quotes or passages within documents.</p>
+
+                        <h6 class="mt-3">What are Content Chunks?</h6>
+                        <ul>
+                            <li><strong>Sentence</strong> - Individual sentences extracted from documents</li>
+                            <li><strong>Paragraph</strong> - Logical text blocks for context</li>
+                        </ul>
+
+                        <h6 class="mt-3">NLP Features</h6>
+                        <p>Chunks may include NLP annotations:</p>
+                        <ul>
+                            <li><strong>Sentiment</strong> - Positive, Negative, or Neutral</li>
+                            <li><strong>Named Entities</strong> - People, organizations, locations</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
-
-        <div th:if="${query != null && query != '' && !hasResults && error == null}">
-            <div class="no-results">
-                <p>No content chunks found for "<strong th:text="${query}">query</strong>"</p>
-                <p>Try different keywords or search in <a th:href="@{/search/files(q=${query})}">files</a>.</p>
-            </div>
-        </div>
-
-        <div th:if="${query == null || query == ''}">
-            <div class="search-intro">
-                <h2>Content Chunk Search</h2>
-                <p>Search at the sentence or paragraph level for precise content matches.</p>
-                <p>Useful for finding specific quotes or passages within documents.</p>
-
-                <h3>What are Content Chunks?</h3>
-                <ul>
-                    <li><strong>Sentence</strong> - Individual sentences extracted from documents</li>
-                    <li><strong>Paragraph</strong> - Logical text blocks for context</li>
-                </ul>
-            </div>
-        </div>
-    </main>
-
-    <footer>
-        <p>&copy; 2025 Spring Search Tempo</p>
-    </footer>
-</div>
-
-<style>
-    .active {
-        font-weight: bold;
-        color: #4CAF50;
-    }
-
-    .chunk-metadata {
-        margin: 0.5rem 0;
-        padding: 0.5rem;
-        background: #f5f5f5;
-        border-radius: 4px;
-        font-size: 0.875rem;
-    }
-
-    .metadata-item {
-        display: inline-block;
-        margin-right: 1rem;
-    }
-
-    .chunk-result {
-        border-left: 4px solid #9C27B0;
-    }
-</style>
-</body>
+    </body>
 </html>

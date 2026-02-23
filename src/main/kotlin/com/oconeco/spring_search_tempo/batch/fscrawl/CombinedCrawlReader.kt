@@ -136,10 +136,10 @@ class CombinedCrawlReader(
                 }
 
                 // List immediate files in this directory (not recursive)
-                // TODO: Consider using Files.newDirectoryStream() with filter for potentially better performance
-                val immediateFiles = Files.list(dir)
-                    .filter { it.isRegularFile() }
-                    .toList()
+                // Use .use { } to ensure the DirectoryStream is closed (prevents "too many open files")
+                val immediateFiles = Files.list(dir).use { stream ->
+                    stream.filter { it.isRegularFile() }.toList()
+                }
 
                 filesCollected += immediateFiles.size
 

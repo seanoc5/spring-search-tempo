@@ -70,29 +70,29 @@ class FirefoxProfileService {
         log.info("Scanning for Firefox profiles in: {}", profilesPath)
 
         return try {
-            Files.list(profilesPath)
-                .filter { it.isDirectory() }
-                .map { profileDir ->
-                    val placesDb = profileDir.resolve("places.sqlite")
-                    if (placesDb.isRegularFile()) {
-                        DiscoveredProfile(
-                            profileName = profileDir.name,
-                            profilePath = profileDir,
-                            placesDbPath = placesDb
-                        )
-                    } else {
-                        null
+            Files.list(profilesPath).use { stream ->
+                stream.filter { it.isDirectory() }
+                    .map { profileDir ->
+                        val placesDb = profileDir.resolve("places.sqlite")
+                        if (placesDb.isRegularFile()) {
+                            DiscoveredProfile(
+                                profileName = profileDir.name,
+                                profilePath = profileDir,
+                                placesDbPath = placesDb
+                            )
+                        } else {
+                            null
+                        }
                     }
+                    .filter { it != null }
+                    .map { it!! }
+                    .toList()
+            }.also { profiles ->
+                log.info("Found {} Firefox profiles with places.sqlite", profiles.size)
+                profiles.forEach { profile ->
+                    log.debug("  Profile: {} at {}", profile.profileName, profile.profilePath)
                 }
-                .filter { it != null }
-                .map { it!! }
-                .toList()
-                .also { profiles ->
-                    log.info("Found {} Firefox profiles with places.sqlite", profiles.size)
-                    profiles.forEach { profile ->
-                        log.debug("  Profile: {} at {}", profile.profileName, profile.profilePath)
-                    }
-                }
+            }
         } catch (e: Exception) {
             log.error("Error scanning Firefox profiles directory", e)
             emptyList()
@@ -109,23 +109,24 @@ class FirefoxProfileService {
         }
 
         return try {
-            Files.list(profilesPath)
-                .filter { it.isDirectory() }
-                .map { profileDir ->
-                    val placesDb = profileDir.resolve("places.sqlite")
-                    if (placesDb.isRegularFile()) {
-                        DiscoveredProfile(
-                            profileName = profileDir.name,
-                            profilePath = profileDir,
-                            placesDbPath = placesDb
-                        )
-                    } else {
-                        null
+            Files.list(profilesPath).use { stream ->
+                stream.filter { it.isDirectory() }
+                    .map { profileDir ->
+                        val placesDb = profileDir.resolve("places.sqlite")
+                        if (placesDb.isRegularFile()) {
+                            DiscoveredProfile(
+                                profileName = profileDir.name,
+                                profilePath = profileDir,
+                                placesDbPath = placesDb
+                            )
+                        } else {
+                            null
+                        }
                     }
-                }
-                .filter { it != null }
-                .map { it!! }
-                .toList()
+                    .filter { it != null }
+                    .map { it!! }
+                    .toList()
+            }
         } catch (e: Exception) {
             log.error("Error scanning profiles directory: {}", profilesPath, e)
             emptyList()
