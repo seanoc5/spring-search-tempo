@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.batch.nlp
 
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
+import com.oconeco.spring_search_tempo.base.service.DependencyParseResult
 import com.oconeco.spring_search_tempo.base.service.NLPService
 import com.oconeco.spring_search_tempo.base.service.NamedEntity
 import com.oconeco.spring_search_tempo.base.service.POSTag
@@ -98,6 +99,16 @@ class NLPChunkProcessor(
                     item.id, sentiment.sentiment, sentiment.score)
             }
 
+            // Store dependency parse data
+            if (analysis.dependencyParses.isNotEmpty()) {
+                val parseData = serializeDependencyParses(analysis.dependencyParses)
+                item.parseTree = parseData.constituencyTrees
+                item.parseUd = parseData.universalDependencies
+                item.conllu = parseData.conllu
+                log.debug("Extracted dependency parses for {} sentences in chunk {}",
+                    analysis.dependencyParses.size, item.id)
+            }
+
             // Mark as processed
             item.nlpProcessedAt = OffsetDateTime.now()
 
@@ -139,5 +150,39 @@ class NLPChunkProcessor(
             log.error("Failed to serialize POS tags", e)
             "[]"
         }
+    }
+
+    /**
+     * Container for serialized dependency parse data.
+     */
+    private data class SerializedParseData(
+        val constituencyTrees: String?,
+        val universalDependencies: String?,
+        val conllu: String?
+    )
+
+    /**
+     * Serialize dependency parse results, combining all sentences.
+     */
+    private fun serializeDependencyParses(parses: List<DependencyParseResult>): SerializedParseData {
+        // Combine constituency trees (separated by newlines)
+        val constituencyTrees = parses
+            .mapNotNull { it.constituencyTree }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
+
+        // Combine UD parses (separated by blank lines)
+        val universalDependencies = parses
+            .mapNotNull { it.universalDependencies }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
+
+        // Combine CoNLL-U (standard format uses blank line separators)
+        val conllu = parses
+            .mapNotNull { it.conllu }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
+
+        return SerializedParseData(constituencyTrees, universalDependencies, conllu)
     }
 }

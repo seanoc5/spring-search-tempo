@@ -60,7 +60,8 @@ data class NLPAnalysisResult(
     val namedEntities: List<NamedEntity>,
     val posTag: List<POSTag>,
     val sentiment: SentimentResult?,
-    val sentences: List<String>
+    val sentences: List<String>,
+    val dependencyParses: List<DependencyParseResult> = emptyList()
 )
 
 /**
@@ -88,6 +89,16 @@ data class POSTag(
 data class SentimentResult(
     val sentiment: String,  // POSITIVE, NEGATIVE, NEUTRAL
     val score: Double  // Confidence score 0-1
+)
+
+/**
+ * Dependency parse result for a sentence.
+ */
+data class DependencyParseResult(
+    val sentenceIndex: Int,
+    val constituencyTree: String?,  // S-expression format
+    val universalDependencies: String?,  // UD format
+    val conllu: String?  // CoNLL-U format
 )
 
 /**
@@ -139,13 +150,15 @@ class StanfordNLPService : NLPService {
             val posTags = extractPOSTagsFromDocument(document)
             val sentiment = extractSentimentFromDocument(document)
             val sentences = document.sentences().map { it.text() }
+            val dependencyParses = extractDependencyParsesFromDocument(document)
 
             return NLPAnalysisResult(
                 text = text,
                 namedEntities = entities,
                 posTag = posTags,
                 sentiment = sentiment,
-                sentences = sentences
+                sentences = sentences,
+                dependencyParses = dependencyParses
             )
         } catch (e: Exception) {
             log.error("Error during NLP analysis", e)
@@ -277,6 +290,61 @@ class StanfordNLPService : NLPService {
         }
 
         return SentimentResult(overallSentiment, avgScore)
+    }
+
+    /**
+     * Extract dependency parse trees from document.
+     *
+     * For each sentence, extracts:
+     * - Constituency tree (S-expression format)
+     * - Universal Dependencies format
+     * - CoNLL-U format
+     */
+    private fun extractDependencyParsesFromDocument(document: CoreDocument): List<DependencyParseResult> {
+        val results = mutableListOf<DependencyParseResult>()
+
+        document.sentences().forEachIndexed { index, sentence ->
+            try {
+                // Constituency parse tree (S-expression)
+                val constituencyTree = try {
+                    sentence.constituencyParse()?.pennString()
+                } catch (e: Exception) {
+                    log.debug("No constituency parse available for sentence {}: {}", index, e.message)
+                    null
+                }
+
+                // Dependency parse (Universal Dependencies format)
+                val depGraph = try {
+                    sentence.dependencyParse()
+                } catch (e: Exception) {
+                    log.debug("No dependency parse available for sentence {}: {}", index, e.message)
+                    null
+                }
+
+                val universalDeps = depGraph?.let { graph ->
+                    // Format as UD-style: token -> relation -> governor
+                    graph.typedDependencies().joinToString("\n") { dep ->
+                        "${dep.reln().shortName}(${dep.gov().word()}-${dep.gov().index()}, ${dep.dep().word()}-${dep.dep().index()})"
+                    }
+                }
+
+                // CoNLL-U format
+                val conllu = depGraph?.toCompactString()
+
+                results.add(
+                    DependencyParseResult(
+                        sentenceIndex = index,
+                        constituencyTree = constituencyTree,
+                        universalDependencies = universalDeps,
+                        conllu = conllu
+                    )
+                )
+            } catch (e: Exception) {
+                log.warn("Error extracting dependency parse for sentence {}: {}", index, e.message)
+            }
+        }
+
+        return results
     }
 }
 

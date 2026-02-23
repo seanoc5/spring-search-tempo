@@ -141,6 +141,11 @@ class NLPProcessingJobConfiguration(
                         entity.sentimentScore = dto.sentimentScore
                         entity.nlpProcessedAt = dto.nlpProcessedAt
 
+                        // Dependency parse fields
+                        entity.parseTree = dto.parseTree
+                        entity.parseUd = dto.parseUd
+                        entity.conllu = dto.conllu
+
                         contentChunksRepository.save(entity)
                         log.debug("Saved NLP results for chunk {}", id)
                     }
