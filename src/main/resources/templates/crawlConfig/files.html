@@ -5,6 +5,32 @@
         <title>Files - [[${crawlConfig.displayLabel ?: crawlConfig.name}]]</title>
     </head>
     <body>
+        <script th:inline="javascript">
+            // Base path for relative path calculation
+            const basePath = /*[[${crawlConfig.startPaths != null && !crawlConfig.startPaths.isEmpty() ? crawlConfig.startPaths[0] : ''}]]*/ '';
+
+            function togglePathDisplay() {
+                const showRelative = document.getElementById('showRelativeToggle').checked;
+                document.querySelectorAll('.file-path').forEach(el => {
+                    const fullPath = el.dataset.fullPath;
+                    if (showRelative && basePath && fullPath.startsWith(basePath)) {
+                        // Show relative path (strip base path, keep leading slash for clarity)
+                        let relative = fullPath.substring(basePath.length);
+                        if (!relative.startsWith('/')) relative = '/' + relative;
+                        el.textContent = '.' + relative;
+                    } else {
+                        el.textContent = fullPath;
+                    }
+                });
+            }
+
+            // Re-apply toggle after HTMX swaps
+            document.addEventListener('htmx:afterSwap', function(evt) {
+                if (evt.detail.target.id === 'table-content') {
+                    togglePathDisplay();
+                }
+            });
+        </script>
         <div layout:fragment="content">
             <nav aria-label="breadcrumb" class="mb-3">
                 <ol class="breadcrumb">
@@ -75,7 +101,7 @@
                         <option value="image/" th:selected="${param.contentType != null and param.contentType[0] == 'image/'}">Images</option>
                     </select>
                 </div>
-                <!-- Show skipped toggle -->
+                <!-- Toggles -->
                 <div class="col-md-3">
                     <div class="form-check form-switch mt-4">
                         <input class="form-check-input" type="checkbox" id="showSkippedToggle"
@@ -86,6 +112,13 @@
                                hx-include="[name='filter'], [name='sort']">
                         <label class="form-check-label" for="showSkippedToggle">
                             Show skipped files
+                        </label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showRelativeToggle"
+                               onchange="togglePathDisplay()">
+                        <label class="form-check-label" for="showRelativeToggle">
+                            Relative paths
                         </label>
                     </div>
                 </div>
@@ -118,17 +151,6 @@
                         <table class="table table-striped table-hover align-middle">
                             <thead>
                                 <tr>
-                                    <th scope="col" style="width: 80px;">
-                                        <a th:hx-get="@{/crawlConfigs/{id}/files(id=${crawlConfig.id}, sort='id,' + (param.sort != null and param.sort[0] == 'id,ASC' ? 'DESC' : 'ASC'), showSkipped=${showSkipped}, filter=${filter})}"
-                                           hx-target="#table-content"
-                                           hx-push-url="true"
-                                           th:classappend="${param.sort != null and #strings.startsWith(param.sort[0], 'id,') ? 'text-primary' : ''}"
-                                           class="text-decoration-none">
-                                            ID
-                                            <span th:if="${param.sort != null and param.sort[0] == 'id,ASC'}">&#9650;</span>
-                                            <span th:if="${param.sort != null and param.sort[0] == 'id,DESC'}">&#9660;</span>
-                                        </a>
-                                    </th>
                                     <th scope="col">
                                         <a th:hx-get="@{/crawlConfigs/{id}/files(id=${crawlConfig.id}, sort='uri,' + (param.sort != null and param.sort[0] == 'uri,ASC' ? 'DESC' : 'ASC'), showSkipped=${showSkipped}, filter=${filter})}"
                                            hx-target="#table-content"
@@ -165,16 +187,17 @@
                                             <span th:if="${param.sort != null and param.sort[0] == 'fsLastModified,DESC'}">&#9660;</span>
                                         </a>
                                     </th>
-                                    <th style="width: 60px;"><!-- Actions --></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:each="file : ${files}">
-                                    <td>[[${file.id}]]</td>
                                     <td>
-                                        <span th:title="${file.uri}" class="text-truncate d-inline-block" style="max-width: 400px;">
-                                            [[${file.uri}]]
-                                        </span>
+                                        <a th:href="@{/fSFiles/{id}(id=${file.id})}"
+                                           th:title="${file.uri}"
+                                           class="text-decoration-none text-truncate d-inline-block"
+                                           style="max-width: 500px;">
+                                            <span class="file-path" th:data-full-path="${file.uri}">[[${file.uri}]]</span>
+                                        </a>
                                     </td>
                                     <td>
                                         <small class="text-muted">[[${file.contentType ?: file.type ?: '-'}]]</small>
@@ -210,11 +233,6 @@
                                             [[${#temporals.format(file.fsLastModified, 'yyyy-MM-dd HH:mm')}]]
                                         </small>
                                         <span th:if="${file.fsLastModified == null}">-</span>
-                                    </td>
-                                    <td>
-                                        <a th:href="@{/fSFiles/{id}(id=${file.id})}" class="btn btn-sm btn-outline-secondary">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
                                     </td>
                                 </tr>
                             </tbody>
