@@ -9,8 +9,7 @@ spring:
     jdbc:
       initialize-schema: never
     job:
-      enabled: true
-      name: fsCrawlJob
+      enabled: false  # Disable auto-run - jobs are triggered via UI/API
   datasource:
     url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/tempo}
     username: ${JDBC_DATABASE_USERNAME:postgres}

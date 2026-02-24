@@ -31,89 +31,178 @@
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>
-                        <i class="bi bi-funnel me-2"></i>Filter Options
-                    </span>
-                    <form class="d-inline" method="get">
-                        <div class="form-check form-switch d-inline-flex align-items-center">
-                            <input class="form-check-input me-2" type="checkbox" id="showSkippedToggle"
-                                   name="showSkipped" th:checked="${showSkipped}"
-                                   onchange="this.form.submit()">
-                            <label class="form-check-label" for="showSkippedToggle">
-                                Show skipped folders
-                            </label>
-                        </div>
-                    </form>
+            <!-- Filters Row -->
+            <div class="row mb-3 align-items-end">
+                <!-- Text search -->
+                <div class="col-md-4">
+                    <label class="form-label">Search Path</label>
+                    <input type="search" name="filter"
+                           th:value="${filter}"
+                           th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
+                           hx-trigger="input changed delay:300ms, search"
+                           hx-target="#table-content"
+                           hx-push-url="true"
+                           hx-include="[name='showSkipped'], [name='sort']"
+                           placeholder="Filter by path..."
+                           class="form-control" />
+                </div>
+                <!-- Status filter -->
+                <div class="col-md-3">
+                    <label class="form-label">Analysis Status</label>
+                    <select name="analysisStatus" class="form-select"
+                            th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
+                            hx-target="#table-content"
+                            hx-push-url="true"
+                            hx-include="[name='filter'], [name='showSkipped'], [name='sort']">
+                        <option value="">All Statuses</option>
+                        <option value="SKIP" th:selected="${param.analysisStatus != null and param.analysisStatus[0] == 'SKIP'}">Skip</option>
+                        <option value="LOCATE" th:selected="${param.analysisStatus != null and param.analysisStatus[0] == 'LOCATE'}">Locate</option>
+                        <option value="INDEX" th:selected="${param.analysisStatus != null and param.analysisStatus[0] == 'INDEX'}">Index</option>
+                        <option value="ANALYZE" th:selected="${param.analysisStatus != null and param.analysisStatus[0] == 'ANALYZE'}">Analyze</option>
+                    </select>
+                </div>
+                <!-- Show skipped toggle -->
+                <div class="col-md-3">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" id="showSkippedToggle"
+                               name="showSkipped" th:checked="${showSkipped}"
+                               th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id}, showSkipped=${!showSkipped})}"
+                               hx-target="#table-content"
+                               hx-push-url="true"
+                               hx-include="[name='filter'], [name='sort']">
+                        <label class="form-check-label" for="showSkippedToggle">
+                            Show skipped folders
+                        </label>
+                    </div>
+                </div>
+                <!-- Sort dropdown -->
+                <div class="col-md-2">
+                    <label class="form-label">Sort By</label>
+                    <select name="sort" class="form-select"
+                            th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
+                            hx-target="#table-content"
+                            hx-push-url="true"
+                            hx-include="[name='filter'], [name='showSkipped']">
+                        <option value="uri,ASC" th:selected="${param.sort == null or param.sort[0] == 'uri,ASC'}">Path A-Z</option>
+                        <option value="uri,DESC" th:selected="${param.sort != null and param.sort[0] == 'uri,DESC'}">Path Z-A</option>
+                        <option value="fsLastModified,DESC" th:selected="${param.sort != null and param.sort[0] == 'fsLastModified,DESC'}">Newest First</option>
+                        <option value="fsLastModified,ASC" th:selected="${param.sort != null and param.sort[0] == 'fsLastModified,ASC'}">Oldest First</option>
+                        <option value="crawlDepth,ASC" th:selected="${param.sort != null and param.sort[0] == 'crawlDepth,ASC'}">Depth (Low-High)</option>
+                        <option value="crawlDepth,DESC" th:selected="${param.sort != null and param.sort[0] == 'crawlDepth,DESC'}">Depth (High-Low)</option>
+                    </select>
                 </div>
             </div>
 
-            <div th:if="${folders.empty}" class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>No folders found for this crawl configuration.
-            </div>
+            <!-- Table Content (HTMX target) -->
+            <div id="table-content">
+                <th:block th:fragment="table-content">
+                    <div th:if="${folders.empty}" class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>No folders found for this crawl configuration.
+                    </div>
 
-            <div th:if="${!folders.empty}" class="table-responsive">
-                <table class="table table-striped table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th scope="col">ID</th>
-                            <th scope="col">Path</th>
-                            <th scope="col">Depth</th>
-                            <th scope="col">Status</th>
-                            <th scope="col">Analysis</th>
-                            <th scope="col">Last Modified</th>
-                            <th><!-- Actions --></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="folder : ${folders}">
-                            <td>[[${folder.id}]]</td>
-                            <td>
-                                <span th:title="${folder.uri}" class="text-truncate d-inline-block" style="max-width: 500px;">
-                                    <i class="bi bi-folder-fill text-warning me-1"></i>[[${folder.uri}]]
-                                </span>
-                            </td>
-                            <td>
-                                <span th:if="${folder.crawlDepth != null}">[[${folder.crawlDepth}]]</span>
-                                <span th:if="${folder.crawlDepth == null}">-</span>
-                            </td>
-                            <td>
-                                <span th:switch="${folder.status?.name()}">
-                                    <span th:case="'NEW'" class="badge bg-info">New</span>
-                                    <span th:case="'IN_PROGRESS'" class="badge bg-warning">In Progress</span>
-                                    <span th:case="'CURRENT'" class="badge bg-success">Current</span>
-                                    <span th:case="'DIRTY'" class="badge bg-secondary">Dirty</span>
-                                    <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
-                                    <span th:case="*" class="badge bg-light text-dark">[[${folder.status}]]</span>
-                                </span>
-                            </td>
-                            <td>
-                                <span th:switch="${folder.analysisStatus?.name()}">
-                                    <span th:case="'SKIP'" class="badge bg-secondary">Skip</span>
-                                    <span th:case="'LOCATE'" class="badge bg-light text-dark">Locate</span>
-                                    <span th:case="'INDEX'" class="badge bg-primary">Index</span>
-                                    <span th:case="'ANALYZE'" class="badge bg-info">Analyze</span>
-                                    <span th:case="'SEMANTIC'" class="badge bg-purple">Semantic</span>
-                                    <span th:case="*" class="badge bg-light text-dark">[[${folder.analysisStatus}]]</span>
-                                </span>
-                            </td>
-                            <td>
-                                <small th:if="${folder.fsLastModified != null}">
-                                    [[${#temporals.format(folder.fsLastModified, 'yyyy-MM-dd HH:mm')}]]
-                                </small>
-                                <span th:if="${folder.fsLastModified == null}">-</span>
-                            </td>
-                            <td>
-                                <a th:href="@{/fSFolders/{id}(id=${folder.id})}" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                    <div th:if="${!folders.empty}" class="table-responsive">
+                        <table class="table table-striped table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col" style="width: 80px;">
+                                        <a th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id}, sort='id,' + (param.sort != null and param.sort[0] == 'id,ASC' ? 'DESC' : 'ASC'), showSkipped=${showSkipped}, filter=${filter})}"
+                                           hx-target="#table-content"
+                                           hx-push-url="true"
+                                           th:classappend="${param.sort != null and #strings.startsWith(param.sort[0], 'id,') ? 'text-primary' : ''}"
+                                           class="text-decoration-none">
+                                            ID
+                                            <span th:if="${param.sort != null and param.sort[0] == 'id,ASC'}">&#9650;</span>
+                                            <span th:if="${param.sort != null and param.sort[0] == 'id,DESC'}">&#9660;</span>
+                                        </a>
+                                    </th>
+                                    <th scope="col">
+                                        <a th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id}, sort='uri,' + (param.sort != null and param.sort[0] == 'uri,ASC' ? 'DESC' : 'ASC'), showSkipped=${showSkipped}, filter=${filter})}"
+                                           hx-target="#table-content"
+                                           hx-push-url="true"
+                                           th:classappend="${param.sort == null or #strings.startsWith(param.sort[0], 'uri,') ? 'text-primary' : ''}"
+                                           class="text-decoration-none">
+                                            Path
+                                            <span th:if="${param.sort == null or param.sort[0] == 'uri,ASC'}">&#9650;</span>
+                                            <span th:if="${param.sort != null and param.sort[0] == 'uri,DESC'}">&#9660;</span>
+                                        </a>
+                                    </th>
+                                    <th scope="col" style="width: 80px;">
+                                        <a th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id}, sort='crawlDepth,' + (param.sort != null and param.sort[0] == 'crawlDepth,ASC' ? 'DESC' : 'ASC'), showSkipped=${showSkipped}, filter=${filter})}"
+                                           hx-target="#table-content"
+                                           hx-push-url="true"
+                                           th:classappend="${param.sort != null and #strings.startsWith(param.sort[0], 'crawlDepth,') ? 'text-primary' : ''}"
+                                           class="text-decoration-none">
+                                            Depth
+                                            <span th:if="${param.sort != null and param.sort[0] == 'crawlDepth,ASC'}">&#9650;</span>
+                                            <span th:if="${param.sort != null and param.sort[0] == 'crawlDepth,DESC'}">&#9660;</span>
+                                        </a>
+                                    </th>
+                                    <th scope="col" style="width: 100px;">Status</th>
+                                    <th scope="col" style="width: 100px;">Analysis</th>
+                                    <th scope="col" style="width: 150px;">
+                                        <a th:hx-get="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id}, sort='fsLastModified,' + (param.sort != null and param.sort[0] == 'fsLastModified,DESC' ? 'ASC' : 'DESC'), showSkipped=${showSkipped}, filter=${filter})}"
+                                           hx-target="#table-content"
+                                           hx-push-url="true"
+                                           th:classappend="${param.sort != null and #strings.startsWith(param.sort[0], 'fsLastModified,') ? 'text-primary' : ''}"
+                                           class="text-decoration-none">
+                                            Last Modified
+                                            <span th:if="${param.sort != null and param.sort[0] == 'fsLastModified,ASC'}">&#9650;</span>
+                                            <span th:if="${param.sort != null and param.sort[0] == 'fsLastModified,DESC'}">&#9660;</span>
+                                        </a>
+                                    </th>
+                                    <th style="width: 60px;"><!-- Actions --></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="folder : ${folders}">
+                                    <td>[[${folder.id}]]</td>
+                                    <td>
+                                        <span th:title="${folder.uri}" class="text-truncate d-inline-block" style="max-width: 500px;">
+                                            <i class="bi bi-folder-fill text-warning me-1"></i>[[${folder.uri}]]
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span th:if="${folder.crawlDepth != null}">[[${folder.crawlDepth}]]</span>
+                                        <span th:if="${folder.crawlDepth == null}">-</span>
+                                    </td>
+                                    <td>
+                                        <span th:switch="${folder.status?.name()}">
+                                            <span th:case="'NEW'" class="badge bg-info">New</span>
+                                            <span th:case="'IN_PROGRESS'" class="badge bg-warning">In Progress</span>
+                                            <span th:case="'CURRENT'" class="badge bg-success">Current</span>
+                                            <span th:case="'DIRTY'" class="badge bg-secondary">Dirty</span>
+                                            <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
+                                            <span th:case="*" class="badge bg-light text-dark">[[${folder.status}]]</span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span th:switch="${folder.analysisStatus?.name()}">
+                                            <span th:case="'SKIP'" class="badge bg-secondary">Skip</span>
+                                            <span th:case="'LOCATE'" class="badge bg-light text-dark">Locate</span>
+                                            <span th:case="'INDEX'" class="badge bg-primary">Index</span>
+                                            <span th:case="'ANALYZE'" class="badge bg-info">Analyze</span>
+                                            <span th:case="'SEMANTIC'" class="badge bg-purple">Semantic</span>
+                                            <span th:case="*" class="badge bg-light text-dark">[[${folder.analysisStatus}]]</span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small th:if="${folder.fsLastModified != null}">
+                                            [[${#temporals.format(folder.fsLastModified, 'yyyy-MM-dd HH:mm')}]]
+                                        </small>
+                                        <span th:if="${folder.fsLastModified == null}">-</span>
+                                    </td>
+                                    <td>
+                                        <a th:href="@{/fSFolders/{id}(id=${folder.id})}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div th:replace="~{fragments/utils::pagination()}" />
+                </th:block>
             </div>
-            <div th:replace="~{fragments/utils::pagination()}" />
         </div>
     </body>
 </html>

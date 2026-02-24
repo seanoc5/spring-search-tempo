@@ -8,6 +8,9 @@ import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
+import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
+import com.oconeco.spring_search_tempo.base.util.WebUtils
+import jakarta.servlet.http.HttpServletRequest
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlCleanupListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.FsCrawlJobBuilder
 import com.oconeco.spring_search_tempo.batch.fscrawl.JobRunTrackingListener
@@ -40,6 +43,7 @@ class CrawlConfigController(
     private val jobLauncher: JobLauncher,
     private val jobBuilder: FsCrawlJobBuilder,
     private val configConverter: CrawlConfigConverter,
+    private val cleanupService: CrawlDataCleanupService,
     private val objectMapper: ObjectMapper
 ) {
 
@@ -254,8 +258,10 @@ class CrawlConfigController(
     fun browseFiles(
         @PathVariable(name = "id") id: Long,
         @RequestParam(name = "showSkipped", required = false, defaultValue = "false") showSkipped: Boolean,
+        @RequestParam(name = "filter", required = false) filter: String?,
         @SortDefault(sort = ["uri"]) @PageableDefault(size = 50) pageable: Pageable,
-        model: Model
+        model: Model,
+        request: HttpServletRequest
     ): String {
         val crawlConfig = crawlConfigService.get(id)
         val files = fileService.findByCrawlConfigId(id, pageable, showSkipped)
@@ -264,7 +270,17 @@ class CrawlConfigController(
         model.addAttribute("files", files)
         model.addAttribute("page", files)
         model.addAttribute("showSkipped", showSkipped)
-        return "crawlConfig/files"
+        model.addAttribute("filter", filter)
+        model.addAttribute("paginationModel", WebUtils.getPaginationModel(files))
+
+        // HX-Boosted requests expect full page; only return fragment for non-boosted HTMX
+        val isHtmx = request.getHeader("HX-Request") == "true"
+        val isBoosted = request.getHeader("HX-Boosted") == "true"
+        return if (isHtmx && !isBoosted) {
+            "crawlConfig/files :: table-content"
+        } else {
+            "crawlConfig/files"
+        }
     }
 
     @PostMapping("/{id}/toggle-enabled")
@@ -278,12 +294,33 @@ class CrawlConfigController(
         return "crawlConfig/fragments/enabledToggle"
     }
 
+    @PostMapping("/{id}/delete-data")
+    fun deleteData(
+        @PathVariable(name = "id") id: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val crawlConfig = crawlConfigService.get(id)
+        val summary = cleanupService.deleteAllDataForCrawlConfig(id)
+
+        if (summary.isEmpty) {
+            redirectAttributes.addFlashAttribute("message", "No data to delete for '${crawlConfig.displayLabel ?: crawlConfig.name}'")
+        } else {
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Deleted ${summary.filesDeleted} files, ${summary.foldersDeleted} folders, and ${summary.chunksDeleted} chunks for '${crawlConfig.displayLabel ?: crawlConfig.name}'"
+            )
+        }
+        return "redirect:/crawlConfigs/$id"
+    }
+
     @GetMapping("/{id}/folders")
     fun browseFolders(
         @PathVariable(name = "id") id: Long,
         @RequestParam(name = "showSkipped", required = false, defaultValue = "false") showSkipped: Boolean,
+        @RequestParam(name = "filter", required = false) filter: String?,
         @SortDefault(sort = ["uri"]) @PageableDefault(size = 50) pageable: Pageable,
-        model: Model
+        model: Model,
+        request: HttpServletRequest
     ): String {
         val crawlConfig = crawlConfigService.get(id)
         val folders = folderService.findByCrawlConfigId(id, pageable, showSkipped)
@@ -292,7 +329,17 @@ class CrawlConfigController(
         model.addAttribute("folders", folders)
         model.addAttribute("page", folders)
         model.addAttribute("showSkipped", showSkipped)
-        return "crawlConfig/folders"
+        model.addAttribute("filter", filter)
+        model.addAttribute("paginationModel", WebUtils.getPaginationModel(folders))
+
+        // HX-Boosted requests expect full page; only return fragment for non-boosted HTMX
+        val isHtmx = request.getHeader("HX-Request") == "true"
+        val isBoosted = request.getHeader("HX-Boosted") == "true"
+        return if (isHtmx && !isBoosted) {
+            "crawlConfig/folders :: table-content"
+        } else {
+            "crawlConfig/folders"
+        }
     }
 
     /**

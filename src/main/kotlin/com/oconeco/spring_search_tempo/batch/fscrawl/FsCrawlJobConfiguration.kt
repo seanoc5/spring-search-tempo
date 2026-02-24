@@ -8,10 +8,13 @@ import org.springframework.context.annotation.Configuration
 
 /**
  * Configuration for file system crawl batch jobs.
- * Uses CrawlConfigService to build jobs for each enabled crawl.
  *
- * The fsCrawlJob bean is the default job that Spring Batch runs on startup.
- * It executes the first enabled crawl definition from application.yml.
+ * NOTE: Jobs are no longer auto-run on startup. They are triggered via:
+ * - UI: CrawlConfigController.runCrawl()
+ * - API: CrawlOrchestrator endpoints
+ *
+ * This configuration provides a no-op placeholder bean to satisfy any
+ * Spring Batch requirements without actually processing any paths.
  */
 @Configuration
 class FsCrawlJobConfiguration(
@@ -23,30 +26,25 @@ class FsCrawlJobConfiguration(
     }
 
     /**
-     * Default batch job that runs on startup.
-     * Uses the first enabled crawl definition, or defaults to WORK crawl if none enabled.
+     * Placeholder job bean. Not intended for actual execution.
+     * Real crawl jobs are built dynamically via FsCrawlJobBuilder with specific
+     * crawl configurations from the database.
+     *
+     * This bean exists only to satisfy Spring Batch's expectation of a job bean.
+     * With spring.batch.job.enabled=false, this won't auto-run.
      */
     @Bean
     fun fsCrawlJob(): Job {
-        val firstEnabledCrawl = crawlConfigService.getEnabledCrawls().firstOrNull()
-
-        if (firstEnabledCrawl == null) {
-            log.warn("No enabled crawls found in configuration. Using default settings.")
-            // Create a minimal default crawl
-            val defaultCrawl = com.oconeco.spring_search_tempo.base.config.CrawlDefinition(
-                name = "DEFAULT",
-                label = "Default Crawl",
-                enabled = true,
-                startPaths = listOf("/opt/work"),
-                maxDepth = 5,
-                followLinks = false
-            )
-            return jobBuilder.buildJob(defaultCrawl)
-        }
-
-        log.info("Building default fsCrawlJob for crawl: {} ({})",
-            firstEnabledCrawl.name, firstEnabledCrawl.label)
-
-        return jobBuilder.buildJob(firstEnabledCrawl)
+        // Use a non-existent path that will immediately complete with no items
+        val noopCrawl = com.oconeco.spring_search_tempo.base.config.CrawlDefinition(
+            name = "NOOP_PLACEHOLDER",
+            label = "Placeholder (not for execution)",
+            enabled = false,
+            startPaths = emptyList(),  // No paths = no processing
+            maxDepth = 0,
+            followLinks = false
+        )
+        log.debug("Creating placeholder fsCrawlJob bean (not for execution)")
+        return jobBuilder.buildJob(noopCrawl)
     }
 }
