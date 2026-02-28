@@ -16,7 +16,9 @@ import javax.sql.DataSource
 
 @Configuration
 class BasicSecurityConfig(
-    private val dataSource: DataSource
+    private val dataSource: DataSource,
+    @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-key}")
+    private val rememberMeKey: String
 ) {
 
     @Bean
@@ -76,6 +78,7 @@ class BasicSecurityConfig(
                 .permitAll()
             }
             .rememberMe { remember -> remember
+                .key(rememberMeKey)
                 .tokenRepository(persistentTokenRepository())
                 .tokenValiditySeconds(60 * 60 * 24 * 30) // 30 days
                 .rememberMeParameter("remember-me")

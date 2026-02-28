@@ -63,6 +63,8 @@ management:
       show-details: always
 
 app:
+  security:
+    remember-me-key: "${REMEMBER_ME_KEY:spring-search-tempo-remember-me-key}"
   crawl:
     # Global defaults that all crawls inherit
     defaults:
