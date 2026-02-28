@@ -22,6 +22,7 @@ interface EmailMessageMapper {
 
     @Mapping(target = "emailAccount", ignore = true)
     @Mapping(target = "emailFolder", ignore = true)
+    @Mapping(target = "tags", ignore = true)
     fun updateEmailMessageDTO(
         emailMessage: EmailMessage,
         @MappingTarget emailMessageDTO: EmailMessageDTO
