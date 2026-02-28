@@ -28,6 +28,7 @@ class EmailQuickSyncWriter(
     }
 
     private var savedCount = 0
+    private var skippedCount = 0
     private var errorCount = 0
     private var highestUid: Long = 0
     private var folderId: Long? = null
@@ -52,8 +53,11 @@ class EmailQuickSyncWriter(
                 // Set folder reference
                 dto.emailFolder = folderId
 
-                // Create or update
-                if (dto.id == null) {
+                // Check for duplicate URI (crash recovery / re-processing)
+                if (dto.id == null && dto.uri != null && emailMessageService.existsByUri(dto.uri!!)) {
+                    skippedCount++
+                    log.debug("Skipping duplicate URI: {}", dto.uri)
+                } else if (dto.id == null) {
                     emailMessageService.create(dto)
                     savedCount++
                 } else {
@@ -103,10 +107,11 @@ class EmailQuickSyncWriter(
         }
 
         log.info(
-            "Email write step completed for {}/{}: {} saved, {} errors",
+            "Email write step completed for {}/{}: {} saved, {} skipped (duplicate), {} errors",
             accountId,
             folderName,
             savedCount,
+            skippedCount,
             errorCount
         )
 

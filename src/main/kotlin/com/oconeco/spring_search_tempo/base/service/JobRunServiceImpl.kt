@@ -12,6 +12,8 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Propagation
+import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 
 @Service
@@ -89,10 +91,31 @@ class JobRunServiceImpl(
         val crawlConfig = crawlConfigRepository.findById(crawlConfigId)
             .orElseThrow { NotFoundException("CrawlConfig not found: $crawlConfigId") }
 
+        val now = OffsetDateTime.now()
         val jobRun = JobRun().apply {
             this.crawlConfig = crawlConfig
             this.jobName = jobName
-            this.startTime = OffsetDateTime.now()
+            this.label = crawlConfig.displayLabel
+            this.startTime = now
+            this.lastHeartbeatAt = now  // Initialize heartbeat at start
+            this.runStatus = RunStatus.RUNNING
+            this.status = Status.IN_PROGRESS
+            this.uri = "job-run:$jobName:${System.currentTimeMillis()}"
+            this.version = 0L
+        }
+
+        val savedJobRun = jobRunRepository.save(jobRun)
+        return jobRunMapper.updateJobRunDTO(savedJobRun, JobRunDTO())
+    }
+
+    override fun startJobRunWithoutConfig(jobName: String, label: String?): JobRunDTO {
+        val now = OffsetDateTime.now()
+        val jobRun = JobRun().apply {
+            this.crawlConfig = null  // No crawl config for email/other jobs
+            this.jobName = jobName
+            this.label = label ?: jobName
+            this.startTime = now
+            this.lastHeartbeatAt = now  // Initialize heartbeat at start
             this.runStatus = RunStatus.RUNNING
             this.status = Status.IN_PROGRESS
             this.uri = "job-run:$jobName:${System.currentTimeMillis()}"
@@ -164,6 +187,53 @@ class JobRunServiceImpl(
         }
 
         jobRunRepository.save(jobRun)
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    override fun updateHeartbeat(jobRunId: Long) {
+        jobRunRepository.updateHeartbeat(jobRunId, OffsetDateTime.now())
+    }
+
+    override fun findStaleJobRuns(staleThresholdMinutes: Long): List<Long> {
+        val threshold = OffsetDateTime.now().minusMinutes(staleThresholdMinutes)
+        return jobRunRepository.findStaleRunningJobs(threshold)
+    }
+
+    override fun markAsFailed(jobRunId: Long, errorMessage: String): String? {
+        val jobRun = jobRunRepository.findById(jobRunId)
+            .orElseThrow { NotFoundException("JobRun not found: $jobRunId") }
+
+        jobRun.finishTime = OffsetDateTime.now()
+        jobRun.runStatus = RunStatus.FAILED
+        jobRun.status = Status.FAILED
+        jobRun.errorMessage = errorMessage
+
+        jobRunRepository.save(jobRun)
+
+        // Return Spring Batch execution ID if available (for cascading cleanup)
+        return jobRun.springBatchJobExecutionId
+    }
+
+    // Progress tracking methods
+
+    override fun setExpectedTotal(jobRunId: Long, total: Long) {
+        jobRunRepository.updateExpectedTotal(jobRunId, total)
+    }
+
+    override fun incrementProcessed(jobRunId: Long, count: Int) {
+        jobRunRepository.incrementProcessedCount(jobRunId, count.toLong())
+    }
+
+    override fun setCurrentStep(jobRunId: Long, stepName: String) {
+        jobRunRepository.updateCurrentStep(jobRunId, stepName)
+    }
+
+    override fun updateProgress(jobRunId: Long, processedIncrement: Int, stepName: String?) {
+        if (stepName != null) {
+            jobRunRepository.updateProgressWithStep(jobRunId, processedIncrement.toLong(), stepName)
+        } else {
+            jobRunRepository.incrementProcessedCount(jobRunId, processedIncrement.toLong())
+        }
     }
 
 }

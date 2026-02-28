@@ -1,6 +1,8 @@
 package com.oconeco.spring_search_tempo.base.model
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.EmailCategory
+import com.oconeco.spring_search_tempo.base.domain.FetchStatus
 import com.oconeco.spring_search_tempo.base.domain.Status
 import jakarta.validation.constraints.NotNull
 import java.time.OffsetDateTime
@@ -39,6 +41,9 @@ class EmailMessageDTO {
 
     var imapUid: Long? = null
 
+    // Two-pass sync status
+    var fetchStatus: FetchStatus = FetchStatus.HEADERS_ONLY
+
     // Envelope data
     var subject: String? = null
 
@@ -70,12 +75,28 @@ class EmailMessageDTO {
 
     var attachmentNames: String? = null
 
+    // Read/unread status
+    var isRead: Boolean = false
+
     // Threading
     var inReplyTo: String? = null
 
     var references: String? = null
 
     var threadId: String? = null
+
+    // Tags (as IDs for display)
+    var tagIds: MutableList<Long> = mutableListOf()
+
+    // Tags with full details (only populated when needed)
+    var tags: MutableList<EmailTagDTO> = mutableListOf()
+
+    // Categorization
+    var category: EmailCategory = EmailCategory.UNCATEGORIZED
+
+    var categoryConfidence: Double? = null
+
+    var categorizedAt: OffsetDateTime? = null
 
     // Relationships (as IDs)
     var emailAccount: Long? = null
