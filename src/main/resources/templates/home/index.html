@@ -1,149 +1,431 @@
 <!DOCTYPE HTML>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
-        layout:decorate="~{layout}">
-    <head>
-        <title>[[#{nav.dashboard}]]</title>
-    </head>
-    <body>
-        <div layout:fragment="content">
-            <!-- Page Header -->
-            <div class="page-header">
-                <h1><i class="bi bi-speedometer2 me-2"></i>[[#{nav.dashboard}]]</h1>
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{nav.dashboard}]]</title>
+    <style>
+        .facet-list { max-height: 150px; overflow-y: auto; }
+        .facet-item { display: flex; justify-content: space-between; padding: 0.25rem 0; border-bottom: 1px solid #eee; }
+        .facet-item:last-child { border-bottom: none; }
+        .facet-name { font-size: 0.85rem; }
+        .facet-count { font-weight: 600; font-size: 0.85rem; }
+        .processing-bar { height: 8px; border-radius: 4px; }
+        .stat-breakdown { font-size: 0.75rem; margin-top: 0.5rem; }
+        .stat-breakdown .badge { font-weight: 500; }
+
+        /* Compact config list styles */
+        .compact-config-list { max-height: 400px; overflow-y: auto; }
+        .compact-config-row {
+            display: flex;
+            align-items: center;
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+        }
+        .compact-config-row:hover { background: #f8f9fa; }
+        .compact-config-row:last-child { border-bottom: none; }
+        .compact-config-check { flex-shrink: 0; margin-right: 0.5rem; }
+        .compact-config-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .compact-config-name a { text-decoration: none; }
+        .compact-config-status { flex-shrink: 0; margin-left: 0.5rem; }
+        /* Hide start paths on smaller screens */
+        .compact-config-paths {
+            flex-shrink: 0;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        @media (max-width: 1400px) {
+            .compact-config-paths { display: none; }
+        }
+
+        /* Run selected toolbar */
+        .config-toolbar {
+            border-top: 1px solid #dee2e6;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            display: none;
+        }
+        .config-toolbar.show { display: flex; }
+
+        /* Tabbed content area */
+        .content-tabs .nav-link {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+        .content-tabs .nav-link.active {
+            font-weight: 600;
+        }
+        .tab-table { font-size: 0.85rem; }
+        .tab-table th { font-weight: 600; font-size: 0.8rem; }
+        .tab-table td { padding: 0.4rem 0.5rem; }
+        .tab-pagination { font-size: 0.85rem; }
+        .tab-pagination .page-link { padding: 0.25rem 0.5rem; }
+    </style>
+</head>
+<body>
+<div layout:fragment="content">
+    <!-- Page Header with Refresh -->
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <h1><i class="bi bi-speedometer2 me-2"></i>[[#{nav.dashboard}]]</h1>
+        <button class="btn btn-outline-secondary btn-sm"
+                hx-get="/dashboard/stats"
+                hx-target="#stats-content"
+                hx-swap="innerHTML"
+                hx-indicator="#refresh-spinner">
+            <span id="refresh-spinner" class="htmx-indicator spinner-border spinner-border-sm me-1"></span>
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh Stats
+        </button>
+    </div>
+
+    <div id="stats-content" th:fragment="stats-content">
+        <!-- Row 1: Stats Cards -->
+        <div class="stats-row mb-4">
+            <!-- Files Indexed with Status/Analysis breakdown -->
+            <div class="dashboard-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="dashboard-card-title">Files Indexed</div>
+                        <div class="dashboard-card-value" th:text="${stats.totalFiles}">0</div>
+                    </div>
+                    <i class="bi bi-file-earmark dashboard-card-icon text-primary"></i>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted d-block mb-1">By Status:</small>
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.filesStatusNew}]]</span>
+                        <span class="badge bg-warning text-dark" th:title="DIRTY"><i class="bi bi-pencil me-1"></i>[[${stats.filesStatusDirty}]]</span>
+                        <span class="badge bg-success" th:title="CURRENT"><i class="bi bi-check-circle me-1"></i>[[${stats.filesStatusCurrent}]]</span>
+                        <span th:if="${stats.filesStatusFailed > 0}" class="badge bg-danger" th:title="FAILED"><i class="bi bi-x-circle me-1"></i>[[${stats.filesStatusFailed}]]</span>
+                    </div>
+                    <small class="text-muted d-block mb-1">By Analysis:</small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge bg-secondary" th:title="SKIP">S: [[${stats.filesSkip}]]</span>
+                        <span class="badge bg-light text-dark border" th:title="LOCATE">L: [[${stats.filesLocate}]]</span>
+                        <span class="badge bg-primary" th:title="INDEX">I: [[${stats.filesIndex}]]</span>
+                        <span class="badge bg-success" th:title="ANALYZE">A: [[${stats.filesAnalyze}]]</span>
+                        <span th:if="${stats.filesSemantic > 0}" class="badge bg-warning text-dark" th:title="SEMANTIC">E: [[${stats.filesSemantic}]]</span>
+                    </div>
+                </div>
             </div>
 
-            <!-- Stats Cards -->
-            <div class="stats-row">
-                <div class="dashboard-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="dashboard-card-title">Files Indexed</div>
-                            <div class="dashboard-card-value" th:text="${fileCount} ?: '0'">0</div>
-                        </div>
-                        <i class="bi bi-file-earmark dashboard-card-icon text-primary"></i>
+            <!-- Folders Scanned with Status/Analysis breakdown -->
+            <div class="dashboard-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="dashboard-card-title">Folders Scanned</div>
+                        <div class="dashboard-card-value" th:text="${stats.totalFolders}">0</div>
                     </div>
+                    <i class="bi bi-folder dashboard-card-icon text-warning"></i>
                 </div>
-                <div class="dashboard-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="dashboard-card-title">Folders Scanned</div>
-                            <div class="dashboard-card-value" th:text="${folderCount} ?: '0'">0</div>
-                        </div>
-                        <i class="bi bi-folder dashboard-card-icon text-warning"></i>
+                <div class="mt-3">
+                    <small class="text-muted d-block mb-1">By Status:</small>
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.foldersStatusNew}]]</span>
+                        <span class="badge bg-warning text-dark" th:title="DIRTY"><i class="bi bi-pencil me-1"></i>[[${stats.foldersStatusDirty}]]</span>
+                        <span class="badge bg-success" th:title="CURRENT"><i class="bi bi-check-circle me-1"></i>[[${stats.foldersStatusCurrent}]]</span>
+                        <span th:if="${stats.foldersStatusFailed > 0}" class="badge bg-danger" th:title="FAILED"><i class="bi bi-x-circle me-1"></i>[[${stats.foldersStatusFailed}]]</span>
                     </div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="dashboard-card-title">Content Chunks</div>
-                            <div class="dashboard-card-value" th:text="${chunkCount} ?: '0'">0</div>
-                        </div>
-                        <i class="bi bi-puzzle dashboard-card-icon text-success"></i>
-                    </div>
-                </div>
-                <div class="dashboard-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="dashboard-card-title">Crawl Configs</div>
-                            <div class="dashboard-card-value" th:text="${configCount} ?: '0'">0</div>
-                        </div>
-                        <i class="bi bi-gear-wide-connected dashboard-card-icon text-info"></i>
+                    <small class="text-muted d-block mb-1">By Analysis:</small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge bg-secondary" th:title="SKIP">S: [[${stats.foldersSkip}]]</span>
+                        <span class="badge bg-light text-dark border" th:title="LOCATE">L: [[${stats.foldersLocate}]]</span>
+                        <span class="badge bg-primary" th:title="INDEX">I: [[${stats.foldersIndex}]]</span>
+                        <span class="badge bg-success" th:title="ANALYZE">A: [[${stats.foldersAnalyze}]]</span>
+                        <span th:if="${stats.foldersSemantic > 0}" class="badge bg-warning text-dark" th:title="SEMANTIC">E: [[${stats.foldersSemantic}]]</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Main Dashboard Content -->
-            <div class="row">
-                <!-- Quick Actions -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-lightning me-2"></i>Quick Actions
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="quick-actions">
-                                <a th:href="@{/crawlConfigs}" class="btn btn-primary">
-                                    <i class="bi bi-play-circle me-1"></i>Run Crawl
-                                </a>
-                                <a th:href="@{/search}" class="btn btn-outline-primary">
-                                    <i class="bi bi-search me-1"></i>Search Files
-                                </a>
-                                <a th:href="@{/fSFiles}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-file-earmark me-1"></i>Browse Files
-                                </a>
-                                <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-clock-history me-1"></i>View Job History
-                                </a>
-                            </div>
-                        </div>
+            <!-- Content Chunks with Status/Analysis Level breakdown -->
+            <div class="dashboard-card">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="dashboard-card-title">Content Chunks</div>
+                        <div class="dashboard-card-value" th:text="${stats.totalChunks}">0</div>
+                    </div>
+                    <i class="bi bi-puzzle dashboard-card-icon text-success"></i>
+                </div>
+                <div class="mt-3" th:if="${stats.totalChunks > 0}">
+                    <small class="text-muted d-block mb-1">By Status:</small>
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.chunksStatusNew}]]</span>
+                        <span class="badge bg-warning text-dark" th:title="DIRTY"><i class="bi bi-pencil me-1"></i>[[${stats.chunksStatusDirty}]]</span>
+                        <span class="badge bg-success" th:title="CURRENT"><i class="bi bi-check-circle me-1"></i>[[${stats.chunksStatusCurrent}]]</span>
+                        <span th:if="${stats.chunksStatusFailed > 0}" class="badge bg-danger" th:title="FAILED"><i class="bi bi-x-circle me-1"></i>[[${stats.chunksStatusFailed}]]</span>
+                    </div>
+                    <small class="text-muted d-block mb-1">By Analysis Level:</small>
+                    <div class="d-flex flex-wrap gap-1">
+                        <span class="badge bg-primary" th:title="|INDEX - Text indexed|">INDEX: [[${stats.chunksLevelIndex}]]</span>
+                        <span class="badge bg-success" th:title="|NLP - Named entities, sentiment, etc.|">NLP: [[${stats.chunksLevelNlp}]]</span>
+                        <span class="badge bg-warning text-dark" th:title="|EMBED - Vector embeddings|">EMBED: [[${stats.chunksLevelEmbed}]]</span>
                     </div>
                 </div>
+            </div>
 
-                <!-- Recent Activity -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-activity me-2"></i>Recent Activity
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div th:if="${recentJobRuns != null and !recentJobRuns.empty}">
-                                <div th:each="job : ${recentJobRuns}" class="activity-item">
-                                    <div class="activity-icon"
-                                         th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bg-success-subtle text-success' :
-                                                         (${job.runStatus?.name() == 'FAILED'} ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info')">
-                                        <i class="bi"
-                                           th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bi-check' :
-                                                          (${job.runStatus?.name() == 'FAILED'} ? 'bi-x' : 'bi-arrow-repeat')"></i>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="fw-medium" th:text="${job.jobName}">Crawl Job</div>
-                                        <small class="text-muted">
-                                            <span th:text="${job.filesDiscovered}">0</span> files,
-                                            <span th:text="${job.foldersDiscovered}">0</span> folders
-                                        </small>
-                                    </div>
-                                    <div class="activity-time" th:if="${job.startTime != null}"
-                                         th:text="${#temporals.format(job.startTime, 'MMM d, HH:mm')}">
-                                        Jan 1, 12:00
-                                    </div>
+            <!-- Quick Actions (swapped from Crawl Configs) -->
+            <div class="dashboard-card">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div class="dashboard-card-title">Quick Actions</div>
+                    <i class="bi bi-lightning dashboard-card-icon text-info"></i>
+                </div>
+                <div class="d-grid gap-2">
+                    <a th:href="@{/crawlConfigs}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-play-circle me-1"></i>Run Crawl
+                    </a>
+                    <a th:href="@{/search}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-search me-1"></i>Search
+                    </a>
+                    <a th:href="@{/fSFiles}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-file-earmark me-1"></i>Browse
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Crawl Configs (1/3) + Tabbed Content (2/3) -->
+        <div class="row mb-4">
+            <!-- Crawl Configs (compact list, 1/3 width) -->
+            <div class="col-lg-4 mb-4 mb-lg-0">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-gear-wide-connected me-1"></i>Crawl Configs
+                            <span class="badge bg-secondary ms-1">[[${stats.totalConfigs}]]</span>
+                        </h6>
+                        <a th:href="@{/crawlConfigs}" class="btn btn-outline-primary btn-sm py-0 px-2">
+                            <i class="bi bi-plus-lg"></i>
+                        </a>
+                    </div>
+                    <div class="card-body p-0">
+                        <div th:if="${crawlConfigs != null and !crawlConfigs.empty}" class="compact-config-list">
+                            <div th:each="config : ${crawlConfigs}" class="compact-config-row">
+                                <div class="compact-config-check">
+                                    <input type="checkbox" class="form-check-input config-select-cb"
+                                           th:value="${config.id}"
+                                           th:data-enabled="${config.enabled}"
+                                           onchange="onConfigSelectionChange()">
+                                </div>
+                                <div class="compact-config-name">
+                                    <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
+                                       th:text="${config.displayLabel ?: config.name}"
+                                       th:title="${config.name}">Config</a>
+                                </div>
+                                <div class="compact-config-paths" th:if="${config.startPaths != null and !config.startPaths.empty}"
+                                     th:title="${#strings.listJoin(config.startPaths, ', ')}">
+                                    [[${config.startPaths[0]}]]
+                                </div>
+                                <div class="compact-config-status">
+                                    <span th:if="${config.enabled}" class="badge bg-success" style="font-size: 0.65rem;">On</span>
+                                    <span th:unless="${config.enabled}" class="badge bg-secondary" style="font-size: 0.65rem;">Off</span>
                                 </div>
                             </div>
-                            <div th:if="${recentJobRuns == null or recentJobRuns.empty}" class="text-muted">
-                                <i class="bi bi-inbox me-2"></i>No recent activity.
-                                <a th:href="@{/crawlConfigs}">Start a crawl</a> to see activity here.
-                            </div>
+                        </div>
+                        <div th:if="${crawlConfigs == null or crawlConfigs.empty}" class="p-3 text-muted small">
+                            <i class="bi bi-inbox me-2"></i>No crawl configs.
+                            <a th:href="@{/crawlConfigs}">Create one</a>
+                        </div>
+                    </div>
+                    <!-- Run Selected toolbar (appears when configs selected) -->
+                    <div class="config-toolbar justify-content-between align-items-center" id="configToolbar">
+                        <span class="small"><strong id="selectedConfigCount">0</strong> selected</span>
+                        <div class="d-flex gap-2">
+                            <form th:action="@{/crawlConfigs/run-selected}" method="post" class="d-inline" id="dashboardRunForm">
+                                <input type="hidden" name="selectedIds" id="dashboardSelectedIds">
+                                <button type="submit" class="btn btn-primary btn-sm" id="dashboardRunBtn">
+                                    <i class="bi bi-play-fill"></i> Run
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearConfigSelection()">
+                                <i class="bi bi-x"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- System Status -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-info-circle me-2"></i>System Information
-                            </h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <p class="mb-2"><strong>Application:</strong> [[#{app.title}]]</p>
-                                    <p class="mb-2"><strong>Version:</strong> 0.0.1-SNAPSHOT</p>
+            <!-- Tabbed Content Widget (2/3 width) -->
+            <div class="col-lg-8">
+                <div class="card h-100">
+                    <div class="card-header py-0">
+                        <ul class="nav nav-tabs content-tabs card-header-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="folders-tab" data-bs-toggle="tab"
+                                        data-bs-target="#folders-panel" type="button" role="tab"
+                                        aria-controls="folders-panel" aria-selected="true">
+                                    <i class="bi bi-folder me-1"></i>Folders
+                                    <span class="badge bg-secondary ms-1" th:text="${folders.totalElements}">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="files-tab" data-bs-toggle="tab"
+                                        data-bs-target="#files-panel" type="button" role="tab"
+                                        aria-controls="files-panel" aria-selected="false">
+                                    <i class="bi bi-file-earmark me-1"></i>Items
+                                    <span class="badge bg-secondary ms-1" th:text="${files.totalElements}">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item ms-auto d-flex align-items-center">
+                                <div class="form-check form-check-inline small mb-0">
+                                    <input class="form-check-input" type="checkbox" id="dashboardShowSkipped"
+                                           onchange="refreshContentTabs()">
+                                    <label class="form-check-label text-muted" for="dashboardShowSkipped">Show skipped</label>
                                 </div>
-                                <div class="col-md-4">
-                                    <p class="mb-2"><strong>Spring Boot:</strong> 3.5.x</p>
-                                    <p class="mb-2"><strong>Database:</strong> PostgreSQL</p>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="tab-content">
+                            <!-- Folders Tab -->
+                            <div class="tab-pane fade show active" id="folders-panel" role="tabpanel" aria-labelledby="folders-tab">
+                                <div id="folders-table-container">
+                                    <th:block th:fragment="folders-table">
+                                        <div th:if="${folders.empty}" class="p-3 text-muted small">
+                                            <i class="bi bi-inbox me-2"></i>No folders found.
+                                        </div>
+                                        <div th:if="${!folders.empty}" class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                            <table class="table table-striped table-hover tab-table mb-0">
+                                                <thead class="sticky-top bg-white">
+                                                    <tr>
+                                                        <th>
+                                                            <a href="#" onclick="sortFolders('label')" class="text-decoration-none">Name</a>
+                                                        </th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFolders('uri')" class="text-decoration-none">Path</a>
+                                                        </th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr th:each="folder : ${folders}"
+                                                        th:classappend="${folder.analysisStatus?.name() == 'SKIP'} ? 'table-secondary' : ''">
+                                                        <td class="text-truncate" style="max-width: 150px;">
+                                                            <a th:href="@{/fSFolders/{id}(id=${folder.id})}"
+                                                               th:text="${folder.label}" th:title="${folder.label}"
+                                                               class="text-decoration-none">Folder</a>
+                                                        </td>
+                                                        <td class="text-truncate" style="max-width: 250px;">
+                                                            <code class="small" th:text="${folder.uri}" th:title="${folder.uri}"></code>
+                                                        </td>
+                                                        <td>
+                                                            <span th:if="${folder.analysisStatus}"
+                                                                  th:class="${'badge ' +
+                                                                      (folder.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
+                                                                       folder.analysisStatus.name() == 'LOCATE' ? 'bg-light text-dark' :
+                                                                       folder.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
+                                                                       folder.analysisStatus.name() == 'ANALYZE' ? 'bg-success' : 'bg-warning')}"
+                                                                  th:text="${folder.analysisStatus}" style="font-size: 0.7rem;"></span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <!-- Pagination -->
+                                        <div th:if="${folders.totalPages > 1}" class="d-flex justify-content-between align-items-center px-3 py-2 border-top tab-pagination">
+                                            <small class="text-muted">
+                                                [[${folders.number * folders.size + 1}]]-[[${folders.number * folders.size + folders.numberOfElements}]]
+                                                of [[${folders.totalElements}]]
+                                            </small>
+                                            <nav>
+                                                <ul class="pagination pagination-sm mb-0">
+                                                    <li class="page-item" th:classappend="${folders.first} ? 'disabled'">
+                                                        <a class="page-link" href="#"
+                                                           th:onclick="|loadFolders(${folders.number - 1})|">&laquo;</a>
+                                                    </li>
+                                                    <li class="page-item active">
+                                                        <span class="page-link">[[${folders.number + 1}]]</span>
+                                                    </li>
+                                                    <li class="page-item" th:classappend="${folders.last} ? 'disabled'">
+                                                        <a class="page-link" href="#"
+                                                           th:onclick="|loadFolders(${folders.number + 1})|">&raquo;</a>
+                                                    </li>
+                                                </ul>
+                                            </nav>
+                                        </div>
+                                    </th:block>
                                 </div>
-                                <div class="col-md-4">
-                                    <p class="mb-2"><strong>Text Extraction:</strong> Apache Tika 2.9.1</p>
-                                    <p class="mb-2"><strong>Status:</strong>
-                                        <span class="badge bg-success">Running</span>
-                                    </p>
+                            </div>
+
+                            <!-- Files Tab -->
+                            <div class="tab-pane fade" id="files-panel" role="tabpanel" aria-labelledby="files-tab">
+                                <div id="files-table-container">
+                                    <th:block th:fragment="files-table">
+                                        <div th:if="${files.empty}" class="p-3 text-muted small">
+                                            <i class="bi bi-inbox me-2"></i>No files found.
+                                        </div>
+                                        <div th:if="${!files.empty}" class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                                            <table class="table table-striped table-hover tab-table mb-0">
+                                                <thead class="sticky-top bg-white">
+                                                    <tr>
+                                                        <th>
+                                                            <a href="#" onclick="sortFiles('label')" class="text-decoration-none">Name</a>
+                                                        </th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFiles('uri')" class="text-decoration-none">Path</a>
+                                                        </th>
+                                                        <th>Size</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr th:each="file : ${files}"
+                                                        th:classappend="${file.analysisStatus?.name() == 'SKIP'} ? 'table-secondary' : ''">
+                                                        <td class="text-truncate" style="max-width: 150px;">
+                                                            <a th:href="@{/fSFiles/{id}(id=${file.id})}"
+                                                               th:text="${file.label}" th:title="${file.label}"
+                                                               class="text-decoration-none">File</a>
+                                                        </td>
+                                                        <td class="text-truncate" style="max-width: 200px;">
+                                                            <code class="small" th:text="${file.uri}" th:title="${file.uri}"></code>
+                                                        </td>
+                                                        <td class="text-nowrap small">
+                                                            <span th:if="${file.size != null}" th:text="${#numbers.formatDecimal(file.size / 1024.0, 0, 1) + ' KB'}"></span>
+                                                        </td>
+                                                        <td>
+                                                            <span th:if="${file.analysisStatus}"
+                                                                  th:class="${'badge ' +
+                                                                      (file.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
+                                                                       file.analysisStatus.name() == 'LOCATE' ? 'bg-light text-dark' :
+                                                                       file.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
+                                                                       file.analysisStatus.name() == 'ANALYZE' ? 'bg-success' : 'bg-warning')}"
+                                                                  th:text="${file.analysisStatus}" style="font-size: 0.7rem;"></span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <!-- Pagination -->
+                                        <div th:if="${files.totalPages > 1}" class="d-flex justify-content-between align-items-center px-3 py-2 border-top tab-pagination">
+                                            <small class="text-muted">
+                                                [[${files.number * files.size + 1}]]-[[${files.number * files.size + files.numberOfElements}]]
+                                                of [[${files.totalElements}]]
+                                            </small>
+                                            <nav>
+                                                <ul class="pagination pagination-sm mb-0">
+                                                    <li class="page-item" th:classappend="${files.first} ? 'disabled'">
+                                                        <a class="page-link" href="#"
+                                                           th:onclick="|loadFiles(${files.number - 1})|">&laquo;</a>
+                                                    </li>
+                                                    <li class="page-item active">
+                                                        <span class="page-link">[[${files.number + 1}]]</span>
+                                                    </li>
+                                                    <li class="page-item" th:classappend="${files.last} ? 'disabled'">
+                                                        <a class="page-link" href="#"
+                                                           th:onclick="|loadFiles(${files.number + 1})|">&raquo;</a>
+                                                    </li>
+                                                </ul>
+                                            </nav>
+                                        </div>
+                                    </th:block>
                                 </div>
                             </div>
                         </div>
@@ -152,26 +434,217 @@
             </div>
         </div>
 
-        <!-- Details Panel Content -->
-        <div layout:fragment="details">
-            <h6 class="fw-semibold mb-3">Dashboard Overview</h6>
-            <p class="small text-muted">
-                This dashboard provides a quick overview of your Spring Search Tempo instance.
-            </p>
-            <hr>
-            <h6 class="fw-semibold mb-2">Getting Started</h6>
-            <ol class="small ps-3">
-                <li class="mb-2">Configure crawl settings in <strong>Configurations</strong></li>
-                <li class="mb-2">Run a crawl to index your files</li>
-                <li class="mb-2">Use <strong>Search</strong> to find content</li>
-                <li class="mb-2">Browse indexed <strong>Files</strong> and <strong>Folders</strong></li>
-            </ol>
-            <hr>
-            <h6 class="fw-semibold mb-2">Need Help?</h6>
-            <p class="small text-muted mb-0">
-                Check the <a href="https://github.com/oconeco/spring-search-tempo" target="_blank">documentation</a>
-                for detailed guides and API reference.
-            </p>
+        <!-- Row 3: Recent Activity, System Information -->
+        <div class="row">
+            <!-- Recent Activity -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-activity me-2"></i>Recent Activity
+                        </h5>
+                        <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-clock-history me-1"></i>All Jobs
+                        </a>
+                    </div>
+                    <div class="card-body p-0">
+                        <div th:if="${recentJobRuns != null and !recentJobRuns.empty}" class="list-group list-group-flush">
+                            <div th:each="job : ${recentJobRuns}" class="list-group-item d-flex align-items-center py-2">
+                                <div class="activity-icon me-2"
+                                     th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bg-success-subtle text-success' :
+                                                     (${job.runStatus?.name() == 'FAILED'} ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info')">
+                                    <i class="bi"
+                                       th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bi-check' :
+                                                      (${job.runStatus?.name() == 'FAILED'} ? 'bi-x' : 'bi-arrow-repeat')"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-medium small" th:text="${job.jobName}">Crawl Job</div>
+                                    <small class="text-muted">
+                                        [[${job.filesDiscovered}]] files, [[${job.foldersDiscovered}]] folders
+                                    </small>
+                                </div>
+                                <small class="text-muted" th:if="${job.startTime != null}"
+                                       th:text="${#temporals.format(job.startTime, 'MMM d, HH:mm')}">
+                                    Jan 1, 12:00
+                                </small>
+                            </div>
+                        </div>
+                        <div th:if="${recentJobRuns == null or recentJobRuns.empty}" class="p-3 text-muted">
+                            <i class="bi bi-inbox me-2"></i>No recent activity.
+                            <a th:href="@{/crawlConfigs}">Start a crawl</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-info-circle me-2"></i>System Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <dl class="mb-0 small">
+                                    <dt>Application:</dt>
+                                    <dd>[[#{app.title}]]</dd>
+                                    <dt>Version:</dt>
+                                    <dd>0.0.1-SNAPSHOT</dd>
+                                    <dt>Spring Boot:</dt>
+                                    <dd>3.5.x</dd>
+                                </dl>
+                            </div>
+                            <div class="col-6">
+                                <dl class="mb-0 small">
+                                    <dt>Database:</dt>
+                                    <dd>PostgreSQL</dd>
+                                    <dt>Text Extraction:</dt>
+                                    <dd>Apache Tika 2.9.1</dd>
+                                    <dt>Status:</dt>
+                                    <dd><span class="badge bg-success">Running</span></dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </body>
+    </div>
+
+    <!-- Dashboard JavaScript for config selection and content tabs -->
+    <script th:inline="javascript">
+    // Track current state
+    let currentFoldersPage = 0;
+    let currentFilesPage = 0;
+    let currentFoldersSort = 'uri';
+    let currentFilesSort = 'uri';
+
+    // Get selected config IDs
+    function getSelectedConfigIds() {
+        const checkboxes = document.querySelectorAll('.config-select-cb:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    // Update toolbar visibility and form fields
+    function onConfigSelectionChange() {
+        const selectedIds = getSelectedConfigIds();
+        const toolbar = document.getElementById('configToolbar');
+        const countSpan = document.getElementById('selectedConfigCount');
+        const hiddenInput = document.getElementById('dashboardSelectedIds');
+        const runBtn = document.getElementById('dashboardRunBtn');
+
+        countSpan.textContent = selectedIds.length;
+        hiddenInput.value = selectedIds.join(',');
+
+        if (selectedIds.length > 0) {
+            toolbar.classList.add('show');
+
+            // Check if any enabled configs selected
+            const enabledSelected = Array.from(document.querySelectorAll('.config-select-cb:checked'))
+                .filter(cb => cb.dataset.enabled === 'true').length;
+            runBtn.disabled = enabledSelected === 0;
+            runBtn.title = enabledSelected === 0 ? 'No enabled configs selected' : '';
+        } else {
+            toolbar.classList.remove('show');
+        }
+
+        // Refresh content tabs with new filter
+        refreshContentTabs();
+    }
+
+    // Clear all config selections
+    function clearConfigSelection() {
+        document.querySelectorAll('.config-select-cb').forEach(cb => cb.checked = false);
+        onConfigSelectionChange();
+    }
+
+    // Build query string for HTMX requests
+    function buildQueryString(page, sort, includeConfigs = true) {
+        const params = new URLSearchParams();
+        params.set('page', page);
+        params.set('sort', sort + ',ASC');
+
+        const showSkipped = document.getElementById('dashboardShowSkipped').checked;
+        if (showSkipped) {
+            params.set('showSkipped', 'true');
+        }
+
+        if (includeConfigs) {
+            const configIds = getSelectedConfigIds();
+            configIds.forEach(id => params.append('configIds', id));
+        }
+
+        return params.toString();
+    }
+
+    // Load folders with HTMX
+    function loadFolders(page) {
+        if (page < 0) return;
+        currentFoldersPage = page;
+        const url = '/dashboard/folders?' + buildQueryString(page, currentFoldersSort);
+        htmx.ajax('GET', url, {target: '#folders-table-container', swap: 'innerHTML'});
+    }
+
+    // Load files with HTMX
+    function loadFiles(page) {
+        if (page < 0) return;
+        currentFilesPage = page;
+        const url = '/dashboard/files?' + buildQueryString(page, currentFilesSort);
+        htmx.ajax('GET', url, {target: '#files-table-container', swap: 'innerHTML'});
+    }
+
+    // Sort folders
+    function sortFolders(field) {
+        currentFoldersSort = field;
+        currentFoldersPage = 0;
+        loadFolders(0);
+    }
+
+    // Sort files
+    function sortFiles(field) {
+        currentFilesSort = field;
+        currentFilesPage = 0;
+        loadFiles(0);
+    }
+
+    // Refresh both content tabs
+    function refreshContentTabs() {
+        loadFolders(0);
+        loadFiles(0);
+    }
+    </script>
+</div>
+
+<!-- Details Panel Content -->
+<div layout:fragment="details">
+    <h6 class="fw-semibold mb-3">Dashboard Overview</h6>
+    <p class="small text-muted">
+        This dashboard provides a quick overview of your Spring Search Tempo instance.
+    </p>
+    <hr>
+    <h6 class="fw-semibold mb-2">Analysis Levels</h6>
+    <ul class="small ps-3 mb-3">
+        <li><strong>S</strong>kip - Not processed</li>
+        <li><strong>L</strong>ocate - Metadata only</li>
+        <li><strong>I</strong>ndex - Full-text extracted</li>
+        <li><strong>A</strong>nalyze - NLP processed</li>
+        <li><strong>E</strong>mbed - Semantic vectors</li>
+    </ul>
+    <hr>
+    <h6 class="fw-semibold mb-2">Config Selection</h6>
+    <p class="small text-muted mb-3">
+        Select configs to filter Folders/Items tabs or run crawls.
+    </p>
+    <hr>
+    <h6 class="fw-semibold mb-2">Getting Started</h6>
+    <ol class="small ps-3">
+        <li class="mb-2">Configure crawl settings in <strong>Crawl Configs</strong></li>
+        <li class="mb-2">Run a crawl to index your files</li>
+        <li class="mb-2">Use <strong>Search</strong> to find content</li>
+    </ol>
+</div>
+</body>
 </html>

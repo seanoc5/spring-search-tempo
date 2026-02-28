@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.repos.SpringRoleRepository
 import com.oconeco.spring_search_tempo.base.repos.SpringUserRepository
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
+import com.oconeco.spring_search_tempo.base.util.UserRoles
 import org.springframework.context.event.EventListener
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -62,12 +63,48 @@ class SpringRoleServiceImpl(
 
     @EventListener(BeforeDeleteSpringUser::class)
     fun on(event: BeforeDeleteSpringUser) {
-        val referencedException = ReferencedException()
-        val springUserSpringRole = springRoleRepository.findFirstBySpringUserId(event.id)
-        if (springUserSpringRole != null) {
-            referencedException.key = "springUser.springRole.springUser.referenced"
-            referencedException.addParam(springUserSpringRole.id)
-            throw referencedException
+        // Delete all roles for the user being deleted
+        springRoleRepository.deleteAllBySpringUserId(event.id)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getRolesForUser(userId: Long): List<String> =
+        springRoleRepository.findAllBySpringUserId(userId)
+            .mapNotNull { it.label }
+
+    @Transactional(readOnly = true)
+    override fun getAvailableRoles(): List<String> =
+        listOf(UserRoles.USER, UserRoles.ADMIN)
+
+    override fun updateRolesForUser(userId: Long, roleLabels: List<String>) {
+        val user = springUserRepository.findById(userId)
+            .orElseThrow { NotFoundException() }
+
+        // Get current roles
+        val currentRoles = springRoleRepository.findAllBySpringUserId(userId)
+        val currentLabels = currentRoles.mapNotNull { it.label }.toSet()
+
+        // Roles to add
+        val toAdd = roleLabels.filter { it !in currentLabels }
+
+        // Roles to remove
+        val toRemove = currentRoles.filter { it.label !in roleLabels }
+
+        // Delete removed roles
+        toRemove.forEach { springRoleRepository.delete(it) }
+
+        // Add new roles
+        toAdd.forEach { label ->
+            val role = SpringRole().apply {
+                this.label = label
+                this.description = when (label) {
+                    UserRoles.ADMIN -> "Administrator role with full access"
+                    UserRoles.USER -> "Standard user role"
+                    else -> label
+                }
+                this.springUser = user
+            }
+            springRoleRepository.save(role)
         }
     }
 

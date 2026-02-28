@@ -1,0 +1,98 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Edit Email Tag</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">Edit Email Tag</h1>
+        <div>
+            <a th:href="@{/emailTags}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+        </div>
+    </div>
+
+    <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger">
+        <span th:each="err : ${#fields.globalErrors()}" th:text="${err}">Error</span>
+    </div>
+
+    <form th:action="@{/emailTags/{id}/edit(id=${emailTag.id})}" th:object="${emailTag}" method="post" novalidate="">
+        <div class="row mb-3">
+            <label for="name" class="col-md-3 col-lg-2 col-form-label">
+                Name <span class="text-danger">*</span>
+            </label>
+            <div class="col-md-6 col-lg-4">
+                <input type="text" th:field="*{name}" id="name"
+                       th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'"
+                       class="form-control" maxlength="100" required />
+                <div th:if="${#fields.hasErrors('name')}" class="invalid-feedback">
+                    <span th:errors="*{name}">Error</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <label for="color" class="col-md-3 col-lg-2 col-form-label">
+                Color <span class="text-danger">*</span>
+            </label>
+            <div class="col-md-6 col-lg-4">
+                <div class="input-group">
+                    <input type="color" th:field="*{color}" id="color"
+                           class="form-control form-control-color" style="width: 60px" />
+                    <input type="text" th:field="*{color}" id="colorHex"
+                           th:classappend="${#fields.hasErrors('color')} ? 'is-invalid'"
+                           class="form-control" pattern="^#[0-9A-Fa-f]{6}$" maxlength="7" />
+                    <div th:if="${#fields.hasErrors('color')}" class="invalid-feedback">
+                        <span th:errors="*{color}">Error</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6 col-lg-4 offset-md-3 offset-lg-2">
+                <span class="badge" th:style="'background-color: ' + *{color}" id="previewBadge">
+                    [[${emailTag.name}]]
+                </span>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 col-lg-4 offset-md-3 offset-lg-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script layout:fragment="scripts">
+    // Sync color picker with hex input
+    document.addEventListener('DOMContentLoaded', function() {
+        const colorPicker = document.getElementById('color');
+        const colorHex = document.getElementById('colorHex');
+        const previewBadge = document.getElementById('previewBadge');
+
+        function updatePreview(color) {
+            previewBadge.style.backgroundColor = color;
+        }
+
+        colorPicker.addEventListener('input', function() {
+            colorHex.value = this.value;
+            updatePreview(this.value);
+        });
+
+        colorHex.addEventListener('input', function() {
+            if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+                colorPicker.value = this.value;
+                updatePreview(this.value);
+            }
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Folder Review</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <th:block th:fragment="content">
+        <div th:if="${error}" class="alert alert-danger">
+            [[${error}]]
+        </div>
+
+        <div th:if="${result != null}">
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1">
+                    <i class="bi bi-folder2-open me-2"></i>Folder Review
+                </h1>
+                <div>
+                    <a th:href="@{/fSFolders/{id}(id=${result.folder.id})}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Folder
+                    </a>
+                    <a th:href="@{/crawlReview}" class="btn btn-outline-secondary ms-2">
+                        <i class="bi bi-clipboard2-check me-1"></i>Crawl Review
+                    </a>
+                </div>
+            </div>
+
+            <!-- Folder info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="card-title mb-1">
+                                <code th:text="${result.folder.uri}">path</code>
+                            </h5>
+                            <p class="text-muted mb-0 small">
+                                Status: <span class="badge"
+                                              th:classappend="${result.folder.analysisStatus?.name() == 'SKIP'} ? 'bg-secondary' :
+                                                              ${result.folder.analysisStatus?.name() == 'LOCATE'} ? 'bg-info' :
+                                                              ${result.folder.analysisStatus?.name() == 'INDEX'} ? 'bg-primary' :
+                                                              ${result.folder.analysisStatus?.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                              th:text="${result.folder.analysisStatus}">STATUS</span>
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <span class="text-muted small">ID: [[${result.folder.id}]]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row g-3 mb-4">
+                <!-- Files summary -->
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-primary" th:text="${result.summary.fsFileCount}">0</div>
+                            <div class="small text-muted">FS Files</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-info" th:text="${result.summary.dbFileCount}">0</div>
+                            <div class="small text-muted">DB Files</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-success" th:text="${result.summary.matchingFileCount}">0</div>
+                            <div class="small text-muted">Matching</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Folders summary -->
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-primary" th:text="${result.summary.fsFolderCount}">0</div>
+                            <div class="small text-muted">FS Folders</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-info" th:text="${result.summary.dbFolderCount}">0</div>
+                            <div class="small text-muted">DB Folders</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="card text-center h-100">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-success" th:text="${result.summary.matchingFolderCount}">0</div>
+                            <div class="small text-muted">Matching</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gap summary -->
+            <div class="row g-3 mb-4" th:if="${result.summary.fsOnlyFileCount > 0 or result.summary.dbOnlyFileCount > 0 or result.summary.fsOnlyFolderCount > 0 or result.summary.dbOnlyFolderCount > 0}">
+                <div class="col-6 col-md-3" th:if="${result.summary.fsOnlyFileCount > 0}">
+                    <div class="card text-center border-danger">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-danger" th:text="${result.summary.fsOnlyFileCount}">0</div>
+                            <div class="small text-muted">Files: FS Only</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3" th:if="${result.summary.dbOnlyFileCount > 0}">
+                    <div class="card text-center border-warning">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-warning" th:text="${result.summary.dbOnlyFileCount}">0</div>
+                            <div class="small text-muted">Files: DB Only</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3" th:if="${result.summary.fsOnlyFolderCount > 0}">
+                    <div class="card text-center border-danger">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-danger" th:text="${result.summary.fsOnlyFolderCount}">0</div>
+                            <div class="small text-muted">Folders: FS Only</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3" th:if="${result.summary.dbOnlyFolderCount > 0}">
+                    <div class="card text-center border-warning">
+                        <div class="card-body py-2">
+                            <div class="fs-4 fw-bold text-warning" th:text="${result.summary.dbOnlyFolderCount}">0</div>
+                            <div class="small text-muted">Folders: DB Only</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expected status breakdown -->
+            <div th:if="${!result.summary.byExpectedStatus.empty}" class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">Files by Expected Status (from pattern matching)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-3">
+                        <th:block th:each="entry : ${result.summary.byExpectedStatus}">
+                            <div class="d-flex align-items-center">
+                                <span class="badge me-2"
+                                      th:classappend="${entry.key.name() == 'SKIP'} ? 'bg-secondary' :
+                                                      ${entry.key.name() == 'LOCATE'} ? 'bg-info' :
+                                                      ${entry.key.name() == 'INDEX'} ? 'bg-primary' :
+                                                      ${entry.key.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                      th:text="${entry.key}">STATUS</span>
+                                <span th:text="${entry.value}">0</span>
+                            </div>
+                        </th:block>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs for Files and Folders -->
+            <ul class="nav nav-tabs" id="reviewTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files-panel"
+                            type="button" role="tab">
+                        <i class="bi bi-file-earmark me-1"></i>Files
+                        <span class="badge bg-secondary ms-1" th:text="${result.filesOnFs.size()}">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="folders-tab" data-bs-toggle="tab" data-bs-target="#folders-panel"
+                            type="button" role="tab">
+                        <i class="bi bi-folder me-1"></i>Subfolders
+                        <span class="badge bg-secondary ms-1" th:text="${result.foldersOnFs.size()}">0</span>
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content border border-top-0 rounded-bottom" id="reviewTabsContent">
+                <!-- Files Panel -->
+                <div class="tab-pane fade show active p-3" id="files-panel" role="tabpanel">
+                    <div th:if="${result.filesOnFs.empty}" class="alert alert-info mb-0">
+                        No files found in this folder.
+                    </div>
+
+                    <div th:if="${!result.filesOnFs.empty}" class="table-responsive">
+                        <table class="table table-striped table-hover align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th scope="col">Filename</th>
+                                <th scope="col">Expected</th>
+                                <th scope="col">In DB</th>
+                                <th scope="col">DB Status</th>
+                                <th scope="col" class="text-end">Size</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="file : ${result.filesOnFs}"
+                                th:classappend="${!file.existsInDb and file.expectedStatus.name() != 'SKIP'} ? 'table-danger' : ''">
+                                <td>
+                                    <span th:text="${file.filename}">filename</span>
+                                    <span th:if="${file.matchedPattern != null}"
+                                          class="d-block small text-muted font-monospace"
+                                          th:text="${file.matchedPattern}"
+                                          th:title="Matched pattern">
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${file.expectedStatus.name() == 'SKIP'} ? 'bg-secondary' :
+                                                          ${file.expectedStatus.name() == 'LOCATE'} ? 'bg-info' :
+                                                          ${file.expectedStatus.name() == 'INDEX'} ? 'bg-primary' :
+                                                          ${file.expectedStatus.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                          th:text="${file.expectedStatus}">STATUS</span>
+                                </td>
+                                <td>
+                                    <i th:if="${file.existsInDb}" class="bi bi-check-circle text-success"></i>
+                                    <i th:if="${!file.existsInDb and file.expectedStatus.name() == 'SKIP'}" class="bi bi-skip-forward text-secondary"></i>
+                                    <i th:if="${!file.existsInDb and file.expectedStatus.name() != 'SKIP'}" class="bi bi-x-circle text-danger"></i>
+                                </td>
+                                <td>
+                                    <span th:if="${file.dbRecord != null}"
+                                          class="badge"
+                                          th:classappend="${file.dbRecord.analysisStatus?.name() == 'SKIP'} ? 'bg-secondary' :
+                                                          ${file.dbRecord.analysisStatus?.name() == 'LOCATE'} ? 'bg-info' :
+                                                          ${file.dbRecord.analysisStatus?.name() == 'INDEX'} ? 'bg-primary' :
+                                                          ${file.dbRecord.analysisStatus?.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                          th:text="${file.dbRecord.analysisStatus}">STATUS</span>
+                                    <span th:if="${file.dbRecord == null}" class="text-muted">-</span>
+                                </td>
+                                <td class="text-end">
+                                    <span class="small text-muted"
+                                          th:text="${#numbers.formatDecimal(file.size / 1024.0, 1, 1) + ' KB'}">0 KB</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Subfolders Panel -->
+                <div class="tab-pane fade p-3" id="folders-panel" role="tabpanel">
+                    <div th:if="${result.foldersOnFs.empty}" class="alert alert-info mb-0">
+                        No subfolders found in this folder.
+                    </div>
+
+                    <div th:if="${!result.foldersOnFs.empty}" class="table-responsive">
+                        <table class="table table-striped table-hover align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Expected</th>
+                                <th scope="col">In DB</th>
+                                <th scope="col">DB Status</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="folder : ${result.foldersOnFs}"
+                                th:classappend="${!folder.existsInDb and folder.expectedStatus.name() != 'SKIP'} ? 'table-danger' : ''">
+                                <td>
+                                    <i class="bi bi-folder me-1 text-muted"></i>
+                                    <span th:text="${folder.name}">foldername</span>
+                                    <span th:if="${folder.matchedPattern != null}"
+                                          class="d-block small text-muted font-monospace"
+                                          th:text="${folder.matchedPattern}"
+                                          th:title="Matched pattern">
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${folder.expectedStatus.name() == 'SKIP'} ? 'bg-secondary' :
+                                                          ${folder.expectedStatus.name() == 'LOCATE'} ? 'bg-info' :
+                                                          ${folder.expectedStatus.name() == 'INDEX'} ? 'bg-primary' :
+                                                          ${folder.expectedStatus.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                          th:text="${folder.expectedStatus}">STATUS</span>
+                                </td>
+                                <td>
+                                    <i th:if="${folder.existsInDb}" class="bi bi-check-circle text-success"></i>
+                                    <i th:if="${!folder.existsInDb and folder.expectedStatus.name() == 'SKIP'}" class="bi bi-skip-forward text-secondary"></i>
+                                    <i th:if="${!folder.existsInDb and folder.expectedStatus.name() != 'SKIP'}" class="bi bi-x-circle text-danger"></i>
+                                </td>
+                                <td>
+                                    <span th:if="${folder.dbRecord != null}"
+                                          class="badge"
+                                          th:classappend="${folder.dbRecord.analysisStatus?.name() == 'SKIP'} ? 'bg-secondary' :
+                                                          ${folder.dbRecord.analysisStatus?.name() == 'LOCATE'} ? 'bg-info' :
+                                                          ${folder.dbRecord.analysisStatus?.name() == 'INDEX'} ? 'bg-primary' :
+                                                          ${folder.dbRecord.analysisStatus?.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                                          th:text="${folder.dbRecord.analysisStatus}">STATUS</span>
+                                    <span th:if="${folder.dbRecord == null}" class="text-muted">-</span>
+                                </td>
+                                <td>
+                                    <a th:if="${folder.dbRecord != null}"
+                                       th:href="@{/crawlReview/folder/{id}(id=${folder.dbRecord.id})}"
+                                       class="btn btn-sm btn-outline-primary"
+                                       title="Review this folder">
+                                        <i class="bi bi-search"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6>Legend</h6>
+                    <div class="row g-2 small">
+                        <div class="col-auto">
+                            <i class="bi bi-check-circle text-success me-1"></i> In database
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-skip-forward text-secondary me-1"></i> Not in DB (expected - SKIP pattern)
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-x-circle text-danger me-1"></i> Not in DB (unexpected - should be crawled)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+</div>
+</body>
+</html>

@@ -3,8 +3,10 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
+import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional
 class FSFolderServiceImpl(
     private val fSFolderRepository: FSFolderRepository,
+    private val crawlConfigRepository: CrawlConfigRepository,
     private val publisher: ApplicationEventPublisher,
     @Qualifier("FSFolderMapperImpl") private val fSFolderMapper: FSFolderMapper
 ) : FSFolderService {
@@ -122,6 +125,42 @@ class FSFolderServiceImpl(
             pageable,
             page.totalElements
         )
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByCrawlConfigFacets(): List<Triple<Long, String, Long>> {
+        val configMap = crawlConfigRepository.findAll().associateBy { it.id }
+        return fSFolderRepository.countGroupedByCrawlConfig(AnalysisStatus.SKIP)
+            .map { row ->
+                val configId = row[0] as Long
+                val count = row[1] as Long
+                val configName = configMap[configId]?.name ?: "Unknown"
+                Triple(configId, configName, count)
+            }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countSkippedByCrawlConfig(): Map<Long, Long> {
+        return fSFolderRepository.countSkippedGroupedByCrawlConfig(AnalysisStatus.SKIP)
+            .associate { row ->
+                val configId = row[0] as Long
+                val count = row[1] as Long
+                configId to count
+            }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByStatus(): Map<String, Long> {
+        return Status.entries.associate { status ->
+            status.name to fSFolderRepository.countByStatus(status)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByAnalysisStatus(): Map<String, Long> {
+        return AnalysisStatus.entries.associate { status ->
+            status.name to fSFolderRepository.countByAnalysisStatus(status)
+        }
     }
 
 }

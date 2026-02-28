@@ -19,7 +19,8 @@ class SpringUserDTO {
 
     var enabled: Boolean? = null
 
-    @NotNull
     var password: String? = null
+
+    var roles: MutableList<String> = mutableListOf()
 
 }

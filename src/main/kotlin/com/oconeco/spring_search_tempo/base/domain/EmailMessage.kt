@@ -2,8 +2,12 @@ package com.oconeco.spring_search_tempo.base.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
+import jakarta.persistence.JoinTable
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import org.hibernate.annotations.JdbcTypeCode
@@ -26,6 +30,14 @@ class EmailMessage : SaveableObject() {
 
     @Column
     var imapUid: Long? = null  // IMAP UID (folder-specific, for incremental sync)
+
+    /**
+     * Two-pass sync status: HEADERS_ONLY (pass 1) or COMPLETE (pass 2).
+     * Allows fast header sync followed by parallel body fetching.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    var fetchStatus: FetchStatus = FetchStatus.HEADERS_ONLY
 
     // Envelope data
     @Column(columnDefinition = "text")
@@ -72,6 +84,10 @@ class EmailMessage : SaveableObject() {
     @Column(columnDefinition = "text")
     var attachmentNames: String? = null  // JSON array
 
+    // Read/unread status
+//    @Column(nullable = false)
+    var isRead: Boolean = false
+
     // Threading
     @Column(columnDefinition = "text")
     var inReplyTo: String? = null  // Message-ID being replied to
@@ -108,6 +124,26 @@ class EmailMessage : SaveableObject() {
     @JdbcTypeCode(SqlTypes.OTHER)
     var ftsVector: ByteArray? = null
 
+    // Categorization
+    /**
+     * Automatic category assigned by heuristic rules.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    var category: EmailCategory = EmailCategory.UNCATEGORIZED
+
+    /**
+     * Confidence score for the category assignment (0.0 to 1.0).
+     */
+    @Column
+    var categoryConfidence: Double? = null
+
+    /**
+     * Timestamp when categorization was performed.
+     */
+    @Column
+    var categorizedAt: OffsetDateTime? = null
+
     // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "email_account_id")
@@ -119,5 +155,13 @@ class EmailMessage : SaveableObject() {
 
     @OneToMany(mappedBy = "emailMessage")
     var contentChunks: MutableSet<ContentChunk> = mutableSetOf()
+
+    @ManyToMany
+    @JoinTable(
+        name = "email_message_tags",
+        joinColumns = [JoinColumn(name = "email_message_id")],
+        inverseJoinColumns = [JoinColumn(name = "email_tag_id")]
+    )
+    var tags: MutableSet<EmailTag> = mutableSetOf()
 
 }

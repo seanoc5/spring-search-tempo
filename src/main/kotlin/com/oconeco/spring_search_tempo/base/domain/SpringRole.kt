@@ -39,7 +39,6 @@ class SpringRole {
 
     @Column(
         nullable = false,
-        unique = true,
         columnDefinition = "text"
     )
     var label: String? = null

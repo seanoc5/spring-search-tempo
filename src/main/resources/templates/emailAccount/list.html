@@ -34,68 +34,107 @@
         No email accounts configured. <a th:href="@{/emailAccounts/add}">Add one now</a>.
     </div>
 
-    <div th:unless="${emailAccounts.empty}" class="table-responsive">
+    <div th:unless="${emailAccounts.empty}" class="table-responsive"
+         id="accounts-table"
+         th:hx-get="@{/emailAccounts/rows}"
+         th:hx-trigger="${emailAccounts.?[activeJobRun != null].size() > 0} ? 'every 3s' : 'none'"
+         hx-swap="innerHTML"
+         hx-target="#account-rows">
         <table class="table table-striped table-hover align-middle">
             <thead>
             <tr>
                 <th>Email</th>
                 <th>Provider</th>
                 <th>Status</th>
+                <th>Folders</th>
+                <th>Messages</th>
                 <th>Last Quick Sync</th>
                 <th>Last Error</th>
                 <th>Actions</th>
             </tr>
             </thead>
-            <tbody>
-            <tr th:each="account : ${emailAccounts}">
-                <td>
-                    <a th:href="@{/emailAccounts/{id}(id=${account.id})}">
-                        <i class="bi bi-envelope me-1"></i>[[${account.email}]]
-                    </a>
-                    <span th:if="${account.label}" class="text-muted small ms-2">([[${account.label}]])</span>
-                </td>
-                <td>
-                    <span class="badge bg-secondary">[[${account.provider}]]</span>
-                </td>
-                <td>
-                    <span th:if="${account.enabled}" class="badge bg-success">Enabled</span>
-                    <span th:unless="${account.enabled}" class="badge bg-secondary">Disabled</span>
-                </td>
-                <td>
-                    <span th:if="${account.lastQuickSyncAt}">
-                        [[${#temporals.format(account.lastQuickSyncAt, 'yyyy-MM-dd HH:mm')}]]
-                    </span>
-                    <span th:unless="${account.lastQuickSyncAt}" class="text-muted">Never</span>
-                </td>
-                <td>
-                    <span th:if="${account.lastError}" class="text-danger" th:title="${account.lastError}">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        [[${#strings.abbreviate(account.lastError, 30)}]]
-                    </span>
-                    <span th:unless="${account.lastError}" class="text-success">
-                        <i class="bi bi-check-circle"></i>
-                    </span>
-                </td>
-                <td>
-                    <div class="btn-group btn-group-sm">
-                        <a th:href="@{/emailAccounts/{id}(id=${account.id})}"
-                           class="btn btn-outline-secondary" title="View">
-                            <i class="bi bi-eye"></i>
-                        </a>
-                        <a th:href="@{/emailAccounts/{id}/edit(id=${account.id})}"
-                           class="btn btn-outline-secondary" title="Edit">
-                            <i class="bi bi-pencil"></i>
-                        </a>
-                        <form th:action="@{/emailAccounts/{id}/sync(id=${account.id})}"
-                              method="post" class="d-inline">
-                            <button type="submit" class="btn btn-outline-primary" title="Sync Now"
-                                    th:disabled="${!account.enabled}">
-                                <i class="bi bi-arrow-repeat"></i>
-                            </button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
+            <tbody id="account-rows">
+                <th:block th:fragment="account-rows">
+                    <tr th:each="account : ${emailAccounts}" th:fragment="account-row">
+                        <td>
+                            <a th:href="@{/emailAccounts/{id}(id=${account.id})}">
+                                <i class="bi bi-envelope me-1"></i>[[${account.email}]]
+                            </a>
+                            <span th:if="${account.label}" class="text-muted small ms-2">([[${account.label}]])</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">[[${account.provider}]]</span>
+                        </td>
+                        <td>
+                            <span th:if="${account.enabled}" class="badge bg-success">Enabled</span>
+                            <span th:unless="${account.enabled}" class="badge bg-secondary">Disabled</span>
+                        </td>
+                        <td>
+                            <span th:text="${account.folderCount}">0</span>
+                        </td>
+                        <td>
+                            <span th:text="${account.messageCount}">0</span>
+                            <span th:if="${account.unreadCount > 0}" class="badge bg-primary ms-1" title="Unread">
+                                [[${account.unreadCount}]]
+                            </span>
+                        </td>
+                        <td>
+                            <!-- Show progress bar if sync is active -->
+                            <div th:if="${account.activeJobRun != null}">
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                         role="progressbar"
+                                         th:style="'width: ' + ${account.activeJobRun.progressPercent ?: 0} + '%'"
+                                         th:attr="aria-valuenow=${account.activeJobRun.progressPercent ?: 0}"
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        [[${account.activeJobRun.progressPercent ?: 0}]]%
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    <span th:if="${account.activeJobRun.processedCount != null && account.activeJobRun.expectedTotal != null}">
+                                        [[${account.activeJobRun.processedCount}]] of [[${account.activeJobRun.expectedTotal}]]
+                                    </span>
+                                    <span th:if="${account.activeJobRun.currentStepName}">
+                                        - [[${account.activeJobRun.currentStepName}]]
+                                    </span>
+                                </small>
+                            </div>
+                            <!-- Show last sync time if no active sync -->
+                            <span th:if="${account.activeJobRun == null && account.lastQuickSyncAt != null}">
+                                [[${#temporals.format(account.lastQuickSyncAt, 'yyyy-MM-dd HH:mm')}]]
+                            </span>
+                            <span th:if="${account.activeJobRun == null && account.lastQuickSyncAt == null}" class="text-muted">Never</span>
+                        </td>
+                        <td>
+                            <span th:if="${account.lastError}" class="text-danger" th:title="${account.lastError}">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                [[${#strings.abbreviate(account.lastError, 30)}]]
+                            </span>
+                            <span th:unless="${account.lastError}" class="text-success">
+                                <i class="bi bi-check-circle"></i>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a th:href="@{/emailAccounts/{id}(id=${account.id})}"
+                                   class="btn btn-outline-secondary" title="View">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a th:href="@{/emailAccounts/{id}/edit(id=${account.id})}"
+                                   class="btn btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/emailAccounts/{id}/sync(id=${account.id})}"
+                                      method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-primary" title="Sync Now"
+                                            th:disabled="${!account.enabled || account.activeJobRun != null}">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                </th:block>
             </tbody>
         </table>
     </div>

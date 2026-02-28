@@ -45,6 +45,11 @@ class SpringUserServiceImpl(
             .map { springUser -> springUserMapper.updateSpringUserDTO(springUser, SpringUserDTO()) }
             .orElseThrow { NotFoundException() }
 
+    @Transactional(readOnly = true)
+    override fun findByLabel(label: String): SpringUserDTO? =
+            springUserRepository.findByLabelIgnoreCase(label)
+                ?.let { springUserMapper.updateSpringUserDTO(it, SpringUserDTO()) }
+
     override fun create(springUserDTO: SpringUserDTO): Long {
         val springUser = SpringUser()
         springUserMapper.updateSpringUser(springUserDTO, springUser, passwordEncoder)
@@ -69,9 +74,9 @@ class SpringUserServiceImpl(
     override fun labelExists(label: String?): Boolean = springUserRepository.existsByLabel(label)
 
     @Transactional(readOnly = true)
-    override fun getSpringUserValues(): Map<Long, Long> =
-            springUserRepository.findAll(Sort.by("id"))
+    override fun getSpringUserValues(): Map<Long, String> =
+            springUserRepository.findAll(Sort.by("label"))
             .stream()
-            .collect(CustomCollectors.toSortedMap(SpringUser::id, SpringUser::id))
+            .collect(CustomCollectors.toSortedMap(SpringUser::id) { it.label ?: "Unknown" })
 
 }

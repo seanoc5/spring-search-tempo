@@ -27,17 +27,33 @@ class EmailAccountController(
     fun providers(): Array<EmailProvider> = EmailProvider.entries.toTypedArray()
 
     /**
-     * List all email accounts.
+     * List all email accounts with summary data.
      */
     @GetMapping
     fun list(model: Model): String {
-        val accounts = emailAccountService.findAll()
-        val syncStatus = emailCrawlOrchestrator.getSyncStatus()
-            .associateBy { it.accountId }
-
+        val accounts = emailAccountService.findAllWithSummary()
         model.addAttribute("emailAccounts", accounts)
-        model.addAttribute("syncStatus", syncStatus)
         return "emailAccount/list"
+    }
+
+    /**
+     * HTMX partial: refresh all account rows (for polling during sync).
+     */
+    @GetMapping("/rows")
+    fun rows(model: Model): String {
+        val accounts = emailAccountService.findAllWithSummary()
+        model.addAttribute("emailAccounts", accounts)
+        return "emailAccount/list :: account-rows"
+    }
+
+    /**
+     * HTMX partial: refresh a single account row.
+     */
+    @GetMapping("/{id}/row")
+    fun row(@PathVariable id: Long, model: Model): String {
+        val account = emailAccountService.getSummary(id)
+        model.addAttribute("account", account)
+        return "emailAccount/list :: account-row"
     }
 
     /**
@@ -137,37 +153,48 @@ class EmailAccountController(
     }
 
     /**
-     * Trigger quick sync for a specific account.
+     * Trigger sync for a specific account.
+     *
+     * @param forceFullSync If true, ignore lastSyncUid and fetch all messages (full recrawl)
      */
     @PostMapping("/{id}/sync")
     fun syncAccount(
         @PathVariable id: Long,
+        @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
         redirectAttributes: RedirectAttributes
     ): String {
         val account = emailAccountService.get(id)
+        val syncType = if (forceFullSync) "full sync" else "quick sync"
 
         try {
-            log.info("Starting quick sync for account: {}", account.email)
-            val status = emailCrawlOrchestrator.runQuickSyncForAccount(id)
+            log.info("Starting {} for account: {}", syncType, account.email)
+            val status = emailCrawlOrchestrator.runQuickSyncForAccount(id, forceFullSync)
             redirectAttributes.addFlashAttribute("message",
-                "Email sync started for ${account.email}. Status: $status")
+                "Email $syncType started for ${account.email}. Status: $status")
         } catch (e: Exception) {
-            log.error("Failed to start sync for account {}: {}", account.email, e.message, e)
+            log.error("Failed to start {} for account {}: {}", syncType, account.email, e.message, e)
             redirectAttributes.addFlashAttribute("error",
-                "Failed to start sync: ${e.message}")
+                "Failed to start $syncType: ${e.message}")
         }
 
         return "redirect:/emailAccounts/$id"
     }
 
     /**
-     * Trigger quick sync for all enabled accounts.
+     * Trigger sync for all enabled accounts.
+     *
+     * @param forceFullSync If true, ignore lastSyncUid and fetch all messages (full recrawl)
      */
     @PostMapping("/syncAll")
-    fun syncAll(redirectAttributes: RedirectAttributes): String {
+    fun syncAll(
+        @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val syncType = if (forceFullSync) "full sync" else "quick sync"
+
         try {
-            log.info("Starting quick sync for all enabled accounts")
-            val results = emailCrawlOrchestrator.runQuickSync()
+            log.info("Starting {} for all enabled accounts", syncType)
+            val results = emailCrawlOrchestrator.runQuickSync(forceFullSync)
 
             if (results["status"] == "disabled") {
                 redirectAttributes.addFlashAttribute("error",
@@ -175,12 +202,12 @@ class EmailAccountController(
             } else {
                 val summary = results.entries.joinToString(", ") { "${it.key}: ${it.value}" }
                 redirectAttributes.addFlashAttribute("message",
-                    "Email sync completed. Results: $summary")
+                    "Email $syncType completed. Results: $summary")
             }
         } catch (e: Exception) {
-            log.error("Failed to start sync all: {}", e.message, e)
+            log.error("Failed to start {}: {}", syncType, e.message, e)
             redirectAttributes.addFlashAttribute("error",
-                "Failed to start sync: ${e.message}")
+                "Failed to start $syncType: ${e.message}")
         }
 
         return "redirect:/emailAccounts"

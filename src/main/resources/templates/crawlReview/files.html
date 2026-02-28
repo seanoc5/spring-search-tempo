@@ -1,0 +1,131 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>File Comparison Results</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-file-earmark me-2"></i>File Comparison Results
+        </h1>
+        <div>
+            <a th:href="@{/crawlReview}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+        </div>
+    </div>
+
+    <p class="text-muted mb-4">
+        Comparing files for configuration: <strong th:text="${summary.crawlConfigName}">Config</strong>
+    </p>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-primary" th:text="${summary.totalFsFiles}">0</div>
+                    <div class="small text-muted">FS Files</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-success" th:text="${summary.totalDbFiles}">0</div>
+                    <div class="small text-muted">DB Files</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card text-center"
+                 th:classappend="${summary.totalFsFiles > 0 ? (summary.totalDbFiles * 100 / summary.totalFsFiles >= 90 ? '' : (summary.totalDbFiles * 100 / summary.totalFsFiles >= 50 ? 'border-warning' : 'border-danger')) : ''}">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold"
+                         th:classappend="${summary.totalFsFiles > 0 ? (summary.totalDbFiles * 100 / summary.totalFsFiles >= 90 ? 'text-success' : (summary.totalDbFiles * 100 / summary.totalFsFiles >= 50 ? 'text-warning' : 'text-danger')) : 'text-success'}"
+                         th:text="${summary.totalFsFiles > 0 ? #numbers.formatDecimal(summary.totalDbFiles * 100.0 / summary.totalFsFiles, 1, 1) + '%' : '100%'}">0%</div>
+                    <div class="small text-muted">Overall Coverage</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extension breakdown table -->
+    <div th:if="${summary.extensionBreakdown.empty}" class="alert alert-info">
+        No files found in the comparison.
+    </div>
+
+    <div th:if="${!summary.extensionBreakdown.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+            <tr>
+                <th scope="col">Extension</th>
+                <th scope="col" class="text-end">FS Count</th>
+                <th scope="col" class="text-end">DB Count</th>
+                <th scope="col" class="text-end">Difference</th>
+                <th scope="col" class="text-end">Coverage</th>
+                <th scope="col" style="width: 200px;">Progress</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="ext : ${summary.extensionBreakdown}">
+                <td>
+                    <code th:text="${ext.extension}">ext</code>
+                </td>
+                <td class="text-end" th:text="${ext.fsCount}">0</td>
+                <td class="text-end" th:text="${ext.dbCount}">0</td>
+                <td class="text-end">
+                    <span th:if="${ext.difference > 0}" class="text-danger">
+                        +<span th:text="${ext.difference}">0</span>
+                    </span>
+                    <span th:if="${ext.difference == 0}" class="text-success">0</span>
+                    <span th:if="${ext.difference < 0}" class="text-warning" th:text="${ext.difference}">0</span>
+                </td>
+                <td class="text-end">
+                    <span th:classappend="${ext.percentageCovered >= 90} ? 'text-success' :
+                                          ${ext.percentageCovered >= 50} ? 'text-warning' : 'text-danger'"
+                          th:text="${#numbers.formatDecimal(ext.percentageCovered, 1, 1) + '%'}">0%</span>
+                </td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar"
+                             th:classappend="${ext.percentageCovered >= 90} ? 'bg-success' :
+                                              ${ext.percentageCovered >= 50} ? 'bg-warning' : 'bg-danger'"
+                             role="progressbar"
+                             th:style="'width: ' + ${ext.percentageCovered} + '%'"
+                             th:attr="aria-valuenow=${ext.percentageCovered}"
+                             aria-valuemin="0" aria-valuemax="100">
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h6>Legend</h6>
+            <div class="row g-2 small">
+                <div class="col-auto">
+                    <span class="badge bg-success me-1">90%+</span> Well covered
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-warning text-dark me-1">50-90%</span> Partial coverage
+                </div>
+                <div class="col-auto">
+                    <span class="badge bg-danger me-1">&lt;50%</span> Low coverage
+                </div>
+            </div>
+            <p class="text-muted mt-2 mb-0 small">
+                <strong>Difference</strong>: Positive means more files on FS than DB (missing from index).
+                Negative means more files in DB than FS (may have been deleted from filesystem).
+            </p>
+        </div>
+    </div>
+</div>
+</body>
+</html>

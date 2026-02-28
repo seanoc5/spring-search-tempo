@@ -3,9 +3,11 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
+import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
+import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
@@ -27,6 +29,7 @@ import java.time.OffsetDateTime
 class FSFileServiceImpl(
     private val fSFileRepository: FSFileRepository,
     private val fSFolderRepository: FSFolderRepository,
+    private val crawlConfigRepository: CrawlConfigRepository,
     private val publisher: ApplicationEventPublisher,
     private val fSFileMapper: FSFileMapper
 ) : FSFileService {
@@ -158,6 +161,42 @@ class FSFileServiceImpl(
             referencedException.key = "fSFolder.fSFile.fsFolder.referenced"
             referencedException.addParam(fsFolderFSFile.id)
             throw referencedException
+        }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByAnalysisStatus(): Map<String, Long> {
+        return AnalysisStatus.entries.associate { status ->
+            status.name to fSFileRepository.countByAnalysisStatus(status)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByCrawlConfigFacets(): List<Triple<Long, String, Long>> {
+        val configMap = crawlConfigRepository.findAll().associateBy { it.id }
+        return fSFileRepository.countGroupedByCrawlConfig(AnalysisStatus.SKIP)
+            .map { row ->
+                val configId = row[0] as Long
+                val count = row[1] as Long
+                val configName = configMap[configId]?.name ?: "Unknown"
+                Triple(configId, configName, count)
+            }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countSkippedByCrawlConfig(): Map<Long, Long> {
+        return fSFileRepository.countSkippedGroupedByCrawlConfig(AnalysisStatus.SKIP)
+            .associate { row ->
+                val configId = row[0] as Long
+                val count = row[1] as Long
+                configId to count
+            }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByStatus(): Map<String, Long> {
+        return Status.entries.associate { status ->
+            status.name to fSFileRepository.countByStatus(status)
         }
     }
 

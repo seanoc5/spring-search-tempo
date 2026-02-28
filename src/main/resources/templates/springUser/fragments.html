@@ -1,0 +1,107 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <!-- Password Change Form Fragment (returned via HTMX) -->
+    <div th:fragment="credentialForm" id="password-section">
+        <form hx-post th:hx-post="@{/springUsers/{id}/credential(id=${userId})}"
+              hx-target="#password-section"
+              hx-swap="innerHTML"
+              class="needs-validation" novalidate="">
+            <div class="row mb-3">
+                <label for="newPassword" class="col-md-3 col-form-label">[[#{springUser.changePassword.newPassword}]]</label>
+                <div class="col-md-9">
+                    <input type="password" class="form-control" id="newPassword" name="newPassword" required="" />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="confirmPassword" class="col-md-3 col-form-label">[[#{springUser.changePassword.confirmPassword}]]</label>
+                <div class="col-md-9">
+                    <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required="" />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-9 offset-md-3">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-check-lg me-1"></i>[[#{springUser.changePassword}]]
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary"
+                            hx-get th:hx-get="@{/springUsers/{id}/credential-cancel(id=${userId})}"
+                            hx-target="#password-section"
+                            hx-swap="innerHTML">
+                        [[#{springUser.changePassword.cancel}]]
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Success message fragment -->
+    <div th:fragment="credentialSuccess" id="password-section">
+        <div class="row mb-3">
+            <label class="col-md-3 col-form-label">[[#{springUser.password.label}]]</label>
+            <div class="col-md-9">
+                <div class="alert alert-success d-inline-block mb-2">
+                    <i class="bi bi-check-circle me-1"></i>[[#{springUser.changePassword.success}]]
+                </div>
+                <br />
+                <button type="button" class="btn btn-outline-secondary"
+                        hx-get th:hx-get="@{/springUsers/{id}/credential-form(id=${userId})}"
+                        hx-target="#password-section"
+                        hx-swap="innerHTML">
+                    <i class="bi bi-key me-1"></i>[[#{springUser.changePassword}]]
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error message fragment -->
+    <div th:fragment="credentialError" id="password-section">
+        <form hx-post th:hx-post="@{/springUsers/{id}/credential(id=${userId})}"
+              hx-target="#password-section"
+              hx-swap="innerHTML"
+              class="needs-validation" novalidate="">
+            <div class="row mb-3">
+                <label for="newPassword" class="col-md-3 col-form-label">[[#{springUser.changePassword.newPassword}]]</label>
+                <div class="col-md-9">
+                    <input type="password" class="form-control is-invalid" id="newPassword" name="newPassword" required="" />
+                </div>
+            </div>
+            <div class="row mb-3">
+                <label for="confirmPassword" class="col-md-3 col-form-label">[[#{springUser.changePassword.confirmPassword}]]</label>
+                <div class="col-md-9">
+                    <input type="password" class="form-control is-invalid" id="confirmPassword" name="confirmPassword" required="" />
+                    <div class="invalid-feedback d-block">[[#{springUser.changePassword.mismatch}]]</div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-9 offset-md-3">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-check-lg me-1"></i>[[#{springUser.changePassword}]]
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary"
+                            hx-get th:hx-get="@{/springUsers/{id}/credential-cancel(id=${userId})}"
+                            hx-target="#password-section"
+                            hx-swap="innerHTML">
+                        [[#{springUser.changePassword.cancel}]]
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Cancel/default state fragment -->
+    <div th:fragment="credentialButton" id="password-section">
+        <div class="row mb-3">
+            <label class="col-md-3 col-form-label">[[#{springUser.password.label}]]</label>
+            <div class="col-md-9">
+                <button type="button" class="btn btn-outline-secondary"
+                        hx-get th:hx-get="@{/springUsers/{id}/credential-form(id=${userId})}"
+                        hx-target="#password-section"
+                        hx-swap="innerHTML">
+                    <i class="bi bi-key me-1"></i>[[#{springUser.changePassword}]]
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

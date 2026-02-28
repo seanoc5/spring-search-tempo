@@ -20,9 +20,44 @@
                 <div th:replace="~{fragments/forms::inputRow(object='springUser', field='lastName', type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='springUser', field='email', type='textarea')}" />
                 <div th:replace="~{fragments/forms::inputRow(object='springUser', field='enabled', type='checkbox')}" />
-                <div th:replace="~{fragments/forms::inputRow(object='springUser', field='password', required=true, type='textarea')}" />
+
+                <!-- Roles -->
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label">[[#{springUser.roles.label}]]</label>
+                    <div class="col-md-9">
+                        <div th:each="role : ${availableRoles}" class="form-check">
+                            <input type="checkbox" class="form-check-input"
+                                   th:id="${'role_' + role}"
+                                   th:name="roles"
+                                   th:value="${role}"
+                                   th:checked="${springUser.roles.contains(role)}" />
+                            <label class="form-check-label" th:for="${'role_' + role}">
+                                <span class="badge" th:classappend="${role == 'ROLE_ADMIN'} ? 'bg-danger' : 'bg-primary'">
+                                    [[${role}]]
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <input type="submit" th:value="#{springUser.edit.headline}" class="btn btn-primary mt-4" />
             </form>
+
+            <!-- Password Change Section -->
+            <hr class="my-4" />
+            <div id="password-section">
+                <div class="row mb-3">
+                    <label class="col-md-3 col-form-label">[[#{springUser.password.label}]]</label>
+                    <div class="col-md-9">
+                        <button type="button" class="btn btn-outline-secondary"
+                                hx-get th:hx-get="@{/springUsers/{id}/credential-form(id=${springUser.id})}"
+                                hx-target="#password-section"
+                                hx-swap="innerHTML">
+                            <i class="bi bi-key me-1"></i>[[#{springUser.changePassword}]]
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </body>
 </html>

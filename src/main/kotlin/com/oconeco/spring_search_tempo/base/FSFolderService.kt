@@ -43,4 +43,28 @@ interface FSFolderService {
      */
     fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable, showSkipped: Boolean = false): Page<FSFolderDTO>
 
+    /**
+     * Get folder counts grouped by crawl config (excluding SKIP).
+     * @return List of pairs [configId, configName, count], ordered by count desc
+     */
+    fun countByCrawlConfigFacets(): List<Triple<Long, String, Long>>
+
+    /**
+     * Get SKIP folder counts grouped by crawl config.
+     * @return Map of configId to skip count
+     */
+    fun countSkippedByCrawlConfig(): Map<Long, Long>
+
+    /**
+     * Get folder counts grouped by Status (processing state).
+     * @return Map of status name to count
+     */
+    fun countByStatus(): Map<String, Long>
+
+    /**
+     * Get folder counts grouped by AnalysisStatus (processing level).
+     * @return Map of analysis status name to count
+     */
+    fun countByAnalysisStatus(): Map<String, Long>
+
 }

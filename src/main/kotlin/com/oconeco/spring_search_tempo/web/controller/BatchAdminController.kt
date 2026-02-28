@@ -1,0 +1,381 @@
+package com.oconeco.spring_search_tempo.web.controller
+
+import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
+import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlOrchestrator
+import com.oconeco.spring_search_tempo.batch.nlp.NLPJobLauncher
+import com.oconeco.spring_search_tempo.web.service.BatchAdminService
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
+import org.springframework.data.domain.Pageable
+import org.springframework.data.web.PageableDefault
+import org.springframework.http.HttpStatus
+import org.springframework.stereotype.Controller
+import org.springframework.ui.Model
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.servlet.mvc.support.RedirectAttributes
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
+/**
+ * Controller for Spring Batch administration UI.
+ * Provides views for job execution history, details, and control operations.
+ */
+@Controller
+@RequestMapping("/batch")
+class BatchAdminController(
+    private val batchAdminService: BatchAdminService,
+    private val nlpJobLauncher: NLPJobLauncher,
+    private val crawlOrchestrator: CrawlOrchestrator,
+    private val emailCrawlOrchestrator: EmailCrawlOrchestrator
+) {
+    companion object {
+        private val log = LoggerFactory.getLogger(BatchAdminController::class.java)
+
+        /**
+         * Set toast notification headers for HTMX responses.
+         */
+        fun setToastHeaders(response: HttpServletResponse, message: String, type: String = "info") {
+            response.setHeader("X-Toast-Message", URLEncoder.encode(message, StandardCharsets.UTF_8))
+            response.setHeader("X-Toast-Type", type)
+        }
+    }
+
+    /**
+     * Main batch admin dashboard showing all job executions.
+     */
+    @GetMapping
+    fun list(
+        @RequestParam(name = "tab", required = false, defaultValue = "all") tab: String,
+        @RequestParam(name = "status", required = false) status: String?,
+        @RequestParam(name = "jobName", required = false) jobName: String?,
+        @RequestParam(name = "filter", required = false) filter: String?,
+        @PageableDefault(size = 20) pageable: Pageable,
+        model: Model,
+        request: HttpServletRequest
+    ): String {
+        // Determine which filter to apply (priority: status > jobName > tab)
+        val executions = when {
+            !status.isNullOrBlank() -> batchAdminService.getJobExecutionsByStatus(status, pageable)
+            tab == "failed" -> batchAdminService.getFailedJobExecutions(pageable)
+            !jobName.isNullOrBlank() -> batchAdminService.getJobExecutionsByJobName(jobName, pageable)
+            else -> batchAdminService.getAllJobExecutions(pageable)
+        }
+
+        val runningJobs = batchAdminService.getRunningJobExecutions()
+        val baseSummary = batchAdminService.getJobSummary()
+        val staleCount = batchAdminService.getStaleJobCount()
+        val staleByHeartbeat = batchAdminService.getStaleJobRunIds().size
+        val summary = baseSummary.copy(staleCount = staleCount, staleByHeartbeatCount = staleByHeartbeat)
+        val jobNames = batchAdminService.getJobNames()
+        val configuredJobs = batchAdminService.getConfiguredJobs()
+
+        model.addAttribute("executions", executions)
+        model.addAttribute("page", executions)
+        model.addAttribute("runningJobs", runningJobs)
+        model.addAttribute("summary", summary)
+        model.addAttribute("jobNames", jobNames)
+        model.addAttribute("configuredJobs", configuredJobs)
+        model.addAttribute("currentTab", tab)
+        model.addAttribute("currentStatus", status)
+        model.addAttribute("selectedJobName", jobName)
+        model.addAttribute("filter", filter)
+        model.addAttribute("staleCount", staleCount)
+
+        // For HTMX partial updates
+        val isHtmx = request.getHeader("HX-Request") == "true"
+        val isBoosted = request.getHeader("HX-Boosted") == "true"
+        return if (isHtmx && !isBoosted) {
+            "batch/list :: table-content"
+        } else {
+            "batch/list"
+        }
+    }
+
+    /**
+     * HTMX fragment for running jobs status (auto-refresh).
+     */
+    @GetMapping("/running")
+    fun runningJobs(model: Model): String {
+        val runningJobs = batchAdminService.getRunningJobExecutions()
+        model.addAttribute("runningJobs", runningJobs)
+        return "batch/fragments/runningJobs :: running-jobs"
+    }
+
+    /**
+     * View details of a specific job execution.
+     */
+    @GetMapping("/{executionId}")
+    fun view(
+        @PathVariable executionId: Long,
+        model: Model,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val detail = batchAdminService.getJobExecution(executionId)
+        if (detail == null) {
+            redirectAttributes.addFlashAttribute("error", "Job execution $executionId not found")
+            return "redirect:/batch"
+        }
+
+        model.addAttribute("detail", detail)
+        model.addAttribute("execution", detail.execution)
+        model.addAttribute("steps", detail.steps)
+        model.addAttribute("jobRun", detail.jobRun)
+        model.addAttribute("failureExceptions", detail.failureExceptions)
+
+        return "batch/view"
+    }
+
+    /**
+     * Stop a running job execution.
+     * Supports HTMX requests with toast notifications.
+     */
+    @PostMapping("/{executionId}/stop")
+    fun stop(
+        @PathVariable executionId: Long,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        redirectAttributes: RedirectAttributes,
+        model: Model
+    ): String {
+        val success = batchAdminService.stopJob(executionId)
+        val isHtmx = request.getHeader("HX-Request") == "true"
+
+        return if (isHtmx) {
+            if (success) {
+                setToastHeaders(response, "Stop request sent for job execution #$executionId", "success")
+            } else {
+                setToastHeaders(response, "Could not stop job execution #$executionId - job may not be running", "error")
+            }
+            // Return updated running jobs fragment
+            val runningJobs = batchAdminService.getRunningJobExecutions()
+            model.addAttribute("runningJobs", runningJobs)
+            "batch/fragments/runningJobs :: running-jobs"
+        } else {
+            if (success) {
+                redirectAttributes.addFlashAttribute("message", "Stop request sent for job execution $executionId")
+            } else {
+                redirectAttributes.addFlashAttribute("error", "Could not stop job execution $executionId - job may not be running")
+            }
+            "redirect:/batch/$executionId"
+        }
+    }
+
+    /**
+     * Restart a failed or stopped job execution.
+     * Note: For crawl jobs, users should re-run via Crawl Configurations.
+     */
+    @PostMapping("/{executionId}/restart")
+    fun restart(
+        @PathVariable executionId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val newExecutionId = batchAdminService.restartJob(executionId)
+        if (newExecutionId != null) {
+            redirectAttributes.addFlashAttribute("message", "Job restarted as execution $newExecutionId")
+            return "redirect:/batch/$newExecutionId"
+        } else {
+            redirectAttributes.addFlashAttribute("error",
+                "Could not restart job execution $executionId. For crawl jobs, please re-run via Crawl Configurations.")
+            return "redirect:/batch/$executionId"
+        }
+    }
+
+    /**
+     * Abandon a failed job execution so it can be restarted fresh.
+     */
+    @PostMapping("/{executionId}/abandon")
+    fun abandon(
+        @PathVariable executionId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val success = batchAdminService.abandonJob(executionId)
+        if (success) {
+            redirectAttributes.addFlashAttribute("message", "Job execution $executionId abandoned")
+        } else {
+            redirectAttributes.addFlashAttribute("error", "Could not abandon job execution $executionId - only FAILED jobs can be abandoned")
+        }
+        return "redirect:/batch/$executionId"
+    }
+
+    /**
+     * Mark a single job execution as FAILED.
+     * Used for cleaning up orphaned "running" jobs.
+     * Supports HTMX requests with toast notifications.
+     */
+    @PostMapping("/{executionId}/mark-failed")
+    fun markFailed(
+        @PathVariable executionId: Long,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        redirectAttributes: RedirectAttributes,
+        model: Model
+    ): String {
+        val success = batchAdminService.markJobAsFailed(executionId, "Manually marked as failed by admin")
+        val isHtmx = request.getHeader("HX-Request") == "true"
+
+        return if (isHtmx) {
+            // Return toast notification via headers and refresh running jobs fragment
+            if (success) {
+                setToastHeaders(response, "Job execution #$executionId marked as FAILED", "success")
+            } else {
+                setToastHeaders(response, "Could not mark job execution #$executionId as failed", "error")
+            }
+            // Return updated running jobs fragment
+            val runningJobs = batchAdminService.getRunningJobExecutions()
+            model.addAttribute("runningJobs", runningJobs)
+            "batch/fragments/runningJobs :: running-jobs"
+        } else {
+            if (success) {
+                redirectAttributes.addFlashAttribute("message", "Job execution $executionId marked as FAILED")
+            } else {
+                redirectAttributes.addFlashAttribute("error", "Could not mark job execution $executionId as failed")
+            }
+            "redirect:/batch/$executionId"
+        }
+    }
+
+    /**
+     * Clean up all stale (orphaned) job executions.
+     * Jobs running longer than the threshold are marked as FAILED.
+     * Supports HTMX requests with toast notifications.
+     */
+    @PostMapping("/cleanup-stale")
+    fun cleanupStale(
+        @RequestParam(name = "thresholdHours", required = false, defaultValue = "4") thresholdHours: Long,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        redirectAttributes: RedirectAttributes,
+        model: Model
+    ): String {
+        val cleanedUp = batchAdminService.cleanupStaleJobs(thresholdHours)
+        val isHtmx = request.getHeader("HX-Request") == "true"
+
+        return if (isHtmx) {
+            if (cleanedUp > 0) {
+                setToastHeaders(response, "Cleaned up $cleanedUp stale job execution(s)", "success")
+            } else {
+                setToastHeaders(response, "No stale jobs found to clean up", "info")
+            }
+            // Return updated running jobs fragment
+            val runningJobs = batchAdminService.getRunningJobExecutions()
+            model.addAttribute("runningJobs", runningJobs)
+            "batch/fragments/runningJobs :: running-jobs"
+        } else {
+            if (cleanedUp > 0) {
+                redirectAttributes.addFlashAttribute("message", "Cleaned up $cleanedUp stale job execution(s)")
+            } else {
+                redirectAttributes.addFlashAttribute("MSG_INFO", "No stale jobs found to clean up")
+            }
+            "redirect:/batch"
+        }
+    }
+
+    /**
+     * Run a batch job by name.
+     * Dispatches to the appropriate job launcher based on job type.
+     */
+    @PostMapping("/run")
+    fun runJob(
+        @RequestParam(name = "jobName") jobName: String,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        log.info("Request to run job: {}", jobName)
+
+        return try {
+            val execution = when {
+                // NLP Processing Job
+                jobName == "nlpProcessingJob" || jobName.startsWith("nlpProcessing") -> {
+                    nlpJobLauncher.launchNLPJob("batch-admin")
+                }
+
+                // File System Crawl Job - extract config name
+                jobName.startsWith("fsCrawlJob") -> {
+                    // Job name format: fsCrawlJob_configName or just fsCrawlJob
+                    val configName = if (jobName.contains("_")) {
+                        jobName.substringAfter("fsCrawlJob_")
+                    } else {
+                        // Run all enabled crawls
+                        val results = crawlOrchestrator.executeAllCrawls()
+                        val successful = results.values.count { !it.status.isUnsuccessful }
+                        redirectAttributes.addFlashAttribute("message",
+                            "Started ${results.size} crawl job(s), $successful successful")
+                        return "redirect:/batch"
+                    }
+
+                    val results = crawlOrchestrator.executeCrawlsByName(configName)
+                    if (results.isEmpty()) {
+                        redirectAttributes.addFlashAttribute("error",
+                            "Crawl config '$configName' not found. Use Crawl Configurations to run crawls.")
+                        return "redirect:/batch"
+                    }
+                    results.values.first()
+                }
+
+                // Email Quick Sync Job - extract account ID
+                jobName.startsWith("emailQuickSync") -> {
+                    val accountId = jobName.substringAfter("emailQuickSync_").toLongOrNull()
+                    if (accountId != null) {
+                        try {
+                            val status = emailCrawlOrchestrator.runQuickSyncForAccount(accountId)
+                            redirectAttributes.addFlashAttribute("message",
+                                "Email sync started for account $accountId: $status")
+                        } catch (e: com.oconeco.spring_search_tempo.base.util.NotFoundException) {
+                            redirectAttributes.addFlashAttribute("error",
+                                "Email account $accountId not found. It may have been deleted.")
+                        }
+                        return "redirect:/batch"
+                    } else {
+                        // Run all enabled accounts
+                        val results = emailCrawlOrchestrator.runQuickSync()
+                        redirectAttributes.addFlashAttribute("message",
+                            "Email sync started for ${results.size} account(s)")
+                        return "redirect:/batch"
+                    }
+                }
+
+                else -> {
+                    redirectAttributes.addFlashAttribute("error",
+                        "Unknown job type: $jobName. Cannot run automatically.")
+                    return "redirect:/batch"
+                }
+            }
+
+            redirectAttributes.addFlashAttribute("message",
+                "Job '$jobName' started successfully (execution #${execution.id})")
+            "redirect:/batch/${execution.id}"
+        } catch (e: Exception) {
+            log.error("Failed to run job {}: {}", jobName, e.message, e)
+            redirectAttributes.addFlashAttribute("error",
+                "Failed to run job '$jobName': ${e.message}")
+            "redirect:/batch"
+        }
+    }
+
+    /**
+     * Re-run a job based on a previous execution.
+     * Uses the job name from the execution to trigger a new run.
+     */
+    @PostMapping("/{executionId}/rerun")
+    fun rerunJob(
+        @PathVariable executionId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val detail = batchAdminService.getJobExecution(executionId)
+        if (detail == null) {
+            redirectAttributes.addFlashAttribute("error", "Job execution $executionId not found")
+            return "redirect:/batch"
+        }
+
+        val jobName = detail.execution.jobName
+        log.info("Re-running job {} based on execution {}", jobName, executionId)
+
+        // Delegate to the run endpoint
+        return runJob(jobName, redirectAttributes)
+    }
+}

@@ -79,6 +79,89 @@ class CrawlConfigController(
         return "crawlConfig/list"
     }
 
+    @GetMapping("/add")
+    fun add(model: Model): String {
+        model.addAttribute("crawlConfig", CrawlConfigDTO().apply {
+            enabled = true
+            maxDepth = 50
+            followLinks = false
+            parallel = false
+        })
+        model.addAttribute("startPathsText", "")
+        model.addAttribute("folderPatternsSkipText", "")
+        model.addAttribute("folderPatternsLocateText", "")
+        model.addAttribute("folderPatternsIndexText", "")
+        model.addAttribute("folderPatternsAnalyzeText", "")
+        model.addAttribute("filePatternsSkipText", "")
+        model.addAttribute("filePatternsLocateText", "")
+        model.addAttribute("filePatternsIndexText", "")
+        model.addAttribute("filePatternsAnalyzeText", "")
+        return "crawlConfig/add"
+    }
+
+    @PostMapping("/add")
+    fun add(
+        @ModelAttribute("crawlConfig") @Valid crawlConfigDTO: CrawlConfigDTO,
+        @RequestParam(name = "startPathsText", required = false) startPathsText: String?,
+        @RequestParam(name = "folderPatternsSkipText", required = false) folderPatternsSkipText: String?,
+        @RequestParam(name = "folderPatternsLocateText", required = false) folderPatternsLocateText: String?,
+        @RequestParam(name = "folderPatternsIndexText", required = false) folderPatternsIndexText: String?,
+        @RequestParam(name = "folderPatternsAnalyzeText", required = false) folderPatternsAnalyzeText: String?,
+        @RequestParam(name = "filePatternsSkipText", required = false) filePatternsSkipText: String?,
+        @RequestParam(name = "filePatternsLocateText", required = false) filePatternsLocateText: String?,
+        @RequestParam(name = "filePatternsIndexText", required = false) filePatternsIndexText: String?,
+        @RequestParam(name = "filePatternsAnalyzeText", required = false) filePatternsAnalyzeText: String?,
+        bindingResult: BindingResult,
+        model: Model,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        // Convert textarea back to list
+        crawlConfigDTO.startPaths = startPathsText
+            ?.split("\n")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+        // Convert pattern text areas to JSON arrays
+        crawlConfigDTO.folderPatternsSkip = textToJson(folderPatternsSkipText)
+        crawlConfigDTO.folderPatternsLocate = textToJson(folderPatternsLocateText)
+        crawlConfigDTO.folderPatternsIndex = textToJson(folderPatternsIndexText)
+        crawlConfigDTO.folderPatternsAnalyze = textToJson(folderPatternsAnalyzeText)
+        crawlConfigDTO.filePatternsSkip = textToJson(filePatternsSkipText)
+        crawlConfigDTO.filePatternsLocate = textToJson(filePatternsLocateText)
+        crawlConfigDTO.filePatternsIndex = textToJson(filePatternsIndexText)
+        crawlConfigDTO.filePatternsAnalyze = textToJson(filePatternsAnalyzeText)
+
+        // Generate URI from name if not provided
+        if (crawlConfigDTO.uri.isNullOrBlank()) {
+            crawlConfigDTO.uri = "crawl-config:${crawlConfigDTO.name?.lowercase()?.replace(Regex("[^a-z0-9]+"), "-") ?: "unnamed"}"
+        }
+
+        if (bindingResult.hasErrors()) {
+            model.addAttribute("startPathsText", startPathsText)
+            model.addAttribute("folderPatternsSkipText", folderPatternsSkipText)
+            model.addAttribute("folderPatternsLocateText", folderPatternsLocateText)
+            model.addAttribute("folderPatternsIndexText", folderPatternsIndexText)
+            model.addAttribute("folderPatternsAnalyzeText", folderPatternsAnalyzeText)
+            model.addAttribute("filePatternsSkipText", filePatternsSkipText)
+            model.addAttribute("filePatternsLocateText", filePatternsLocateText)
+            model.addAttribute("filePatternsIndexText", filePatternsIndexText)
+            model.addAttribute("filePatternsAnalyzeText", filePatternsAnalyzeText)
+            return "crawlConfig/add"
+        }
+
+        try {
+            val newId = crawlConfigService.create(crawlConfigDTO)
+            redirectAttributes.addFlashAttribute("message",
+                "Configuration created: ${crawlConfigDTO.displayLabel ?: crawlConfigDTO.name}")
+            return "redirect:/crawlConfigs/$newId"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error",
+                "Failed to create configuration: ${e.message}")
+            return "redirect:/crawlConfigs/add"
+        }
+    }
+
     @GetMapping("/{id}")
     fun view(
         @PathVariable(name = "id") id: Long,
@@ -343,6 +426,16 @@ class CrawlConfigController(
     }
 
     /**
+     * Handle GET requests to /run-selected (redirect to list).
+     * This prevents the /{id} route from catching "run-selected" as an ID.
+     */
+    @GetMapping("/run-selected")
+    fun runSelectedGet(redirectAttributes: RedirectAttributes): String {
+        redirectAttributes.addFlashAttribute("error", "Please use the form to run selected configurations")
+        return "redirect:/crawlConfigs"
+    }
+
+    /**
      * Run multiple crawl configurations.
      */
     @PostMapping("/run-selected")
@@ -396,6 +489,15 @@ class CrawlConfigController(
                 "Failed to start: ${errors.joinToString(", ")}")
         }
 
+        return "redirect:/crawlConfigs"
+    }
+
+    /**
+     * Handle GET requests to /toggle-selected (redirect to list).
+     */
+    @GetMapping("/toggle-selected")
+    fun toggleSelectedGet(redirectAttributes: RedirectAttributes): String {
+        redirectAttributes.addFlashAttribute("error", "Please use the form to toggle selected configurations")
         return "redirect:/crawlConfigs"
     }
 

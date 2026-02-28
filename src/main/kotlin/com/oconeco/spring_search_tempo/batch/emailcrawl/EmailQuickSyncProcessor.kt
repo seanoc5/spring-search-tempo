@@ -1,33 +1,34 @@
 package com.oconeco.spring_search_tempo.batch.emailcrawl
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.oconeco.spring_search_tempo.base.EmailMessageService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.FetchStatus
 import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.model.EmailMessageDTO
-import com.oconeco.spring_search_tempo.base.service.EmailTextExtractionService
-import com.oconeco.spring_search_tempo.base.service.EmailTextResult
 import jakarta.mail.Address
 import jakarta.mail.Message
-import jakarta.mail.Multipart
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
-import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
 
 /**
- * Processor that extracts email content and creates EmailMessageDTO.
+ * Pass 1 Processor: Extracts email HEADERS ONLY (no body fetch).
+ *
+ * This is the fast pass that can process thousands of emails quickly because
+ * it only uses prefetched envelope data - no IMAP body fetch needed.
  *
  * Handles:
- * - Duplicate detection by Message-ID
  * - Envelope data extraction (from, to, subject, dates)
- * - Body text extraction (plain text or HTML conversion)
- * - Attachment detection
+ * - Threading headers (In-Reply-To, References)
+ * - Sets fetchStatus = HEADERS_ONLY
+ *
+ * Body fetching is done in Pass 2 (BodyEnrichmentProcessor) which can be parallelized.
+ *
+ * Note: Duplicate detection is done in EmailQuickSyncReader for efficiency
+ * (batch query instead of per-message check).
  */
 class EmailQuickSyncProcessor(
-    private val emailMessageService: EmailMessageService,
-    private val emailTextExtractionService: EmailTextExtractionService,
     private val objectMapper: ObjectMapper = ObjectMapper()
 ) : ItemProcessor<ImapMessageWrapper, EmailMessageDTO> {
 
@@ -36,28 +37,20 @@ class EmailQuickSyncProcessor(
     }
 
     private var processedCount = 0
-    private var skippedCount = 0
 
     override fun process(item: ImapMessageWrapper): EmailMessageDTO? {
         val message = item.message
 
         try {
-            // Get Message-ID for duplicate detection
+            // Get Message-ID (headers already prefetched by Reader)
             val messageId = message.getHeader("Message-ID")?.firstOrNull()?.trim()
 
-            // Skip if message already exists
-            if (messageId != null && emailMessageService.existsByMessageId(messageId)) {
-                skippedCount++
-                log.debug("Skipping existing message: {}", messageId)
-                return null
-            }
-
             processedCount++
-            if (processedCount % 50 == 0) {
-                log.info("Processed {} emails ({} skipped)", processedCount, skippedCount)
+            if (processedCount % 100 == 0) {
+                log.info("Processed {} email headers", processedCount)
             }
 
-            // Create DTO with envelope data
+            // Create DTO with envelope data ONLY (no body fetch - that's Pass 2)
             val dto = EmailMessageDTO().apply {
                 this.messageId = messageId
                 this.imapUid = item.uid
@@ -84,33 +77,10 @@ class EmailQuickSyncProcessor(
                 this.uri = "email://${item.accountId}/${item.folderName}/${item.uid}"
                 this.label = this.subject
                 this.version = 0L
-            }
 
-            // Extract text content
-            when (val result = emailTextExtractionService.extractText(message)) {
-                is EmailTextResult.Success -> {
-                    dto.bodyText = result.text
-                    dto.bodySize = result.text.length.toLong()
-                }
-                is EmailTextResult.Failure -> {
-                    dto.bodyText = "[Extraction failed: ${result.error}]"
-                    dto.bodySize = 0
-                    log.warn("Text extraction failed for message {}: {}", messageId, result.error)
-                }
+                // Mark as headers-only - body will be fetched in Pass 2
+                this.fetchStatus = FetchStatus.HEADERS_ONLY
             }
-
-            // Check for attachments
-            if (message.content is Multipart) {
-                val attachments = emailTextExtractionService.extractAttachmentInfo(message)
-                dto.hasAttachments = attachments.isNotEmpty()
-                dto.attachmentCount = attachments.size
-                dto.attachmentNames = if (attachments.isNotEmpty()) {
-                    objectMapper.writeValueAsString(attachments)
-                } else null
-            }
-
-            // Set size based on body
-            dto.size = dto.bodySize
 
             return dto
 
@@ -137,5 +107,4 @@ class EmailQuickSyncProcessor(
     }
 
     fun getProcessedCount(): Int = processedCount
-    fun getSkippedCount(): Int = skippedCount
 }

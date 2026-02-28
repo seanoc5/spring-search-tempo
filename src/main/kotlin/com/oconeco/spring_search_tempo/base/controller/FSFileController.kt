@@ -48,6 +48,12 @@ class FSFileController(
         return "fSFile/list"
     }
 
+    @GetMapping("/{id}")
+    fun view(@PathVariable(name = "id") id: Long, model: Model): String {
+        model.addAttribute("fSFile", fSFileService.get(id))
+        return "fSFile/view"
+    }
+
     @GetMapping("/add")
     fun add(@ModelAttribute("fSFile") fSFileDTO: FSFileDTO): String = "fSFile/add"
 

@@ -25,7 +25,7 @@ class NLPAutoTriggerListener(
 
     companion object {
         private val log = LoggerFactory.getLogger(NLPAutoTriggerListener::class.java)
-        private val TRIGGER_JOB_NAMES = setOf("fsCrawlJob")
+        private val TRIGGER_JOB_PREFIXES = setOf("fsCrawlJob", "emailQuickSync")
     }
 
     override fun beforeJob(jobExecution: JobExecution) {
@@ -35,8 +35,8 @@ class NLPAutoTriggerListener(
     override fun afterJob(jobExecution: JobExecution) {
         val jobName = jobExecution.jobInstance.jobName
 
-        // Only trigger for specific jobs
-        if (jobName !in TRIGGER_JOB_NAMES) {
+        // Only trigger for specific job prefixes
+        if (!TRIGGER_JOB_PREFIXES.any { jobName.startsWith(it) }) {
             log.debug("Job {} is not configured to trigger NLP processing", jobName)
             return
         }

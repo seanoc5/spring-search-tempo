@@ -28,7 +28,9 @@ class ImapConnectionService(
         val GMAIL_IMAP = ImapSettings("imap.gmail.com", 993, true)
 
         fun getWorkmailImap(region: String): ImapSettings {
-            return ImapSettings("imap.mail.$region.awsapps.com", 993, true)
+            val foo = ImapSettings("imap.mail.$region.awsapps.com", 993, true)
+            log.info("Imap settings: {}", foo)
+            return foo
         }
     }
 
@@ -43,7 +45,7 @@ class ImapConnectionService(
         val settings = getImapSettings(account)
         val password = getCredential(account)
 
-        log.info("Connecting to IMAP server: {}:{} for {}", settings.host, settings.port, account.email)
+        log.debug("\t\tConnecting to IMAP server: {}:{} for {}", settings.host, settings.port, account.email)
 
         val props = Properties().apply {
             put("mail.store.protocol", "imaps")
@@ -53,10 +55,8 @@ class ImapConnectionService(
             put("mail.imaps.connectiontimeout", "15000")
             put("mail.imaps.timeout", "60000")
             put("mail.imaps.ssl.trust", "*")  // Trust all certificates for now
-            // Gmail-specific settings
-            if (account.provider == EmailProvider.GMAIL) {
-                put("mail.imaps.auth.mechanisms", "XOAUTH2 PLAIN")
-            }
+            // Note: Don't set auth.mechanisms - let JavaMail auto-negotiate
+            // XOAUTH2 requires OAuth2 tokens, not app passwords
         }
 
         val session = Session.getInstance(props)
@@ -130,6 +130,18 @@ class ImapConnectionService(
             log.warn("Connection test failed for {}: {}", account.email, e.message)
             false
         }
+    }
+
+    /**
+     * Execute a block with a connected IMAP store.
+     * The store is automatically closed after the block completes.
+     *
+     * @param account The email account to connect to
+     * @param block The block to execute with the connected store
+     * @return The result of the block
+     */
+    fun <T> withConnection(account: EmailAccountDTO, block: (Store) -> T): T {
+        return connect(account).use { store -> block(store) }
     }
 }
 

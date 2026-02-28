@@ -1,0 +1,222 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>File Details</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/fSFiles}">Files</a></li>
+            <li class="breadcrumb-item active">[[${fSFile.label ?: fSFile.uri}]]</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">[[${fSFile.title ?: fSFile.label ?: 'File Details'}]]</h1>
+        <div>
+            <a th:href="@{/fSFiles/edit/{id}(id=${fSFile.id})}" class="btn btn-secondary me-2">Edit</a>
+            <a th:href="@{/fSFiles}" class="btn btn-outline-secondary">Back to List</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Path Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Path Information</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">URI:</dt>
+                        <dd class="col-sm-9"><code>[[${fSFile.uri}]]</code></dd>
+
+                        <dt class="col-sm-3">Label:</dt>
+                        <dd class="col-sm-9">[[${fSFile.label ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Description:</dt>
+                        <dd class="col-sm-9">[[${fSFile.description ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Type:</dt>
+                        <dd class="col-sm-9">[[${fSFile.type ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Content Type:</dt>
+                        <dd class="col-sm-9"><code th:if="${fSFile.contentType}">[[${fSFile.contentType}]]</code><span th:unless="${fSFile.contentType}">-</span></dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Document Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Document Metadata</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Title:</dt>
+                        <dd class="col-sm-9">[[${fSFile.title ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Author:</dt>
+                        <dd class="col-sm-9">[[${fSFile.author ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Subject:</dt>
+                        <dd class="col-sm-9">[[${fSFile.subject ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Keywords:</dt>
+                        <dd class="col-sm-9">[[${fSFile.keywords ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Language:</dt>
+                        <dd class="col-sm-9">[[${fSFile.language ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Page Count:</dt>
+                        <dd class="col-sm-9">[[${fSFile.pageCount ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Comments:</dt>
+                        <dd class="col-sm-9">[[${fSFile.comments ?: '-'}]]</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- File System Attributes -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">File System Attributes</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Owner:</dt>
+                        <dd class="col-sm-9">[[${fSFile.owner ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Group:</dt>
+                        <dd class="col-sm-9">[[${fSFile.group ?: '-'}]]</dd>
+
+                        <dt class="col-sm-3">Permissions:</dt>
+                        <dd class="col-sm-9"><code>[[${fSFile.permissions ?: '-'}]]</code></dd>
+
+                        <dt class="col-sm-3">Last Modified:</dt>
+                        <dd class="col-sm-9">
+                            <span th:if="${fSFile.fsLastModified != null}">
+                                [[${#temporals.format(fSFile.fsLastModified, 'yyyy-MM-dd HH:mm:ss')}]]
+                            </span>
+                            <span th:if="${fSFile.fsLastModified == null}">-</span>
+                        </dd>
+
+                        <dt class="col-sm-3">File Size:</dt>
+                        <dd class="col-sm-9">[[${fSFile.size ?: '-'}]] bytes</dd>
+
+                        <dt class="col-sm-3">Body Size:</dt>
+                        <dd class="col-sm-9">[[${fSFile.bodySize ?: '-'}]] characters</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Body Text Preview -->
+            <div th:if="${fSFile.bodyText != null && fSFile.bodyText != ''}" class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Body Text Preview</h5>
+                    <span class="badge bg-secondary">[[${fSFile.bodySize ?: 0}]] chars</span>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">[[${#strings.abbreviate(fSFile.bodyText, 5000)}]]</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Status -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Status</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Status:</dt>
+                        <dd class="col-sm-7">
+                            <span th:switch="${fSFile.status?.name()}">
+                                <span th:case="'NEW'" class="badge bg-info">New</span>
+                                <span th:case="'CURRENT'" class="badge bg-success">Current</span>
+                                <span th:case="'STALE'" class="badge bg-warning">Stale</span>
+                                <span th:case="'DELETED'" class="badge bg-danger">Deleted</span>
+                                <span th:case="*" class="badge bg-secondary">[[${fSFile.status}]]</span>
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-5">Analysis:</dt>
+                        <dd class="col-sm-7">
+                            <span th:switch="${fSFile.analysisStatus?.name()}">
+                                <span th:case="'SKIP'" class="badge bg-secondary">Skip</span>
+                                <span th:case="'LOCATE'" class="badge bg-info">Locate</span>
+                                <span th:case="'INDEX'" class="badge bg-primary">Index</span>
+                                <span th:case="'ANALYZE'" class="badge bg-success">Analyze</span>
+                                <span th:case="'SEMANTIC'" class="badge bg-warning">Semantic</span>
+                                <span th:case="*" class="badge bg-secondary">[[${fSFile.analysisStatus}]]</span>
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-5">Archived:</dt>
+                        <dd class="col-sm-7">
+                            <span th:if="${fSFile.archived}" class="badge bg-secondary">Yes</span>
+                            <span th:unless="${fSFile.archived}">No</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Metadata -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Metadata</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">ID:</dt>
+                        <dd class="col-sm-7">[[${fSFile.id}]]</dd>
+
+                        <dt class="col-sm-5">Version:</dt>
+                        <dd class="col-sm-7">[[${fSFile.version}]]</dd>
+
+                        <dt class="col-sm-5">Crawl Depth:</dt>
+                        <dd class="col-sm-7">[[${fSFile.crawlDepth ?: '-'}]]</dd>
+
+                        <dt class="col-sm-5">Job Run ID:</dt>
+                        <dd class="col-sm-7">[[${fSFile.jobRunId ?: '-'}]]</dd>
+
+                        <dt class="col-sm-5">Parent Folder:</dt>
+                        <dd class="col-sm-7">
+                            <a th:if="${fSFile.fsFolder}" th:href="@{/fSFolders/{id}(id=${fSFile.fsFolder})}">[[${fSFile.fsFolder}]]</a>
+                            <span th:unless="${fSFile.fsFolder}">-</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Processing Dates -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Processing</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Chunked At:</dt>
+                        <dd class="col-sm-7">
+                            <span th:if="${fSFile.chunkedAt}">
+                                [[${#temporals.format(fSFile.chunkedAt, 'yyyy-MM-dd HH:mm')}]]
+                            </span>
+                            <span th:unless="${fSFile.chunkedAt}" class="text-muted">Not chunked</span>
+                        </dd>
+
+                        <dt class="col-sm-5">Created:</dt>
+                        <dd class="col-sm-7">[[${fSFile.creationDate ?: '-'}]]</dd>
+
+                        <dt class="col-sm-5">Modified:</dt>
+                        <dd class="col-sm-7">[[${fSFile.modifiedDate ?: '-'}]]</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

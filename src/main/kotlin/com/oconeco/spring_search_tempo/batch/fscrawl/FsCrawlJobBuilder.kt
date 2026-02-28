@@ -11,6 +11,7 @@ import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.base.service.StartPathValidator
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
+import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -48,6 +49,7 @@ class FsCrawlJobBuilder(
     private val crawlCleanupListener: CrawlCleanupListener,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val nlpAutoTriggerListener: NLPAutoTriggerListener,
+    private val heartbeatChunkListener: HeartbeatChunkListener,
     private val jobRunService: JobRunService
 ) {
     companion object {
@@ -118,6 +120,7 @@ class FsCrawlJobBuilder(
             .processor(createChunkProcessor())
             .writer(createChunkWriter())
             .listener(reader)  // Register reader as listener to get jobRunId
+            .listener(heartbeatChunkListener)  // Update heartbeat after each chunk
             .build()
     }
 
@@ -178,6 +181,7 @@ class FsCrawlJobBuilder(
             .writer(writer)
             .listener(CrawlStepListener())
             .listener(writer) // Writer is also a step listener
+            .listener(heartbeatChunkListener) // Update heartbeat after each chunk
             .build()
     }
 

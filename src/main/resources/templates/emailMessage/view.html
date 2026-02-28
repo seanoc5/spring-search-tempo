@@ -1,0 +1,220 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{emailMessage.view.headline}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">[[#{emailMessage.view.headline}]]</h1>
+        <div class="d-flex align-items-center gap-2">
+            <a th:href="@{/emailMessages}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-1"></i>[[#{emailMessage.view.back}]]
+            </a>
+            <!-- Read/Unread Toggle -->
+            <form th:action="@{/emailMessages/{id}/toggleRead(id=${emailMessage.id})}" method="post" class="d-inline">
+                <button type="submit" class="btn btn-outline-secondary" th:title="${emailMessage.isRead} ? 'Mark as unread' : 'Mark as read'">
+                    <i th:if="${emailMessage.isRead}" class="bi bi-envelope me-1"></i>
+                    <i th:unless="${emailMessage.isRead}" class="bi bi-envelope-open me-1"></i>
+                    <span th:if="${emailMessage.isRead}">Mark Unread</span>
+                    <span th:unless="${emailMessage.isRead}">Mark Read</span>
+                </button>
+            </form>
+            <a th:href="@{/emailMessages/edit/{id}(id=${emailMessage.id})}" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>[[#{emailMessage.view.edit}]]
+            </a>
+            <form th:action="@{/emailMessages/delete/{id}(id=${emailMessage.id})}"
+                  th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>[[#{emailMessage.view.delete}]]
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tags Card -->
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center">
+            <h6 class="mb-0 flex-grow-1"><i class="bi bi-tags me-2"></i>Tags</h6>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        id="addTagDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-plus-lg me-1"></i>Add Tag
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="addTagDropdown">
+                    <li th:each="tag : ${allTags}" th:unless="${emailMessage.tagIds.contains(tag.id)}">
+                        <form th:action="@{/emailMessages/{id}/tags/add(id=${emailMessage.id})}" method="post">
+                            <input type="hidden" name="tagId" th:value="${tag.id}" />
+                            <button type="submit" class="dropdown-item">
+                                <span class="badge me-2" th:style="'background-color: ' + ${tag.color}">[[${tag.name}]]</span>
+                            </button>
+                        </form>
+                    </li>
+                    <li th:if="${#lists.isEmpty(allTags)}">
+                        <span class="dropdown-item text-muted">No tags available</span>
+                    </li>
+                    <li th:if="${emailMessage.tagIds.size() == allTags.size() && !#lists.isEmpty(allTags)}">
+                        <span class="dropdown-item text-muted">All tags applied</span>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" th:href="@{/emailTags/add}">
+                            <i class="bi bi-plus-circle me-1"></i>Create New Tag
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="card-body">
+            <div th:if="${emailMessage.tagIds.empty}" class="text-muted">
+                No tags applied to this message.
+            </div>
+            <div th:unless="${emailMessage.tagIds.empty}">
+                <th:block th:each="tag : ${allTags}" th:if="${emailMessage.tagIds.contains(tag.id)}">
+                    <span class="badge me-2 mb-2" th:style="'background-color: ' + ${tag.color}">
+                        [[${tag.name}]]
+                        <form th:action="@{/emailMessages/{id}/tags/remove(id=${emailMessage.id})}"
+                              method="post" class="d-inline">
+                            <input type="hidden" name="tagId" th:value="${tag.id}" />
+                            <button type="submit" class="btn-close btn-close-white ms-1" style="font-size: 0.6em;"
+                                    aria-label="Remove tag"></button>
+                        </form>
+                    </span>
+                </th:block>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Header Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i th:if="${!emailMessage.isRead}" class="bi bi-envelope-fill text-primary me-2"></i>
+                <i th:if="${emailMessage.isRead}" class="bi bi-envelope-open me-2"></i>
+                <span th:if="${emailMessage.subject}" th:text="${emailMessage.subject}">Subject</span>
+                <span th:unless="${emailMessage.subject}" class="text-muted fst-italic">(no subject)</span>
+                <span th:if="${!emailMessage.isRead}" class="badge bg-primary ms-2">Unread</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">[[#{emailMessage.fromAddress.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.fromAddress ?: '-'}">from@example.com</dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.toAddresses.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.toAddresses ?: '-'}">to@example.com</dd>
+
+                        <dt th:if="${emailMessage.ccAddresses}" class="col-sm-4">[[#{emailMessage.ccAddresses.label}]]</dt>
+                        <dd th:if="${emailMessage.ccAddresses}" class="col-sm-8" th:text="${emailMessage.ccAddresses}">cc@example.com</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">[[#{emailMessage.sentDate.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <span th:if="${emailMessage.sentDate}"
+                                  th:text="${#temporals.format(emailMessage.sentDate, 'yyyy-MM-dd HH:mm:ss')}">2024-01-01</span>
+                            <span th:unless="${emailMessage.sentDate}" class="text-muted">-</span>
+                        </dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.receivedDate.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <span th:if="${emailMessage.receivedDate}"
+                                  th:text="${#temporals.format(emailMessage.receivedDate, 'yyyy-MM-dd HH:mm:ss')}">2024-01-01</span>
+                            <span th:unless="${emailMessage.receivedDate}" class="text-muted">-</span>
+                        </dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.fetchStatus.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <span th:if="${emailMessage.fetchStatus.name() == 'COMPLETE'}" class="badge bg-success">[[${emailMessage.fetchStatus}]]</span>
+                            <span th:if="${emailMessage.fetchStatus.name() == 'HEADERS_ONLY'}" class="badge bg-warning text-dark">[[${emailMessage.fetchStatus}]]</span>
+                            <span th:if="${emailMessage.fetchStatus.name() != 'COMPLETE' && emailMessage.fetchStatus.name() != 'HEADERS_ONLY'}" class="badge bg-secondary">[[${emailMessage.fetchStatus}]]</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Attachments -->
+            <div th:if="${emailMessage.hasAttachments}" class="alert alert-secondary mb-0">
+                <i class="bi bi-paperclip me-2"></i>
+                <strong>[[${emailMessage.attachmentCount}]] attachment(s):</strong>
+                <span th:text="${emailMessage.attachmentNames}">file1.pdf, file2.doc</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Body Content -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0">[[#{emailMessage.bodyText.label}]]</h6>
+        </div>
+        <div class="card-body">
+            <div th:if="${emailMessage.bodyText}">
+                <pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;" th:text="${emailMessage.bodyText}">Body text content...</pre>
+            </div>
+            <div th:unless="${emailMessage.bodyText}" class="text-muted fst-italic">
+                <span th:if="${emailMessage.fetchStatus.name() == 'HEADERS_ONLY'}">
+                    <i class="bi bi-hourglass me-1"></i>Body not yet fetched (headers only)
+                </span>
+                <span th:unless="${emailMessage.fetchStatus.name() == 'HEADERS_ONLY'}">
+                    No body content available
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technical Details -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Technical Details</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">ID</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.id}">1</dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.messageId.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <code th:if="${emailMessage.messageId}" th:text="${emailMessage.messageId}" style="word-break: break-all;">&lt;msgid@example.com&gt;</code>
+                            <span th:unless="${emailMessage.messageId}" class="text-muted">-</span>
+                        </dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.imapUid.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.imapUid ?: '-'}">12345</dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.contentType.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.contentType ?: '-'}">text/plain</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">[[#{emailMessage.bodySize.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.bodySize ?: '-'}">1234</dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.emailAccount.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <a th:if="${emailMessage.emailAccount}" th:href="@{/emailAccounts/{id}(id=${emailMessage.emailAccount})}">[[${emailMessage.emailAccount}]]</a>
+                            <span th:unless="${emailMessage.emailAccount}" class="text-muted">-</span>
+                        </dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.emailFolder.label}]]</dt>
+                        <dd class="col-sm-8" th:text="${emailMessage.emailFolder ?: '-'}">1</dd>
+
+                        <dt class="col-sm-4">[[#{emailMessage.threadId.label}]]</dt>
+                        <dd class="col-sm-8">
+                            <code th:if="${emailMessage.threadId}" th:text="${emailMessage.threadId}">thread-123</code>
+                            <span th:unless="${emailMessage.threadId}" class="text-muted">-</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

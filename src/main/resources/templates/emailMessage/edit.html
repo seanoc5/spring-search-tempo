@@ -1,0 +1,122 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{emailMessage.edit.headline}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailMessages}">[[#{emailMessage.list.headline}]]</a></li>
+            <li class="breadcrumb-item">
+                <a th:href="@{/emailMessages/{id}(id=${emailMessage.id})}" th:text="${emailMessage.subject ?: '#' + emailMessage.id}">Message</a>
+            </li>
+            <li class="breadcrumb-item active">[[#{emailMessage.edit.headline}]]</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4"><i class="bi bi-pencil me-2"></i>[[#{emailMessage.edit.headline}]]</h1>
+
+    <form th:action="@{/emailMessages/edit/{id}(id=${emailMessage.id})}" th:object="${emailMessage}" method="post">
+        <div th:replace="~{fragments/forms::globalErrors('emailMessage')}" />
+        <input type="hidden" th:field="*{version}" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Envelope Data -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Envelope</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'uri', required=true)}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'subject')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'fromAddress')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'toAddresses')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'ccAddresses')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'bccAddresses')}" />
+                    </div>
+                </div>
+
+                <!-- Technical Details -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Technical Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'messageId')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'imapUid', type='number')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'fetchStatus', type='select')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'contentType')}" />
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Content</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'bodyText', type='textarea')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'bodySize', type='number')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'hasAttachments', type='checkbox')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'attachmentCount', type='number')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'attachmentNames')}" />
+                    </div>
+                </div>
+
+                <!-- Threading -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Threading</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'inReplyTo')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'threadId')}" />
+                    </div>
+                </div>
+
+                <!-- Relationships -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Relationships</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'emailAccount', type='select')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'emailFolder', type='select')}" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>[[#{emailMessage.edit.submit}]]
+                    </button>
+                    <a th:href="@{/emailMessages/{id}(id=${emailMessage.id})}" class="btn btn-outline-secondary">[[#{emailMessage.edit.cancel}]]</a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Info</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">ID</dt>
+                            <dd class="col-sm-8" th:text="${emailMessage.id}">1</dd>
+
+                            <dt class="col-sm-4">Status</dt>
+                            <dd class="col-sm-8" th:text="${emailMessage.status}">NEW</dd>
+
+                            <dt class="col-sm-4">Version</dt>
+                            <dd class="col-sm-8" th:text="${emailMessage.version}">1</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>

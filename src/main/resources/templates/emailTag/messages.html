@@ -1,0 +1,87 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Messages Tagged: [[${emailTag.name}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            Messages Tagged:
+            <span class="badge" th:style="'background-color: ' + ${emailTag.color}">[[${emailTag.name}]]</span>
+        </h1>
+        <div>
+            <a th:href="@{/emailTags}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Tags
+            </a>
+        </div>
+    </div>
+
+    <!-- Top Pagination -->
+    <div th:replace="~{fragments/utils::pagination()}" />
+
+    <div th:if="${emailMessages.empty}" class="alert alert-info">
+        No messages with this tag.
+    </div>
+
+    <div th:unless="${emailMessages.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+            <tr>
+                <th scope="col">Subject</th>
+                <th scope="col">From</th>
+                <th scope="col">Received</th>
+                <th scope="col">Status</th>
+                <th><!-- Actions --></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="msg : ${emailMessages}">
+                <td>
+                    <a th:href="@{/emailMessages/{id}(id=${msg.id})}" class="text-decoration-none">
+                        <i th:if="${!msg.isRead}" class="bi bi-envelope-fill text-primary me-1" title="Unread"></i>
+                        <i th:if="${msg.isRead}" class="bi bi-envelope-open text-muted me-1" title="Read"></i>
+                        <span th:if="${msg.subject}" th:text="${#strings.abbreviate(msg.subject, 60)}">Subject</span>
+                        <span th:unless="${msg.subject}" class="text-muted fst-italic">(no subject)</span>
+                    </a>
+                </td>
+                <td>
+                    <span th:if="${msg.fromAddress}" th:text="${#strings.abbreviate(msg.fromAddress, 40)}">from@example.com</span>
+                    <span th:unless="${msg.fromAddress}" class="text-muted">-</span>
+                </td>
+                <td>
+                    <span th:if="${msg.receivedDate}"
+                          th:text="${#temporals.format(msg.receivedDate, 'yyyy-MM-dd HH:mm')}">2024-01-01 10:00</span>
+                    <span th:unless="${msg.receivedDate}" class="text-muted">-</span>
+                </td>
+                <td>
+                    <span th:if="${msg.fetchStatus.name() == 'COMPLETE'}" class="badge bg-success">[[${msg.fetchStatus}]]</span>
+                    <span th:if="${msg.fetchStatus.name() == 'HEADERS_ONLY'}" class="badge bg-warning text-dark">[[${msg.fetchStatus}]]</span>
+                </td>
+                <td>
+                    <div class="float-end text-nowrap">
+                        <a th:href="@{/emailMessages/{id}(id=${msg.id})}"
+                           class="btn btn-sm btn-outline-primary" title="View">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <form th:action="@{/emailMessages/{id}/tags/remove(id=${msg.id})}"
+                              method="post" class="d-inline">
+                            <input type="hidden" name="tagId" th:value="${emailTag.id}" />
+                            <input type="hidden" name="redirectTo" th:value="@{/emailTags/{id}/messages(id=${emailTag.id})}" />
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Remove tag">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bottom Pagination -->
+    <div th:replace="~{fragments/utils::pagination()}" />
+</div>
+</body>
+</html>

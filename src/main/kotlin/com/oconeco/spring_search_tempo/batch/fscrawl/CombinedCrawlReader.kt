@@ -45,7 +45,8 @@ class CombinedCrawlReader(
     private val maxDepth: Int,
     private val followLinks: Boolean,
     private val folderMatcher: ((Path) -> AnalysisStatus)? = null,
-    private val recentCrawlChecker: RecentCrawlSkipChecker? = null
+    private val recentCrawlChecker: RecentCrawlSkipChecker? = null,
+    private val maxFilesPerBatch: Int = 500
 ) : ItemReader<CombinedCrawlItem> {
 
     companion object {
@@ -143,10 +144,31 @@ class CombinedCrawlReader(
 
                 filesCollected += immediateFiles.size
 
-                // Add directory + its files as a single item
-                items.add(CombinedCrawlItem(directory = dir, files = immediateFiles))
+                // Split large directories into batches of maxFilesPerBatch
+                if (immediateFiles.size <= maxFilesPerBatch) {
+                    // Small directory - single item
+                    items.add(CombinedCrawlItem(
+                        directory = dir,
+                        files = immediateFiles,
+                        isContinuation = false,
+                        totalFileCount = immediateFiles.size
+                    ))
+                    log.trace("Collected directory: {} with {} files", dir, immediateFiles.size)
+                } else {
+                    // Large directory - split into batches
+                    val batches = immediateFiles.chunked(maxFilesPerBatch)
+                    log.info("Splitting large directory ({} files) into {} batches: {}",
+                        immediateFiles.size, batches.size, dir)
 
-                log.trace("Collected directory: {} with {} files", dir, immediateFiles.size)
+                    batches.forEachIndexed { index, batch ->
+                        items.add(CombinedCrawlItem(
+                            directory = dir,
+                            files = batch,
+                            isContinuation = index > 0,  // First batch processes folder
+                            totalFileCount = immediateFiles.size
+                        ))
+                    }
+                }
 
             } catch (e: AccessDeniedException) {
                 errorsEncountered++

@@ -35,6 +35,14 @@ class JobRun : SaveableObject() {
     @Column
     var finishTime: OffsetDateTime? = null
 
+    /**
+     * Last heartbeat timestamp. Updated periodically during job execution
+     * to indicate the job is still actively processing.
+     * Used for detecting stale/orphaned jobs (heartbeat > 2 minutes old = likely dead).
+     */
+    @Column
+    var lastHeartbeatAt: OffsetDateTime? = null
+
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "text")
     var runStatus: RunStatus = RunStatus.RUNNING
@@ -86,6 +94,28 @@ class JobRun : SaveableObject() {
      */
     @Column(columnDefinition = "text")
     var warningMessage: String? = null
+
+    // Progress tracking fields
+    /**
+     * Total number of items expected to be processed.
+     * Set at job start (e.g., from IMAP folder message counts).
+     */
+    @Column
+    var expectedTotal: Long? = null
+
+    /**
+     * Number of items processed so far.
+     * Updated during job execution for progress display.
+     */
+    @Column
+    var processedCount: Long? = 0
+
+    /**
+     * Name/description of the current processing step.
+     * e.g., "Fetching headers: INBOX" or "Enriching bodies"
+     */
+    @Column(columnDefinition = "text")
+    var currentStepName: String? = null
 
 }
 

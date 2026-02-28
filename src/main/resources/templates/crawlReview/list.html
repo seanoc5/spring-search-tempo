@@ -1,0 +1,178 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Crawl Review Tool</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-clipboard2-check me-2"></i>Crawl Review Tool
+        </h1>
+    </div>
+
+    <p class="text-muted mb-4">
+        Compare filesystem state against database state for a specific crawl configuration.
+        Identify what's been crawled, what's missing, and why.
+    </p>
+
+    <div class="row g-4">
+        <!-- Folder Comparison -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-folder me-2"></i>Folder Comparison
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text text-muted">
+                        Compare folders from a filesystem list against what's indexed in the database.
+                        Shows which folders exist in both, which are missing from DB (expected or unexpected),
+                        and which are in DB but no longer on filesystem.
+                    </p>
+
+                    <form th:action="@{/crawlReview/{configId}/folders(configId=0)}"
+                          method="post" enctype="multipart/form-data" id="folderCompareForm">
+                        <div class="mb-3">
+                            <label for="folderConfigSelect" class="form-label">Crawl Configuration</label>
+                            <select class="form-select" id="folderConfigSelect" name="configId" required
+                                    onchange="updateFormAction('folderCompareForm', 'folders', this.value)">
+                                <option value="" selected disabled>Select a configuration...</option>
+                                <option th:each="config : ${configs}"
+                                        th:value="${config.id}"
+                                        th:text="${config.displayLabel ?: config.name}">
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="folderListFile" class="form-label">Folder List File</label>
+                            <input type="file" class="form-control" id="folderListFile"
+                                   name="fsListFile" accept=".txt" required>
+                            <div class="form-text">
+                                Upload a text file with one folder path per line.
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="folderSubmitBtn" disabled>
+                            <i class="bi bi-search me-1"></i>Compare Folders
+                        </button>
+                    </form>
+
+                    <hr class="my-3">
+
+                    <details>
+                        <summary class="text-muted small">How to generate a folder list</summary>
+                        <pre class="bg-light p-2 mt-2 small"><code># List all folders in a directory
+find /home/user/Documents -type d > folders.txt
+
+# Exclude hidden folders
+find /home/user/Documents -type d -not -path '*/.*' > folders.txt</code></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Comparison -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark me-2"></i>File Comparison
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text text-muted">
+                        Compare files from a filesystem list against what's indexed.
+                        Shows coverage by file extension - how many files of each type are indexed
+                        compared to what exists on the filesystem.
+                    </p>
+
+                    <form th:action="@{/crawlReview/{configId}/files(configId=0)}"
+                          method="post" enctype="multipart/form-data" id="fileCompareForm">
+                        <div class="mb-3">
+                            <label for="fileConfigSelect" class="form-label">Crawl Configuration</label>
+                            <select class="form-select" id="fileConfigSelect" name="configId" required
+                                    onchange="updateFormAction('fileCompareForm', 'files', this.value)">
+                                <option value="" selected disabled>Select a configuration...</option>
+                                <option th:each="config : ${configs}"
+                                        th:value="${config.id}"
+                                        th:text="${config.displayLabel ?: config.name}">
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="fileListFile" class="form-label">File List File</label>
+                            <input type="file" class="form-control" id="fileListFile"
+                                   name="fsListFile" accept=".txt" required>
+                            <div class="form-text">
+                                Upload a text file with one file path per line.
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="fileSubmitBtn" disabled>
+                            <i class="bi bi-search me-1"></i>Compare Files
+                        </button>
+                    </form>
+
+                    <hr class="my-3">
+
+                    <details>
+                        <summary class="text-muted small">How to generate a file list</summary>
+                        <pre class="bg-light p-2 mt-2 small"><code># List all files in a directory
+find /home/user/Documents -type f > files.txt
+
+# Only common document types
+find /home/user/Documents -type f \
+  \( -name "*.pdf" -o -name "*.doc*" -o -name "*.txt" \) > files.txt</code></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ad-hoc Folder Review -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-folder2-open me-2"></i>Ad-hoc Folder Review
+            </h5>
+        </div>
+        <div class="card-body">
+            <p class="card-text text-muted">
+                Review a specific indexed folder to see how its immediate children compare between
+                the filesystem and database. Access this from any folder's detail view.
+            </p>
+            <a th:href="@{/fSFolders}" class="btn btn-outline-secondary">
+                <i class="bi bi-folder me-1"></i>Browse Folders
+            </a>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        function updateFormAction(formId, type, configId) {
+            const form = document.getElementById(formId);
+            form.action = '/crawlReview/' + configId + '/' + type;
+
+            // Enable submit button
+            const submitBtnId = type === 'folders' ? 'folderSubmitBtn' : 'fileSubmitBtn';
+            document.getElementById(submitBtnId).disabled = false;
+        }
+
+        // Also validate file input before enabling submit
+        document.getElementById('folderListFile').addEventListener('change', function() {
+            const configSelect = document.getElementById('folderConfigSelect');
+            document.getElementById('folderSubmitBtn').disabled = !this.files.length || !configSelect.value;
+        });
+
+        document.getElementById('fileListFile').addEventListener('change', function() {
+            const configSelect = document.getElementById('fileConfigSelect');
+            document.getElementById('fileSubmitBtn').disabled = !this.files.length || !configSelect.value;
+        });
+    </script>
+</div>
+</body>
+</html>

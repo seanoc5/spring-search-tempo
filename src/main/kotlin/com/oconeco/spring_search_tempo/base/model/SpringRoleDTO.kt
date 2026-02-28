@@ -8,7 +8,6 @@ class SpringRoleDTO {
     var id: Long? = null
 
     @NotNull
-    @SpringRoleLabelUnique
     var label: String? = null
 
     var description: String? = null

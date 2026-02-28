@@ -19,4 +19,10 @@ interface SpringRoleService {
 
     fun labelExists(label: String?): Boolean
 
+    fun getRolesForUser(userId: Long): List<String>
+
+    fun getAvailableRoles(): List<String>
+
+    fun updateRolesForUser(userId: Long, roleLabels: List<String>)
+
 }

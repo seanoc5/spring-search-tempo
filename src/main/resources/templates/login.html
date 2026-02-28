@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Login - [[#{app.title}]]</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link th:href="@{/webjars/bootstrap/5.3.8/css/bootstrap.min.css}" rel="stylesheet" />
+    <link th:href="@{/webjars/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css}" rel="stylesheet" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            max-width: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-card">
+            <div class="card shadow">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <img th:src="@{/images/logo.png}" alt="Logo" width="64" height="64" class="mb-3" />
+                        <h4 class="mb-0" th:text="#{app.title}">Spring Search Tempo</h4>
+                        <p class="text-muted">Sign in to continue</p>
+                    </div>
+
+                    <!-- Error message -->
+                    <div th:if="${param.error}" class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Invalid username or password
+                    </div>
+
+                    <!-- Session expired message -->
+                    <div th:if="${param.expired}" class="alert alert-warning" role="alert">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Your session has expired. Please sign in again.
+                    </div>
+
+                    <!-- Logout success message -->
+                    <div th:if="${param.logout}" class="alert alert-success" role="alert">
+                        <i class="bi bi-check-circle me-2"></i>
+                        You have been logged out successfully
+                    </div>
+
+                    <form th:action="@{/login}" method="post">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                <input type="text" class="form-control" id="username" name="username"
+                                       placeholder="Enter username" required autofocus />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                <input type="password" class="form-control" id="password" name="password"
+                                       placeholder="Enter password" required />
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="remember-me" name="remember-me" />
+                                <label class="form-check-label" for="remember-me">
+                                    Remember me for 30 days
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <p class="text-center text-white-50 mt-3 small">
+                Default accounts: <strong>admin</strong> / password or <strong>user</strong> / password
+            </p>
+        </div>
+    </div>
+</body>
+</html>

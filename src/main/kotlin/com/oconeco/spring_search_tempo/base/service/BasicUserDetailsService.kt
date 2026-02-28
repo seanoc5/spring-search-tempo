@@ -9,6 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 
 @Service
@@ -16,22 +17,41 @@ class BasicUserDetailsService(
     private val springUserRepository: SpringUserRepository
 ) : UserDetailsService {
 
+    @Transactional(readOnly = true)
     override fun loadUserByUsername(username: String): BasicUserDetails {
         val springUser = springUserRepository.findByLabelIgnoreCase(username)
         if (springUser == null) {
             log.warn("user not found: {}", username)
             throw UsernameNotFoundException("User ${username} not found")
         }
-        val role = UserRoles.LOGIN
-        val authorities = listOf(SimpleGrantedAuthority(role))
+
+        if (springUser.enabled != true) {
+            log.warn("user is disabled: {}", username)
+            throw UsernameNotFoundException("User ${username} is disabled")
+        }
+
+        // Build authorities from user's roles
+        val authorities = mutableListOf<SimpleGrantedAuthority>()
+
+        // Add LOGIN authority for all authenticated users
+        authorities.add(SimpleGrantedAuthority(UserRoles.LOGIN))
+
+        // Add role-based authorities from SpringRole entities
+        for (role in springUser.springRoles) {
+            role.label?.let { authorities.add(SimpleGrantedAuthority(it)) }
+        }
+
+        // If no roles assigned, default to USER role
+        if (springUser.springRoles.isEmpty()) {
+            authorities.add(SimpleGrantedAuthority(UserRoles.USER))
+        }
+
         return BasicUserDetails(springUser.id, username, springUser.password, authorities)
     }
 
 
     companion object {
-
         val log: Logger = LoggerFactory.getLogger(BasicUserDetailsService::class.java)
-
     }
 
 }

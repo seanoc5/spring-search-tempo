@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.repos
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
+import com.oconeco.spring_search_tempo.base.domain.Status
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
@@ -141,5 +142,77 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
         )
     """)
     fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
+
+    /**
+     * Count files by analysis status.
+     */
+    fun countByAnalysisStatus(analysisStatus: AnalysisStatus): Long
+
+    /**
+     * Get file counts grouped by crawl config.
+     * Returns pairs of [crawlConfigId, count].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(f)
+        FROM FSFile f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE f.analysisStatus <> :excludedStatus
+        GROUP BY jr.crawlConfig.id
+        ORDER BY COUNT(f) DESC
+    """)
+    fun countGroupedByCrawlConfig(@Param("excludedStatus") excludedStatus: AnalysisStatus): List<Array<Any>>
+
+    /**
+     * Get SKIP file counts grouped by crawl config.
+     * Returns pairs of [crawlConfigId, count].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(f)
+        FROM FSFile f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE f.analysisStatus = :status
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countSkippedGroupedByCrawlConfig(@Param("status") status: AnalysisStatus): List<Array<Any>>
+
+    /**
+     * Find all file URIs belonging to a crawl config.
+     * Efficient query for set comparison in crawl review.
+     */
+    @Query("""
+        SELECT f.uri FROM FSFile f
+        WHERE f.jobRunId IN (
+            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
+        )
+    """)
+    fun findAllUrisByCrawlConfigId(@Param("configId") configId: Long): List<String>
+
+    /**
+     * Find all files (with status info) belonging to a crawl config.
+     * Used for detailed comparison in crawl review.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.jobRunId IN (
+            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
+        )
+    """)
+    fun findAllByCrawlConfigId(@Param("configId") configId: Long): List<FSFile>
+
+    /**
+     * Find immediate child files by parent folder URI prefix.
+     * The folderUri should end with '/' for proper prefix matching.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.uri LIKE :folderUri || '%'
+        AND f.uri NOT LIKE :folderUri || '%/%'
+    """)
+    fun findImmediateChildFiles(@Param("folderUri") folderUri: String): List<FSFile>
+
+    /**
+     * Count files by processing status.
+     */
+    fun countByStatus(status: Status): Long
 
 }

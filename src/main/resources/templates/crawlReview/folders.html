@@ -1,0 +1,197 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Folder Comparison Results</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-folder me-2"></i>Folder Comparison Results
+        </h1>
+        <div>
+            <a th:href="@{/crawlReview}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </a>
+        </div>
+    </div>
+
+    <p class="text-muted mb-4">
+        Comparing folders for configuration: <strong th:text="${summary.crawlConfigName}">Config</strong>
+    </p>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-primary" th:text="${summary.totalFsCount}">0</div>
+                    <div class="small text-muted">FS Folders</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-success" th:text="${summary.bothExistCount}">0</div>
+                    <div class="small text-muted">In Both</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-secondary" th:text="${summary.fsOnlyExpectedCount}">0</div>
+                    <div class="small text-muted">Expected Skip</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-danger" th:text="${summary.fsOnlyUnexpectedCount}">0</div>
+                    <div class="small text-muted">Unexpected Gap</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-info" th:text="${summary.totalDbCount}">0</div>
+                    <div class="small text-muted">DB Folders</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center">
+                <div class="card-body py-3">
+                    <div class="fs-3 fw-bold text-warning" th:text="${summary.dbOnlyCount}">0</div>
+                    <div class="small text-muted">DB Only (deleted?)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter buttons -->
+    <div class="btn-group mb-3" role="group">
+        <a th:href="@{/crawlReview}"
+           th:classappend="${categoryFilter == null} ? 'active' : ''"
+           class="btn btn-outline-secondary"
+           onclick="return false;">All</a>
+        <a href="#"
+           th:classappend="${categoryFilter == 'BOTH_EXIST'} ? 'active' : ''"
+           class="btn btn-outline-success"
+           onclick="filterTable('BOTH_EXIST'); return false;">
+            In Both <span class="badge bg-success" th:text="${summary.bothExistCount}">0</span>
+        </a>
+        <a href="#"
+           th:classappend="${categoryFilter == 'FS_ONLY_EXPECTED'} ? 'active' : ''"
+           class="btn btn-outline-secondary"
+           onclick="filterTable('FS_ONLY_EXPECTED'); return false;">
+            Expected Skip <span class="badge bg-secondary" th:text="${summary.fsOnlyExpectedCount}">0</span>
+        </a>
+        <a href="#"
+           th:classappend="${categoryFilter == 'FS_ONLY_UNEXPECTED'} ? 'active' : ''"
+           class="btn btn-outline-danger"
+           onclick="filterTable('FS_ONLY_UNEXPECTED'); return false;">
+            Unexpected <span class="badge bg-danger" th:text="${summary.fsOnlyUnexpectedCount}">0</span>
+        </a>
+        <a href="#"
+           th:classappend="${categoryFilter == 'DB_ONLY'} ? 'active' : ''"
+           class="btn btn-outline-warning"
+           onclick="filterTable('DB_ONLY'); return false;">
+            DB Only <span class="badge bg-warning text-dark" th:text="${summary.dbOnlyCount}">0</span>
+        </a>
+    </div>
+
+    <!-- Results table -->
+    <div th:if="${items.empty}" class="alert alert-info">
+        No folders found matching the selected filter.
+    </div>
+
+    <div th:if="${!items.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="resultsTable">
+            <thead>
+            <tr>
+                <th scope="col">Path</th>
+                <th scope="col">Category</th>
+                <th scope="col">Pattern/Status</th>
+                <th scope="col">Last Updated</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="item : ${items}" th:data-category="${item.category}">
+                <td>
+                    <code class="small" th:text="${item.path}">path</code>
+                </td>
+                <td>
+                    <span th:switch="${item.category.name()}">
+                        <span th:case="'BOTH_EXIST'" class="badge bg-success">
+                            <i class="bi bi-check-circle me-1"></i>In Both
+                        </span>
+                        <span th:case="'FS_ONLY_EXPECTED'" class="badge bg-secondary">
+                            <i class="bi bi-skip-forward me-1"></i>Expected Skip
+                        </span>
+                        <span th:case="'FS_ONLY_UNEXPECTED'" class="badge bg-danger">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Unexpected
+                        </span>
+                        <span th:case="'DB_ONLY'" class="badge bg-warning text-dark">
+                            <i class="bi bi-question-circle me-1"></i>DB Only
+                        </span>
+                    </span>
+                </td>
+                <td>
+                    <span th:if="${item.matchedPattern != null}"
+                          class="small text-muted font-monospace"
+                          th:text="${item.matchedPattern}"
+                          th:title="Matched SKIP pattern">
+                    </span>
+                    <span th:if="${item.dbAnalysisStatus != null}"
+                          class="badge"
+                          th:classappend="${item.dbAnalysisStatus.name() == 'SKIP'} ? 'bg-secondary' :
+                                          ${item.dbAnalysisStatus.name() == 'LOCATE'} ? 'bg-info' :
+                                          ${item.dbAnalysisStatus.name() == 'INDEX'} ? 'bg-primary' :
+                                          ${item.dbAnalysisStatus.name() == 'ANALYZE'} ? 'bg-success' : 'bg-light'"
+                          th:text="${item.dbAnalysisStatus}">
+                    </span>
+                </td>
+                <td>
+                    <span th:if="${item.dbLastUpdated != null}"
+                          th:text="${#temporals.format(item.dbLastUpdated, 'yyyy-MM-dd HH:mm')}"
+                          class="small text-muted">
+                    </span>
+                    <span th:if="${item.dbLastUpdated == null}" class="text-muted">-</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script th:inline="javascript">
+        function filterTable(category) {
+            const rows = document.querySelectorAll('#resultsTable tbody tr');
+            const buttons = document.querySelectorAll('.btn-group .btn');
+
+            // Update active button
+            buttons.forEach(btn => btn.classList.remove('active'));
+            if (category) {
+                event.target.closest('.btn').classList.add('active');
+            }
+
+            // Filter rows
+            rows.forEach(row => {
+                if (!category) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = row.dataset.category === category ? '' : 'none';
+                }
+            });
+        }
+    </script>
+</div>
+</body>
+</html>

@@ -11,6 +11,8 @@ interface SpringUserService {
 
     fun `get`(id: Long): SpringUserDTO
 
+    fun findByLabel(label: String): SpringUserDTO?
+
     fun create(springUserDTO: SpringUserDTO): Long
 
     fun update(id: Long, springUserDTO: SpringUserDTO)
@@ -19,6 +21,6 @@ interface SpringUserService {
 
     fun labelExists(label: String?): Boolean
 
-    fun getSpringUserValues(): Map<Long, Long>
+    fun getSpringUserValues(): Map<Long, String>
 
 }

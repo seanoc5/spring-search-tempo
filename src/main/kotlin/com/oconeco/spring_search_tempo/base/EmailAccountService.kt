@@ -1,7 +1,7 @@
 package com.oconeco.spring_search_tempo.base
 
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
-import java.time.OffsetDateTime
+import com.oconeco.spring_search_tempo.base.model.EmailAccountSummaryDTO
 
 
 interface EmailAccountService {
@@ -48,5 +48,15 @@ interface EmailAccountService {
      * Clear the last error after successful sync.
      */
     fun clearError(id: Long)
+
+    /**
+     * Find all accounts with summary info (folder/message counts, active job progress).
+     */
+    fun findAllWithSummary(): List<EmailAccountSummaryDTO>
+
+    /**
+     * Get summary for a single account (for HTMX partial refresh).
+     */
+    fun getSummary(id: Long): EmailAccountSummaryDTO
 
 }

@@ -59,7 +59,9 @@
                         <tr th:each="fSFile : ${fSFiles}"
                             th:classappend="${fSFile.analysisStatus?.name() == 'SKIP'} ? 'table-secondary text-muted' : ''">
                             <td>
-                                [[${fSFile.label}]]
+                                <a th:href="@{/fSFiles/{id}(id=${fSFile.id})}" class="text-decoration-none">
+                                    [[${fSFile.label}]]
+                                </a>
                                 <span th:if="${fSFile.analysisStatus?.name() == 'SKIP'}"
                                       class="badge bg-secondary ms-2">SKIP</span>
                             </td>

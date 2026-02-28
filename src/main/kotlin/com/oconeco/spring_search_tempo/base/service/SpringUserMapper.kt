@@ -45,7 +45,10 @@ interface SpringUserMapper {
         @MappingTarget springUser: SpringUser,
         @Context passwordEncoder: PasswordEncoder
     ) {
-        springUser.password = passwordEncoder.encode(springUserDTO.password)
+        // Only update password if provided (for create or explicit password change)
+        if (!springUserDTO.password.isNullOrBlank()) {
+            springUser.password = passwordEncoder.encode(springUserDTO.password)
+        }
     }
 
 }

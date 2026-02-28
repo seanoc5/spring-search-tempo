@@ -73,4 +73,28 @@ interface FSFileService {
      */
     fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable, showSkipped: Boolean = false): Page<FSFileDTO>
 
+    /**
+     * Get file counts grouped by analysis status.
+     * @return Map of AnalysisStatus name to count
+     */
+    fun countByAnalysisStatus(): Map<String, Long>
+
+    /**
+     * Get file counts grouped by crawl config (excluding SKIP).
+     * @return List of pairs [configId, configName, count], ordered by count desc
+     */
+    fun countByCrawlConfigFacets(): List<Triple<Long, String, Long>>
+
+    /**
+     * Get SKIP file counts grouped by crawl config.
+     * @return Map of configId to skip count
+     */
+    fun countSkippedByCrawlConfig(): Map<Long, Long>
+
+    /**
+     * Get file counts grouped by Status (processing state).
+     * @return Map of status name to count
+     */
+    fun countByStatus(): Map<String, Long>
+
 }

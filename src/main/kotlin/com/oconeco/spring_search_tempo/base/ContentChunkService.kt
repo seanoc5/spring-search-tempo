@@ -19,4 +19,29 @@ interface ContentChunkService {
 
     fun getContentChunkValues(): Map<Long, Long>
 
+    /**
+     * Count chunks that have been NLP processed.
+     */
+    fun countNlpProcessed(): Long
+
+    /**
+     * Count chunks pending NLP processing.
+     */
+    fun countNlpPending(): Long
+
+    /**
+     * Get chunk counts grouped by Status (processing state).
+     * @return Map of status name to count
+     */
+    fun countByStatus(): Map<String, Long>
+
+    /**
+     * Get chunk counts grouped by analysis level.
+     * - INDEX: default, text indexed only
+     * - NLP: INDEX + NLP processing done (nlpProcessedAt IS NOT NULL)
+     * - EMBED: INDEX + NLP + vector embedding done (embedding IS NOT NULL)
+     * @return Map of level name to count
+     */
+    fun countByAnalysisLevel(): Map<String, Long>
+
 }

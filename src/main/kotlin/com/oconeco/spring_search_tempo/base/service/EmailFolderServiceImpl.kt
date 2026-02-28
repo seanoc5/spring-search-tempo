@@ -107,4 +107,40 @@ class EmailFolderServiceImpl(
         emailFolderRepository.save(emailFolder)
     }
 
+    override fun resetSyncState(id: Long) {
+        val emailFolder = emailFolderRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+
+        emailFolder.lastSyncUid = 0L
+        emailFolder.uidValidity = null
+
+        emailFolderRepository.save(emailFolder)
+    }
+
+    override fun resetSyncStateForAccount(accountId: Long) {
+        val folders = emailFolderRepository.findByEmailAccountId(accountId)
+        folders.forEach { folder ->
+            folder.lastSyncUid = 0L
+            folder.uidValidity = null
+        }
+        emailFolderRepository.saveAll(folders)
+    }
+
+    override fun updateUidValidity(id: Long, newUidValidity: Long): Boolean {
+        val emailFolder = emailFolderRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+
+        val oldUidValidity = emailFolder.uidValidity
+        val changed = oldUidValidity != null && oldUidValidity != newUidValidity
+
+        if (changed) {
+            // UIDVALIDITY changed - UIDs are no longer valid, reset sync state
+            emailFolder.lastSyncUid = 0L
+        }
+        emailFolder.uidValidity = newUidValidity
+
+        emailFolderRepository.save(emailFolder)
+        return changed
+    }
+
 }

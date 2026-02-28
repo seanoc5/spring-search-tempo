@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
+import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteContentChunk
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteEmailMessage
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
@@ -9,6 +10,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.repos.OneDriveItemRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
@@ -25,6 +27,7 @@ class ContentChunkServiceImpl(
     private val contentChunkRepository: ContentChunkRepository,
     private val fSFileRepository: FSFileRepository,
     private val emailMessageRepository: EmailMessageRepository,
+    private val oneDriveItemRepository: OneDriveItemRepository,
     private val publisher: ApplicationEventPublisher,
     private val contentChunkMapper: ContentChunkMapper
 ) : ContentChunkService {
@@ -48,7 +51,7 @@ class ContentChunkServiceImpl(
     override fun create(contentChunkDTO: ContentChunkDTO): Long {
         val contentChunk = ContentChunk()
         contentChunkMapper.updateContentChunk(contentChunkDTO, contentChunk,
-                contentChunkRepository, fSFileRepository, emailMessageRepository)
+                contentChunkRepository, fSFileRepository, emailMessageRepository, oneDriveItemRepository)
         return contentChunkRepository.save(contentChunk).id!!
     }
 
@@ -56,7 +59,7 @@ class ContentChunkServiceImpl(
         val contentChunk = contentChunkRepository.findById(id)
                 .orElseThrow { NotFoundException() }
         contentChunkMapper.updateContentChunk(contentChunkDTO, contentChunk,
-                contentChunkRepository, fSFileRepository, emailMessageRepository)
+                contentChunkRepository, fSFileRepository, emailMessageRepository, oneDriveItemRepository)
         contentChunkRepository.save(contentChunk)
     }
 
@@ -105,6 +108,36 @@ class ContentChunkServiceImpl(
             referencedException.addParam(emailMessageContentChunk.id)
             throw referencedException
         }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countNlpProcessed(): Long = contentChunkRepository.countByNlpProcessedAtIsNotNull()
+
+    @Transactional(readOnly = true)
+    override fun countNlpPending(): Long = contentChunkRepository.countNlpPending()
+
+    @Transactional(readOnly = true)
+    override fun countByStatus(): Map<String, Long> {
+        return Status.entries.associate { status ->
+            status.name to contentChunkRepository.countByStatus(status.name)
+        }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countByAnalysisLevel(): Map<String, Long> {
+        val total = contentChunkRepository.count()
+        val nlpCount = contentChunkRepository.countByNlpProcessedAtIsNotNull()
+        val embedCount = contentChunkRepository.countWithEmbedding()
+
+        // Analysis levels are cumulative:
+        // EMBED = has embedding (implies NLP + INDEX)
+        // NLP = has NLP but no embedding (implies INDEX)
+        // INDEX = default (no NLP, no embedding)
+        return mapOf(
+            "INDEX" to (total - nlpCount),  // Not NLP processed yet
+            "NLP" to (nlpCount - embedCount), // NLP done but no embedding
+            "EMBED" to embedCount  // Full embedding done
+        )
     }
 
 }

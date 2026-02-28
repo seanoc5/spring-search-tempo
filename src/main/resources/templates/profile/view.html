@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{profile.view.headline}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-person-circle me-2"></i>[[#{profile.view.headline}]]
+        </h1>
+        <div>
+            <a th:href="@{/profile/edit}" class="btn btn-primary">
+                <i class="bi bi-pencil me-1"></i>[[#{profile.edit.button}]]
+            </a>
+        </div>
+    </div>
+
+    <div th:if="${error}" class="alert alert-danger">[[${error}]]</div>
+
+    <div th:if="${user != null}" class="card">
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-3 text-center">
+                    <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center"
+                         style="width: 120px; height: 120px;">
+                        <i class="bi bi-person-fill text-secondary" style="font-size: 4rem;"></i>
+                    </div>
+                </div>
+                <div class="col-md-9">
+                    <h3 class="mb-1" th:text="${user.firstName != null && user.lastName != null} ? ${user.firstName + ' ' + user.lastName} : ${user.label}">
+                        User Name
+                    </h3>
+                    <p class="text-muted mb-2">@[[${user.label}]]</p>
+                    <span th:if="${user.enabled}" class="badge bg-success">Active</span>
+                    <span th:unless="${user.enabled}" class="badge bg-danger">Disabled</span>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <h5 class="text-muted mb-3">[[#{profile.details}]]</h5>
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="ps-0" style="width: 150px;">[[#{springUser.label.label}]]</th>
+                            <td>[[${user.label}]]</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-0">[[#{springUser.firstName.label}]]</th>
+                            <td th:text="${user.firstName} ?: '-'">-</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-0">[[#{springUser.lastName.label}]]</th>
+                            <td th:text="${user.lastName} ?: '-'">-</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-0">[[#{springUser.email.label}]]</th>
+                            <td th:text="${user.email} ?: '-'">-</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="text-muted mb-3">[[#{profile.security}]]</h5>
+                    <table class="table table-borderless">
+                        <tr>
+                            <th class="ps-0" style="width: 150px;">[[#{springUser.id.label}]]</th>
+                            <td>[[${user.id}]]</td>
+                        </tr>
+                        <tr>
+                            <th class="ps-0">[[#{springUser.enabled.label}]]</th>
+                            <td>
+                                <span th:if="${user.enabled}" class="text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Yes
+                                </span>
+                                <span th:unless="${user.enabled}" class="text-danger">
+                                    <i class="bi bi-x-circle me-1"></i>No
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th class="ps-0">[[#{springUser.password.label}]]</th>
+                            <td>
+                                <span class="text-muted">********</span>
+                                <a th:href="@{/profile/edit}" class="btn btn-sm btn-outline-secondary ms-2">Change</a>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

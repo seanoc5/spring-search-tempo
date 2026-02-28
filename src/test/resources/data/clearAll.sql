@@ -6,6 +6,7 @@ DELETE FROM fsfolder;
 
 DELETE FROM annotation;
 
-DELETE FROM spring_user;
-
+-- spring_role must be deleted before spring_user (FK constraint)
 DELETE FROM spring_role;
+
+DELETE FROM spring_user;

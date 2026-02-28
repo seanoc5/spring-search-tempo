@@ -8,6 +8,10 @@ interface SpringRoleRepository : JpaRepository<SpringRole, Long> {
 
     fun findFirstBySpringUserId(id: Long): SpringRole?
 
+    fun findAllBySpringUserId(id: Long): List<SpringRole>
+
+    fun deleteAllBySpringUserId(id: Long)
+
     fun existsByLabel(label: String?): Boolean
 
 }

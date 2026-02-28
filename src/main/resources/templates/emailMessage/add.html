@@ -1,0 +1,83 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{emailMessage.create.headline}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailMessages}">[[#{emailMessage.list.headline}]]</a></li>
+            <li class="breadcrumb-item active">[[#{emailMessage.create.headline}]]</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4"><i class="bi bi-envelope-plus me-2"></i>[[#{emailMessage.create.headline}]]</h1>
+
+    <form th:action="@{/emailMessages/add}" th:object="${emailMessage}" method="post">
+        <div th:replace="~{fragments/forms::globalErrors('emailMessage')}" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Envelope Data -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Envelope</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'uri', required=true)}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'subject')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'fromAddress')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'toAddresses')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'ccAddresses')}" />
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Content</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'bodyText', type='textarea')}" />
+                    </div>
+                </div>
+
+                <!-- Relationships -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Relationships</h5>
+                    </div>
+                    <div class="card-body">
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'emailAccount', type='select')}" />
+                        <div th:replace="~{fragments/forms::inputRow('emailMessage', 'emailFolder', type='select')}" />
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>[[#{emailMessage.create.submit}]]
+                    </button>
+                    <a th:href="@{/emailMessages}" class="btn btn-outline-secondary">[[#{emailMessage.create.cancel}]]</a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Notes</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-0">
+                            Email messages are typically created automatically during email sync.
+                            Manual creation is available for testing or importing external data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>

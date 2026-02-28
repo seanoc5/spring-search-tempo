@@ -52,6 +52,12 @@ class JobRunDTO {
 
     var finishTime: OffsetDateTime? = null
 
+    /**
+     * Last heartbeat timestamp. Updated periodically during job execution.
+     * If null for a running job, heartbeat tracking isn't enabled yet.
+     */
+    var lastHeartbeatAt: OffsetDateTime? = null
+
     var runStatus: RunStatus = RunStatus.RUNNING
 
     var filesDiscovered: Long = 0
@@ -87,5 +93,34 @@ class JobRunDTO {
      * Stored as newline-separated strings.
      */
     var warningMessage: String? = null
+
+    // Progress tracking fields
+
+    /**
+     * Total number of items expected to be processed.
+     * Used for progress display: "Processed X of Y"
+     */
+    var expectedTotal: Long? = null
+
+    /**
+     * Number of items processed so far.
+     */
+    var processedCount: Long? = 0
+
+    /**
+     * Name/description of the current processing step.
+     * e.g., "Fetching headers: INBOX"
+     */
+    var currentStepName: String? = null
+
+    /**
+     * Computed progress percentage (0-100).
+     * Returns null if expectedTotal is not set.
+     */
+    val progressPercent: Int?
+        get() = expectedTotal?.let { total ->
+            val processed = processedCount ?: 0
+            if (total > 0) ((processed * 100) / total).toInt().coerceIn(0, 100) else 0
+        }
 
 }

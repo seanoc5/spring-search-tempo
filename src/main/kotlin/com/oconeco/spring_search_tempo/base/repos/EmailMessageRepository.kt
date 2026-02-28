@@ -1,9 +1,16 @@
 package com.oconeco.spring_search_tempo.base.repos
 
+import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.domain.EmailMessage
+import com.oconeco.spring_search_tempo.base.domain.FetchStatus
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 
 
 interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
@@ -22,8 +29,123 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
 
     fun findByEmailFolderId(folderId: Long): List<EmailMessage>
 
+    /**
+     * Search messages by subject, from address, or body text (case-insensitive).
+     */
+    @Query("""
+        SELECT e FROM EmailMessage e
+        WHERE LOWER(e.subject) LIKE LOWER(CONCAT('%', :filter, '%'))
+           OR LOWER(e.fromAddress) LIKE LOWER(CONCAT('%', :filter, '%'))
+           OR LOWER(e.bodyText) LIKE LOWER(CONCAT('%', :filter, '%'))
+    """)
+    fun search(filter: String, pageable: Pageable): Page<EmailMessage>
+
     fun countByEmailAccountId(accountId: Long): Long
 
     fun countByEmailFolderId(folderId: Long): Long
+
+    /**
+     * Count unread messages for an account.
+     */
+    fun countByEmailAccountIdAndIsRead(accountId: Long, isRead: Boolean): Long
+
+    /**
+     * Find all existing Message-IDs from a set of candidates.
+     * Used for batch duplicate detection during sync.
+     */
+    @Query("SELECT e.messageId FROM EmailMessage e WHERE e.messageId IN :messageIds")
+    fun findExistingMessageIds(messageIds: Collection<String>): List<String>
+
+    /**
+     * Find messages by fetch status for an account.
+     * Used for body enrichment pass (fetching bodies for HEADERS_ONLY messages).
+     */
+    fun findByEmailAccountIdAndFetchStatus(
+        accountId: Long,
+        fetchStatus: FetchStatus,
+        pageable: Pageable
+    ): Page<EmailMessage>
+
+    /**
+     * Count messages needing body fetch for an account.
+     */
+    fun countByEmailAccountIdAndFetchStatus(accountId: Long, fetchStatus: FetchStatus): Long
+
+    /**
+     * Delete all messages for a folder.
+     */
+    @Modifying
+    fun deleteByEmailFolderId(folderId: Long): Int
+
+    /**
+     * Delete all messages for an account.
+     */
+    @Modifying
+    fun deleteByEmailAccountId(accountId: Long): Int
+
+    /**
+     * Find messages that need categorization (COMPLETE but not categorized).
+     */
+    fun findByEmailAccountIdAndFetchStatusAndCategorizedAtIsNull(
+        accountId: Long,
+        fetchStatus: FetchStatus,
+        pageable: Pageable
+    ): Page<EmailMessage>
+
+    /**
+     * Count uncategorized messages for an account.
+     */
+    fun countByEmailAccountIdAndFetchStatusAndCategorizedAtIsNull(
+        accountId: Long,
+        fetchStatus: FetchStatus
+    ): Long
+
+    /**
+     * Update categorization fields for a message.
+     */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE EmailMessage e
+        SET e.category = :category,
+            e.categoryConfidence = :confidence,
+            e.categorizedAt = :categorizedAt
+        WHERE e.id = :id
+    """)
+    fun updateCategorization(
+        @Param("id") id: Long,
+        @Param("category") category: EmailCategory,
+        @Param("confidence") confidence: Double?,
+        @Param("categorizedAt") categorizedAt: OffsetDateTime?
+    )
+
+    /**
+     * Update read status for a message.
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE EmailMessage e SET e.isRead = :isRead WHERE e.id = :id")
+    fun updateReadStatus(@Param("id") id: Long, @Param("isRead") isRead: Boolean)
+
+    /**
+     * Find message with tags eagerly loaded.
+     */
+    @Query("SELECT e FROM EmailMessage e LEFT JOIN FETCH e.tags WHERE e.id = :id")
+    fun findByIdWithTags(@Param("id") id: Long): EmailMessage?
+
+    /**
+     * Find messages by tag with pagination.
+     */
+    @Query(
+        "SELECT DISTINCT e FROM EmailMessage e JOIN e.tags t WHERE t.id = :tagId",
+        countQuery = "SELECT COUNT(DISTINCT e) FROM EmailMessage e JOIN e.tags t WHERE t.id = :tagId"
+    )
+    fun findByTagId(@Param("tagId") tagId: Long, pageable: Pageable): Page<EmailMessage>
+
+    /**
+     * Count messages with a specific tag.
+     */
+    @Query("SELECT COUNT(DISTINCT e) FROM EmailMessage e JOIN e.tags t WHERE t.id = :tagId")
+    fun countByTagId(@Param("tagId") tagId: Long): Long
 
 }

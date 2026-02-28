@@ -60,6 +60,9 @@ class CombinedCrawlProcessor(
     // Cache for parent folder analysis status (supports hierarchical matching)
     private val parentStatusCache = mutableMapOf<String, AnalysisStatus>()
 
+    // Cache for folders that were skipped (unchanged) - continuation batches should also skip
+    private val skippedFolderCache = mutableSetOf<String>()
+
     // Batch cache for file lookups within a directory
     // TODO: Consider using Spring Cache abstraction or Caffeine for more sophisticated caching
     private val fileCache = mutableMapOf<String, com.oconeco.spring_search_tempo.base.domain.FSFile?>()
@@ -67,13 +70,20 @@ class CombinedCrawlProcessor(
 
     override fun process(item: CombinedCrawlItem): CombinedCrawlResult? {
         log.debug(
-            "Processing combined item: directory={}, files={}",
-            item.directory, item.files.size
+            "Processing combined item: directory={}, files={}, isContinuation={}",
+            item.directory, item.files.size, item.isContinuation
         )
 
-        // Process the folder first
-        val folderDto = processFolder(item.directory, item.files.size) ?: run {
+        // Handle continuation batches (folder already processed in first batch)
+        if (item.isContinuation) {
+            return processContinuationBatch(item)
+        }
+
+        // First batch: process the folder
+        val folderDto = processFolder(item.directory, item.totalFileCount) ?: run {
             // Folder is unchanged - skip entire directory including files
+            // Mark as skipped so continuation batches also skip
+            skippedFolderCache.add(item.directory.toString())
             log.debug("\t\tSkipping unchanged directory and all {} files: {}", item.files.size, item.directory)
             return null
         }
@@ -93,6 +103,49 @@ class CombinedCrawlProcessor(
 
         return CombinedCrawlResult(
             folder = folderDto,
+            files = fileDtos
+        )
+    }
+
+    /**
+     * Process a continuation batch (2nd, 3rd, etc. batch of a large directory).
+     * Folder was already processed in first batch - just process files using cached status.
+     */
+    private fun processContinuationBatch(item: CombinedCrawlItem): CombinedCrawlResult? {
+        val dirUri = item.directory.toString()
+
+        // Check if first batch decided to skip this folder (unchanged)
+        if (dirUri in skippedFolderCache) {
+            log.debug("Continuation batch for unchanged folder, skipping {} files: {}", item.files.size, dirUri)
+            return null
+        }
+
+        // Get parent folder's analysis status from cache (set during first batch)
+        val parentStatus = parentStatusCache[dirUri] ?: run {
+            // Fallback: check database if not in cache (shouldn't happen normally)
+            val existingFolder = folderCache.getOrPut(dirUri) {
+                folderRepository.findByUri(dirUri)
+            }
+            existingFolder?.analysisStatus ?: run {
+                log.warn("Continuation batch but folder not found in cache or DB: {}", dirUri)
+                return null
+            }
+        }
+
+        // SKIP folders shouldn't have continuation batches (reader splits before SKIP check)
+        // but handle it defensively
+        if (parentStatus == AnalysisStatus.SKIP) {
+            log.debug("Continuation batch for SKIP folder, skipping files: {}", dirUri)
+            return null
+        }
+
+        log.debug("Processing continuation batch: {} files for {} (parentStatus={})",
+            item.files.size, dirUri, parentStatus)
+
+        val fileDtos = processFiles(item.files, parentStatus)
+
+        return CombinedCrawlResult(
+            folder = null,  // Folder already persisted in first batch
             files = fileDtos
         )
     }
@@ -242,7 +295,7 @@ class CombinedCrawlProcessor(
 
         // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
-            log.info("\t\t++++ File does not exist in DB, will process: {}", uri)
+            log.debug("\t\t++++ File does not exist in DB, will process: {}", uri)
         } else {
             val isUnchanged = fsMetadata.isUnchanged(
                 dbLastModified = existingFile.fsLastModified,
@@ -448,6 +501,7 @@ class CombinedCrawlProcessor(
      */
     fun clearCaches() {
         parentStatusCache.clear()
+        skippedFolderCache.clear()
         fileCache.clear()
         folderCache.clear()
         log.debug("Cleared all processor caches")

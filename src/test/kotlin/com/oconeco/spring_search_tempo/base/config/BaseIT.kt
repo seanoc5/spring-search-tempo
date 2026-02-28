@@ -35,6 +35,8 @@ abstract class BaseIT {
         RestAssured.urlEncodingEnabled = false
         RestAssured.config =
                 RestAssured.config().sessionConfig(SessionConfig().sessionIdName("SESSION"))
+        // Configure default authentication for all tests
+        RestAssured.authentication = RestAssured.preemptive().basic(LOGIN, PASSWORD)
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails()
     }
 

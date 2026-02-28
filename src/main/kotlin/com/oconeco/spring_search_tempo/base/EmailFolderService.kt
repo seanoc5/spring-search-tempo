@@ -32,4 +32,21 @@ interface EmailFolderService {
      */
     fun updateSyncState(id: Long, lastUid: Long, messageCount: Long)
 
+    /**
+     * Reset sync state for a folder to trigger full resync.
+     * Sets lastSyncUid to 0 and clears uidValidity.
+     */
+    fun resetSyncState(id: Long)
+
+    /**
+     * Reset sync state for all folders in an account.
+     */
+    fun resetSyncStateForAccount(accountId: Long)
+
+    /**
+     * Update UIDVALIDITY for a folder.
+     * If UIDVALIDITY changed, returns true (indicating UIDs are invalid).
+     */
+    fun updateUidValidity(id: Long, newUidValidity: Long): Boolean
+
 }

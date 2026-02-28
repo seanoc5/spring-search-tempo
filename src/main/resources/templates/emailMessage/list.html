@@ -1,0 +1,106 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{emailMessage.list.headline}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">[[#{emailMessage.list.headline}]]</h1>
+        <div>
+            <a th:href="@{/emailMessages/add}" class="btn btn-primary ms-2">[[#{emailMessage.list.createNew}]]</a>
+        </div>
+    </div>
+
+    <!-- Filters Row -->
+    <div th:if="${!emailMessages.empty || filter != null}" class="row mb-3">
+        <div th:replace="~{fragments/utils::searchFilter(object='emailMessage')}" />
+        <div th:replace="~{fragments/utils::sorting(object='emailMessage', sortOptions=${ {'receivedDate,DESC', 'receivedDate,ASC', 'sentDate,DESC', 'subject,ASC'} }, columnClass='offset-lg-4')}" />
+    </div>
+
+    <!-- Table Content (HTMX target) -->
+    <div id="table-content">
+        <th:block th:fragment="table-content">
+            <!-- Top Pagination -->
+            <div th:replace="~{fragments/utils::pagination()}" />
+
+            <div th:if="${emailMessages.empty}" class="alert alert-info">[[#{emailMessage.list.empty}]]</div>
+
+            <div th:if="${!emailMessages.empty}" class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                    <tr>
+                        <th scope="col">[[#{emailMessage.subject.label}]]</th>
+                        <th scope="col">[[#{emailMessage.fromAddress.label}]]</th>
+                        <th scope="col">[[#{emailMessage.receivedDate.label}]]</th>
+                        <th scope="col">[[#{emailMessage.fetchStatus.label}]]</th>
+                        <th scope="col">[[#{emailMessage.hasAttachments.label}]]</th>
+                        <th scope="col">Status</th>
+                        <th><!-- Actions --></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="msg : ${emailMessages}">
+                        <td>
+                            <a th:href="@{/emailMessages/{id}(id=${msg.id})}" class="text-decoration-none">
+                                <i th:if="${!msg.isRead}" class="bi bi-envelope-fill text-primary me-1" title="Unread"></i>
+                                <i th:if="${msg.isRead}" class="bi bi-envelope-open text-muted me-1" title="Read"></i>
+                                <span th:if="${msg.subject}" th:text="${#strings.abbreviate(msg.subject, 60)}" th:classappend="${!msg.isRead} ? 'fw-bold'">Subject</span>
+                                <span th:unless="${msg.subject}" class="text-muted fst-italic">(no subject)</span>
+                            </a>
+                        </td>
+                        <td>
+                            <span th:if="${msg.fromAddress}" th:text="${#strings.abbreviate(msg.fromAddress, 40)}">from@example.com</span>
+                            <span th:unless="${msg.fromAddress}" class="text-muted">-</span>
+                        </td>
+                        <td>
+                            <span th:if="${msg.receivedDate}"
+                                  th:text="${#temporals.format(msg.receivedDate, 'yyyy-MM-dd HH:mm')}">2024-01-01 10:00</span>
+                            <span th:unless="${msg.receivedDate}" class="text-muted">-</span>
+                        </td>
+                        <td>
+                            <span th:if="${msg.fetchStatus.name() == 'COMPLETE'}" class="badge bg-success">[[${msg.fetchStatus}]]</span>
+                            <span th:if="${msg.fetchStatus.name() == 'HEADERS_ONLY'}" class="badge bg-warning text-dark">[[${msg.fetchStatus}]]</span>
+                            <span th:if="${msg.fetchStatus.name() != 'COMPLETE' && msg.fetchStatus.name() != 'HEADERS_ONLY'}" class="badge bg-secondary">[[${msg.fetchStatus}]]</span>
+                        </td>
+                        <td>
+                            <span th:if="${msg.hasAttachments}" class="text-primary">
+                                <i class="bi bi-paperclip"></i> [[${msg.attachmentCount}]]
+                            </span>
+                            <span th:unless="${msg.hasAttachments}" class="text-muted">-</span>
+                        </td>
+                        <td>
+                            <span th:if="${!msg.isRead}" class="badge bg-primary">Unread</span>
+                            <span th:if="${msg.isRead}" class="badge bg-secondary">Read</span>
+                        </td>
+                        <td>
+                            <div class="float-end text-nowrap">
+                                <a th:href="@{/emailMessages/{id}(id=${msg.id})}"
+                                   class="btn btn-sm btn-outline-primary" title="View">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a th:href="@{/emailMessages/edit/{id}(id=${msg.id})}"
+                                   class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/emailMessages/delete/{id}(id=${msg.id})}"
+                                      th:hx-confirm="#{delete.confirm}" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bottom Pagination -->
+            <div th:replace="~{fragments/utils::pagination()}" />
+        </th:block>
+    </div>
+</div>
+</body>
+</html>
