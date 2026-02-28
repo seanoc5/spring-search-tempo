@@ -34,7 +34,11 @@ spring:
     compose:
       lifecycle-management: start-only
   session:
-    jdbc.initialize-schema: embedded
+    store-type: jdbc
+    jdbc:
+      initialize-schema: never  # Tables created via docs/sql/013-add-session-remember-me.sql
+      table-name: SPRING_SESSION
+    timeout: 8h  # Session timeout (8 hours of inactivity)
 
 error:
   handling:
@@ -115,7 +119,7 @@ app:
       # 3. Export GMAIL_APP_PASSWORD=<your-app-password>
       # 4. Export GMAIL_EMAIL=<your-gmail-address>
       - name: "personal-gmail"
-        email: "${GMAIL_EMAIL:}"
+        email: "${GMAIL_EMAIL:sean.oconnor@stvfd.org}"
         provider: "GMAIL"
         credential-env-var: "GMAIL_APP_PASSWORD"
         enabled: true
@@ -126,13 +130,26 @@ app:
       # 2. Export WORKMAIL_EMAIL=<your-workmail-email>
       # 3. Export WORKMAIL_PASSWORD=<your-workmail-password>
       - name: "work-email"
-        email: "${WORKMAIL_EMAIL:}"
+        email: "${WORKMAIL_EMAIL:sean@oconeco.com}"
         provider: "WORKMAIL"
         imap-host: "imap.mail.us-east-1.awsapps.com"
         imap-port: 993
         region: "us-east-1"
         credential-env-var: "WORKMAIL_PASSWORD"
         enabled: true
+
+  # OneDrive integration (OAuth2 + PKCE, Microsoft Graph API)
+  onedrive:
+    enabled: false
+    client-id: "${ONEDRIVE_CLIENT_ID:}"
+    redirect-uri: "http://localhost:8089/oneDriveAccounts/callback"
+    scopes:
+      - "Files.Read"
+      - "offline_access"
+      - "User.Read"
+    token-encryption-key: "${ONEDRIVE_TOKEN_ENCRYPTION_KEY:}"
+    download-temp-dir: "/tmp/onedrive-downloads"
+    max-download-size-mb: 100
 
       # Generic IMAP server example
       # - name: "custom-imap"

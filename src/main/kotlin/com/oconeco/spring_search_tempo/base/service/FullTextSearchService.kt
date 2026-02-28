@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
@@ -55,6 +56,18 @@ interface FullTextSearchService {
      * @return Page of chunk search results with NLP data
      */
     fun searchChunks(query: String, sentiment: String?, pageable: Pageable): Page<ChunkSearchResult>
+
+    /**
+     * Search with configurable filters.
+     *
+     * Searches across selected content types (files, emails, chunks) with optional
+     * sentiment and category filters.
+     *
+     * @param filter Search filter containing query, content types, and optional filters
+     * @param pageable Pagination and sorting parameters
+     * @return Page of unified search results
+     */
+    fun searchWithFilters(filter: SearchFilterDTO, pageable: Pageable): Page<SearchResult>
 }
 
 /**
@@ -131,6 +144,22 @@ class FullTextSearchServiceImpl(
 
             UNION ALL
 
+            -- Search in one_drive_item
+            SELECT
+                'one_drive_item' as source_table,
+                odi.id,
+                odi.uri,
+                COALESCE(odi.label, odi.item_name, 'OneDrive Item') as label,
+                ts_headline('english', COALESCE(odi.body_text, odi.item_name),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank
+            FROM one_drive_item odi
+            WHERE odi.fts_vector @@ to_tsquery('english', :query)
+              AND odi.is_deleted = false
+
+            UNION ALL
+
             -- Search in content_chunks
             SELECT
                 'content_chunks' as source_table,
@@ -152,6 +181,8 @@ class FullTextSearchServiceImpl(
         val countSql = """
             SELECT COUNT(*) FROM (
                 SELECT 1 FROM fsfile WHERE fts_vector @@ to_tsquery('english', :query)
+                UNION ALL
+                SELECT 1 FROM one_drive_item WHERE fts_vector @@ to_tsquery('english', :query) AND is_deleted = false
                 UNION ALL
                 SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)
             ) combined
@@ -362,6 +393,183 @@ class FullTextSearchServiceImpl(
             .split("""\s+""".toRegex())
             .filter { it.isNotBlank() }
             .joinToString(" & ")
+    }
+
+    override fun searchWithFilters(filter: SearchFilterDTO, pageable: Pageable): Page<SearchResult> {
+        val sanitizedQuery = sanitizeQuery(filter.query)
+
+        log.debug("Searching with filters: types={}, sentiment={}, category={}",
+            filter.contentTypes, filter.sentiment, filter.emailCategory)
+
+        val sqlParts = mutableListOf<String>()
+
+        // Build UNION query based on selected content types
+        if (filter.includeFiles()) {
+            sqlParts.add(buildFileSearchSql())
+        }
+
+        if (filter.includeEmails()) {
+            sqlParts.add(buildEmailSearchSql(filter.emailCategory))
+        }
+
+        if (filter.includeOneDrive()) {
+            sqlParts.add(buildOneDriveSearchSql())
+        }
+
+        if (filter.includeChunks()) {
+            sqlParts.add(buildChunkSearchSql(filter.sentiment))
+        }
+
+        if (sqlParts.isEmpty()) {
+            return PageImpl(emptyList(), pageable, 0)
+        }
+
+        val sql = """
+            ${sqlParts.joinToString("\n\nUNION ALL\n\n")}
+            ORDER BY rank DESC
+            LIMIT :limit OFFSET :offset
+        """.trimIndent()
+
+        // Build count query
+        val countParts = mutableListOf<String>()
+        if (filter.includeFiles()) {
+            countParts.add("SELECT 1 FROM fsfile WHERE fts_vector @@ to_tsquery('english', :query)")
+        }
+        if (filter.includeEmails()) {
+            val categoryCondition = if (filter.emailCategory != null) " AND category = :category" else ""
+            countParts.add("SELECT 1 FROM email_message WHERE fts_vector @@ to_tsquery('english', :query)$categoryCondition")
+        }
+        if (filter.includeOneDrive()) {
+            countParts.add("SELECT 1 FROM one_drive_item WHERE fts_vector @@ to_tsquery('english', :query) AND is_deleted = false")
+        }
+        if (filter.includeChunks()) {
+            val sentimentCondition = if (filter.sentiment != null) " AND sentiment = :sentiment" else ""
+            countParts.add("SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$sentimentCondition")
+        }
+
+        val countSql = """
+            SELECT COUNT(*) FROM (
+                ${countParts.joinToString("\nUNION ALL\n")}
+            ) combined
+        """.trimIndent()
+
+        try {
+            val resultsQuery = entityManager.createNativeQuery(sql)
+                .setParameter("query", sanitizedQuery)
+                .setParameter("limit", pageable.pageSize)
+                .setParameter("offset", pageable.offset)
+
+            val countQuery = entityManager.createNativeQuery(countSql)
+                .setParameter("query", sanitizedQuery)
+
+            // Set optional filter parameters
+            if (filter.emailCategory != null && filter.includeEmails()) {
+                resultsQuery.setParameter("category", filter.emailCategory.name)
+                countQuery.setParameter("category", filter.emailCategory.name)
+            }
+
+            if (filter.sentiment != null && filter.includeChunks()) {
+                val validSentiment = validateSentiment(filter.sentiment)
+                if (validSentiment != null) {
+                    resultsQuery.setParameter("sentiment", validSentiment)
+                    countQuery.setParameter("sentiment", validSentiment)
+                }
+            }
+
+            val results = resultsQuery.resultList.map { row ->
+                val cols = row as Array<*>
+                SearchResult(
+                    sourceTable = cols[0] as String,
+                    id = (cols[1] as Number).toLong(),
+                    uri = cols[2] as String,
+                    label = cols[3] as String,
+                    snippet = cols[4] as String,
+                    rank = (cols[5] as Number).toFloat()
+                )
+            }
+
+            val total = (countQuery.singleResult as Number).toLong()
+
+            log.debug("Found {} results with filters", total)
+            return PageImpl(results, pageable, total)
+
+        } catch (e: Exception) {
+            log.error("Error searching with filters: {}", filter, e)
+            throw SearchException("Failed to search with filters: ${e.message}", e)
+        }
+    }
+
+    private fun buildFileSearchSql(): String {
+        return """
+            SELECT
+                'fsfile' as source_table,
+                f.id,
+                f.uri,
+                f.label,
+                ts_headline('english', COALESCE(f.body_text, f.label),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank
+            FROM fsfile f
+            WHERE f.fts_vector @@ to_tsquery('english', :query)
+        """.trimIndent()
+    }
+
+    private fun buildEmailSearchSql(category: com.oconeco.spring_search_tempo.base.domain.EmailCategory?): String {
+        val categoryCondition = if (category != null) "AND e.category = :category" else ""
+        return """
+            SELECT
+                'email_message' as source_table,
+                e.id,
+                COALESCE(e.message_id, 'email:' || e.id) as uri,
+                COALESCE(e.subject, 'Email #' || e.id) as label,
+                ts_headline('english', COALESCE(e.body_text, e.subject),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                ts_rank(e.fts_vector, to_tsquery('english', :query)) as rank
+            FROM email_message e
+            WHERE e.fts_vector @@ to_tsquery('english', :query)
+            $categoryCondition
+        """.trimIndent()
+    }
+
+    private fun buildOneDriveSearchSql(): String {
+        return """
+            SELECT
+                'one_drive_item' as source_table,
+                odi.id,
+                odi.uri,
+                COALESCE(odi.label, odi.item_name, 'OneDrive Item') as label,
+                ts_headline('english', COALESCE(odi.body_text, odi.item_name),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank
+            FROM one_drive_item odi
+            WHERE odi.fts_vector @@ to_tsquery('english', :query)
+              AND odi.is_deleted = false
+        """.trimIndent()
+    }
+
+    private fun buildChunkSearchSql(sentiment: String?): String {
+        val validSentiment = validateSentiment(sentiment)
+        val sentimentCondition = if (validSentiment != null) "AND c.sentiment = :sentiment" else ""
+        return """
+            SELECT
+                'content_chunks' as source_table,
+                c.id,
+                COALESCE(f.uri, em.message_id, odi.uri, 'unknown') as uri,
+                COALESCE(f.label, em.subject, odi.item_name, 'Chunk #' || c.chunk_number) as label,
+                ts_headline('english', COALESCE(c.text, ''),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank
+            FROM content_chunks c
+            LEFT JOIN fsfile f ON c.concept_id = f.id
+            LEFT JOIN email_message em ON c.email_message_id = em.id
+            LEFT JOIN one_drive_item odi ON c.one_drive_item_id = odi.id
+            WHERE c.fts_vector @@ to_tsquery('english', :query)
+            $sentimentCondition
+        """.trimIndent()
     }
 }
 

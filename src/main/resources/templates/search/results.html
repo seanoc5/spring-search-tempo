@@ -17,48 +17,115 @@
                 <h1 class="flex-grow-1"><i class="bi bi-search me-2"></i>Full-Text Search</h1>
             </div>
 
-            <!-- Search Tabs -->
-            <ul class="nav nav-tabs mb-4">
-                <li class="nav-item">
-                    <a class="nav-link active" th:href="@{/search(q=${query})}">
-                        <i class="bi bi-collection me-1"></i>All
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" th:href="@{/search/files(q=${query})}">
-                        <i class="bi bi-file-earmark me-1"></i>Files
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" th:href="@{/search/chunks(q=${query})}">
-                        <i class="bi bi-text-paragraph me-1"></i>Chunks
-                    </a>
-                </li>
-            </ul>
+            <!-- Quick filter links (shortcuts for common searches) -->
+            <div class="d-flex gap-2 mb-4">
+                <a th:href="@{/search(q=${query}, types='FILE,EMAIL,ONEDRIVE,CHUNK')}"
+                   class="btn btn-sm"
+                   th:classappend="${selectedTypes.size() == 4} ? 'btn-primary' : 'btn-outline-primary'">
+                    <i class="bi bi-collection me-1"></i>All
+                </a>
+                <a th:href="@{/search(q=${query}, types='FILE')}"
+                   class="btn btn-sm"
+                   th:classappend="${selectedTypes.size() == 1 and selectedTypes.contains('FILE')} ? 'btn-primary' : 'btn-outline-primary'">
+                    <i class="bi bi-file-earmark me-1"></i>Files Only
+                </a>
+                <a th:href="@{/search(q=${query}, types='EMAIL')}"
+                   class="btn btn-sm"
+                   th:classappend="${selectedTypes.size() == 1 and selectedTypes.contains('EMAIL')} ? 'btn-success' : 'btn-outline-success'">
+                    <i class="bi bi-envelope me-1"></i>Emails Only
+                </a>
+                <a th:href="@{/search(q=${query}, types='ONEDRIVE')}"
+                   class="btn btn-sm"
+                   th:classappend="${selectedTypes.size() == 1 and selectedTypes.contains('ONEDRIVE')} ? 'btn-info' : 'btn-outline-info'">
+                    <i class="bi bi-cloud me-1"></i>OneDrive Only
+                </a>
+                <a th:href="@{/search/chunks(q=${query})}"
+                   class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-text-paragraph me-1"></i>Chunks (NLP)
+                </a>
+            </div>
 
             <!-- Search Box -->
             <div class="card mb-4">
                 <div class="card-body">
-                    <form th:action="@{/search}" method="get" class="row g-3">
-                        <div class="col-md-10">
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text"
-                                       name="q"
-                                       th:value="${query}"
-                                       placeholder="Search indexed content..."
-                                       class="form-control form-control-lg"
-                                       autofocus>
+                    <form th:action="@{/search}" method="get" id="searchForm">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-10">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                    <input type="text"
+                                           name="q"
+                                           th:value="${query}"
+                                           placeholder="Search indexed content..."
+                                           class="form-control form-control-lg"
+                                           autofocus>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
+
+                        <!-- Content Type Filters -->
+                        <div class="row g-3 align-items-center">
+                            <div class="col-auto">
+                                <span class="text-muted">Include:</span>
+                            </div>
+                            <div class="col-auto">
+                                <div class="btn-group" role="group" aria-label="Content type filters">
+                                    <input type="checkbox" class="btn-check" id="typeFile" name="types" value="FILE"
+                                           th:checked="${selectedTypes.contains('FILE')}">
+                                    <label class="btn btn-outline-primary" for="typeFile">
+                                        <i class="bi bi-file-earmark me-1"></i>Files
+                                    </label>
+
+                                    <input type="checkbox" class="btn-check" id="typeEmail" name="types" value="EMAIL"
+                                           th:checked="${selectedTypes.contains('EMAIL')}">
+                                    <label class="btn btn-outline-secondary" for="typeEmail">
+                                        <i class="bi bi-envelope me-1"></i>Emails
+                                    </label>
+
+                                    <input type="checkbox" class="btn-check" id="typeOneDrive" name="types" value="ONEDRIVE"
+                                           th:checked="${selectedTypes.contains('ONEDRIVE')}">
+                                    <label class="btn btn-outline-info" for="typeOneDrive">
+                                        <i class="bi bi-cloud me-1"></i>OneDrive
+                                    </label>
+
+                                    <input type="checkbox" class="btn-check" id="typeChunk" name="types" value="CHUNK"
+                                           th:checked="${selectedTypes.contains('CHUNK')}">
+                                    <label class="btn btn-outline-secondary" for="typeChunk">
+                                        <i class="bi bi-text-paragraph me-1"></i>Chunks
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Sentiment Filter (for chunks) -->
+                            <div class="col-auto">
+                                <select name="sentiment" class="form-select form-select-sm">
+                                    <option value="" th:selected="${selectedSentiment == ''}">Any sentiment</option>
+                                    <option value="POSITIVE" th:selected="${selectedSentiment == 'POSITIVE'}">Positive</option>
+                                    <option value="NEGATIVE" th:selected="${selectedSentiment == 'NEGATIVE'}">Negative</option>
+                                    <option value="NEUTRAL" th:selected="${selectedSentiment == 'NEUTRAL'}">Neutral</option>
+                                </select>
+                            </div>
+
+                            <!-- Email Category Filter -->
+                            <div class="col-auto">
+                                <select name="category" class="form-select form-select-sm">
+                                    <option value="" th:selected="${selectedCategory == ''}">Any category</option>
+                                    <option th:each="cat : ${allCategories}"
+                                            th:value="${cat}"
+                                            th:text="${cat}"
+                                            th:selected="${selectedCategory == cat}">Category</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-2 text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Syntax: <code>spring kotlin</code> (AND) | <code>spring | kotlin</code> (OR) | <code>spring &amp; !java</code> (NOT)
                         </div>
                     </form>
-                    <div class="mt-2 text-muted small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Syntax: <code>spring kotlin</code> (AND) | <code>spring | kotlin</code> (OR) | <code>spring &amp; !java</code> (NOT)
-                    </div>
                 </div>
             </div>
 
@@ -84,7 +151,7 @@
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <h5 class="mb-1">
-                                    <a th:href="@{|/${result.sourceTable == 'fsfile' ? 'fSFile' : 'contentChunks'}/${result.id}|}"
+                                    <a th:href="@{|/${result.sourceTable == 'fsfile' ? 'fSFile' : (result.sourceTable == 'email_message' ? 'emailMessages' : (result.sourceTable == 'one_drive_item' ? 'oneDriveAccounts' : 'contentChunks'))}/${result.id}|}"
                                        th:text="${result.label}" class="text-decoration-none">
                                         Result title
                                     </a>
@@ -100,6 +167,12 @@
                                     <span th:if="${result.sourceTable == 'fsfile'}" class="badge bg-primary">
                                         <i class="bi bi-file-earmark me-1"></i>File
                                     </span>
+                                    <span th:if="${result.sourceTable == 'email_message'}" class="badge bg-success">
+                                        <i class="bi bi-envelope me-1"></i>Email
+                                    </span>
+                                    <span th:if="${result.sourceTable == 'one_drive_item'}" class="badge bg-info">
+                                        <i class="bi bi-cloud me-1"></i>OneDrive
+                                    </span>
                                     <span th:if="${result.sourceTable == 'content_chunks'}" class="badge bg-secondary">
                                         <i class="bi bi-text-paragraph me-1"></i>Chunk
                                     </span>
@@ -109,10 +182,10 @@
                     </div>
                 </div>
 
-                <!-- Pagination -->
+                <!-- Pagination (preserves all filter parameters) -->
                 <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
                     <a th:if="${results.hasPrevious()}"
-                       th:href="@{/search(q=${query}, page=${results.number - 1}, size=${results.size})}"
+                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, page=${results.number - 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         <i class="bi bi-chevron-left me-1"></i>Previous
                     </a>
@@ -121,7 +194,7 @@
                         Page [[${results.number + 1}]] of [[${results.totalPages}]]
                     </span>
                     <a th:if="${results.hasNext()}"
-                       th:href="@{/search(q=${query}, page=${results.number + 1}, size=${results.size})}"
+                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, page=${results.number + 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         Next<i class="bi bi-chevron-right ms-1"></i>
                     </a>

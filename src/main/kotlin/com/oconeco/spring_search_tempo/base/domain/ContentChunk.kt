@@ -205,11 +205,19 @@ class ContentChunk {
 
     /**
      * Browser bookmark parent (alternative to FSFile/EmailMessage).
-     * A ContentChunk belongs to exactly one of: FSFile, EmailMessage, or BrowserBookmark.
+     * A ContentChunk belongs to exactly one of: FSFile, EmailMessage, BrowserBookmark, or OneDriveItem.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "browser_bookmark_id")
     var browserBookmark: BrowserBookmark? = null
+
+    /**
+     * OneDrive item parent (alternative to FSFile/EmailMessage/BrowserBookmark).
+     * A ContentChunk belongs to exactly one of: FSFile, EmailMessage, BrowserBookmark, or OneDriveItem.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "one_drive_item_id")
+    var oneDriveItem: OneDriveItem? = null
 
     @CreatedDate
     @Column(

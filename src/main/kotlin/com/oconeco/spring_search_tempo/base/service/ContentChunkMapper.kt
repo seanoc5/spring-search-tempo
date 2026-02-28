@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.repos.OneDriveItemRepository
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.mapstruct.AfterMapping
 import org.mapstruct.Context
@@ -27,6 +28,7 @@ interface ContentChunkMapper {
     @Mapping(target = "parentChunk", source = "parentChunk.id")
     @Mapping(target = "concept", source = "concept.id")
     @Mapping(target = "emailMessage", source = "emailMessage.id")
+    @Mapping(target = "oneDriveItem", source = "oneDriveItem.id")
     fun toDto(contentChunk: ContentChunk): ContentChunkDTO
 
     @Mapping(
@@ -41,6 +43,10 @@ interface ContentChunkMapper {
         target = "emailMessage",
         ignore = true
     )
+    @Mapping(
+        target = "oneDriveItem",
+        ignore = true
+    )
     fun updateContentChunkDTO(contentChunk: ContentChunk, @MappingTarget
             contentChunkDTO: ContentChunkDTO): ContentChunkDTO
 
@@ -50,6 +56,7 @@ interface ContentChunkMapper {
         contentChunkDTO.parentChunk = contentChunk.parentChunk?.id
         contentChunkDTO.concept = contentChunk.concept?.id
         contentChunkDTO.emailMessage = contentChunk.emailMessage?.id
+        contentChunkDTO.oneDriveItem = contentChunk.oneDriveItem?.id
     }
 
     @Mapping(
@@ -76,12 +83,17 @@ interface ContentChunkMapper {
         target = "embedding",
         ignore = true
     )
+    @Mapping(
+        target = "oneDriveItem",
+        ignore = true
+    )
     fun updateContentChunk(
         contentChunkDTO: ContentChunkDTO,
         @MappingTarget contentChunk: ContentChunk,
         @Context contentChunkRepository: ContentChunkRepository,
         @Context fSFileRepository: FSFileRepository,
-        @Context emailMessageRepository: EmailMessageRepository
+        @Context emailMessageRepository: EmailMessageRepository,
+        @Context oneDriveItemRepository: OneDriveItemRepository
     ): ContentChunk
 
     @AfterMapping
@@ -90,7 +102,8 @@ interface ContentChunkMapper {
         @MappingTarget contentChunk: ContentChunk,
         @Context contentChunkRepository: ContentChunkRepository,
         @Context fSFileRepository: FSFileRepository,
-        @Context emailMessageRepository: EmailMessageRepository
+        @Context emailMessageRepository: EmailMessageRepository,
+        @Context oneDriveItemRepository: OneDriveItemRepository
     ) {
         val parentChunk = if (contentChunkDTO.parentChunk == null) null else
                 contentChunkRepository.findById(contentChunkDTO.parentChunk!!)
@@ -106,6 +119,11 @@ interface ContentChunkMapper {
                 emailMessageRepository.findById(contentChunkDTO.emailMessage!!)
                 .orElseThrow { NotFoundException("emailMessage not found") }
         contentChunk.emailMessage = emailMessage
+
+        val oneDriveItem = if (contentChunkDTO.oneDriveItem == null) null else
+                oneDriveItemRepository.findById(contentChunkDTO.oneDriveItem!!)
+                .orElseThrow { NotFoundException("oneDriveItem not found") }
+        contentChunk.oneDriveItem = oneDriveItem
     }
 
 }

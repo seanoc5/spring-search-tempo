@@ -1,0 +1,142 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>OneDrive Accounts</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1"><i class="bi bi-cloud me-2"></i>OneDrive Accounts</h1>
+        <div class="d-flex align-items-center gap-2">
+            <a th:if="${oneDriveEnabled}" th:href="@{/oneDriveAccounts/connect}" class="btn btn-primary">
+                <i class="bi bi-plug me-1"></i>Connect OneDrive
+            </a>
+            <span th:unless="${oneDriveEnabled}" class="badge bg-secondary">Integration Disabled</span>
+        </div>
+    </div>
+
+    <div th:if="${oneDriveAccounts.empty}" class="alert alert-info">
+        No OneDrive accounts connected.
+        <span th:if="${oneDriveEnabled}">
+            <a th:href="@{/oneDriveAccounts/connect}">Connect one now</a>.
+        </span>
+        <span th:unless="${oneDriveEnabled}">
+            Enable OneDrive integration in <code>application.yml</code> to get started.
+        </span>
+    </div>
+
+    <div th:unless="${oneDriveAccounts.empty}" class="table-responsive"
+         id="accounts-table"
+         th:hx-get="@{/oneDriveAccounts/rows}"
+         th:hx-trigger="${oneDriveAccounts.?[activeJobRun != null].size() > 0} ? 'every 3s' : 'none'"
+         hx-swap="innerHTML"
+         hx-target="#account-rows">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+            <tr>
+                <th>Account</th>
+                <th>Drive</th>
+                <th>Status</th>
+                <th>Items</th>
+                <th>Last Sync</th>
+                <th>Last Error</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody id="account-rows">
+                <th:block th:fragment="account-rows">
+                    <tr th:each="account : ${oneDriveAccounts}" th:fragment="account-row">
+                        <td>
+                            <a th:href="@{/oneDriveAccounts/{id}(id=${account.id})}">
+                                <i class="bi bi-cloud me-1"></i>[[${account.email ?: account.displayName ?: 'Unknown'}]]
+                            </a>
+                            <span th:if="${account.displayName}" class="text-muted small ms-2">([[${account.displayName}]])</span>
+                        </td>
+                        <td>
+                            <span th:if="${account.driveType}" class="badge bg-secondary">[[${account.driveType}]]</span>
+                            <span th:if="${account.driveQuotaUsed != null && account.driveQuotaTotal != null}" class="small text-muted ms-1">
+                                [[${#numbers.formatDecimal(account.driveQuotaUsed / 1073741824.0, 1, 1)}]] /
+                                [[${#numbers.formatDecimal(account.driveQuotaTotal / 1073741824.0, 1, 1)}]] GB
+                            </span>
+                        </td>
+                        <td>
+                            <span th:if="${account.enabled && account.isConnected}" class="badge bg-success">Connected</span>
+                            <span th:if="${account.enabled && !account.isConnected}" class="badge bg-warning">No Token</span>
+                            <span th:unless="${account.enabled}" class="badge bg-secondary">Disabled</span>
+                        </td>
+                        <td>
+                            <span th:text="${account.totalItems}">0</span>
+                        </td>
+                        <td>
+                            <!-- Show progress bar if sync is active -->
+                            <div th:if="${account.activeJobRun != null}">
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                         role="progressbar"
+                                         th:style="'width: ' + ${account.activeJobRun.progressPercent ?: 0} + '%'"
+                                         th:attr="aria-valuenow=${account.activeJobRun.progressPercent ?: 0}"
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        [[${account.activeJobRun.progressPercent ?: 0}]]%
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    <span th:if="${account.activeJobRun.processedCount != null && account.activeJobRun.expectedTotal != null}">
+                                        [[${account.activeJobRun.processedCount}]] of [[${account.activeJobRun.expectedTotal}]]
+                                    </span>
+                                </small>
+                            </div>
+                            <!-- Show last sync time if no active sync -->
+                            <span th:if="${account.activeJobRun == null && account.lastDeltaSyncAt != null}">
+                                [[${#temporals.format(account.lastDeltaSyncAt, 'yyyy-MM-dd HH:mm')}]]
+                            </span>
+                            <span th:if="${account.activeJobRun == null && account.lastDeltaSyncAt == null}" class="text-muted">Never</span>
+                        </td>
+                        <td>
+                            <span th:if="${account.lastError}" class="text-danger" th:title="${account.lastError}">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                [[${#strings.abbreviate(account.lastError, 30)}]]
+                            </span>
+                            <span th:unless="${account.lastError}" class="text-success">
+                                <i class="bi bi-check-circle"></i>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a th:href="@{/oneDriveAccounts/{id}(id=${account.id})}"
+                                   class="btn btn-outline-secondary" title="View">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <form th:action="@{/oneDriveAccounts/{id}/sync(id=${account.id})}"
+                                      method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-primary" title="Sync Now"
+                                            th:disabled="${!account.enabled || !account.isConnected || account.activeJobRun != null}">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                </th:block>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Setup</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">To connect OneDrive:</p>
+            <ol class="mb-0">
+                <li>Register an app at <a href="https://portal.azure.com" target="_blank">Azure Portal</a> (App registrations)</li>
+                <li>Set platform to "Mobile and desktop applications" with redirect URI <code th:text="${'http://localhost:8089/oneDriveAccounts/callback'}"></code></li>
+                <li>Add permissions: <code>Files.Read</code>, <code>User.Read</code>, <code>offline_access</code></li>
+                <li>Set <code>ONEDRIVE_CLIENT_ID</code> and <code>ONEDRIVE_TOKEN_ENCRYPTION_KEY</code> env vars</li>
+                <li>Set <code>app.onedrive.enabled: true</code> in config</li>
+            </ol>
+        </div>
+    </div>
+</div>
+</body>
+</html>

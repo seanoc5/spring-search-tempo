@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout">
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
     <head>
         <title layout:title-pattern="$CONTENT_TITLE - $LAYOUT_TITLE">[[#{app.title}]]</title>
         <meta charset="utf-8" />
@@ -88,10 +88,20 @@
                             <i class="bi bi-clock-history"></i>
                             <span>[[#{nav.jobRuns}]]</span>
                         </a>
+                        <a th:href="@{/crawlReview}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/crawlReview')} ? 'active' : ''">
+                            <i class="bi bi-clipboard2-check"></i>
+                            <span>Crawl Review</span>
+                        </a>
                         <a th:href="@{/emailAccounts}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailAccounts')} ? 'active' : ''">
                             <i class="bi bi-envelope"></i>
-                            <span>Email Accounts</span>
+                            <span>[[#{nav.emailAccounts}]]</span>
+                        </a>
+                        <a th:href="@{/oneDriveAccounts}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/oneDriveAccounts')} ? 'active' : ''">
+                            <i class="bi bi-cloud"></i>
+                            <span>[[#{nav.oneDriveAccounts}]]</span>
                         </a>
                     </div>
 
@@ -123,6 +133,16 @@
                             <i class="bi bi-puzzle"></i>
                             <span>[[#{contentChunk.list.headline}]]</span>
                         </a>
+                        <a th:href="@{/emailMessages}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailMessages')} ? 'active' : ''">
+                            <i class="bi bi-envelope-open"></i>
+                            <span>[[#{emailMessage.list.headline}]]</span>
+                        </a>
+                        <a th:href="@{/emailTags}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailTags')} ? 'active' : ''">
+                            <i class="bi bi-tags"></i>
+                            <span>Email Tags</span>
+                        </a>
                         <a th:href="@{/annotations}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/annotations')} ? 'active' : ''">
                             <i class="bi bi-tag"></i>
@@ -133,12 +153,18 @@
                     <!-- Administration -->
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.admin}]]</div>
-                        <a th:href="@{/springUsers}" class="nav-item"
+                        <a th:href="@{/batch}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/batch')} ? 'active' : ''">
+                            <i class="bi bi-list-task"></i>
+                            <span>[[#{nav.batchJobs}]]</span>
+                        </a>
+                        <!-- Admin-only: User Management -->
+                        <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/springUsers}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/springUsers')} ? 'active' : ''">
                             <i class="bi bi-people"></i>
                             <span>[[#{springUser.list.headline}]]</span>
                         </a>
-                        <a th:href="@{/springRoles}" class="nav-item"
+                        <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/springRoles}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/springRoles')} ? 'active' : ''">
                             <i class="bi bi-shield-lock"></i>
                             <span>[[#{springRole.list.headline}]]</span>
@@ -218,6 +244,33 @@
                     </button>
                 </div>
             </main>
+        </div>
+
+        <!-- Toast Container (Growler) -->
+        <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+        <!-- Toast History Toggle Button -->
+        <button type="button" class="toast-history-toggle" onclick="ToastManager.toggleHistoryPanel()" title="Notification history">
+            <i class="bi bi-bell"></i>
+            <span id="toastHistoryBadge" class="badge bg-danger" style="display: none;">0</span>
+        </button>
+
+        <!-- Toast History Panel -->
+        <div id="toastHistoryPanel" class="toast-history-panel">
+            <div class="toast-history-header">
+                <h6><i class="bi bi-bell me-2"></i>Notifications</h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="ToastManager.clearHistory()" title="Clear all">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-link p-0" onclick="ToastManager.toggleHistoryPanel()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="toastHistoryContent" class="toast-history-content">
+                <!-- History items rendered by JS -->
+            </div>
         </div>
 
         <!-- Footer -->

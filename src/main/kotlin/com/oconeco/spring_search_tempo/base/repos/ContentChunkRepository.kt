@@ -75,6 +75,30 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
 
     /**
+     * Delete all content chunks for an email account.
+     */
+    @Modifying
+    @Query("""
+        DELETE FROM ContentChunk c
+        WHERE c.emailMessage.id IN (
+            SELECT m.id FROM EmailMessage m WHERE m.emailAccount.id = :accountId
+        )
+    """)
+    fun deleteByEmailAccountId(@Param("accountId") accountId: Long): Int
+
+    /**
+     * Delete all content chunks for a OneDrive account.
+     */
+    @Modifying
+    @Query("""
+        DELETE FROM ContentChunk c
+        WHERE c.oneDriveItem.id IN (
+            SELECT i.id FROM OneDriveItem i WHERE i.oneDriveAccount.id = :accountId
+        )
+    """)
+    fun deleteByOneDriveAccountId(@Param("accountId") accountId: Long): Int
+
+    /**
      * Find chunks containing a specific named entity text.
      * Uses PostgreSQL JSONB containment to search the named_entities JSON array.
      *
@@ -138,5 +162,35 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * Count chunks that have named entities (NLP processed).
      */
     fun countByNamedEntitiesIsNotNull(): Long
+
+    /**
+     * Count chunks that have been NLP processed (nlpProcessedAt is not null).
+     */
+    fun countByNlpProcessedAtIsNotNull(): Long
+
+    /**
+     * Count chunks pending NLP processing (nlpProcessedAt is null, text is not null).
+     */
+    @Query("""
+        SELECT COUNT(c) FROM ContentChunk c
+        WHERE c.nlpProcessedAt IS NULL AND c.text IS NOT NULL
+    """)
+    fun countNlpPending(): Long
+
+    /**
+     * Count chunks by processing status.
+     * Note: ContentChunk.status is a String field, not an enum.
+     */
+    fun countByStatus(status: String?): Long
+
+    /**
+     * Count chunks with vector embedding (embedding column is not null).
+     * Used for EMBED analysis level.
+     */
+    @Query("""
+        SELECT COUNT(c) FROM ContentChunk c
+        WHERE c.embedding IS NOT NULL
+    """)
+    fun countWithEmbedding(): Long
 
 }

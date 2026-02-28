@@ -39,6 +39,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-batch")
     implementation("org.springframework.batch:spring-batch-core")
     implementation("org.springframework.batch:spring-batch-infrastructure")
+    implementation("org.springframework.batch:spring-batch-integration")
 
     runtimeOnly("org.postgresql:postgresql")
 
@@ -51,6 +52,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-hateoas")
     implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect")
+    implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
     implementation("org.webjars:bootstrap:5.3.8")
     implementation("org.webjars.npm:bootstrap-icons:1.11.3")
     implementation("org.webjars.npm:htmx.org:2.0.7")
@@ -77,6 +79,10 @@ dependencies {
 
     // SQLite JDBC driver for reading Firefox places.sqlite
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
+
+    // OneDrive / Microsoft Graph SDK
+    implementation("com.microsoft.graph:microsoft-graph:6.5.0")
+    implementation("com.azure:azure-identity:1.14.2")
 
     kapt("org.mapstruct:mapstruct-processor:1.6.3")
     kapt("org.springframework.boot:spring-boot-configuration-processor")

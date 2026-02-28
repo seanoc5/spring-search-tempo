@@ -101,4 +101,10 @@ class ContentChunkDTO {
      */
     var emailMessage: Long? = null
 
+    /**
+     * OneDrive item parent (alternative to FSFile/EmailMessage/BrowserBookmark).
+     * A ContentChunk belongs to exactly one of: FSFile, EmailMessage, BrowserBookmark, or OneDriveItem.
+     */
+    var oneDriveItem: Long? = null
+
 }
