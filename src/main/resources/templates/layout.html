@@ -158,6 +158,12 @@
                             <i class="bi bi-list-task"></i>
                             <span>[[#{nav.batchJobs}]]</span>
                         </a>
+                        <!-- Admin-only: System Monitor -->
+                        <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/system}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/system')} ? 'active' : ''">
+                            <i class="bi bi-display"></i>
+                            <span>[[#{nav.systemMonitor}]]</span>
+                        </a>
                         <!-- Admin-only: User Management -->
                         <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/springUsers}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/springUsers')} ? 'active' : ''">

@@ -1,0 +1,220 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>[[#{system.headline}]]</title>
+    <style>
+        .monitor-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+        .summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 0.3rem 0.65rem;
+            background: #fff;
+            white-space: nowrap;
+        }
+        .summary-chip-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+        }
+        .summary-chip-value {
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+        .info-table th {
+            width: 35%;
+            font-weight: 600;
+            color: #495057;
+            background: #f8f9fa;
+        }
+        .info-table td {
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+<div layout:fragment="content">
+    <div th:fragment="monitor-content">
+
+        <!-- Page Header -->
+        <div class="page-header d-flex justify-content-between align-items-center mb-3">
+            <h1><i class="bi bi-display me-2"></i>[[#{system.headline}]]</h1>
+        </div>
+
+        <!-- Summary Strip -->
+        <div class="monitor-summary">
+            <!-- Health -->
+            <div class="summary-chip">
+                <span class="summary-chip-label">Health</span>
+                <span th:if="${monitor.health.status == 'UP'}" class="badge bg-success">UP</span>
+                <span th:if="${monitor.health.status == 'DOWN'}" class="badge bg-danger">DOWN</span>
+                <span th:if="${monitor.health.status != 'UP' && monitor.health.status != 'DOWN'}"
+                      class="badge bg-warning text-dark" th:text="${monitor.health.status}">UNKNOWN</span>
+            </div>
+            <!-- Uptime -->
+            <div class="summary-chip">
+                <span class="summary-chip-label">Uptime</span>
+                <span class="summary-chip-value" th:text="${monitor.appInfo.uptime}">0h 0m</span>
+            </div>
+            <!-- Heap -->
+            <div class="summary-chip">
+                <span class="summary-chip-label">Heap</span>
+                <span class="summary-chip-value"
+                      th:classappend="${monitor.jvm.heapUsagePercent > 85} ? 'text-danger' : (${monitor.jvm.heapUsagePercent > 70} ? 'text-warning' : 'text-success')"
+                      th:text="${monitor.jvm.heapUsagePercent + '%'}">0%</span>
+            </div>
+            <!-- DB Pool -->
+            <div class="summary-chip">
+                <span class="summary-chip-label">DB Pool</span>
+                <span class="summary-chip-value"
+                      th:text="${monitor.database.activeConnections + '/' + monitor.database.maxConnections}">0/10</span>
+            </div>
+            <!-- CPU -->
+            <div class="summary-chip" th:if="${monitor.system.systemCpuLoad != null}">
+                <span class="summary-chip-label">CPU</span>
+                <span class="summary-chip-value"
+                      th:with="cpuPct=${T(java.lang.Math).round(monitor.system.systemCpuLoad)}"
+                      th:classappend="${cpuPct > 85} ? 'text-danger' : (${cpuPct > 70} ? 'text-warning' : 'text-success')"
+                      th:text="${cpuPct + '%'}">0%</span>
+            </div>
+            <!-- Disk -->
+            <div class="summary-chip">
+                <span class="summary-chip-label">Disk</span>
+                <span class="summary-chip-value"
+                      th:classappend="${monitor.system.diskUsagePercent > 90} ? 'text-danger' : (${monitor.system.diskUsagePercent > 75} ? 'text-warning' : 'text-success')"
+                      th:text="${monitor.system.diskUsagePercent + '%'}">0%</span>
+            </div>
+        </div>
+
+        <!-- Live Metrics Section (auto-refresh every 10s) -->
+        <div id="liveMetricsContainer"
+             hx-get="/system/live"
+             hx-trigger="every 10s"
+             hx-swap="innerHTML">
+            <th:block th:replace="~{system/fragments/liveMetrics :: live-metrics}" />
+        </div>
+
+        <!-- Static Section: Application Info + System Info -->
+        <div class="row mt-4">
+            <!-- Application Info -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header py-2">
+                        <h6 class="card-title mb-0"><i class="bi bi-info-circle me-1"></i>[[#{system.appInfo}]]</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm info-table mb-0">
+                            <tbody>
+                                <tr>
+                                    <th>Application</th>
+                                    <td th:text="${monitor.appInfo.name}">App</td>
+                                </tr>
+                                <tr>
+                                    <th>Version</th>
+                                    <td th:text="${monitor.appInfo.version}">0.0.0</td>
+                                </tr>
+                                <tr>
+                                    <th>Host Name</th>
+                                    <td th:text="${monitor.appInfo.hostName}">localhost</td>
+                                </tr>
+                                <tr>
+                                    <th>Active Profiles</th>
+                                    <td>
+                                        <span th:each="profile : ${monitor.appInfo.profiles}"
+                                              class="badge bg-info me-1" th:text="${profile}">dev</span>
+                                        <span th:if="${#lists.isEmpty(monitor.appInfo.profiles)}" class="text-muted">none</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Server Port</th>
+                                    <td th:text="${monitor.appInfo.serverPort}">8082</td>
+                                </tr>
+                                <tr>
+                                    <th>Start Time</th>
+                                    <td th:text="${monitor.appInfo.startTime}">-</td>
+                                </tr>
+                                <tr>
+                                    <th>Java Version</th>
+                                    <td th:text="${monitor.appInfo.javaVersion}">21</td>
+                                </tr>
+                                <tr>
+                                    <th>Kotlin Version</th>
+                                    <td th:text="${monitor.appInfo.kotlinVersion}">1.9</td>
+                                </tr>
+                                <tr>
+                                    <th>Spring Boot</th>
+                                    <td th:text="${monitor.appInfo.springBootVersion}">3.x</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Info -->
+            <div class="col-lg-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header py-2">
+                        <h6 class="card-title mb-0"><i class="bi bi-pc-display me-1"></i>[[#{system.systemInfo}]]</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm info-table mb-0">
+                            <tbody>
+                                <tr>
+                                    <th>OS</th>
+                                    <td th:text="${monitor.system.osName + ' ' + monitor.system.osVersion}">Linux</td>
+                                </tr>
+                                <tr>
+                                    <th>Architecture</th>
+                                    <td th:text="${monitor.system.osArch}">amd64</td>
+                                </tr>
+                                <tr th:if="${monitor.system.totalPhysicalMemory != null}">
+                                    <th>Physical Memory</th>
+                                    <td>
+                                        <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.totalPhysicalMemory)}">0</span>
+                                        total,
+                                        <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.freePhysicalMemory)}">0</span>
+                                        free
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Disk (root)</th>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 14px;">
+                                                <div class="progress-bar"
+                                                     th:classappend="${monitor.system.diskUsagePercent > 90} ? 'bg-danger' : (${monitor.system.diskUsagePercent > 75} ? 'bg-warning' : 'bg-success')"
+                                                     role="progressbar"
+                                                     th:style="${'width: ' + monitor.system.diskUsagePercent + '%'}"
+                                                     th:text="${monitor.system.diskUsagePercent + '%'}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">
+                                            <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.diskUsable)}">0</span>
+                                            free of
+                                            <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.diskTotal)}">0</span>
+                                        </small>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /monitor-content -->
+</div>
+</body>
+</html>

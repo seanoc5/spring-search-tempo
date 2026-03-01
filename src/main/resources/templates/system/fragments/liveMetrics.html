@@ -1,0 +1,209 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <th:block th:fragment="live-metrics">
+        <div class="row">
+
+            <!-- Health Status -->
+            <div class="col-lg-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                        <h6 class="card-title mb-0"><i class="bi bi-heart-pulse me-1"></i>[[#{system.health}]]</h6>
+                        <span th:if="${monitor.health.status == 'UP'}" class="badge bg-success">UP</span>
+                        <span th:if="${monitor.health.status == 'DOWN'}" class="badge bg-danger">DOWN</span>
+                        <span th:if="${monitor.health.status != 'UP' && monitor.health.status != 'DOWN'}"
+                              class="badge bg-warning text-dark" th:text="${monitor.health.status}">UNKNOWN</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-striped mb-0" th:if="${!monitor.health.components.empty}">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="comp : ${monitor.health.components}">
+                                    <td th:text="${comp.name}">db</td>
+                                    <td>
+                                        <span th:if="${comp.status == 'UP'}" class="badge bg-success">UP</span>
+                                        <span th:if="${comp.status == 'DOWN'}" class="badge bg-danger">DOWN</span>
+                                        <span th:if="${comp.status != 'UP' && comp.status != 'DOWN'}"
+                                              class="badge bg-secondary" th:text="${comp.status}">?</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted" th:if="${!comp.details.empty}">
+                                            <th:block th:each="entry, stat : ${comp.details}">
+                                                <span th:text="${entry.key}">key</span>:
+                                                <code th:text="${entry.value}">val</code>
+                                                <span th:if="${!stat.last}">, </span>
+                                            </th:block>
+                                        </small>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div th:if="${monitor.health.components.empty}" class="p-3 text-muted">
+                            No health components available.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database -->
+            <div class="col-lg-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-header py-2">
+                        <h6 class="card-title mb-0"><i class="bi bi-database me-1"></i>[[#{system.database}]]</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <small class="text-muted">JDBC URL</small>
+                            <div><code class="small" th:text="${monitor.database.jdbcUrl}">jdbc:...</code></div>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Database</small>
+                            <div>
+                                <span th:text="${monitor.database.databaseProduct}">PostgreSQL</span>
+                                <span class="text-muted" th:text="${monitor.database.databaseVersion}">16</span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Connection Pool</small>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <div class="progress flex-grow-1" style="height: 18px;">
+                                    <div class="progress-bar bg-primary" role="progressbar"
+                                         th:style="${'width: ' + (monitor.database.maxConnections > 0 ? (monitor.database.activeConnections * 100 / monitor.database.maxConnections) : 0) + '%'}"
+                                         th:text="${monitor.database.activeConnections + ' active'}">
+                                    </div>
+                                    <div class="progress-bar bg-info" role="progressbar"
+                                         th:style="${'width: ' + (monitor.database.maxConnections > 0 ? (monitor.database.idleConnections * 100 / monitor.database.maxConnections) : 0) + '%'}"
+                                         th:text="${monitor.database.idleConnections + ' idle'}">
+                                    </div>
+                                </div>
+                                <small class="text-nowrap" th:text="${monitor.database.totalConnections + '/' + monitor.database.maxConnections}">0/10</small>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 small text-muted">
+                            <span>Driver: <span th:text="${monitor.database.driverName}">PG JDBC</span></span>
+                            <span>User: <span th:text="${monitor.database.username}">postgres</span></span>
+                            <span th:if="${monitor.database.threadsAwaiting > 0}" class="text-danger">
+                                Awaiting: <strong th:text="${monitor.database.threadsAwaiting}">0</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JVM / Memory -->
+            <div class="col-lg-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-header py-2">
+                        <h6 class="card-title mb-0"><i class="bi bi-memory me-1"></i>[[#{system.jvm}]]</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Heap -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Heap Memory</span>
+                                <span>
+                                    <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.jvm.heapUsed)}">0</span>
+                                    /
+                                    <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.jvm.heapMax)}">0</span>
+                                </span>
+                            </div>
+                            <div class="progress" style="height: 18px;">
+                                <div class="progress-bar"
+                                     th:classappend="${monitor.jvm.heapUsagePercent > 85} ? 'bg-danger' : (${monitor.jvm.heapUsagePercent > 70} ? 'bg-warning' : 'bg-success')"
+                                     role="progressbar"
+                                     th:style="${'width: ' + monitor.jvm.heapUsagePercent + '%'}"
+                                     th:text="${monitor.jvm.heapUsagePercent + '%'}">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Non-Heap -->
+                        <div class="mb-3">
+                            <small class="text-muted">Non-Heap:
+                                <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.jvm.nonHeapUsed)}">0</span>
+                            </small>
+                        </div>
+                        <!-- Threads & GC -->
+                        <div class="d-flex gap-3 small">
+                            <div>
+                                <span class="text-muted">Threads:</span>
+                                <strong th:text="${monitor.jvm.threadCount}">0</strong>
+                                <span class="text-muted">(peak <span th:text="${monitor.jvm.peakThreadCount}">0</span>)</span>
+                            </div>
+                            <div>
+                                <span class="text-muted">Classes:</span>
+                                <strong th:text="${monitor.jvm.loadedClassCount}">0</strong>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 small mt-1">
+                            <div>
+                                <span class="text-muted">GC Runs:</span>
+                                <strong th:text="${monitor.jvm.gcRuns}">0</strong>
+                            </div>
+                            <div>
+                                <span class="text-muted">GC Time:</span>
+                                <strong th:text="${monitor.jvm.gcTime + 'ms'}">0ms</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CPU -->
+            <div class="col-lg-6 mb-3" th:if="${monitor.system.systemCpuLoad != null || monitor.system.processCpuLoad != null}">
+                <div class="card h-100">
+                    <div class="card-header py-2">
+                        <h6 class="card-title mb-0"><i class="bi bi-cpu me-1"></i>[[#{system.cpu}]]</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- System CPU -->
+                        <div th:if="${monitor.system.systemCpuLoad != null}" class="mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>System CPU</span>
+                                <span th:with="cpuPct=${T(java.lang.Math).round(monitor.system.systemCpuLoad)}"
+                                      th:text="${cpuPct + '%'}">0%</span>
+                            </div>
+                            <div class="progress" style="height: 14px;">
+                                <div class="progress-bar"
+                                     th:with="cpuPct=${T(java.lang.Math).round(monitor.system.systemCpuLoad)}"
+                                     th:classappend="${cpuPct > 85} ? 'bg-danger' : (${cpuPct > 70} ? 'bg-warning' : 'bg-success')"
+                                     role="progressbar"
+                                     th:style="${'width: ' + cpuPct + '%'}">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Process CPU -->
+                        <div th:if="${monitor.system.processCpuLoad != null}" class="mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Process CPU</span>
+                                <span th:with="cpuPct=${T(java.lang.Math).round(monitor.system.processCpuLoad)}"
+                                      th:text="${cpuPct + '%'}">0%</span>
+                            </div>
+                            <div class="progress" style="height: 14px;">
+                                <div class="progress-bar bg-info"
+                                     th:with="cpuPct=${T(java.lang.Math).round(monitor.system.processCpuLoad)}"
+                                     role="progressbar"
+                                     th:style="${'width: ' + cpuPct + '%'}">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Physical Memory -->
+                        <div th:if="${monitor.system.totalPhysicalMemory != null}" class="small text-muted mt-2">
+                            Physical Memory:
+                            <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.freePhysicalMemory)}">0</span>
+                            free of
+                            <span th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(monitor.system.totalPhysicalMemory)}">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </th:block>
+</body>
+</html>
