@@ -134,6 +134,28 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
     fun findByIdWithTags(@Param("id") id: Long): EmailMessage?
 
     /**
+     * Find "interesting" email messages for chunking.
+     * Filters by: account, non-null body, received within cutoff date, no 'junk' tag,
+     * and optionally skips messages that already have content chunks.
+     */
+    @Query("""
+        SELECT e FROM EmailMessage e
+        WHERE e.emailAccount.id = :accountId
+          AND e.bodyText IS NOT NULL
+          AND e.receivedDate >= :cutoffDate
+          AND NOT EXISTS (SELECT 1 FROM e.tags t WHERE t.name = 'junk')
+          AND (:forceRefresh = true OR NOT EXISTS (
+              SELECT 1 FROM ContentChunk cc WHERE cc.emailMessage = e
+          ))
+    """)
+    fun findInterestingForChunking(
+        @Param("accountId") accountId: Long,
+        @Param("cutoffDate") cutoffDate: OffsetDateTime,
+        @Param("forceRefresh") forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<EmailMessage>
+
+    /**
      * Find messages by tag with pagination.
      */
     @Query(

@@ -6,7 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import org.slf4j.LoggerFactory
-import org.springframework.batch.core.Job
+import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher
 import org.springframework.stereotype.Service
@@ -37,15 +37,22 @@ class EmailCrawlOrchestrator(
      * Quick sync fetches only new messages (since last UID) from configured folders.
      * This is the "daily" sync strategy that handles 98%+ of messages efficiently.
      *
+     * Jobs are launched asynchronously -- this method returns immediately after
+     * submitting each account's job to the async JobLauncher.
+     *
      * @param forceFullSync If true, ignore lastSyncUid and fetch all messages (full recrawl)
+     * @param forceRefresh If true, re-process already-processed records (chunks, NLP)
+     * @param interestingDays How far back to look for "interesting" messages (default 7)
      * @param stepThreads Number of threads for step-level parallelism (default: 1 = serial)
      * @param itemAsync Whether to use AsyncItemProcessor (default: false)
      * @param asyncThreads Number of threads for async item processing (default: 4)
      * @param chunkSize Number of items per chunk (default: 20)
-     * @return Map of account email to job execution status
+     * @return Map of account email to job launch status (includes executionId)
      */
     fun runQuickSync(
         forceFullSync: Boolean = false,
+        forceRefresh: Boolean = false,
+        interestingDays: Int = 7,
         stepThreads: Int = 1,
         itemAsync: Boolean = false,
         asyncThreads: Int = 4,
@@ -63,7 +70,7 @@ class EmailCrawlOrchestrator(
             chunkSize = chunkSize
         )
 
-        log.info("Starting email {} for all enabled accounts with {}",
+        log.info("Launching email {} for all enabled accounts with {}",
             if (forceFullSync) "FULL sync" else "quick sync",
             parallelConfig)
 
@@ -75,7 +82,7 @@ class EmailCrawlOrchestrator(
 
         accounts.filter { it.enabled == true }.forEach { account ->
             try {
-                log.info("Running {} for account: {} with folders: {} ({})",
+                log.info("Launching {} for account: {} with folders: {} ({})",
                     if (forceFullSync) "FULL sync" else "quick sync",
                     account.email, folders, parallelConfig.modeName)
 
@@ -83,11 +90,15 @@ class EmailCrawlOrchestrator(
                 val expectedTotal = getExpectedMessageCount(account, folders)
                 log.debug("Expected total messages for {}: {}", account.email, expectedTotal)
 
-                val job = emailQuickSyncJobBuilder.buildJob(account, folders, forceFullSync, parallelConfig)
+                val job = emailQuickSyncJobBuilder.buildJob(
+                    account, folders, forceFullSync, forceRefresh, interestingDays, parallelConfig
+                )
                 val jobParameters = JobParametersBuilder()
                     .addString("accountId", account.id.toString())
                     .addString("accountEmail", account.email ?: "unknown")  // For job run tracking
                     .addString("forceFullSync", forceFullSync.toString())
+                    .addString("forceRefresh", forceRefresh.toString())
+                    .addLong("interestingDays", interestingDays.toLong())
                     .addString("parallelMode", parallelConfig.modeName)
                     .addLong("expectedTotal", expectedTotal)  // For progress tracking
                     .addString("timestamp", OffsetDateTime.now().toString())
@@ -95,13 +106,13 @@ class EmailCrawlOrchestrator(
 
                 val execution = jobLauncher.run(job, jobParameters)
 
-                results[account.email!!] = execution.status.toString()
-                log.info("{} for {} completed with status: {} ({})",
+                results[account.email!!] = "STARTED (executionId=${execution.id})"
+                log.info("{} for {} launched: executionId={}, status={} ({})",
                     if (forceFullSync) "Full sync" else "Quick sync",
-                    account.email, execution.status, parallelConfig.modeName)
+                    account.email, execution.id, execution.status, parallelConfig.modeName)
 
             } catch (e: Exception) {
-                log.error("Error running sync for {}: {}", account.email, e.message, e)
+                log.error("Error launching sync for {}: {}", account.email, e.message, e)
                 results[account.email!!] = "ERROR: ${e.message}"
 
                 // Record error on account
@@ -113,27 +124,34 @@ class EmailCrawlOrchestrator(
             }
         }
 
-        log.info("Email sync completed. Results: {}", results)
+        log.info("Email sync jobs launched. Results: {}", results)
         return results
     }
 
     /**
      * Run quick sync for a specific account.
      *
+     * The job is launched asynchronously -- this method returns immediately
+     * after submitting the job to the async JobLauncher.
+     *
      * @param accountId The account ID to sync
      * @param forceFullSync If true, ignore lastSyncUid and fetch all messages (full recrawl)
+     * @param forceRefresh If true, re-process already-processed records (chunks, NLP)
+     * @param interestingDays How far back to look for "interesting" messages (default 7)
      * @param parallelConfig Configuration for parallel processing (default: serial)
-     * @return Job execution status
+     * @return The job execution (status will be STARTING since launch is async)
      */
     fun runQuickSyncForAccount(
         accountId: Long,
         forceFullSync: Boolean = false,
+        forceRefresh: Boolean = false,
+        interestingDays: Int = 7,
         parallelConfig: ParallelizationConfig = ParallelizationConfig()
-    ): String {
+    ): JobExecution {
         val account = emailAccountService.get(accountId)
         val folders = emailConfiguration.quickSyncFolders
 
-        log.info("Running {} for account {} with folders: {} ({})",
+        log.info("Launching {} for account {} with folders: {} ({})",
             if (forceFullSync) "FULL sync" else "quick sync",
             account.email, folders, parallelConfig.modeName)
 
@@ -141,19 +159,26 @@ class EmailCrawlOrchestrator(
         val expectedTotal = getExpectedMessageCount(account, folders)
         log.debug("Expected total messages for {}: {}", account.email, expectedTotal)
 
-        val job = emailQuickSyncJobBuilder.buildJob(account, folders, forceFullSync, parallelConfig)
+        val job = emailQuickSyncJobBuilder.buildJob(
+            account, folders, forceFullSync, forceRefresh, interestingDays, parallelConfig
+        )
         val jobParameters = JobParametersBuilder()
             .addString("accountId", accountId.toString())
             .addString("accountEmail", account.email ?: "unknown")  // For job run tracking
             .addString("forceFullSync", forceFullSync.toString())
+            .addString("forceRefresh", forceRefresh.toString())
+            .addLong("interestingDays", interestingDays.toLong())
             .addString("parallelMode", parallelConfig.modeName)
             .addLong("expectedTotal", expectedTotal)  // For progress tracking
             .addString("timestamp", OffsetDateTime.now().toString())
             .toJobParameters()
 
         val execution = jobLauncher.run(job, jobParameters)
+        log.info("{} for {} launched: executionId={}, status={}",
+            if (forceFullSync) "Full sync" else "Quick sync",
+            account.email, execution.id, execution.status)
 
-        return execution.status.toString()
+        return execution
     }
 
     /**

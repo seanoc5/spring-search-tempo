@@ -27,6 +27,9 @@ class EmailSyncResource(
     /**
      * Sync all enabled email accounts.
      *
+     * Jobs are launched asynchronously -- this endpoint returns immediately
+     * with STARTED status. Check /batch page or /api/email/status for progress.
+     *
      * POST /api/email/sync
      * POST /api/email/sync?forceFullSync=true  (full recrawl)
      *
@@ -36,18 +39,12 @@ class EmailSyncResource(
      * - asyncThreads: Number of threads for async item processing (default: 4)
      * - chunkSize: Number of items per chunk (default: 20)
      *
-     * Example configurations:
-     * - Serial (baseline): stepThreads=1, itemAsync=false
-     * - TaskExecutor only: stepThreads=4, itemAsync=false
-     * - AsyncItemProcessor only: stepThreads=1, itemAsync=true, asyncThreads=4
-     * - Combined: stepThreads=2, itemAsync=true, asyncThreads=4
-     *
      * @param forceFullSync If true, ignore lastSyncUid and fetch all messages
      * @param stepThreads Number of threads for step-level parallelism
      * @param itemAsync Whether to use AsyncItemProcessor
      * @param asyncThreads Number of threads for AsyncItemProcessor
      * @param chunkSize Number of items per chunk
-     * @return Map of account email to job execution status with timing info
+     * @return Map of account email to job launch status (STARTED with execution IDs)
      */
     @PostMapping("/sync")
     fun syncAllAccounts(
@@ -61,8 +58,6 @@ class EmailSyncResource(
         log.info("REST API request to {} all email accounts with {}",
             if (forceFullSync) "FULL sync" else "sync", parallelConfig)
 
-        val startTime = System.currentTimeMillis()
-
         return try {
             val results = emailCrawlOrchestrator.runQuickSync(
                 forceFullSync = forceFullSync,
@@ -71,27 +66,22 @@ class EmailSyncResource(
                 asyncThreads = asyncThreads,
                 chunkSize = chunkSize
             )
-            val elapsed = System.currentTimeMillis() - startTime
             val syncType = if (forceFullSync) "Full sync" else "Sync"
 
-            ResponseEntity.ok(
+            ResponseEntity.accepted().body(
                 EmailSyncResponse(
-                    status = "COMPLETED",
-                    message = "$syncType completed in ${elapsed}ms",
-                    results = results + mapOf(
-                        "elapsedMs" to elapsed.toString(),
-                        "parallelConfig" to parallelConfig.modeName
-                    )
+                    status = "STARTED",
+                    message = "$syncType jobs launched for all enabled accounts",
+                    results = results + mapOf("parallelConfig" to parallelConfig.modeName)
                 )
             )
         } catch (e: Exception) {
-            val elapsed = System.currentTimeMillis() - startTime
-            log.error("Failed to sync email accounts via API after {}ms", elapsed, e)
+            log.error("Failed to launch email sync jobs via API", e)
             ResponseEntity.internalServerError().body(
                 EmailSyncResponse(
                     status = "FAILED",
-                    message = "Failed to sync email accounts: ${e.message}",
-                    results = mapOf("elapsedMs" to elapsed.toString())
+                    message = "Failed to launch email sync: ${e.message}",
+                    results = emptyMap()
                 )
             )
         }
@@ -99,6 +89,9 @@ class EmailSyncResource(
 
     /**
      * Sync a specific email account.
+     *
+     * The job is launched asynchronously -- this endpoint returns immediately
+     * with STARTED status and the execution ID for tracking.
      *
      * POST /api/email/sync/{accountId}
      * POST /api/email/sync/{accountId}?forceFullSync=true  (full recrawl)
@@ -109,7 +102,7 @@ class EmailSyncResource(
      * @param itemAsync Whether to use AsyncItemProcessor
      * @param asyncThreads Number of threads for AsyncItemProcessor
      * @param chunkSize Number of items per chunk
-     * @return Job execution status
+     * @return Job launch status with execution ID
      */
     @PostMapping("/sync/{accountId}")
     fun syncAccount(
@@ -124,34 +117,34 @@ class EmailSyncResource(
         log.info("REST API request to {} email account: {} with {}",
             if (forceFullSync) "FULL sync" else "sync", accountId, parallelConfig)
 
-        val startTime = System.currentTimeMillis()
-
         return try {
-            val status = emailCrawlOrchestrator.runQuickSyncForAccount(accountId, forceFullSync, parallelConfig)
-            val elapsed = System.currentTimeMillis() - startTime
+            val execution = emailCrawlOrchestrator.runQuickSyncForAccount(
+                    accountId = accountId,
+                    forceFullSync = forceFullSync,
+                    parallelConfig = parallelConfig
+                )
             val syncType = if (forceFullSync) "Full sync" else "Sync"
 
-            ResponseEntity.ok(
+            ResponseEntity.accepted().body(
                 EmailSyncResponse(
-                    status = status,
-                    message = "$syncType completed in ${elapsed}ms",
+                    status = "STARTED",
+                    message = "$syncType job launched for account $accountId",
                     results = mapOf(
                         "accountId" to accountId.toString(),
-                        "status" to status,
+                        "executionId" to execution.id.toString(),
+                        "status" to execution.status.toString(),
                         "syncType" to if (forceFullSync) "full" else "incremental",
-                        "elapsedMs" to elapsed.toString(),
                         "parallelConfig" to parallelConfig.modeName
                     )
                 )
             )
         } catch (e: Exception) {
-            val elapsed = System.currentTimeMillis() - startTime
-            log.error("Failed to sync email account {} via API after {}ms", accountId, elapsed, e)
+            log.error("Failed to launch email sync for account {} via API", accountId, e)
             ResponseEntity.internalServerError().body(
                 EmailSyncResponse(
                     status = "FAILED",
-                    message = "Failed to sync email account $accountId: ${e.message}",
-                    results = mapOf("elapsedMs" to elapsed.toString())
+                    message = "Failed to launch email sync for account $accountId: ${e.message}",
+                    results = emptyMap()
                 )
             )
         }

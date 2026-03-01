@@ -219,6 +219,24 @@ class EmailMessageServiceImpl(
     override fun countUnreadByAccount(accountId: Long): Long =
         emailMessageRepository.countByEmailAccountIdAndIsRead(accountId, false)
 
+    override fun findInterestingForChunking(
+        accountId: Long,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<EmailMessageDTO> {
+        val page = emailMessageRepository.findInterestingForChunking(
+            accountId, cutoffDate, forceRefresh, pageable
+        )
+        return PageImpl(
+            page.content.map { message ->
+                emailMessageMapper.updateEmailMessageDTO(message, EmailMessageDTO())
+            },
+            pageable,
+            page.totalElements
+        )
+    }
+
     override fun getWithTags(id: Long): EmailMessageDTO {
         val message = emailMessageRepository.findByIdWithTags(id)
             ?: throw NotFoundException()

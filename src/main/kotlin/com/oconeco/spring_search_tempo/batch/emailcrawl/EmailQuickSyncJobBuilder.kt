@@ -7,13 +7,20 @@ import com.oconeco.spring_search_tempo.base.EmailCategorizationService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.EmailMessageService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.model.EmailMessageDTO
+import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
+import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
 import com.oconeco.spring_search_tempo.base.service.EmailTextExtractionService
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
+import com.oconeco.spring_search_tempo.base.service.EmbeddingService
+import com.oconeco.spring_search_tempo.base.service.NLPService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.ProgressTrackingItemWriteListener
+import com.oconeco.spring_search_tempo.batch.embedding.EmbeddingChunkProcessor
+import com.oconeco.spring_search_tempo.batch.nlp.NLPChunkProcessor
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -21,15 +28,18 @@ import org.springframework.batch.core.job.builder.JobBuilder
 import org.springframework.batch.core.launch.support.RunIdIncrementer
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.builder.StepBuilder
+import org.springframework.batch.core.step.tasklet.Tasklet
 import org.springframework.batch.integration.async.AsyncItemProcessor
 import org.springframework.batch.integration.async.AsyncItemWriter
 import org.springframework.batch.item.ItemProcessor
 import org.springframework.batch.item.ItemReader
 import org.springframework.batch.item.ItemWriter
+import org.springframework.batch.repeat.RepeatStatus
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
+import java.time.OffsetDateTime
 import java.util.concurrent.Future
 
 
@@ -39,8 +49,10 @@ import java.util.concurrent.Future
  * Creates a job for each email account with:
  * 1. Pass 1: Header sync steps for each folder (fast - headers only)
  * 2. Pass 2: Body enrichment step (slower - fetches bodies, can be parallelized)
- * 3. Chunking step to split email body text into ContentChunks
- * 4. Categorization step to classify emails by type
+ * 3. Pass 3: Chunking step (splits body text, filtered to "interesting" messages)
+ * 4. Pass 4: NLP step (Stanford CoreNLP on email chunks)
+ * 5. Pass 5: Categorization step (classify emails by type)
+ * 6. Pass 6: Embedding step (vector embeddings via Ollama)
  */
 @Component
 class EmailQuickSyncJobBuilder(
@@ -58,6 +70,10 @@ class EmailQuickSyncJobBuilder(
     private val emailJobRunTrackingListener: EmailJobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val progressTrackingItemWriteListener: ProgressTrackingItemWriteListener<Any>,
+    private val nlpService: NLPService,
+    private val embeddingService: EmbeddingService,
+    private val contentChunkMapper: ContentChunkMapper,
+    private val contentChunkRepository: ContentChunkRepository,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor,
     @Qualifier("asyncItemExecutor") private val asyncItemExecutor: TaskExecutor
 ) {
@@ -68,14 +84,19 @@ class EmailQuickSyncJobBuilder(
     /**
      * Build a complete batch job for an email account.
      *
-     * Job structure (two-pass architecture):
-     * 1. Pass 1: Header sync for each folder (fast - only envelope data)
-     * 2. Pass 2: Body enrichment (slower - fetches full message bodies)
-     * 3. Chunking step (splits body text for NLP)
+     * Job structure (6-pass pipeline):
+     * 1. Header sync for each folder (fast - only envelope data)
+     * 2. Body enrichment (slower - fetches full message bodies)
+     * 3. Chunking (splits body text, filtered to "interesting" messages)
+     * 4. NLP (Stanford CoreNLP on email chunks)
+     * 5. Categorization (classify emails by type)
+     * 6. Embedding (vector embeddings via Ollama, skipped if unavailable)
      *
      * @param account The email account to sync
      * @param folders The folder names to sync (e.g., ["INBOX", "Sent"])
      * @param forceFullSync If true, ignore lastSyncUid and fetch all messages
+     * @param forceRefresh If true, re-process already-processed records (chunks, NLP)
+     * @param interestingDays How far back to look for "interesting" messages (default 7)
      * @param parallelConfig Configuration for parallel processing (default: serial)
      * @return A configured Spring Batch Job
      */
@@ -83,18 +104,23 @@ class EmailQuickSyncJobBuilder(
         account: EmailAccountDTO,
         folders: List<String>,
         forceFullSync: Boolean = false,
+        forceRefresh: Boolean = false,
+        interestingDays: Int = 7,
         parallelConfig: ParallelizationConfig = ParallelizationConfig()
     ): Job {
         log.info(
-            "Building email {} job for account: {} ({}) with {} folders (two-pass, {})",
+            "Building email {} job for account: {} ({}) with {} folders (6-pass, {}, forceRefresh={}, interestingDays={})",
             if (forceFullSync) "FULL sync" else "quick sync",
             account.email,
             account.label,
             folders.size,
-            parallelConfig.modeName
+            parallelConfig.modeName,
+            forceRefresh,
+            interestingDays
         )
 
         val jobName = "emailQuickSync_${account.id}"
+        val cutoffDate = OffsetDateTime.now().minusDays(interestingDays.toLong())
 
         val jobBuilder = JobBuilder(jobName, jobRepository)
             .incrementer(RunIdIncrementer())
@@ -108,15 +134,20 @@ class EmailQuickSyncJobBuilder(
         }
 
         // Pass 2: Body enrichment step (slower, processes all HEADERS_ONLY messages)
-        // Uses parallelConfig for optional parallel processing
         currentFlow = currentFlow.next(buildBodyEnrichmentStep(account, parallelConfig))
 
-        // Pass 3: Chunking step
-        currentFlow = currentFlow.next(buildChunkingStep(account))
+        // Pass 3: Chunking step (filtered to "interesting" messages)
+        currentFlow = currentFlow.next(buildChunkingStep(account, cutoffDate, forceRefresh))
 
-        // Pass 4: Categorization step
+        // Pass 4: NLP step (Stanford CoreNLP on email chunks)
+        currentFlow = currentFlow.next(buildNLPStep(account, cutoffDate, forceRefresh))
+
+        // Pass 5: Categorization step
+        currentFlow = currentFlow.next(buildCategorizationStep(account))
+
+        // Pass 6: Embedding step (skipped gracefully if Ollama unavailable)
         return currentFlow
-            .next(buildCategorizationStep(account))
+            .next(buildEmbeddingStep(account, cutoffDate, forceRefresh))
             .build()
     }
 
@@ -323,30 +354,45 @@ class EmailQuickSyncJobBuilder(
         return BodyEnrichmentWriter(emailMessageService = emailMessageService)
     }
 
+    // ==================== PASS 3: CHUNKING ====================
+
     /**
      * Build the chunking step that splits email body text into ContentChunks.
+     * Filtered to "interesting" messages: within cutoff date, not junk-tagged.
      */
-    private fun buildChunkingStep(account: EmailAccountDTO): Step {
-        log.info("Building chunking step for email account: {}", account.email)
+    private fun buildChunkingStep(
+        account: EmailAccountDTO,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): Step {
+        log.info("Building chunking step for email account: {} (cutoff={}, forceRefresh={})",
+            account.email, cutoffDate, forceRefresh)
 
         return StepBuilder("emailChunking_${account.id}", jobRepository)
             .chunk<EmailMessageDTO, List<ContentChunkDTO>>(10, transactionManager)
-            .reader(createChunkReader(account.id!!))
+            .reader(createChunkReader(account.id!!, cutoffDate, forceRefresh))
             .processor(createChunkProcessor())
-            .writer(createChunkWriter())
+            .writer(createChunkWriter(forceRefresh))
             .listener(heartbeatChunkListener)  // Update heartbeat after each chunk
             .listener(progressTrackingItemWriteListener)  // Track progress for UI
             .build()
     }
 
     /**
-     * Create a chunk reader that reads email messages with bodyText that need chunking.
+     * Create a chunk reader that reads "interesting" email messages for chunking.
      */
-    private fun createChunkReader(accountId: Long): ItemReader<EmailMessageDTO> {
-        log.debug("Creating EmailChunkReader for account {}", accountId)
+    private fun createChunkReader(
+        accountId: Long,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): ItemReader<EmailMessageDTO> {
+        log.debug("Creating EmailChunkReader for account {} (cutoff={}, forceRefresh={})",
+            accountId, cutoffDate, forceRefresh)
         return EmailChunkReader(
             emailMessageService = emailMessageService,
             accountId = accountId,
+            cutoffDate = cutoffDate,
+            forceRefresh = forceRefresh,
             pageSize = 50
         )
     }
@@ -362,12 +408,66 @@ class EmailQuickSyncJobBuilder(
     /**
      * Create a chunk writer that saves ContentChunks.
      */
-    private fun createChunkWriter(): ItemWriter<List<ContentChunkDTO>> {
-        log.debug("Creating EmailChunkWriter")
-        return EmailChunkWriter(chunkService = chunkService)
+    private fun createChunkWriter(forceRefresh: Boolean): ItemWriter<List<ContentChunkDTO>> {
+        log.debug("Creating EmailChunkWriter (forceRefresh={})", forceRefresh)
+        return EmailChunkWriter(
+            chunkService = chunkService,
+            contentChunkRepository = if (forceRefresh) contentChunkRepository else null,
+            forceRefresh = forceRefresh
+        )
     }
 
-    // ==================== PASS 4: CATEGORIZATION ====================
+    // ==================== PASS 4: NLP ====================
+
+    /**
+     * Build the NLP step that processes email chunks through Stanford CoreNLP.
+     * Filtered to "interesting" email chunks: within cutoff date, not junk-tagged.
+     */
+    private fun buildNLPStep(
+        account: EmailAccountDTO,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): Step {
+        log.info("Building NLP step for email account: {} (cutoff={}, forceRefresh={})",
+            account.email, cutoffDate, forceRefresh)
+
+        val nlpProcessor = NLPChunkProcessor(nlpService, objectMapper, contentChunkMapper)
+
+        return StepBuilder("emailNLP_${account.id}", jobRepository)
+            .chunk<ContentChunk, ContentChunkDTO>(10, transactionManager)
+            .reader(createNLPReader(account.id!!, cutoffDate, forceRefresh))
+            .processor(ItemProcessor { entity ->
+                val dto = contentChunkMapper.toDto(entity)
+                nlpProcessor.process(dto)
+            })
+            .writer(createNLPWriter())
+            .listener(heartbeatChunkListener)
+            .listener(progressTrackingItemWriteListener)
+            .build()
+    }
+
+    private fun createNLPReader(
+        accountId: Long,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): ItemReader<ContentChunk> {
+        log.debug("Creating EmailNLPReader for account {} (cutoff={}, forceRefresh={})",
+            accountId, cutoffDate, forceRefresh)
+        return EmailNLPReader(
+            contentChunkRepository = contentChunkRepository,
+            accountId = accountId,
+            cutoffDate = cutoffDate,
+            forceRefresh = forceRefresh,
+            pageSize = 50
+        )
+    }
+
+    private fun createNLPWriter(): ItemWriter<ContentChunkDTO> {
+        log.debug("Creating EmailNLPWriter")
+        return EmailNLPWriter(contentChunkRepository = contentChunkRepository)
+    }
+
+    // ==================== PASS 5: CATEGORIZATION ====================
 
     /**
      * Build the categorization step that classifies emails by type.
@@ -402,5 +502,68 @@ class EmailQuickSyncJobBuilder(
     private fun createCategorizationWriter(): ItemWriter<EmailMessageDTO> {
         log.debug("Creating EmailCategorizationWriter")
         return EmailCategorizationWriter(emailMessageService = emailMessageService)
+    }
+
+    // ==================== PASS 6: EMBEDDING ====================
+
+    /**
+     * Build the embedding step that generates vector embeddings for email chunks.
+     *
+     * If the embedding service is unavailable, builds a tasklet that logs a warning
+     * and returns FINISHED (graceful degradation).
+     */
+    private fun buildEmbeddingStep(
+        account: EmailAccountDTO,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): Step {
+        log.info("Building embedding step for email account: {} (cutoff={}, forceRefresh={})",
+            account.email, cutoffDate, forceRefresh)
+
+        if (!embeddingService.isAvailable()) {
+            log.warn("Embedding service unavailable - building skip tasklet for account {}", account.email)
+            return StepBuilder("emailEmbedding_${account.id}", jobRepository)
+                .tasklet(Tasklet { _, _ ->
+                    log.warn("Embedding step skipped for account {} - embedding service (Ollama) is not available",
+                        account.email)
+                    RepeatStatus.FINISHED
+                }, transactionManager)
+                .build()
+        }
+
+        val processor = EmbeddingChunkProcessor(embeddingService)
+
+        return StepBuilder("emailEmbedding_${account.id}", jobRepository)
+            .chunk<ContentChunk, ContentChunkDTO>(10, transactionManager)
+            .reader(createEmbeddingReader(account.id!!, cutoffDate, forceRefresh))
+            .processor(ItemProcessor { entity ->
+                val dto = contentChunkMapper.toDto(entity)
+                processor.process(dto)
+            })
+            .writer(createEmbeddingWriter())
+            .listener(heartbeatChunkListener)
+            .listener(progressTrackingItemWriteListener)
+            .build()
+    }
+
+    private fun createEmbeddingReader(
+        accountId: Long,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean
+    ): ItemReader<ContentChunk> {
+        log.debug("Creating EmailEmbeddingReader for account {} (cutoff={}, forceRefresh={})",
+            accountId, cutoffDate, forceRefresh)
+        return EmailEmbeddingReader(
+            contentChunkRepository = contentChunkRepository,
+            accountId = accountId,
+            cutoffDate = cutoffDate,
+            forceRefresh = forceRefresh,
+            pageSize = 50
+        )
+    }
+
+    private fun createEmbeddingWriter(): ItemWriter<ContentChunkDTO> {
+        log.debug("Creating EmailEmbeddingWriter")
+        return EmailEmbeddingWriter(contentChunkRepository = contentChunkRepository)
     }
 }

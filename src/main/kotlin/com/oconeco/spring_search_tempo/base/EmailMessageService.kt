@@ -112,6 +112,17 @@ interface EmailMessageService {
     fun countUnreadByAccount(accountId: Long): Long
 
     /**
+     * Find "interesting" email messages for chunking.
+     * Applies date cutoff, junk filter, and optional already-chunked filter.
+     */
+    fun findInterestingForChunking(
+        accountId: Long,
+        cutoffDate: OffsetDateTime,
+        forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<EmailMessageDTO>
+
+    /**
      * Get message with tags eagerly loaded.
      */
     fun getWithTags(id: Long): EmailMessageDTO

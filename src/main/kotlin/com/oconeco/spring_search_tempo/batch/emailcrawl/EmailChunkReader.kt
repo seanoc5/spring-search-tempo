@@ -6,20 +6,26 @@ import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemReader
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
+import java.time.OffsetDateTime
 
 
 /**
- * ItemReader that reads EmailMessageDTO entities with non-null bodyText for chunking.
+ * ItemReader that reads "interesting" EmailMessageDTO entities for chunking.
  *
- * Uses service layer pagination to efficiently process messages in batches.
+ * Uses the "interesting" filter: messages within cutoff date, not junk-tagged,
+ * with non-null bodyText, and optionally not already chunked (unless forceRefresh).
  *
  * @param emailMessageService Service for accessing EmailMessage entities
  * @param accountId The account ID to filter messages by
+ * @param cutoffDate Only include messages received on or after this date
+ * @param forceRefresh If true, include messages that already have chunks
  * @param pageSize Number of messages to load per page (default 50)
  */
 class EmailChunkReader(
     private val emailMessageService: EmailMessageService,
     private val accountId: Long,
+    private val cutoffDate: OffsetDateTime,
+    private val forceRefresh: Boolean = false,
     private val pageSize: Int = 50
 ) : ItemReader<EmailMessageDTO> {
 
@@ -70,16 +76,24 @@ class EmailChunkReader(
     }
 
     private fun initialize() {
-        log.info("Initializing EmailChunkReader for account {}...", accountId)
+        log.info(
+            "Initializing EmailChunkReader for account {} (cutoff={}, forceRefresh={})...",
+            accountId, cutoffDate, forceRefresh
+        )
 
         // Get first page to determine total count
-        val firstPage = emailMessageService.findMessagesWithBodyTextByAccount(
+        val firstPage = emailMessageService.findInterestingForChunking(
             accountId,
+            cutoffDate,
+            forceRefresh,
             PageRequest.of(0, pageSize, Sort.by("id"))
         )
         totalMessages = firstPage.totalElements
 
-        log.info("Found {} messages with bodyText to chunk for account {}", totalMessages, accountId)
+        log.info(
+            "Found {} interesting messages to chunk for account {} (cutoff={}, forceRefresh={})",
+            totalMessages, accountId, cutoffDate, forceRefresh
+        )
 
         initialized = true
         loadNextPage()
@@ -88,8 +102,10 @@ class EmailChunkReader(
     private fun loadNextPage() {
         log.debug("Loading page {} with page size {} for account {}", currentPage, pageSize, accountId)
 
-        val page = emailMessageService.findMessagesWithBodyTextByAccount(
+        val page = emailMessageService.findInterestingForChunking(
             accountId,
+            cutoffDate,
+            forceRefresh,
             PageRequest.of(currentPage, pageSize, Sort.by("id"))
         )
 
