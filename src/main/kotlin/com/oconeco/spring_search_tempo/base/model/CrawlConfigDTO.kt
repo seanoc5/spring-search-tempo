@@ -32,6 +32,8 @@ class CrawlConfigDTO {
 
     var jobRunId: Long? = null
 
+    var sourceHost: String? = null
+
     @NotNull
     var name: String? = null
 

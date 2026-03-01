@@ -37,6 +37,7 @@
                         <th scope="col">[[#{emailMessage.fetchStatus.label}]]</th>
                         <th scope="col">[[#{emailMessage.hasAttachments.label}]]</th>
                         <th scope="col">Status</th>
+                        <th scope="col">[[#{sourceHost.label}]]</th>
                         <th><!-- Actions --></th>
                     </tr>
                     </thead>
@@ -74,6 +75,7 @@
                             <span th:if="${!msg.isRead}" class="badge bg-primary">Unread</span>
                             <span th:if="${msg.isRead}" class="badge bg-secondary">Read</span>
                         </td>
+                        <td><small class="text-muted" th:text="${msg.sourceHost}"></small></td>
                         <td>
                             <div class="float-end text-nowrap">
                                 <a th:href="@{/emailMessages/{id}(id=${msg.id})}"

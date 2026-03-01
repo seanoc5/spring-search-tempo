@@ -23,6 +23,7 @@
                             <th scope="col">Sentiment</th>
                             <th scope="col">NLP Status</th>
                             <th scope="col">[[#{contentChunk.createdAt.label}]]</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th><!-- --></th>
                         </tr>
                     </thead>
@@ -60,6 +61,7 @@
                                     [[${#temporals.format(chunk.createdAt, 'MM-dd HH:mm')}]]
                                 </span>
                             </td>
+                            <td><small class="text-muted" th:text="${chunk.sourceHost}"></small></td>
                             <td>
                                 <div class="float-end text-nowrap">
                                     <a th:href="@{/contentChunks/{id}(id=${chunk.id})}" class="btn btn-sm btn-outline-secondary" title="View">

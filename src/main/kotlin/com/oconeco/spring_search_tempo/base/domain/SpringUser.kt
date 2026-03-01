@@ -26,7 +26,7 @@ class SpringUser {
     @SequenceGenerator(
         name = "primary_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 1,
+        allocationSize = 200,
         initialValue = 10000
     )
     @GeneratedValue(

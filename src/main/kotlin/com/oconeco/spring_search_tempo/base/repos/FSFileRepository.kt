@@ -21,6 +21,8 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
 
     fun findByUri(uri: String): FSFile?
 
+    fun findByUriIn(uris: Collection<String>): List<FSFile>
+
     fun findByBodyTextIsNotNull(pageable: Pageable): Page<FSFile>
 
     /**

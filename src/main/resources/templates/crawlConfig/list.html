@@ -57,6 +57,7 @@
                             <th scope="col">Status</th>
                             <th scope="col">Files</th>
                             <th scope="col">Folders</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th scope="col">Last Run</th>
                         </tr>
                     </thead>
@@ -105,6 +106,7 @@
                                    th:text="${folderCounts[crawlConfig.id] ?: 0}"
                                    class="text-decoration-none">0</a>
                             </td>
+                            <td><small class="text-muted" th:text="${crawlConfig.sourceHost}"></small></td>
                             <td>
                                 <th:block th:if="${lastRuns[crawlConfig.id] != null}"
                                           th:with="lastRun=${lastRuns[crawlConfig.id]}">

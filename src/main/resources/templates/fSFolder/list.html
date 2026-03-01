@@ -92,6 +92,7 @@
                             <th scope="col">[[#{fSFolder.jobRun.label}]]</th>
                             <th scope="col">[[#{fSFolder.analysisStatus.label}]]</th>
                             <th scope="col">[[#{fSFolder.fsLastModified.label}]]</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th><!-- --></th>
                         </tr>
                     </thead>
@@ -133,6 +134,7 @@
                                       th:text="${#temporals.format(fSFolder.fsLastModified, 'yyyy-MM-dd HH:mm')}"
                                       class="small text-nowrap"></span>
                             </td>
+                            <td><small class="text-muted" th:text="${fSFolder.sourceHost}"></small></td>
                             <td>
                                 <div class="float-end text-nowrap">
                                     <a th:href="@{/fSFolders/edit/{id}(id=${fSFolder.id})}" class="btn btn-sm btn-secondary">[[#{fSFolder.list.edit}]]</a>

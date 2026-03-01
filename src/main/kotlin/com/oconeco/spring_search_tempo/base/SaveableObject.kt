@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.domain
 
+import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import jakarta.persistence.Column
 import jakarta.persistence.EntityListeners
 import jakarta.persistence.Enumerated
@@ -8,6 +9,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.MappedSuperclass
+import jakarta.persistence.PrePersist
 import jakarta.persistence.SequenceGenerator
 import java.time.OffsetDateTime
 import org.springframework.data.annotation.CreatedDate
@@ -27,7 +29,7 @@ abstract class SaveableObject {
     @SequenceGenerator(
         name = "primary_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 1,
+        allocationSize = 200,
         initialValue = 10000
     )
     @GeneratedValue(
@@ -85,6 +87,16 @@ abstract class SaveableObject {
 
     @Column
     var jobRunId: Long? = null
+
+    @Column(length = 50)
+    var sourceHost: String? = null
+
+    @PrePersist
+    fun prePersistSourceHost() {
+        if (sourceHost == null) {
+            sourceHost = HostNameHolder.currentHostName
+        }
+    }
 
 }
 

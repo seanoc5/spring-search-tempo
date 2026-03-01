@@ -52,6 +52,7 @@
                             <th scope="col">[[#{fSFile.archived.label}]]</th>
                             <th scope="col">[[#{fSFile.bodySize.label}]]</th>
                             <th scope="col">[[#{fSFile.fsFolder.label}]]</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th><!-- --></th>
                         </tr>
                     </thead>
@@ -71,6 +72,7 @@
                             <td>[[${fSFile.archived}]]</td>
                             <td>[[${fSFile.bodySize}]]</td>
                             <td>[[${fSFile.fsFolder}]]</td>
+                            <td><small class="text-muted" th:text="${fSFile.sourceHost}"></small></td>
                             <td>
                                 <div class="float-end text-nowrap">
                                     <a th:href="@{/fSFiles/edit/{id}(id=${fSFile.id})}" class="btn btn-sm btn-secondary">[[#{fSFile.list.edit}]]</a>

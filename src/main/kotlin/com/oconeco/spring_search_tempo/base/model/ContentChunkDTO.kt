@@ -91,6 +91,8 @@ class ContentChunkDTO {
     @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
     var nlpProcessedAt: OffsetDateTime? = null
 
+    var sourceHost: String? = null
+
     var parentChunk: Long? = null
 
     var concept: Long? = null

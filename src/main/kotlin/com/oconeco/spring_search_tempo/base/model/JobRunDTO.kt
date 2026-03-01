@@ -34,6 +34,8 @@ class JobRunDTO {
 
     var jobRunId: Long? = null
 
+    var sourceHost: String? = null
+
     var crawlConfig: Long? = null
 
     /** Display label from the associated CrawlConfig */

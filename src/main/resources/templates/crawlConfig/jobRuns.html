@@ -34,6 +34,7 @@
                             <th scope="col">Finish Time</th>
                             <th scope="col">Duration</th>
                             <th scope="col">Status</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th scope="col">Files</th>
                             <th scope="col">Folders</th>
                             <th scope="col">Total Items</th>
@@ -98,6 +99,7 @@
                                     </span>
                                 </div>
                             </td>
+                            <td><small class="text-muted" th:text="${jobRun.sourceHost}"></small></td>
                             <td>
                                 <div class="small">
                                     <strong>Discovered:</strong> [[${jobRun.filesDiscovered}]]<br/>

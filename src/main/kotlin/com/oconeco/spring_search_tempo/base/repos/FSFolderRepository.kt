@@ -43,6 +43,8 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
 
     fun findByUri(uri: String?): FSFolder?
 
+    fun findByUriIn(uris: Collection<String>): List<FSFolder>
+
     /**
      * Find all folders excluding those with SKIP analysis status.
      * Used by UI to hide skipped items by default.

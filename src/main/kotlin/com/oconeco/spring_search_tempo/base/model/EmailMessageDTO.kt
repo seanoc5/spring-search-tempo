@@ -36,6 +36,8 @@ class EmailMessageDTO {
 
     var jobRunId: Long? = null
 
+    var sourceHost: String? = null
+
     // Email identifiers
     var messageId: String? = null
 

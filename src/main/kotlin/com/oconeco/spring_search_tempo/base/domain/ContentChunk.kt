@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.domain
 
+import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -10,6 +11,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
+import jakarta.persistence.PrePersist
 import jakarta.persistence.SequenceGenerator
 import jakarta.persistence.Table
 import java.time.OffsetDateTime
@@ -33,7 +35,7 @@ class ContentChunk {
     @SequenceGenerator(
         name = "primary_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 1,
+        allocationSize = 200,
         initialValue = 10000
     )
     @GeneratedValue(
@@ -128,8 +130,8 @@ class ContentChunk {
      * LIMIT 10
      * ```
      *
-     * NOTE: Currently read-only (insertable=false, updatable=false) until Phase 3
-     * embedding generation is implemented with proper Hibernate type support.
+     * Embeddings are persisted via native SQL update (see ContentChunkRepository.updateEmbedding)
+     * to avoid Hibernate type-mapping complexity with the vector column.
      */
     @Column(name = "embedding", columnDefinition = "vector(1024)", insertable = false, updatable = false)
     var embedding: FloatArray? = null
@@ -219,6 +221,9 @@ class ContentChunk {
     @JoinColumn(name = "one_drive_item_id")
     var oneDriveItem: OneDriveItem? = null
 
+    @Column(length = 50)
+    var sourceHost: String? = null
+
     @CreatedDate
     @Column(
         nullable = false,
@@ -229,5 +234,12 @@ class ContentChunk {
     @LastModifiedDate
     @Column(nullable = false)
     var lastUpdated: OffsetDateTime? = null
+
+    @PrePersist
+    fun prePersistSourceHost() {
+        if (sourceHost == null) {
+            sourceHost = HostNameHolder.currentHostName
+        }
+    }
 
 }

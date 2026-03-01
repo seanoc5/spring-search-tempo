@@ -69,6 +69,8 @@ class FSFileDTO {
 
     var jobRunId: Long? = null
 
+    var sourceHost: String? = null
+
     /**
      * Timestamp when this file was last chunked into ContentChunks.
      * Used to determine if re-chunking is needed.
