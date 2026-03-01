@@ -27,6 +27,7 @@ repositories {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.modulith:spring-modulith-bom:1.4.3")
+        mavenBom("org.springframework.ai:spring-ai-bom:1.1.2")
     }
 }
 
@@ -46,6 +47,9 @@ dependencies {
 
     // pgvector support for vector embeddings
     implementation("com.pgvector:pgvector:0.1.6")
+
+    // Spring AI + Ollama for embedding generation
+    implementation("org.springframework.ai:spring-ai-starter-model-ollama")
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.session:spring-session-jdbc")

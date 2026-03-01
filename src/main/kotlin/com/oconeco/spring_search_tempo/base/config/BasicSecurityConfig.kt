@@ -68,6 +68,7 @@ class BasicSecurityConfig(
                 // Admin-only endpoints
                 .requestMatchers("/springUsers/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/springRoles/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/system/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/actuator/**").hasAuthority("ROLE_ADMIN")
                 // Everything else requires authentication
                 .anyRequest().authenticated()

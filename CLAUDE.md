@@ -330,15 +330,14 @@ class MyComponent(
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/spring_search_tempo  # Port 5433!
-    username: postgres
+    url: jdbc:postgresql://localhost:5432/spring_search_tempo 
+    username: tempo
     password: postgres
   jpa:
     hibernate:
       ddl-auto: update  # Use 'validate' in production
 ```
 
-**Connect**: `psql -h localhost -p 5433 -U postgres -d spring_search_tempo`
 
 ### Batch Jobs
 

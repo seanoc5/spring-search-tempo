@@ -1,0 +1,10 @@
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    # docker-compose maps container 5432 -> host 15432
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:15432/tempo}
+  docker:
+    compose:
+      enabled: true

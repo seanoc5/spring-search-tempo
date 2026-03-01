@@ -235,7 +235,7 @@ The chunk search endpoint returns NLP data:
 For existing databases, run the migration script to update the FTS vector:
 
 ```bash
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo -f docs/sql/003-add-nlp-to-fts.sql
+psql -h localhost -p 5432 -U tempo -d tempo -f docs/sql/003-add-nlp-to-fts.sql
 ```
 
 This migration:

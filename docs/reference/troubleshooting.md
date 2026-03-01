@@ -42,22 +42,13 @@ docker compose up -d
 docker compose restart postgres
 
 # Check connection manually
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo
+psql -h localhost -p 5432 -U tempo -d tempo
 
 # Verify port mapping
 docker compose ps
 ```
 
 ### Wrong PostgreSQL Port
-
-**Symptom**: Application tries to connect to port 5432 instead of 5433
-
-**Solution**: Verify configuration in `application.yml`:
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5433/spring_search_tempo  # Not 5432!
-```
 
 ## Spring Batch Issues
 
@@ -487,17 +478,6 @@ df -h
 ```
 
 ### Port Conflict with Host PostgreSQL
-
-**Symptom**: Can't bind to port 5433
-
-**Solution**: Stop host PostgreSQL or use different port
-```yaml
-# docker-compose.yml
-services:
-  postgres:
-    ports:
-      - "5434:5432"  # Use 5434 instead
-```
 
 ## Git Issues
 

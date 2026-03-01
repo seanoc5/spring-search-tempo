@@ -8,7 +8,7 @@ Connect to PostgreSQL and execute query.
 
 **Connection:**
 ```bash
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo
+psql -h localhost -p 5432 -U tempo -d tempo
 ```
 
 **If no query provided, show dashboard:**

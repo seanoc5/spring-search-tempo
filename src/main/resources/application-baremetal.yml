@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: baremetal
+  datasource:
+    url: ${JDBC_DATABASE_URL:jdbc:postgresql://minti9:5432/tempo}
+  docker:
+    compose:
+      enabled: false

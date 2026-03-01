@@ -69,7 +69,7 @@ The `CrawlConfigConverter` service handles conversion between JSON strings and K
 
 ### Accessing Crawl Management
 
-Navigate to: `http://localhost:8085/crawlConfigs`
+Navigate to: `http://localhost:8082/crawlConfigs`
 
 From the home page, click "Crawl Configurations" in the "Crawl Management" section.
 

@@ -211,12 +211,11 @@ During development, use the `local` profile. In IntelliJ IDEA, add `-Dspring.pro
 # application.yml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/spring_search_tempo
+    url: jdbc:postgresql://localhost:5432/tempo
     username: postgres
     password: postgres
 ```
 
-**Note**: Port 5433 (not default 5432) to avoid conflicts.
 
 ### Security
 

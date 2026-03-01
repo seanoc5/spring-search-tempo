@@ -181,14 +181,14 @@ docker compose logs --tail=100 postgres
 
 ```bash
 # Connect using psql
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo
+psql -h localhost -p 5432 -U tempo -d tempo
 
 # Connect and execute query
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo \
+psql -h localhost -p 5432 -U tempo -d tempo \
      -c "SELECT COUNT(*) FROM fs_file;"
 
 # Connect with password from environment
-PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -d spring_search_tempo
+PGPASSWORD=postgres psql -h localhost -p 5432 -U tempo -d tempo
 ```
 
 ### Database Backup & Restore
@@ -199,7 +199,7 @@ pg_dump -h localhost -p 5433 -U postgres -d spring_search_tempo \
         > backup_$(date +%Y%m%d).sql
 
 # Restore database
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo \
+psql -h localhost -p 5432 -U tempo -d tempo \
      < backup_20251107.sql
 
 # Backup with compression
@@ -241,7 +241,7 @@ NLP processing runs automatically after file crawl by default. See [NLP Processi
 
 ```bash
 # Connect to database and clear batch tables
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo <<EOF
+psql -h localhost -p 5432 -U tempo -d tempo <<EOF
 DELETE FROM batch_step_execution_context;
 DELETE FROM batch_step_execution;
 DELETE FROM batch_job_execution_context;
@@ -555,19 +555,19 @@ git diff --staged
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
-| Start app | `./gradlew bootRun` |
-| Run tests | `./gradlew test` |
-| Build JAR | `./gradlew build` |
-| Start DB | `docker compose up -d` |
-| Connect DB | `psql -h localhost -p 5433 -U postgres -d spring_search_tempo` |
-| View logs | `docker compose logs -f postgres` |
-| Clean build | `./gradlew clean build` |
-| Run specific test | `./gradlew test --tests TestName` |
-| Module verification | `./gradlew test --tests ModularityTest` |
-| Coverage report | `./gradlew test jacocoTestReport` |
-| Trigger NLP | `curl -X POST http://localhost:8089/api/nlp/process` |
+| Task | Command                                                     |
+|------|-------------------------------------------------------------|
+| Start app | `./gradlew bootRun`                                         |
+| Run tests | `./gradlew test`                                            |
+| Build JAR | `./gradlew build`                                           |
+| Start DB | `docker compose up -d`                                      |
+| Connect DB | `psql -h localhost -p 5432 -U tempo -d spring_search_tempo` |
+| View logs | `docker compose logs -f postgres`                           |
+| Clean build | `./gradlew clean build`                                     |
+| Run specific test | `./gradlew test --tests TestName`                           |
+| Module verification | `./gradlew test --tests ModularityTest`                     |
+| Coverage report | `./gradlew test jacocoTestReport`                           |
+| Trigger NLP | `curl -X POST http://localhost:8089/api/nlp/process`        |
 
 ## See Also
 

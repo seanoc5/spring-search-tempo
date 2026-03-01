@@ -1,5 +1,5 @@
 server:
-  port: 8085
+  port: 8082
 
 spring:
   devtools:
@@ -12,7 +12,7 @@ spring:
       enabled: false  # Disable auto-run - jobs are triggered via UI/API
   datasource:
     url: ${JDBC_DATABASE_URL:jdbc:postgresql://localhost:5432/tempo}
-    username: ${JDBC_DATABASE_USERNAME:postgres}
+    username: ${JDBC_DATABASE_USERNAME:tempo}
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
       connection-timeout: 30000
@@ -24,12 +24,22 @@ spring:
     properties:
       hibernate:
         jdbc:
+          batch_size: 50
           lob:
             non_contextual_creation: true
+        order_inserts: true
+        order_updates: true
         id:
           new_generator_mappings: true
   messages:
     basename: messages,messagesWeb
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: mxbai-embed-large
+          truncate: true
   docker:
     compose:
       lifecycle-management: start-only
@@ -63,6 +73,7 @@ management:
       show-details: always
 
 app:
+  host-name: "${TEMPO_HOST_NAME:localhost}"
   security:
     remember-me-key: "${REMEMBER_ME_KEY:spring-search-tempo-remember-me-key}"
   crawl:
@@ -140,6 +151,12 @@ app:
         credential-env-var: "WORKMAIL_PASSWORD"
         enabled: true
 
+  embedding:
+    enabled: true
+    model-name: mxbai-embed-large
+    max-text-length: 8192
+    batch-size: 10
+    recent-days: 7
   # OneDrive integration (OAuth2 + PKCE, Microsoft Graph API)
   onedrive:
     enabled: false
