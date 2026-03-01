@@ -18,6 +18,7 @@ import org.springframework.batch.item.ItemWriter
 import org.springframework.batch.item.data.RepositoryItemReader
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.data.domain.Sort
 import org.springframework.transaction.PlatformTransactionManager
 
@@ -32,9 +33,9 @@ import org.springframework.transaction.PlatformTransactionManager
  *
  * Processing is done in chunks to handle large datasets efficiently.
  *
- * IMPORTANT: Only chunks from files/emails with analysisStatus of ANALYZE or SEMANTIC
- * are processed. Files with lower analysis levels (SKIP, LOCATE, INDEX) are not
- * processed for NLP even if they have content chunks.
+ * IMPORTANT: Only chunks whose parent object has analysisStatus of ANALYZE or SEMANTIC
+ * are processed. Content with lower analysis levels (SKIP, LOCATE, INDEX) is not
+ * processed for NLP even if it has content chunks.
  */
 @Configuration
 class NLPProcessingJobConfiguration(
@@ -43,7 +44,9 @@ class NLPProcessingJobConfiguration(
     private val contentChunksRepository: ContentChunkRepository,
     private val contentChunksMapper: ContentChunkMapper,
     private val nlpService: NLPService,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    @Qualifier("embeddingProcessingStep")
+    private val embeddingProcessingStep: Step
 ) {
 
     companion object {
@@ -59,12 +62,15 @@ class NLPProcessingJobConfiguration(
     }
 
     /**
-     * Main NLP processing job.
+     * Main semantic processing job flow:
+     * 1) NLP processing step
+     * 2) Embedding generation step (Ollama)
      */
     @Bean
     fun nlpProcessingJob(): Job {
         return JobBuilder("nlpProcessingJob", jobRepository)
             .start(nlpProcessingStep())
+            .next(embeddingProcessingStep)
             .build()
     }
 
@@ -88,7 +94,7 @@ class NLPProcessingJobConfiguration(
      * Only reads ContentChunk entities where:
      * - nlpProcessedAt is null (not yet processed)
      * - text is not null (has content to analyze)
-     * - Parent file/email has analysisStatus of ANALYZE or SEMANTIC
+     * - Parent object has analysisStatus of ANALYZE or SEMANTIC
      *
      * This ensures NLP processing only runs on content that has been explicitly
      * marked for deep analysis, not on files that are only being indexed.

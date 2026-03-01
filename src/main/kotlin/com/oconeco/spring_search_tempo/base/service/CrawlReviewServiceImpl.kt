@@ -344,7 +344,8 @@ class CrawlReviewServiceImpl(
             skip = parsePatterns(config.folderPatternsSkip) + crawlConfiguration.defaults.folderPatterns.skip,
             locate = parsePatterns(config.folderPatternsLocate),
             index = parsePatterns(config.folderPatternsIndex),
-            analyze = parsePatterns(config.folderPatternsAnalyze)
+            analyze = parsePatterns(config.folderPatternsAnalyze),
+            semantic = crawlConfiguration.defaults.folderPatterns.semantic
         )
     }
 
@@ -356,7 +357,8 @@ class CrawlReviewServiceImpl(
             skip = parsePatterns(config.filePatternsSkip) + crawlConfiguration.defaults.filePatterns.skip,
             locate = parsePatterns(config.filePatternsLocate),
             index = parsePatterns(config.filePatternsIndex),
-            analyze = parsePatterns(config.filePatternsAnalyze)
+            analyze = parsePatterns(config.filePatternsAnalyze),
+            semantic = crawlConfiguration.defaults.filePatterns.semantic
         )
     }
 
@@ -374,8 +376,9 @@ class CrawlReviewServiceImpl(
      * Find the first matching pattern for a file path.
      */
     private fun findMatchingPatternForFile(path: String, patterns: PatternSet): String? {
-        // Check in priority order: skip, analyze, index, locate
+        // Check in priority order: skip, semantic, analyze, index, locate
         findMatchingPattern(path, patterns.skip)?.let { return it }
+        findMatchingPattern(path, patterns.semantic)?.let { return it }
         findMatchingPattern(path, patterns.analyze)?.let { return it }
         findMatchingPattern(path, patterns.index)?.let { return it }
         findMatchingPattern(path, patterns.locate)?.let { return it }
@@ -386,8 +389,9 @@ class CrawlReviewServiceImpl(
      * Find the first matching pattern for a folder path.
      */
     private fun findMatchingPatternForFolder(path: String, patterns: PatternSet): String? {
-        // Check in priority order: skip, analyze, index, locate
+        // Check in priority order: skip, semantic, analyze, index, locate
         findMatchingPattern(path, patterns.skip)?.let { return it }
+        findMatchingPattern(path, patterns.semantic)?.let { return it }
         findMatchingPattern(path, patterns.analyze)?.let { return it }
         findMatchingPattern(path, patterns.index)?.let { return it }
         findMatchingPattern(path, patterns.locate)?.let { return it }

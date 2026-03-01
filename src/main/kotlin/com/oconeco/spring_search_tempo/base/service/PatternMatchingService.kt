@@ -12,7 +12,7 @@ import java.util.regex.Pattern
  *
  * Pattern matching follows these rules:
  * 1. SKIP patterns have highest priority (matched items persisted with SKIP status, no further processing)
- * 2. For folders: explicit patterns (ANALYZE > INDEX > LOCATE), then inherit from parent
+ * 2. For folders: explicit patterns (SEMANTIC > ANALYZE > INDEX > LOCATE), then inherit from parent
  * 3. For files: explicit patterns, then inherit from parent folder (capped at INDEX for safety)
  * 4. Hierarchical: folder's AnalysisStatus affects all children unless overridden
  * 5. SKIP folders: children are not crawled at all (processing stops)
@@ -43,7 +43,11 @@ class PatternMatchingService {
             return AnalysisStatus.SKIP
         }
 
-        // Check explicit patterns in priority order: ANALYZE > INDEX > LOCATE
+        // Check explicit patterns in priority order: SEMANTIC > ANALYZE > INDEX > LOCATE
+        if (matchesAny(path, patterns.semantic)) {
+            logger.debug("Folder {} matched SEMANTIC pattern", path)
+            return AnalysisStatus.SEMANTIC
+        }
         if (matchesAny(path, patterns.analyze)) {
             logger.debug("Folder {} matched ANALYZE pattern", path)
             return AnalysisStatus.ANALYZE
@@ -89,7 +93,11 @@ class PatternMatchingService {
             return AnalysisStatus.SKIP
         }
 
-        // Check explicit file patterns: ANALYZE > INDEX > LOCATE
+        // Check explicit file patterns: SEMANTIC > ANALYZE > INDEX > LOCATE
+        if (matchesAny(path, filePatterns.semantic)) {
+            logger.debug("File {} matched SEMANTIC pattern", path)
+            return AnalysisStatus.SEMANTIC
+        }
         if (matchesAny(path, filePatterns.analyze)) {
             logger.debug("File {} matched ANALYZE pattern", path)
             return AnalysisStatus.ANALYZE

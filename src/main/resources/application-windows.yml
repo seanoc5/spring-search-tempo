@@ -25,7 +25,7 @@ app:
           - "[A-Z]:\\\\Program Files \\(x86\\)\\\\.*"
           - "[A-Z]:\\\\ProgramData\\\\.*"
           - "[A-Z]:\\\\System Volume Information\\\\.*"
-          - "[A-Z]:\\\\\$Recycle\\.Bin\\\\.*"
+          - "[A-Z]:\\\\[$]Recycle\\.Bin\\\\.*"
           - ".*\\\\AppData\\\\Local\\\\Temp\\\\.*"
           - ".*\\\\AppData\\\\Local\\\\Microsoft\\\\Windows\\\\.*"
           - ".*\\\\.cache\\\\.*"
@@ -58,11 +58,10 @@ app:
           index:
             - ".*"
         file-patterns:
-          analyze:
+          semantic:
             - ".*\\.(md|txt|org|rst|adoc)$"
             - ".*/(?i)README.*$"
             - ".*/(?i)CHANGELOG.*$"
-          index:
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
             - ".*\\.(epub|mobi)$"
             - ".*\\.html?$"
@@ -153,11 +152,13 @@ app:
           skip:
             # Skip large binaries and installers
             - ".*\\.(iso|exe|msi|dll|sys)$"
-          analyze:
+          semantic:
             - ".*\\.(md|txt|org|rst|adoc)$"
-          index:
             # Documents
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+          index:
             # Code files
             - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|bat|ps1|cmd)$"
             # Config files
@@ -179,8 +180,10 @@ app:
         file-patterns:
           skip:
             - ".*\\.(iso|exe|msi|dll)$"
-          index:
-            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|csv)$"
+          semantic:
+            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
 
       - name: "WIN_USER_DESKTOP"
         label: "Windows User Desktop"
@@ -192,8 +195,10 @@ app:
           index:
             - ".*"
         file-patterns:
-          index:
-            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"
+          semantic:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
 
       # ===== PHASE 3: C:\ DRIVE ROOT =====
 
@@ -257,8 +262,10 @@ app:
           locate:
             - ".*"
         file-patterns:
-          index:
-            - ".*\\.(txt|md|pdf|docx?|xlsx?|csv)$"
+          semantic:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
           locate:
             - ".*"
 
@@ -275,19 +282,21 @@ app:
           skip:
             # Skip system directories that might exist on D:
             - "D:\\\\System Volume Information\\\\.*"
-            - "D:\\\\\$Recycle\\.Bin\\\\.*"
+            - "D:\\\\[$]Recycle\\.Bin\\\\.*"
             - "D:\\\\Windows\\\\.*"
           index:
             - ".*"
         file-patterns:
           skip:
             - ".*\\.(iso|exe|msi|dll|sys)$"
-          analyze:
+          semantic:
             - ".*\\.(md|txt|org|rst|adoc)$"
             - ".*/(?i)(README|CHANGELOG).*$"
-          index:
             # Documents
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+          index:
             # Code files
             - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|bat|ps1|cmd)$"
             # Config files
@@ -310,7 +319,8 @@ app:
           index:
             - ".*"
         file-patterns:
-          analyze:
-            - ".*\\.(md|txt)$"
-          index:
+          semantic:
+            - ".*\\.(md|txt|org|rst|adoc)$"
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"

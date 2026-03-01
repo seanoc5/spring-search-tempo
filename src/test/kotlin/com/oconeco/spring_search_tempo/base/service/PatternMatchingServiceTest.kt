@@ -52,6 +52,24 @@ class PatternMatchingServiceTest {
     }
 
     @Test
+    @DisplayName("Should mark folder as SEMANTIC when matching semantic pattern")
+    fun testFolderSemanticPattern() {
+        val patterns = PatternSet(
+            semantic = listOf(".*/semantic/.*"),
+            analyze = listOf(".*/important/.*"),
+            index = listOf(".*")
+        )
+
+        val result = service.determineFolderAnalysisStatus(
+            path = "/home/user/semantic/docs",
+            patterns = patterns,
+            parentStatus = null
+        )
+
+        assertEquals(AnalysisStatus.SEMANTIC, result)
+    }
+
+    @Test
     @DisplayName("Should mark folder as ANALYZE when matching analyze pattern")
     fun testFolderAnalyzePattern() {
         val patterns = PatternSet(
@@ -121,6 +139,24 @@ class PatternMatchingServiceTest {
     }
 
     @Test
+    @DisplayName("Should prioritize SEMANTIC over ANALYZE for folders")
+    fun testFolderSemanticPriorityOverAnalyze() {
+        val patterns = PatternSet(
+            semantic = listOf(".*/important/.*"),
+            analyze = listOf(".*/important/.*"),
+            index = listOf(".*")
+        )
+
+        val result = service.determineFolderAnalysisStatus(
+            path = "/home/user/important/docs",
+            patterns = patterns,
+            parentStatus = null
+        )
+
+        assertEquals(AnalysisStatus.SEMANTIC, result)
+    }
+
+    @Test
     @DisplayName("Should mark file as SKIP when matching skip pattern")
     fun testFileSkipPattern() {
         val patterns = PatternSet(
@@ -170,6 +206,24 @@ class PatternMatchingServiceTest {
     }
 
     @Test
+    @DisplayName("Should mark file as SEMANTIC when matching semantic pattern")
+    fun testFileSemanticPattern() {
+        val patterns = PatternSet(
+            semantic = listOf(".*\\.(pdf|docx?|xlsx?)$"),
+            analyze = listOf(".*\\.md$"),
+            index = listOf(".*")
+        )
+
+        val result = service.determineFileAnalysisStatus(
+            path = "/home/user/document.pdf",
+            filePatterns = patterns,
+            parentFolderStatus = AnalysisStatus.INDEX
+        )
+
+        assertEquals(AnalysisStatus.SEMANTIC, result)
+    }
+
+    @Test
     @DisplayName("Should mark file as ANALYZE when matching analyze pattern")
     fun testFileAnalyzePattern() {
         val patterns = PatternSet(
@@ -184,6 +238,20 @@ class PatternMatchingServiceTest {
         )
 
         assertEquals(AnalysisStatus.ANALYZE, result)
+    }
+
+    @Test
+    @DisplayName("Should cap inherited SEMANTIC status to INDEX for files")
+    fun testFileCapSemanticInheritance() {
+        val patterns = PatternSet()  // No explicit patterns
+
+        val result = service.determineFileAnalysisStatus(
+            path = "/home/user/file.txt",
+            filePatterns = patterns,
+            parentFolderStatus = AnalysisStatus.SEMANTIC
+        )
+
+        assertEquals(AnalysisStatus.INDEX, result)
     }
 
     @Test

@@ -48,11 +48,10 @@ app:
           index:
             - ".*"
         file-patterns:
-          analyze:
+          semantic:
             - ".*\\.(md|txt|org|rst|adoc)$"
             - ".*/README.*$"
             - ".*/CHANGELOG.*$"
-          index:
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
             - ".*\\.(epub|mobi)$"
             - ".*\\.html?$"
@@ -142,11 +141,13 @@ app:
           skip:
             # Skip large binaries and installers
             - ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg|flatpak|snap)$"
-          analyze:
+          semantic:
             - ".*\\.(md|txt|org|rst|adoc)$"
-          index:
             # Documents
             - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+          index:
             # Code files
             - ".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash|fish|zsh)$"
             # Config files
@@ -173,8 +174,10 @@ app:
         file-patterns:
           skip:
             - ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg)$"
-          index:
-            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|csv)$"
+          semantic:
+            - ".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
 
       - name: "USER_DESKTOP"
         label: "User Desktop"
@@ -186,8 +189,10 @@ app:
           index:
             - ".*"
         file-patterns:
-          index:
-            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"
+          semantic:
+            - ".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
 
       # ===== PHASE 3: WORK =====
 
@@ -202,6 +207,13 @@ app:
           index:
             - ".*"
         file-patterns:
+          semantic:
+            # User-oriented documentation/content in project trees
+            - ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$"
+            - ".*\\.(epub|mobi)$"
+            - ".*\\.html?$"
+            - ".*/(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$"
+            - ".*\\.(md|txt|adoc|rst)$"
           index:
             # Source code (comprehensive language support)
             - ".*\\.(kt|kts|java|scala)$"                     # JVM
@@ -231,11 +243,6 @@ app:
 
             # Documentation
             - ".*\\.(md|rst|adoc|txt)$"
-
-          analyze:
-            # Deep NLP analysis for documentation
-            - ".*/(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$"
-            - ".*\\.(md|txt|adoc)$"
 
       # ===== PHASE 4: LOGGING =====
 

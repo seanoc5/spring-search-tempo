@@ -156,7 +156,6 @@ app:
     model-name: mxbai-embed-large
     max-text-length: 8192
     batch-size: 10
-    recent-days: 7
   # OneDrive integration (OAuth2 + PKCE, Microsoft Graph API)
   onedrive:
     enabled: false
@@ -178,4 +177,3 @@ app:
       #   imap-port: 993
       #   credential-env-var: "CUSTOM_IMAP_PASSWORD"
       #   enabled: false
-

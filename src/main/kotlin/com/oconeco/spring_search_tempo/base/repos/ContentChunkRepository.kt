@@ -33,10 +33,13 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * Only processes chunks where:
      * - nlpProcessedAt is NULL (not yet processed)
      * - text is NOT NULL (has content to analyze)
-     * - Parent FSFile has analysisStatus in the provided list (typically ANALYZE, SEMANTIC)
+     * - Parent object has analysisStatus in the provided list (typically ANALYZE, SEMANTIC)
      *
-     * Note: Chunks from EmailMessage parents are also included if their parent
-     * has the appropriate analysisStatus.
+     * Parent sources supported:
+     * - FSFile (`concept`)
+     * - EmailMessage (`emailMessage`)
+     * - BrowserBookmark (`browserBookmark`)
+     * - OneDriveItem (`oneDriveItem`)
      *
      * @param analysisStatuses List of AnalysisStatus values that qualify for NLP (e.g., ANALYZE, SEMANTIC)
      * @param pageable Pagination parameters
@@ -50,6 +53,10 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
               (c.concept IS NOT NULL AND c.concept.analysisStatus IN :analysisStatuses)
               OR
               (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :analysisStatuses)
+              OR
+              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :analysisStatuses)
+              OR
+              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :analysisStatuses)
           )
     """)
     fun findChunksForNlpProcessing(
@@ -246,18 +253,32 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     ): Page<ContentChunk>
 
     /**
-     * Find ALL chunks eligible for embedding generation (email, file, onedrive, etc.).
-     * Used by the standalone embedding job.
+     * Find chunks eligible for embedding generation.
+     *
+     * Only returns chunks where:
+     * - text is not null
+     * - nlpProcessedAt is not null (NLP already completed)
+     * - parent analysisStatus is in the provided list (typically ANALYZE/SEMANTIC)
+     * - embeddingGeneratedAt is null (unless forceRefresh=true)
      */
     @Query("""
         SELECT c FROM ContentChunk c
         WHERE c.text IS NOT NULL
-          AND c.dateCreated >= :cutoffDate
+          AND c.nlpProcessedAt IS NOT NULL
           AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
+          AND (
+              (c.concept IS NOT NULL AND c.concept.analysisStatus IN :analysisStatuses)
+              OR
+              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :analysisStatuses)
+              OR
+              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :analysisStatuses)
+              OR
+              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :analysisStatuses)
+          )
     """)
     fun findChunksForEmbedding(
-        @Param("cutoffDate") cutoffDate: OffsetDateTime,
         @Param("forceRefresh") forceRefresh: Boolean,
+        @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>,
         pageable: Pageable
     ): Page<ContentChunk>
 
@@ -269,7 +290,33 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     /**
      * Count chunks pending embedding (embeddingGeneratedAt is null, text is not null).
      */
-    @Query("SELECT COUNT(c) FROM ContentChunk c WHERE c.embeddingGeneratedAt IS NULL AND c.text IS NOT NULL")
+    @Query("""
+        SELECT COUNT(c) FROM ContentChunk c
+        WHERE c.embeddingGeneratedAt IS NULL
+          AND c.text IS NOT NULL
+          AND c.nlpProcessedAt IS NOT NULL
+          AND (
+              (c.concept IS NOT NULL AND c.concept.analysisStatus IN (
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
+              ))
+              OR
+              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN (
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
+              ))
+              OR
+              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN (
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
+              ))
+              OR
+              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN (
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
+                  com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
+              ))
+          )
+    """)
     fun countEmbeddingPending(): Long
 
     /**

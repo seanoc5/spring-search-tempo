@@ -22,7 +22,7 @@ data class CrawlConfiguration(
      * For folders: children are not crawled (processing stops).
      * For files: no text extraction occurs.
      *
-     * Other patterns (LOCATE, INDEX, ANALYZE) use crawl-specific only.
+     * Other patterns (LOCATE, INDEX, ANALYZE, SEMANTIC) use crawl-specific only.
      */
     fun getEffectivePatterns(crawl: CrawlDefinition): EffectivePatterns {
         return EffectivePatterns(
@@ -30,13 +30,15 @@ data class CrawlConfiguration(
                 skip = defaults.folderPatterns.skip + crawl.folderPatterns.skip,
                 locate = crawl.folderPatterns.locate,
                 index = crawl.folderPatterns.index,
-                analyze = crawl.folderPatterns.analyze
+                analyze = crawl.folderPatterns.analyze,
+                semantic = crawl.folderPatterns.semantic
             ),
             filePatterns = PatternSet(
                 skip = defaults.filePatterns.skip + crawl.filePatterns.skip,
                 locate = crawl.filePatterns.locate,
                 index = crawl.filePatterns.index,
-                analyze = crawl.filePatterns.analyze
+                analyze = crawl.filePatterns.analyze,
+                semantic = crawl.filePatterns.semantic
             )
         )
     }
@@ -99,7 +101,8 @@ data class PatternSet(
     var skip: List<String> = emptyList(),     // SKIP - persist metadata only, no further processing
     var locate: List<String> = emptyList(),   // LOCATE - metadata only (like plocate)
     var index: List<String> = emptyList(),    // INDEX - extract and index text
-    var analyze: List<String> = emptyList()   // ANALYZE - full NLP processing
+    var analyze: List<String> = emptyList(),  // ANALYZE - full NLP processing
+    var semantic: List<String> = emptyList()  // SEMANTIC - ANALYZE + vector embedding
 )
 
 /**

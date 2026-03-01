@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.batch.embedding
 
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
@@ -37,14 +38,13 @@ class EmbeddingProcessingJobConfiguration(
     private val embeddingService: EmbeddingService,
     @Value("\${app.embedding.batch-size:10}")
     private val batchSize: Int,
-    @Value("\${app.embedding.recent-days:7}")
-    private val recentDays: Int,
     @Value("\${app.embedding.max-text-length:8192}")
     private val maxTextLength: Int
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(EmbeddingProcessingJobConfiguration::class.java)
+        private val EMBED_ELIGIBLE_STATUSES = listOf(AnalysisStatus.ANALYZE, AnalysisStatus.SEMANTIC)
     }
 
     @Bean
@@ -66,16 +66,14 @@ class EmbeddingProcessingJobConfiguration(
 
     /**
      * Reader for content chunks that need embedding.
-     * Reads ALL chunk types created within the recent-days window that don't yet have embeddings.
+     * Reads all eligible chunks that don't yet have embeddings.
      */
     @Bean
     fun embeddingChunkReader(): RepositoryItemReader<ContentChunk> {
-        val cutoffDate = OffsetDateTime.now().minusDays(recentDays.toLong())
-
         val reader = RepositoryItemReader<ContentChunk>()
         reader.setRepository(contentChunkRepository)
         reader.setMethodName("findChunksForEmbedding")
-        reader.setArguments(listOf(cutoffDate, false))
+        reader.setArguments(listOf(false, EMBED_ELIGIBLE_STATUSES))
         reader.setPageSize(batchSize)
         reader.setSort(mapOf("id" to Sort.Direction.ASC))
         return reader
