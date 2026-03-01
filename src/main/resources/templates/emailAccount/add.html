@@ -73,6 +73,15 @@
                             <label class="form-check-label" for="useSsl">Use SSL/TLS</label>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="credentialEnvVar" class="form-label">Credential Env Var</label>
+                            <input type="text" class="form-control" id="credentialEnvVar" th:field="*{credentialEnvVar}"
+                                   placeholder="e.g., GMAIL_APP_PASSWORD">
+                            <div class="form-text">
+                                Name of the environment variable holding the IMAP password (not the password itself)
+                            </div>
+                        </div>
+
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
                             <label class="form-check-label" for="enabled">Enabled</label>

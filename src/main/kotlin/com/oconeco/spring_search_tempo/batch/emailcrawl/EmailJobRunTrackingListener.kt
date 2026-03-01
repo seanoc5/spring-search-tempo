@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.emailcrawl
 
+import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
 import org.slf4j.LoggerFactory
@@ -10,12 +11,14 @@ import org.springframework.stereotype.Component
 /**
  * Job execution listener that tracks email sync job runs in the JobRun entity.
  * Creates a JobRun record at job start and updates it at job completion.
+ * Also updates the EmailAccount sync state (lastQuickSyncAt, UIDs) on completion.
  *
  * Similar to JobRunTrackingListener but works without requiring a CrawlConfig.
  */
 @Component
 class EmailJobRunTrackingListener(
-    private val jobRunService: JobRunService
+    private val jobRunService: JobRunService,
+    private val emailAccountService: EmailAccountService
 ) : JobExecutionListener {
 
     companion object {
@@ -97,9 +100,55 @@ class EmailJobRunTrackingListener(
 
                 log.info("Completed email job run tracking: jobRunId={}, status={}, messages={}",
                     jobRunId, runStatus, messagesDiscovered)
+
+                // Update EmailAccount sync state (lastQuickSyncAt + per-folder UIDs)
+                updateAccountSyncState(jobExecution, runStatus)
+
             } catch (e: Exception) {
                 log.error("Failed to complete email job run tracking for jobRunId: {}", jobRunId, e)
             }
+        }
+    }
+
+    /**
+     * Extract per-folder highest UIDs from header sync steps and update the account.
+     */
+    private fun updateAccountSyncState(jobExecution: JobExecution, runStatus: RunStatus) {
+        val accountIdStr = jobExecution.jobParameters.getString(ACCOUNT_ID_KEY) ?: return
+        val accountId = accountIdStr.toLongOrNull() ?: return
+
+        if (runStatus != RunStatus.COMPLETED) {
+            val errorMsg = jobExecution.allFailureExceptions
+                .joinToString("; ") { it.message ?: "Unknown error" }
+                .takeIf { it.isNotEmpty() }
+            if (errorMsg != null) {
+                emailAccountService.recordError(accountId, errorMsg)
+            }
+            return
+        }
+
+        // Extract highest UID per folder from header sync step execution contexts
+        var inboxUid: Long? = null
+        var sentUid: Long? = null
+
+        for (stepExecution in jobExecution.stepExecutions) {
+            val stepName = stepExecution.stepName
+            val uid = stepExecution.executionContext.getLong("highestUid", 0L)
+            if (uid <= 0) continue
+
+            when {
+                stepName.contains("_INBOX") -> inboxUid = uid
+                stepName.contains("_Sent") -> sentUid = uid
+            }
+        }
+
+        try {
+            emailAccountService.updateQuickSyncState(accountId, inboxUid, sentUid)
+            emailAccountService.clearError(accountId)
+            log.info("Updated account sync state: accountId={}, inboxUid={}, sentUid={}",
+                accountId, inboxUid, sentUid)
+        } catch (e: Exception) {
+            log.error("Failed to update account sync state for accountId={}: {}", accountId, e.message, e)
         }
     }
 }

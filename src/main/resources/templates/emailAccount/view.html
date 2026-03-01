@@ -67,6 +67,16 @@
                         <dt class="col-sm-4">SSL:</dt>
                         <dd class="col-sm-8">[[${emailAccount.useSsl ? 'Yes' : 'No'}]]</dd>
 
+                        <dt class="col-sm-4">Credential:</dt>
+                        <dd class="col-sm-8">
+                            <span th:if="${emailAccount.credentialEnvVar}">
+                                <code>[[${emailAccount.credentialEnvVar}]]</code>
+                                <span th:if="${credentialEnvVarSet}" class="badge bg-success ms-1">Set</span>
+                                <span th:unless="${credentialEnvVarSet}" class="badge bg-warning text-dark ms-1">Not Set</span>
+                            </span>
+                            <span th:unless="${emailAccount.credentialEnvVar}" class="text-muted">Not configured</span>
+                        </dd>
+
                         <dt class="col-sm-4">Status:</dt>
                         <dd class="col-sm-8">
                             <span th:if="${emailAccount.enabled}" class="badge bg-success">Enabled</span>

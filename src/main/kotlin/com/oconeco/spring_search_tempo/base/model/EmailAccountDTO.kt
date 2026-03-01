@@ -64,6 +64,9 @@ class EmailAccountDTO {
 
     var lastFullSyncFolderCount: Int? = null
 
+    // Credential configuration
+    var credentialEnvVar: String? = null
+
     // Account status
     var enabled: Boolean = true
 

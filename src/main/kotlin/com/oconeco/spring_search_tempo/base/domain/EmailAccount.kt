@@ -58,6 +58,10 @@ class EmailAccount : SaveableObject() {
     @Column
     var enabled: Boolean = true
 
+    // Credential configuration: name of env var holding the password
+    @Column(length = 100)
+    var credentialEnvVar: String? = null
+
     @Column(columnDefinition = "text")
     var lastError: String? = null
 

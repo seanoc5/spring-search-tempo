@@ -77,6 +77,15 @@
                             <label class="form-check-label" for="useSsl">Use SSL/TLS</label>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="credentialEnvVar" class="form-label">Credential Env Var</label>
+                            <input type="text" class="form-control" id="credentialEnvVar" th:field="*{credentialEnvVar}"
+                                   placeholder="e.g., GMAIL_APP_PASSWORD">
+                            <div class="form-text">
+                                Name of the environment variable holding the IMAP password (not the password itself)
+                            </div>
+                        </div>
+
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
                             <label class="form-check-label" for="enabled">Enabled</label>
@@ -113,6 +122,23 @@
                                     [[${#temporals.format(emailAccount.lastFullSyncAt, 'MM-dd HH:mm')}]]
                                 </span>
                                 <span th:unless="${emailAccount.lastFullSyncAt}" class="text-muted">Never</span>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div th:if="${emailAccount.credentialEnvVar}" class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-key me-2"></i>Credential Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0 small">
+                            <dt class="col-5">Env Var:</dt>
+                            <dd class="col-7"><code>[[${emailAccount.credentialEnvVar}]]</code></dd>
+                            <dt class="col-5">Status:</dt>
+                            <dd class="col-7">
+                                <span th:if="${credentialEnvVarSet}" class="badge bg-success">Set</span>
+                                <span th:unless="${credentialEnvVarSet}" class="badge bg-warning text-dark">Not Set</span>
                             </dd>
                         </dl>
                     </div>

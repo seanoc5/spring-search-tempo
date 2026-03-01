@@ -91,6 +91,9 @@ class EmailQuickSyncWriter(
     }
 
     override fun afterStep(stepExecution: StepExecution): ExitStatus {
+        // Store highest UID in execution context for job-level listener
+        stepExecution.executionContext.putLong("highestUid", highestUid)
+
         // Update folder sync state with highest UID
         if (highestUid > 0 && folderId != null) {
             try {

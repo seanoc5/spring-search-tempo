@@ -63,6 +63,7 @@ class EmailAccountController(
     fun view(@PathVariable id: Long, model: Model): String {
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
+        model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
         return "emailAccount/view"
     }
 
@@ -116,6 +117,7 @@ class EmailAccountController(
     fun edit(@PathVariable id: Long, model: Model): String {
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
+        model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
         return "emailAccount/edit"
     }
 
@@ -224,5 +226,10 @@ class EmailAccountController(
         emailAccountService.clearError(id)
         redirectAttributes.addFlashAttribute("message", "Error cleared")
         return "redirect:/emailAccounts/$id"
+    }
+
+    private fun isEnvVarSet(envVarName: String?): Boolean {
+        if (envVarName.isNullOrBlank()) return false
+        return System.getenv(envVarName) != null
     }
 }

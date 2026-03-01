@@ -94,15 +94,21 @@ class ImapConnectionService(
 
     /**
      * Get credential from environment variable.
+     *
+     * Checks the account's own credentialEnvVar (from DB) first,
+     * then falls back to the YAML config lookup for backwards compatibility.
      */
     private fun getCredential(account: EmailAccountDTO): String {
-        val config = findAccountConfig(account)
-        val envVar = config?.credentialEnvVar
-            ?: throw IllegalStateException("No credential env var configured for ${account.email}")
+        val envVar = account.credentialEnvVar?.takeIf { it.isNotBlank() }
+            ?: findAccountConfig(account)?.credentialEnvVar
+            ?: throw IllegalStateException(
+                "No credential env var configured for ${account.email}. " +
+                "Set it on the account edit page or in application.yml."
+            )
 
         return System.getenv(envVar)
             ?: throw IllegalStateException(
-                "Environment variable $envVar not set for ${account.email}. " +
+                "Environment variable '$envVar' not set for ${account.email}. " +
                 "Set it with: export $envVar=your_password"
             )
     }
