@@ -14,6 +14,8 @@ import org.springframework.batch.item.ItemWriter
  * the ContentChunkService. After successfully writing chunks for a file,
  * marks the file as chunked by setting its chunkedAt timestamp.
  *
+ * Uses bulk createBulk() for efficiency, with per-item fallback on failure.
+ *
  * @param chunkService Service for persisting ContentChunks
  * @param fileService Service for updating file chunkedAt timestamp
  */
@@ -35,30 +37,35 @@ class ChunkWriter(
 
         chunk.items.forEach { chunkList ->
             // Each item is a list of chunks from a single file
-            var fileChunksSucceeded = true
-            var fileId: Long? = null
+            val fileId = chunkList.firstOrNull()?.concept
 
-            chunkList.forEach { chunkDTO ->
-                try {
-                    chunkService.create(chunkDTO)
-                    batchChunksSaved++
-                    totalChunksSaved++
-                    fileId = chunkDTO.concept
-                } catch (e: Exception) {
-                    log.error(
-                        "Error saving chunk {} for file {}: {}",
-                        chunkDTO.chunkNumber,
-                        chunkDTO.concept,
-                        e.message,
-                        e
-                    )
-                    fileChunksSucceeded = false
+            try {
+                val ids = chunkService.createBulk(chunkList)
+                batchChunksSaved += ids.size
+                totalChunksSaved += ids.size
+                if (fileId != null) processedFileIds.add(fileId)
+            } catch (e: Exception) {
+                log.warn("Bulk chunk save failed for file {}, falling back to per-item: {}", fileId, e.message)
+                var fileChunksSucceeded = true
+                chunkList.forEach { chunkDTO ->
+                    try {
+                        chunkService.create(chunkDTO)
+                        batchChunksSaved++
+                        totalChunksSaved++
+                    } catch (e2: Exception) {
+                        log.error(
+                            "Error saving chunk {} for file {}: {}",
+                            chunkDTO.chunkNumber,
+                            chunkDTO.concept,
+                            e2.message,
+                            e2
+                        )
+                        fileChunksSucceeded = false
+                    }
                 }
-            }
-
-            // Mark file as chunked if all chunks saved successfully
-            if (fileChunksSucceeded && fileId != null) {
-                processedFileIds.add(fileId!!)
+                if (fileChunksSucceeded && fileId != null) {
+                    processedFileIds.add(fileId)
+                }
             }
         }
 

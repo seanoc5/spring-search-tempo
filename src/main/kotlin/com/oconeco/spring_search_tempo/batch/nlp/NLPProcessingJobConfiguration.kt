@@ -128,28 +128,29 @@ class NLPProcessingJobConfiguration(
     @Bean
     fun nlpChunkWriter(): ItemWriter<ContentChunkDTO> {
         return ItemWriter { chunks ->
-            chunks.forEach { dto ->
-                // Find the entity and update it
-                dto.id?.let { id ->
-                    contentChunksRepository.findById(id).ifPresent { entity ->
-                        // Update NLP fields
-                        entity.namedEntities = dto.namedEntities
-                        entity.tokenAnnotations = dto.tokenAnnotations
-                        entity.nouns = dto.nouns
-                        entity.verbs = dto.verbs
-                        entity.sentiment = dto.sentiment
-                        entity.sentimentScore = dto.sentimentScore
-                        entity.nlpProcessedAt = dto.nlpProcessedAt
+            val ids = chunks.items.mapNotNull { it.id }
+            if (ids.isEmpty()) return@ItemWriter
 
-                        // Dependency parse fields
-                        entity.parseTree = dto.parseTree
-                        entity.parseUd = dto.parseUd
-                        entity.conllu = dto.conllu
+            val entities = contentChunksRepository.findAllById(ids).associateBy { it.id }
 
-                        contentChunksRepository.save(entity)
-                        log.debug("Saved NLP results for chunk {}", id)
-                    }
+            val updated = chunks.items.mapNotNull { dto ->
+                entities[dto.id]?.apply {
+                    namedEntities = dto.namedEntities
+                    tokenAnnotations = dto.tokenAnnotations
+                    nouns = dto.nouns
+                    verbs = dto.verbs
+                    sentiment = dto.sentiment
+                    sentimentScore = dto.sentimentScore
+                    nlpProcessedAt = dto.nlpProcessedAt
+                    parseTree = dto.parseTree
+                    parseUd = dto.parseUd
+                    conllu = dto.conllu
                 }
+            }
+
+            if (updated.isNotEmpty()) {
+                contentChunksRepository.saveAll(updated)
+                log.debug("Saved NLP results for {} chunks", updated.size)
             }
         }
     }

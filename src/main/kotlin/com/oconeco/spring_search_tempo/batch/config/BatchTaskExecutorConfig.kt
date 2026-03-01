@@ -1,19 +1,40 @@
 package com.oconeco.spring_search_tempo.batch.config
 
+import org.springframework.batch.core.launch.support.TaskExecutorJobLauncher
+import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.SimpleAsyncTaskExecutor
 import org.springframework.core.task.TaskExecutor
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 
 /**
- * Configuration for batch processing thread pools.
+ * Configuration for batch processing thread pools and job launcher.
  *
- * Provides separate executors for:
+ * Provides:
+ * - asyncJobLauncherConfigurer: Customizes the auto-configured JobLauncher to run async
  * - stepTaskExecutor: Multi-threaded chunk processing (parallel chunks within a step)
  * - asyncItemExecutor: AsyncItemProcessor/AsyncItemWriter (parallel item processing)
  */
 @Configuration
 class BatchTaskExecutorConfig {
+
+    /**
+     * Customizes the auto-configured JobLauncher to use async execution.
+     * The auto-configured launcher is a TaskExecutorJobLauncher with a SyncTaskExecutor.
+     * This swaps it for a SimpleAsyncTaskExecutor so that HTTP endpoints
+     * (file crawl, email sync, NLP, embedding) return immediately
+     * instead of blocking until the job completes.
+     */
+    @Bean
+    fun asyncJobLauncherConfigurer(): BeanPostProcessor = object : BeanPostProcessor {
+        override fun postProcessAfterInitialization(bean: Any, beanName: String): Any {
+            if (beanName == "jobLauncher" && bean is TaskExecutorJobLauncher) {
+                bean.setTaskExecutor(SimpleAsyncTaskExecutor("batch-job-"))
+            }
+            return bean
+        }
+    }
 
     /**
      * TaskExecutor for step-level parallelism.

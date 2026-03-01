@@ -2,6 +2,14 @@ package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.domain.FSFile
+import com.oconeco.spring_search_tempo.base.domain.FSFolder
+import com.oconeco.spring_search_tempo.base.model.FSFileDTO
+import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.FSFileMapper
+import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.StepExecution
 import org.springframework.batch.core.StepExecutionListener
@@ -10,19 +18,27 @@ import org.springframework.batch.item.ItemWriter
 
 /**
  * Writer that persists both folders and files from combined crawl results.
- * Uses batch operations for efficiency when multiple items are written together.
+ * Uses bulk saveAll() for efficiency, with per-item fallback on failure.
  *
  * Persists all items including those with SKIP status (metadata only).
  * SKIP items are stored in the database for audit trail and UI filtering.
  *
  * Sets jobRunId on all persisted entities for tracking purposes.
  *
- * @param folderService Service for persisting folders
- * @param fileService Service for persisting files
+ * @param folderService Service for per-item fallback persistence
+ * @param fileService Service for per-item fallback persistence
+ * @param folderRepository Repository for bulk folder operations
+ * @param fileRepository Repository for bulk file operations
+ * @param folderMapper Mapper for DTO-to-entity conversion
+ * @param fileMapper Mapper for DTO-to-entity conversion
  */
 class CombinedCrawlWriter(
     private val folderService: FSFolderService,
-    private val fileService: FSFileService
+    private val fileService: FSFileService,
+    private val folderRepository: FSFolderRepository,
+    private val fileRepository: FSFileRepository,
+    private val folderMapper: FSFolderMapper,
+    private val fileMapper: FSFileMapper
 ) : ItemWriter<CombinedCrawlResult>, StepExecutionListener {
 
     companion object {
@@ -46,75 +62,173 @@ class CombinedCrawlWriter(
 
         log.debug("Writing chunk of {} combined items", chunk.size())
 
-        // Separate folders and files for batch persistence
-        val folders = chunk.mapNotNull { it.folder }
-        val allFiles = chunk.flatMap { it.files }
+        val folderDTOs = chunk.mapNotNull { it.folder }
+        val allFileDTOs = chunk.flatMap { it.files }
 
-        var foldersWritten = 0
-        var filesWritten = 0
+        // Set jobRunId on all DTOs before persistence
+        folderDTOs.forEach { it.jobRunId = currentJobRunId }
+        allFileDTOs.forEach { it.jobRunId = currentJobRunId }
 
         // Persist folders first (files may reference them as parents)
-        if (folders.isNotEmpty()) {
-            log.trace("Persisting {} folders", folders.size)
-            folders.forEach { folder ->
-                try {
-                    // Set jobRunId if available
-                    folder.jobRunId = currentJobRunId
-
-                    val isNew = folder.id == null
-                    if (isNew) {
-                        folderService.create(folder)
-                    } else {
-                        folderService.update(folder.id!!, folder)
-                    }
-                    foldersWritten++
-
-                    // Track statistics
-                    incrementFolderCounter(isNew, folder.analysisStatus)
-                } catch (e: Exception) {
-                    log.error("Failed to save folder: {}", folder.uri, e)
-                    // Continue with other items rather than failing entire batch
-                }
-            }
-        }
+        val foldersWritten = if (folderDTOs.isNotEmpty()) {
+            writeFoldersBulk(folderDTOs)
+        } else 0
 
         // Persist files
-        if (allFiles.isNotEmpty()) {
-            log.trace("Persisting {} files", allFiles.size)
-            allFiles.forEach { file ->
-                try {
-                    // Set jobRunId if available
-                    file.jobRunId = currentJobRunId
+        val filesWritten = if (allFileDTOs.isNotEmpty()) {
+            writeFilesBulk(allFileDTOs)
+        } else 0
 
-                    val isNew = file.id == null
-                    if (isNew) {
-                        fileService.create(file)
-                    } else {
-                        fileService.update(file.id!!, file)
-                    }
-                    filesWritten++
+        log.info("Wrote chunk: {} folders, {} files", foldersWritten, filesWritten)
+    }
 
-                    // Track statistics
-                    incrementFileCounter(isNew, file.analysisStatus)
+    private fun writeFoldersBulk(folderDTOs: List<FSFolderDTO>): Int {
+        try {
+            return writeFoldersBulkInternal(folderDTOs)
+        } catch (e: Exception) {
+            log.warn("Bulk folder save failed, falling back to per-item: {}", e.message)
+            return writeFoldersPerItem(folderDTOs)
+        }
+    }
 
-                    // Track access denied (informational, not an error)
-                    if (file.accessDenied) {
-                        incrementFileAccessDenied()
-                    }
+    private fun writeFoldersBulkInternal(folderDTOs: List<FSFolderDTO>): Int {
+        val (newDTOs, existingDTOs) = folderDTOs.partition { it.id == null }
 
-                    // Track actual extraction errors (parser failures, etc.)
-                    if (file.extractionError) {
-                        incrementFileError()
-                    }
-                } catch (e: Exception) {
-                    log.error("Failed to save file: {}", file.uri, e)
-                    incrementFileError()
-                    // Continue with other items rather than failing entire batch
+        val entities = mutableListOf<FSFolder>()
+
+        // Map new DTOs to new entities
+        for (dto in newDTOs) {
+            val entity = FSFolder()
+            folderMapper.updateFSFolder(dto, entity)
+            entities.add(entity)
+        }
+
+        // Load existing entities in bulk and apply updates
+        if (existingDTOs.isNotEmpty()) {
+            val existingIds = existingDTOs.mapNotNull { it.id }
+            val existingEntities = folderRepository.findAllById(existingIds).associateBy { it.id }
+
+            for (dto in existingDTOs) {
+                val entity = existingEntities[dto.id]
+                if (entity != null) {
+                    folderMapper.updateFSFolder(dto, entity)
+                    entities.add(entity)
+                } else {
+                    log.warn("Folder not found for update, id={}, uri={}", dto.id, dto.uri)
                 }
             }
         }
 
-        log.info("Wrote chunk: {} folders, {} files", foldersWritten, filesWritten)
+        val saved = folderRepository.saveAll(entities)
+
+        // Track statistics
+        var count = 0
+        for (i in saved.indices) {
+            val isNew = i < newDTOs.size
+            val dto = if (isNew) newDTOs[i] else existingDTOs[i - newDTOs.size]
+            incrementFolderCounter(isNew, dto.analysisStatus)
+            count++
+        }
+
+        return count
+    }
+
+    private fun writeFoldersPerItem(folderDTOs: List<FSFolderDTO>): Int {
+        var written = 0
+        for (folder in folderDTOs) {
+            try {
+                val isNew = folder.id == null
+                if (isNew) {
+                    folderService.create(folder)
+                } else {
+                    folderService.update(folder.id!!, folder)
+                }
+                written++
+                incrementFolderCounter(isNew, folder.analysisStatus)
+            } catch (e: Exception) {
+                log.error("Failed to save folder: {}", folder.uri, e)
+            }
+        }
+        return written
+    }
+
+    private fun writeFilesBulk(fileDTOs: List<FSFileDTO>): Int {
+        try {
+            return writeFilesBulkInternal(fileDTOs)
+        } catch (e: Exception) {
+            log.warn("Bulk file save failed, falling back to per-item: {}", e.message)
+            return writeFilesPerItem(fileDTOs)
+        }
+    }
+
+    private fun writeFilesBulkInternal(fileDTOs: List<FSFileDTO>): Int {
+        val (newDTOs, existingDTOs) = fileDTOs.partition { it.id == null }
+
+        val entities = mutableListOf<FSFile>()
+
+        // Map new DTOs to new entities
+        // Pass real folderRepository for mapper @AfterMapping; during crawl dto.fsFolder
+        // is always null so findById is never called, but the mapper needs the reference.
+        for (dto in newDTOs) {
+            val entity = FSFile()
+            fileMapper.updateFSFile(dto, entity, folderRepository)
+            entities.add(entity)
+        }
+
+        // Load existing entities in bulk and apply updates
+        if (existingDTOs.isNotEmpty()) {
+            val existingIds = existingDTOs.mapNotNull { it.id }
+            val existingEntities = fileRepository.findAllById(existingIds).associateBy { it.id }
+
+            for (dto in existingDTOs) {
+                val entity = existingEntities[dto.id]
+                if (entity != null) {
+                    fileMapper.updateFSFile(dto, entity, folderRepository)
+                    entities.add(entity)
+                } else {
+                    log.warn("File not found for update, id={}, uri={}", dto.id, dto.uri)
+                }
+            }
+        }
+
+        val saved = fileRepository.saveAll(entities)
+
+        // Track statistics
+        var count = 0
+        for (i in saved.indices) {
+            val isNew = i < newDTOs.size
+            val dto = if (isNew) newDTOs[i] else existingDTOs[i - newDTOs.size]
+            incrementFileCounter(isNew, dto.analysisStatus)
+
+            if (dto.accessDenied) incrementFileAccessDenied()
+            if (dto.extractionError) incrementFileError()
+            count++
+        }
+
+        return count
+    }
+
+    private fun writeFilesPerItem(fileDTOs: List<FSFileDTO>): Int {
+        var written = 0
+        for (file in fileDTOs) {
+            try {
+                val isNew = file.id == null
+                if (isNew) {
+                    fileService.create(file)
+                } else {
+                    fileService.update(file.id!!, file)
+                }
+                written++
+                incrementFileCounter(isNew, file.analysisStatus)
+
+                if (file.accessDenied) incrementFileAccessDenied()
+                if (file.extractionError) incrementFileError()
+            } catch (e: Exception) {
+                log.error("Failed to save file: {}", file.uri, e)
+                incrementFileError()
+            }
+        }
+        return written
     }
 
     private fun incrementFolderCounter(isNew: Boolean, analysisStatus: com.oconeco.spring_search_tempo.base.domain.AnalysisStatus?) {

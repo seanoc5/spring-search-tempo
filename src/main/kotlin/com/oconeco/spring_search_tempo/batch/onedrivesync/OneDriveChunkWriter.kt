@@ -10,6 +10,7 @@ import org.springframework.batch.item.ItemWriter
 
 /**
  * Pass 3 Writer: Saves ContentChunks for OneDrive items and marks items as chunked.
+ * Uses bulk createBulk() for efficiency, with per-item fallback on failure.
  */
 class OneDriveChunkWriter(
     private val chunkService: ContentChunkService,
@@ -28,14 +29,22 @@ class OneDriveChunkWriter(
         chunk.items.forEach { chunkList ->
             val oneDriveItemId = chunkList.firstOrNull()?.oneDriveItem
 
-            chunkList.forEach { chunkDTO ->
-                try {
-                    chunkService.create(chunkDTO)
-                    batchChunksSaved++
-                    totalChunksSaved++
-                } catch (e: Exception) {
-                    log.error("Error saving chunk {} for OneDrive item {}: {}",
-                        chunkDTO.chunkNumber, chunkDTO.oneDriveItem, e.message, e)
+            try {
+                val ids = chunkService.createBulk(chunkList)
+                batchChunksSaved += ids.size
+                totalChunksSaved += ids.size
+            } catch (e: Exception) {
+                log.warn("Bulk chunk save failed for OneDrive item {}, falling back to per-item: {}",
+                    oneDriveItemId, e.message)
+                chunkList.forEach { chunkDTO ->
+                    try {
+                        chunkService.create(chunkDTO)
+                        batchChunksSaved++
+                        totalChunksSaved++
+                    } catch (e2: Exception) {
+                        log.error("Error saving chunk {} for OneDrive item {}: {}",
+                            chunkDTO.chunkNumber, chunkDTO.oneDriveItem, e2.message, e2)
+                    }
                 }
             }
 

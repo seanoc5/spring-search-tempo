@@ -259,7 +259,11 @@ class FsCrawlJobBuilder(
         log.debug("Creating CombinedCrawlWriter")
         return CombinedCrawlWriter(
             folderService = folderService,
-            fileService = fileService
+            fileService = fileService,
+            folderRepository = fsFolderRepository,
+            fileRepository = fsFileRepository,
+            folderMapper = folderMapper,
+            fileMapper = fileMapper
         )
     }
 }
