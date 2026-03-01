@@ -1,4 +1,5 @@
 import org.springframework.boot.gradle.tasks.run.BootRun
+import org.springframework.boot.gradle.tasks.bundling.BootJar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -133,4 +134,11 @@ tasks.withType<Test> {
 // Handle duplicate dependencies in bootJar
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.register<Copy>("stageWindowsJpackage") {
+    dependsOn(tasks.named<BootJar>("bootJar"))
+    from(tasks.named<BootJar>("bootJar").flatMap { it.archiveFile })
+    into(layout.buildDirectory.dir("jpackage/input"))
+    rename { "spring-search-tempo.jar" }
 }

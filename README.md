@@ -242,6 +242,22 @@ spring:
 
 [Full configuration reference →](docs/reference/configuration.md)
 
+### Windows Packaging (jpackage)
+
+Build a native Windows installer with bundled Java:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-jpackage.ps1 `
+  -InstallerType msi `
+  -DbHost minti9 `
+  -DbPort 5432 `
+  -DbName tempo `
+  -DbUser tempo `
+  -DbPassword "password"
+```
+
+[Windows jpackage deployment guide →](docs/guides/windows-jpackage-deployment.md)
+
 ## Roadmap
 
 ### ✅ Phase 1: Core Foundation (Complete)
