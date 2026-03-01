@@ -13,6 +13,12 @@ interface ContentChunkService {
 
     fun create(contentChunkDTO: ContentChunkDTO): Long
 
+    /**
+     * Bulk-create content chunks. Returns list of saved entity IDs.
+     * More efficient than calling create() per item due to JDBC batching.
+     */
+    fun createBulk(dtos: List<ContentChunkDTO>): List<Long>
+
     fun update(id: Long, contentChunkDTO: ContentChunkDTO)
 
     fun delete(id: Long)

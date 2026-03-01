@@ -55,6 +55,16 @@ class ContentChunkServiceImpl(
         return contentChunkRepository.save(contentChunk).id!!
     }
 
+    override fun createBulk(dtos: List<ContentChunkDTO>): List<Long> {
+        val entities = dtos.map { dto ->
+            val entity = ContentChunk()
+            contentChunkMapper.updateContentChunk(dto, entity,
+                contentChunkRepository, fSFileRepository, emailMessageRepository, oneDriveItemRepository)
+            entity
+        }
+        return contentChunkRepository.saveAll(entities).map { it.id!! }
+    }
+
     override fun update(id: Long, contentChunkDTO: ContentChunkDTO) {
         val contentChunk = contentChunkRepository.findById(id)
                 .orElseThrow { NotFoundException() }

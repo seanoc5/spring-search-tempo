@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.OffsetDateTime
 
 
 interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
@@ -55,6 +56,35 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
         @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>,
         pageable: Pageable
     ): Page<ContentChunk>
+
+    /**
+     * Find email-linked chunks eligible for NLP processing.
+     * Filters by: account, received within cutoff date, non-null text, no 'junk' tag,
+     * and optionally skips already NLP-processed chunks.
+     */
+    @Query("""
+        SELECT c FROM ContentChunk c
+        JOIN c.emailMessage em
+        WHERE em.emailAccount.id = :accountId
+          AND em.receivedDate >= :cutoffDate
+          AND c.text IS NOT NULL
+          AND (:forceRefresh = true OR c.nlpProcessedAt IS NULL)
+          AND NOT EXISTS (SELECT 1 FROM em.tags t WHERE t.name = 'junk')
+    """)
+    fun findEmailChunksForNlp(
+        @Param("accountId") accountId: Long,
+        @Param("cutoffDate") cutoffDate: java.time.OffsetDateTime,
+        @Param("forceRefresh") forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<ContentChunk>
+
+    /**
+     * Delete all content chunks for a specific email message.
+     * Used by forceRefresh chunking to clear existing chunks before re-chunking.
+     */
+    @Modifying
+    @Query("DELETE FROM ContentChunk c WHERE c.emailMessage.id = :emailMessageId")
+    fun deleteByEmailMessageId(@Param("emailMessageId") emailMessageId: Long): Int
 
     /**
      * Delete all content chunks belonging to files that were crawled by a specific crawl config.
@@ -192,5 +222,76 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
         WHERE c.embedding IS NOT NULL
     """)
     fun countWithEmbedding(): Long
+
+    // ==================== EMBEDDING QUERIES ====================
+
+    /**
+     * Find email-linked chunks eligible for embedding generation.
+     * Mirrors findEmailChunksForNlp but checks embeddingGeneratedAt instead.
+     */
+    @Query("""
+        SELECT c FROM ContentChunk c
+        JOIN c.emailMessage em
+        WHERE em.emailAccount.id = :accountId
+          AND em.receivedDate >= :cutoffDate
+          AND c.text IS NOT NULL
+          AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
+          AND NOT EXISTS (SELECT 1 FROM em.tags t WHERE t.name = 'junk')
+    """)
+    fun findEmailChunksForEmbedding(
+        @Param("accountId") accountId: Long,
+        @Param("cutoffDate") cutoffDate: OffsetDateTime,
+        @Param("forceRefresh") forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<ContentChunk>
+
+    /**
+     * Find ALL chunks eligible for embedding generation (email, file, onedrive, etc.).
+     * Used by the standalone embedding job.
+     */
+    @Query("""
+        SELECT c FROM ContentChunk c
+        WHERE c.text IS NOT NULL
+          AND c.dateCreated >= :cutoffDate
+          AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
+    """)
+    fun findChunksForEmbedding(
+        @Param("cutoffDate") cutoffDate: OffsetDateTime,
+        @Param("forceRefresh") forceRefresh: Boolean,
+        pageable: Pageable
+    ): Page<ContentChunk>
+
+    /**
+     * Count chunks that have been embedded (embeddingGeneratedAt is not null).
+     */
+    fun countByEmbeddingGeneratedAtIsNotNull(): Long
+
+    /**
+     * Count chunks pending embedding (embeddingGeneratedAt is null, text is not null).
+     */
+    @Query("SELECT COUNT(c) FROM ContentChunk c WHERE c.embeddingGeneratedAt IS NULL AND c.text IS NOT NULL")
+    fun countEmbeddingPending(): Long
+
+    /**
+     * Update embedding via native SQL to bypass Hibernate vector type mapping.
+     * The embedding string should be in pgvector format: [0.1,0.2,...].
+     */
+    @Modifying
+    @Query(
+        value = """
+            UPDATE content_chunks
+            SET embedding = CAST(:embedding AS vector),
+                embedding_generated_at = :generatedAt,
+                embedding_model = :modelName
+            WHERE id = :id
+        """,
+        nativeQuery = true
+    )
+    fun updateEmbedding(
+        @Param("id") id: Long,
+        @Param("embedding") embedding: String,
+        @Param("generatedAt") generatedAt: OffsetDateTime,
+        @Param("modelName") modelName: String
+    )
 
 }
