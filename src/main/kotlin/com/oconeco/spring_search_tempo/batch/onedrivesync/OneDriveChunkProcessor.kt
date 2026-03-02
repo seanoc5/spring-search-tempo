@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.model.OneDriveItemDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
+import java.util.concurrent.atomic.AtomicInteger
 
 
 /**
@@ -26,7 +27,7 @@ class OneDriveChunkProcessor : ItemProcessor<OneDriveItemDTO, List<ContentChunkD
         private const val MIN_CHUNK_LENGTH = 10
     }
 
-    private var totalChunksCreated = 0
+    private val totalChunksCreated = AtomicInteger(0)
 
     override fun process(item: OneDriveItemDTO): List<ContentChunkDTO>? {
         val bodyText = item.bodyText
@@ -43,10 +44,10 @@ class OneDriveChunkProcessor : ItemProcessor<OneDriveItemDTO, List<ContentChunkD
                 return null
             }
 
-            totalChunksCreated += chunks.size
+            val newTotal = totalChunksCreated.addAndGet(chunks.size)
 
-            if (totalChunksCreated % 100 == 0) {
-                log.info("OneDriveChunkProcessor progress: {} chunks created", totalChunksCreated)
+            if (newTotal % 100 < chunks.size) {
+                log.info("OneDriveChunkProcessor progress: {} chunks created", newTotal)
             }
 
             log.debug("Created {} chunks for OneDrive item {}", chunks.size, item.uri)

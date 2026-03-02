@@ -40,6 +40,7 @@ class EmailChunkReader(
     private var initialized = false
     private var totalMessages: Long = 0
 
+    @Synchronized
     override fun read(): EmailMessageDTO? {
         if (!initialized) {
             initialize()

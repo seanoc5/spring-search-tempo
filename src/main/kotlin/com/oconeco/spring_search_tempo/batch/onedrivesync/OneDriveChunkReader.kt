@@ -29,6 +29,7 @@ class OneDriveChunkReader(
     private var totalRead = 0
     private var initialized = false
 
+    @Synchronized
     override fun read(): OneDriveItemDTO? {
         if (!initialized) {
             initialize()

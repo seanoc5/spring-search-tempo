@@ -68,6 +68,7 @@ class ChunkReader(
         }
     }
 
+    @Synchronized
     override fun read(): FSFileDTO? {
         if (!initialized) {
             initialize()

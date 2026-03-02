@@ -35,6 +35,7 @@ import org.springframework.batch.item.ItemProcessor
 import org.springframework.batch.item.ItemReader
 import org.springframework.batch.item.ItemWriter
 import org.springframework.batch.repeat.RepeatStatus
+import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Component
@@ -375,6 +376,8 @@ class EmailQuickSyncJobBuilder(
             .writer(createChunkWriter(forceRefresh))
             .listener(heartbeatChunkListener)  // Update heartbeat after each chunk
             .listener(progressTrackingItemWriteListener)  // Track progress for UI
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 
@@ -443,6 +446,8 @@ class EmailQuickSyncJobBuilder(
             .writer(createNLPWriter())
             .listener(heartbeatChunkListener)
             .listener(progressTrackingItemWriteListener)
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 
@@ -482,6 +487,8 @@ class EmailQuickSyncJobBuilder(
             .writer(createCategorizationWriter())
             .listener(heartbeatChunkListener)
             .listener(progressTrackingItemWriteListener)
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 
@@ -543,6 +550,8 @@ class EmailQuickSyncJobBuilder(
             .writer(createEmbeddingWriter())
             .listener(heartbeatChunkListener)
             .listener(progressTrackingItemWriteListener)
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 

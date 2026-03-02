@@ -28,6 +28,7 @@ class EmailCategorizationReader(
     private var exhausted = false
     private var totalRead = 0
 
+    @Synchronized
     override fun read(): EmailMessageDTO? {
         // If we have buffered messages, return the next one
         if (messages.isNotEmpty()) {

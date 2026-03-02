@@ -24,6 +24,8 @@
             <div class="d-flex flex-wrap mb-4">
                 <h1 class="flex-grow-1">Crawl Configurations</h1>
                 <div>
+                    <a th:href="@{/crawlConfigs/wizard}" class="btn btn-primary">Preset Wizard</a>
+                    <a th:href="@{/crawlConfigs/add}" class="btn btn-outline-primary ms-2">Add Config</a>
                     <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-secondary ms-2">View Job Run History</a>
                 </div>
             </div>
@@ -57,73 +59,99 @@
                             <th scope="col">Status</th>
                             <th scope="col">Files</th>
                             <th scope="col">Folders</th>
-                            <th scope="col">[[#{sourceHost.label}]]</th>
+                            <th scope="col" title="Files with extracted text (INDEX/ANALYZE/SEMANTIC)">Search</th>
+                            <th scope="col" title="Files with NLP-processed chunks">NLP</th>
+                            <th scope="col" title="Files with vector embeddings">Embed</th>
+                            <th scope="col">[[#{targetHost.label}]]</th>
                             <th scope="col">Last Run</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="crawlConfig : ${crawlConfigs}">
-                            <td>
-                                <input type="checkbox" class="form-check-input config-checkbox"
-                                       th:value="${crawlConfig.id}"
-                                       th:data-enabled="${crawlConfig.enabled}"
-                                       onchange="updateActionToolbar()">
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}"
-                                   th:title="|ID: ${crawlConfig.id} - Name: ${crawlConfig.name}|"
-                                   class="text-decoration-none fw-semibold"
-                                   data-bs-toggle="tooltip">
-                                    [[${crawlConfig.displayLabel ?: crawlConfig.name}]]
-                                </a>
-                            </td>
-                            <td>
-                                <span th:if="${crawlConfig.startPaths != null && !crawlConfig.startPaths.empty}"
-                                      class="small text-muted">
-                                    <th:block th:each="path, stat : ${crawlConfig.startPaths}">
-                                        <code th:text="${path}" style="font-size: 0.85em;"></code>
-                                        <br th:if="${!stat.last}" />
-                                    </th:block>
-                                </span>
-                            </td>
-                            <td>
-                                <button type="button"
-                                        th:class="${crawlConfig.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
-                                        th:text="${crawlConfig.enabled} ? 'Enabled' : 'Disabled'"
-                                        th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${crawlConfig.id})}"
-                                        hx-swap="outerHTML"
-                                        th:title="${crawlConfig.enabled} ? 'Click to disable' : 'Click to enable'"
-                                        style="cursor: pointer;">
-                                </button>
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}"
-                                   th:text="${fileCounts[crawlConfig.id] ?: 0}"
-                                   class="text-decoration-none">0</a>
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
-                                   th:text="${folderCounts[crawlConfig.id] ?: 0}"
-                                   class="text-decoration-none">0</a>
-                            </td>
-                            <td><small class="text-muted" th:text="${crawlConfig.sourceHost}"></small></td>
-                            <td>
-                                <th:block th:if="${lastRuns[crawlConfig.id] != null}"
-                                          th:with="lastRun=${lastRuns[crawlConfig.id]}">
-                                    <span th:text="${#temporals.format(lastRun.startTime, 'yyyy-MM-dd HH:mm')}"
-                                          class="small"></span>
-                                    <span th:switch="${lastRun.runStatus.name()}">
-                                        <span th:case="'RUNNING'" class="badge bg-primary ms-1">Running</span>
-                                        <span th:case="'COMPLETED'" class="badge bg-success ms-1"
-                                              th:classappend="${lastRun.warningMessage != null} ? 'bg-warning text-dark' : 'bg-success'"
-                                              th:text="${lastRun.warningMessage != null ? 'Warnings' : ''}"></span>
-                                        <span th:case="'FAILED'" class="badge bg-danger ms-1">Failed</span>
-                                        <span th:case="'CANCELLED'" class="badge bg-warning ms-1">Cancelled</span>
+                        <th:block th:each="hostGroup : ${crawlConfigsBySourceHost}">
+                            <tr class="table-light">
+                                <td colspan="11">
+                                    <strong>Source Host:</strong>
+                                    <span class="badge bg-dark ms-2" th:text="${hostGroup.key}"></span>
+                                    <span class="text-muted ms-2"
+                                          th:text="|(${#lists.size(hostGroup.value)} configs on this page)|"></span>
+                                </td>
+                            </tr>
+                            <tr th:each="crawlConfig : ${hostGroup.value}">
+                                <td>
+                                    <input type="checkbox" class="form-check-input config-checkbox"
+                                           th:value="${crawlConfig.id}"
+                                           th:data-enabled="${crawlConfig.enabled}"
+                                           onchange="updateActionToolbar()">
+                                </td>
+                                <td>
+                                    <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}"
+                                       th:title="|ID: ${crawlConfig.id} - Name: ${crawlConfig.name}|"
+                                       class="text-decoration-none fw-semibold"
+                                       data-bs-toggle="tooltip">
+                                        [[${crawlConfig.displayLabel ?: crawlConfig.name}]]
+                                    </a>
+                                </td>
+                                <td>
+                                    <span th:if="${crawlConfig.startPaths != null && !crawlConfig.startPaths.empty}"
+                                          class="small text-muted">
+                                        <th:block th:each="path, stat : ${crawlConfig.startPaths}">
+                                            <code th:text="${path}" style="font-size: 0.85em;"></code>
+                                            <br th:if="${!stat.last}" />
+                                        </th:block>
                                     </span>
-                                </th:block>
-                                <span th:if="${lastRuns[crawlConfig.id] == null}" class="text-muted">-</span>
-                            </td>
-                        </tr>
+                                </td>
+                                <td>
+                                    <button type="button"
+                                            th:class="${crawlConfig.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+                                            th:text="${crawlConfig.enabled} ? 'Enabled' : 'Disabled'"
+                                            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${crawlConfig.id})}"
+                                            hx-swap="outerHTML"
+                                            th:title="${crawlConfig.enabled} ? 'Click to disable' : 'Click to enable'"
+                                            style="cursor: pointer;">
+                                    </button>
+                                </td>
+                                <td>
+                                    <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}"
+                                       th:text="${fileCounts[crawlConfig.id] ?: 0}"
+                                       class="text-decoration-none">0</a>
+                                </td>
+                                <td>
+                                    <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
+                                       th:text="${folderCounts[crawlConfig.id] ?: 0}"
+                                       class="text-decoration-none">0</a>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary" th:text="${searchableCounts[crawlConfig.id] ?: 0}">0</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-success" th:text="${nlpProcessedCounts[crawlConfig.id] ?: 0}">0</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning text-dark" th:text="${embeddingCounts[crawlConfig.id] ?: 0}">0</span>
+                                </td>
+                                <td>
+                                    <small th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any</small>
+                                    <small th:if="${crawlConfig.targetHost != null && crawlConfig.targetHost == currentHostName}" class="text-success fw-semibold" th:text="${crawlConfig.targetHost}"></small>
+                                    <small th:if="${crawlConfig.targetHost != null && crawlConfig.targetHost != currentHostName}" class="text-warning fw-semibold" th:text="${crawlConfig.targetHost}"></small>
+                                </td>
+                                <td>
+                                    <th:block th:if="${lastRuns[crawlConfig.id] != null}"
+                                              th:with="lastRun=${lastRuns[crawlConfig.id]}">
+                                        <span th:text="${#temporals.format(lastRun.startTime, 'yyyy-MM-dd HH:mm')}"
+                                              class="small"></span>
+                                        <span th:switch="${lastRun.runStatus.name()}">
+                                            <span th:case="'RUNNING'" class="badge bg-primary ms-1">Running</span>
+                                            <span th:case="'COMPLETED'" class="badge bg-success ms-1"
+                                                  th:classappend="${lastRun.warningMessage != null} ? 'bg-warning text-dark' : 'bg-success'"
+                                                  th:text="${lastRun.warningMessage != null ? 'Warnings' : ''}"></span>
+                                            <span th:case="'FAILED'" class="badge bg-danger ms-1">Failed</span>
+                                            <span th:case="'CANCELLED'" class="badge bg-warning ms-1">Cancelled</span>
+                                        </span>
+                                    </th:block>
+                                    <span th:if="${lastRuns[crawlConfig.id] == null}" class="text-muted">-</span>
+                                </td>
+                            </tr>
+                        </th:block>
                     </tbody>
                 </table>
             </div>

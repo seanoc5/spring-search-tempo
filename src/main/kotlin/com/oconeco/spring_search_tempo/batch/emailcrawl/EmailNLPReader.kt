@@ -41,6 +41,7 @@ class EmailNLPReader(
     private var initialized = false
     private var totalChunks: Long = 0
 
+    @Synchronized
     override fun read(): ContentChunk? {
         if (!initialized) {
             initialize()

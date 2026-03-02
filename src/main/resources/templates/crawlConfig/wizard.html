@@ -1,0 +1,125 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Crawl Config Preset Wizard</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
+            <li class="breadcrumb-item active">Preset Wizard</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">Preset Wizard</h1>
+        <div>
+            <a th:href="@{/crawlConfigs}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        Creates a starter crawl config from an OS preset, then redirects to the full editor for customization.
+    </div>
+
+    <form th:action="@{/crawlConfigs/wizard/create}" method="post">
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="mb-0">Preset Selection</h5></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="os" class="form-label">Operating System</label>
+                            <select class="form-select" id="os" name="os" required>
+                                <option th:each="os : ${osOptions}" th:value="${os}" th:text="${os}"></option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" id="name" name="name" class="form-control"
+                                   th:value="${defaultName}" required />
+                            <small class="text-muted">Unique config identifier.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="displayLabel" class="form-label">Display Label</label>
+                            <input type="text" id="displayLabel" name="displayLabel" class="form-control"
+                                   th:value="${defaultDisplayLabel}" />
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea id="description" name="description" class="form-control" rows="2"
+                                      th:text="${defaultDescription}"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="mb-0">Base Crawl Settings</h5></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="startPath" class="form-label">Start Path</label>
+                            <input type="text" id="startPath" name="startPath" class="form-control font-monospace"
+                                   th:value="${defaultStartPath}" required />
+                            <small class="text-muted">Adjust to the local user scope before creating.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="targetHost" class="form-label">[[#{targetHost.label}]]</label>
+                            <input type="text" class="form-control" id="targetHost" name="targetHost"
+                                   th:value="${currentHostName}" list="knownHostsList" />
+                            <datalist id="knownHostsList">
+                                <option th:each="host : ${knownHosts}" th:value="${host}"></option>
+                            </datalist>
+                        </div>
+                        <div class="mb-3">
+                            <label for="maxDepth" class="form-label">Max Depth</label>
+                            <input type="number" id="maxDepth" name="maxDepth" class="form-control"
+                                   min="1" max="100" th:value="${defaultMaxDepth}" />
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="enabled" name="enabled" checked />
+                            <label class="form-check-label" for="enabled">Enabled</label>
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="parallel" name="parallel" checked />
+                            <label class="form-check-label" for="parallel">Parallel Processing</label>
+                        </div>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="followLinks" name="followLinks" />
+                            <label class="form-check-label" for="followLinks">Follow Symbolic Links</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Create Starter Config</button>
+            <a th:href="@{/crawlConfigs/add}" class="btn btn-outline-secondary">Manual Add Instead</a>
+        </div>
+    </form>
+
+    <script>
+        (function () {
+            const osSelect = document.getElementById('os');
+            const startPathInput = document.getElementById('startPath');
+            if (!osSelect || !startPathInput) return;
+
+            const pathByOs = {
+                LINUX: '/home',
+                WINDOWS: 'C:\\Users',
+                MACOS: '/Users'
+            };
+
+            osSelect.addEventListener('change', function () {
+                const preset = pathByOs[osSelect.value];
+                if (preset) startPathInput.value = preset;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>

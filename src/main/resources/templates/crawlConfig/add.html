@@ -16,6 +16,7 @@
             <div class="d-flex flex-wrap mb-4">
                 <h1 class="flex-grow-1">Add Crawl Config</h1>
                 <div>
+                    <a th:href="@{/crawlConfigs/wizard}" class="btn btn-outline-primary me-2">Preset Wizard</a>
                     <a th:href="@{/crawlConfigs}" class="btn btn-secondary">Cancel</a>
                 </div>
             </div>
@@ -57,6 +58,16 @@
                                         <label class="form-check-label" for="enabled">Enabled</label>
                                     </div>
                                     <small class="text-muted">Disabled configs cannot be run</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="targetHost" class="form-label">[[#{targetHost.label}]]</label>
+                                    <input type="text" class="form-control" id="targetHost" th:field="*{targetHost}"
+                                           list="knownHostsList" />
+                                    <datalist id="knownHostsList">
+                                        <option th:each="host : ${knownHosts}" th:value="${host}"></option>
+                                    </datalist>
+                                    <small class="text-muted">Which machine should run this config. Leave blank for any host. Current host: <strong th:text="${currentHostName}"></strong></small>
                                 </div>
                             </div>
                         </div>

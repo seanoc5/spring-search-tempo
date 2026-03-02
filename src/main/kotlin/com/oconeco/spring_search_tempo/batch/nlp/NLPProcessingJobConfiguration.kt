@@ -19,6 +19,7 @@ import org.springframework.batch.item.data.RepositoryItemReader
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.core.task.TaskExecutor
 import org.springframework.data.domain.Sort
 import org.springframework.transaction.PlatformTransactionManager
 
@@ -46,7 +47,8 @@ class NLPProcessingJobConfiguration(
     private val nlpService: NLPService,
     private val objectMapper: ObjectMapper,
     @Qualifier("embeddingProcessingStep")
-    private val embeddingProcessingStep: Step
+    private val embeddingProcessingStep: Step,
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
 
     companion object {
@@ -85,6 +87,8 @@ class NLPProcessingJobConfiguration(
             .reader(nlpChunkReader())
             .processor(nlpChunkProcessor())
             .writer(nlpChunkWriter())
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 

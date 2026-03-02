@@ -200,4 +200,11 @@ class FSFileServiceImpl(
         }
     }
 
+    @Transactional(readOnly = true)
+    override fun countSearchableByCrawlConfig(): Map<Long, Long> {
+        val searchableStatuses = listOf(AnalysisStatus.INDEX, AnalysisStatus.ANALYZE, AnalysisStatus.SEMANTIC)
+        return fSFileRepository.countSearchableGroupedByCrawlConfig(searchableStatuses)
+            .associate { (it[0] as Long) to (it[1] as Long) }
+    }
+
 }

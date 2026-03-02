@@ -217,4 +217,19 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      */
     fun countByStatus(status: Status): Long
 
+    /**
+     * Count searchable files (INDEX, ANALYZE, SEMANTIC) grouped by crawl config.
+     * Returns pairs of [crawlConfigId, count].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(f)
+        FROM FSFile f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE f.analysisStatus IN :searchableStatuses
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countSearchableGroupedByCrawlConfig(
+        @Param("searchableStatuses") searchableStatuses: List<AnalysisStatus>
+    ): List<Array<Any>>
+
 }

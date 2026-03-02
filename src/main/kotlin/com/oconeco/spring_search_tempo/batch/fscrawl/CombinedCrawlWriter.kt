@@ -15,6 +15,7 @@ import org.springframework.batch.core.StepExecution
 import org.springframework.batch.core.StepExecutionListener
 import org.springframework.batch.item.Chunk
 import org.springframework.batch.item.ItemWriter
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Writer that persists both folders and files from combined crawl results.
@@ -48,11 +49,39 @@ class CombinedCrawlWriter(
     private var currentJobRunId: Long? = null
     private lateinit var currentStepExecution: StepExecution
 
+    // Thread-safe counters for step statistics (accessed from multiple chunk-processing threads)
+    private val foldersDiscovered = AtomicLong(0)
+    private val foldersNew = AtomicLong(0)
+    private val foldersUpdated = AtomicLong(0)
+    private val foldersSkipped = AtomicLong(0)
+    private val filesDiscovered = AtomicLong(0)
+    private val filesNew = AtomicLong(0)
+    private val filesUpdated = AtomicLong(0)
+    private val filesSkipped = AtomicLong(0)
+    private val filesError = AtomicLong(0)
+    private val filesAccessDenied = AtomicLong(0)
+
     override fun beforeStep(stepExecution: StepExecution) {
         currentStepExecution = stepExecution
         currentJobRunId = stepExecution.executionContext.getLong(CrawlStepListener.JOB_RUN_ID_KEY, -1L)
             .takeIf { it > 0 }
         log.info("Writer initialized with jobRunId: {}", currentJobRunId)
+    }
+
+    override fun afterStep(stepExecution: StepExecution): org.springframework.batch.core.ExitStatus {
+        // Flush atomic counters into step execution context (single-threaded at this point)
+        val context = stepExecution.executionContext
+        context.putLong("foldersDiscovered", foldersDiscovered.get())
+        context.putLong("foldersNew", foldersNew.get())
+        context.putLong("foldersUpdated", foldersUpdated.get())
+        context.putLong("foldersSkipped", foldersSkipped.get())
+        context.putLong("filesDiscovered", filesDiscovered.get())
+        context.putLong("filesNew", filesNew.get())
+        context.putLong("filesUpdated", filesUpdated.get())
+        context.putLong("filesSkipped", filesSkipped.get())
+        context.putLong("filesError", filesError.get())
+        context.putLong("filesAccessDenied", filesAccessDenied.get())
+        return org.springframework.batch.core.ExitStatus.COMPLETED
     }
 
     override fun write(chunk: Chunk<out CombinedCrawlResult>) {
@@ -232,46 +261,34 @@ class CombinedCrawlWriter(
     }
 
     private fun incrementFolderCounter(isNew: Boolean, analysisStatus: com.oconeco.spring_search_tempo.base.domain.AnalysisStatus?) {
-        if (!::currentStepExecution.isInitialized) return
-
-        val context = currentStepExecution.executionContext
-        context.putLong("foldersDiscovered", context.getLong("foldersDiscovered", 0) + 1)
+        foldersDiscovered.incrementAndGet()
 
         if (analysisStatus == com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SKIP) {
-            context.putLong("foldersSkipped", context.getLong("foldersSkipped", 0) + 1)
+            foldersSkipped.incrementAndGet()
         } else if (isNew) {
-            context.putLong("foldersNew", context.getLong("foldersNew", 0) + 1)
+            foldersNew.incrementAndGet()
         } else {
-            context.putLong("foldersUpdated", context.getLong("foldersUpdated", 0) + 1)
+            foldersUpdated.incrementAndGet()
         }
     }
 
     private fun incrementFileCounter(isNew: Boolean, analysisStatus: com.oconeco.spring_search_tempo.base.domain.AnalysisStatus?) {
-        if (!::currentStepExecution.isInitialized) return
-
-        val context = currentStepExecution.executionContext
-        context.putLong("filesDiscovered", context.getLong("filesDiscovered", 0) + 1)
+        filesDiscovered.incrementAndGet()
 
         if (analysisStatus == com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SKIP) {
-            context.putLong("filesSkipped", context.getLong("filesSkipped", 0) + 1)
+            filesSkipped.incrementAndGet()
         } else if (isNew) {
-            context.putLong("filesNew", context.getLong("filesNew", 0) + 1)
+            filesNew.incrementAndGet()
         } else {
-            context.putLong("filesUpdated", context.getLong("filesUpdated", 0) + 1)
+            filesUpdated.incrementAndGet()
         }
     }
 
     private fun incrementFileError() {
-        if (!::currentStepExecution.isInitialized) return
-
-        val context = currentStepExecution.executionContext
-        context.putLong("filesError", context.getLong("filesError", 0) + 1)
+        filesError.incrementAndGet()
     }
 
     private fun incrementFileAccessDenied() {
-        if (!::currentStepExecution.isInitialized) return
-
-        val context = currentStepExecution.executionContext
-        context.putLong("filesAccessDenied", context.getLong("filesAccessDenied", 0) + 1)
+        filesAccessDenied.incrementAndGet()
     }
 }

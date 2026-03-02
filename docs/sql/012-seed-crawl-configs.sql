@@ -380,6 +380,11 @@ BEGIN
             NULL
         );
 
+        -- Ensure seeded configs are visibly attributable in host-grouped UIs.
+        UPDATE crawl_config
+        SET source_host = 'seed'
+        WHERE source_host IS NULL;
+
         RAISE NOTICE 'Seeded 15 crawl configurations for Linux';
     ELSE
         RAISE NOTICE 'Crawl config table already contains data. Skipping seed.';

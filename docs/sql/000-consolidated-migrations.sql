@@ -6,7 +6,7 @@
 
 \set ON_ERROR_STOP on
 
-\echo 'Applying SQL migrations 001..024'
+\echo 'Applying SQL migrations 001..026'
 \ir 001-add-metadata-columns.sql
 \ir 002-migrate-to-generated-fts.sql
 \ir 003-add-nlp-to-fts.sql
@@ -31,4 +31,6 @@
 \ir 022-promote-user-content-to-analyze.sql
 \ir 023-add-crawl-config-target-host.sql
 \ir 024-fix-fs-analysis-status-checks.sql
+\ir 025-backfill-crawl-config-source-host.sql
+\ir 026-create-remote-crawl-task-table.sql
 \echo 'Done'

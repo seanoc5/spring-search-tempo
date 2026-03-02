@@ -63,6 +63,16 @@
                                     </div>
                                     <small class="text-muted">Disabled configs cannot be run</small>
                                 </div>
+
+                                <div class="mb-3">
+                                    <label for="targetHost" class="form-label">[[#{targetHost.label}]]</label>
+                                    <input type="text" class="form-control" id="targetHost" th:field="*{targetHost}"
+                                           list="knownHostsList" />
+                                    <datalist id="knownHostsList">
+                                        <option th:each="host : ${knownHosts}" th:value="${host}"></option>
+                                    </datalist>
+                                    <small class="text-muted">Which machine should run this config. Leave blank for any host. Current host: <strong th:text="${currentHostName}"></strong></small>
+                                </div>
                             </div>
                         </div>
 

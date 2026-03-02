@@ -17,6 +17,8 @@ import org.springframework.batch.item.ItemProcessor
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFileAttributes
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentSkipListSet
 import kotlin.io.path.name
 
 /**
@@ -58,15 +60,15 @@ class CombinedCrawlProcessor(
     }
 
     // Cache for parent folder analysis status (supports hierarchical matching)
-    private val parentStatusCache = mutableMapOf<String, AnalysisStatus>()
+    private val parentStatusCache = ConcurrentHashMap<String, AnalysisStatus>()
 
     // Cache for folders that were skipped (unchanged) - continuation batches should also skip
-    private val skippedFolderCache = mutableSetOf<String>()
+    private val skippedFolderCache = ConcurrentSkipListSet<String>()
 
     // Batch cache for file lookups within a directory
     // TODO: Consider using Spring Cache abstraction or Caffeine for more sophisticated caching
-    private val fileCache = mutableMapOf<String, com.oconeco.spring_search_tempo.base.domain.FSFile?>()
-    private val folderCache = mutableMapOf<String, com.oconeco.spring_search_tempo.base.domain.FSFolder?>()
+    private val fileCache = ConcurrentHashMap<String, com.oconeco.spring_search_tempo.base.domain.FSFile?>()
+    private val folderCache = ConcurrentHashMap<String, com.oconeco.spring_search_tempo.base.domain.FSFolder?>()
 
     override fun process(item: CombinedCrawlItem): CombinedCrawlResult? {
         log.debug(

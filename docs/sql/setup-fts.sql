@@ -5,7 +5,7 @@
 -- Note: If fts_vector already exists as VARCHAR, we need to convert it
 
 -- For fs_file table: add fts_vector column for bodyText
-ALTER TABLE fs_file ADD COLUMN IF NOT EXISTS fts_vector tsvector;
+ALTER TABLE fsfile ADD COLUMN IF NOT EXISTS fts_vector tsvector;
 
 -- For content_chunks table: convert fts_vector from VARCHAR to tsvector if needed
 -- First check if it exists and drop if it's the wrong type

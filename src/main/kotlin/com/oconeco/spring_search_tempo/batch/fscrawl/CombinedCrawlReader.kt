@@ -249,6 +249,7 @@ class CombinedCrawlReader(
         }
     }
 
+    @Synchronized
     override fun read(): CombinedCrawlItem? {
         return try {
             if (itemIterator?.hasNext() == true) {

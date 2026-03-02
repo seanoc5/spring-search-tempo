@@ -28,6 +28,7 @@ class OneDriveContentReader(
     private var currentIndex = 0
     private var initialized = false
 
+    @Synchronized
     override fun read(): OneDriveItemDTO? {
         if (!initialized) {
             initialize()

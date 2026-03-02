@@ -59,7 +59,10 @@
                                     Delete existing data
                                 </label>
                             </div>
-                            <button type="submit" class="btn btn-primary" th:disabled="${!crawlConfig.enabled}">
+                            <button type="submit"
+                                    th:class="${!isForCurrentHost} ? 'btn btn-warning' : 'btn btn-primary'"
+                                    th:disabled="${!crawlConfig.enabled}"
+                                    th:title="${!isForCurrentHost} ? |This config targets '${crawlConfig.targetHost}', not this host| : ''">
                                 Run Crawl
                             </button>
                         </div>
@@ -69,6 +72,11 @@
 
             <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
                 [[${message}]]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <div th:if="${warning}" class="alert alert-warning alert-dismissible fade show" role="alert">
+                [[${warning}]]
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
 
@@ -102,6 +110,22 @@
                                     </div>
                                 </div>
                             </div>
+                            <hr class="my-3">
+                            <h6 class="text-muted mb-2">Processing Pipeline</h6>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="h5 text-primary mb-0">[[${searchableCount}]]</div>
+                                    <small class="text-muted">Searchable</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="h5 text-success mb-0">[[${nlpProcessedCount}]]</div>
+                                    <small class="text-muted">NLP</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="h5 text-warning mb-0">[[${embeddingCount}]]</div>
+                                    <small class="text-muted">Embed</small>
+                                </div>
+                            </div>
                             <div class="text-center mt-3">
                                 <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}" class="btn btn-outline-primary btn-sm me-2">
                                     <i class="bi bi-file-earmark-text me-1"></i>Browse Files
@@ -131,6 +155,15 @@
                                 <dd class="col-sm-7">[[${crawlConfig.maxDepth}]]</dd>
                                 <dt class="col-sm-5">Parallel:</dt>
                                 <dd class="col-sm-7">[[${crawlConfig.parallel}]]</dd>
+                                <dt class="col-sm-5">[[#{targetHost.label}]]:</dt>
+                                <dd class="col-sm-7">
+                                    <span th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any</span>
+                                    <span th:if="${crawlConfig.targetHost != null && isForCurrentHost}" class="text-success" th:text="${crawlConfig.targetHost}"></span>
+                                    <span th:if="${crawlConfig.targetHost != null && !isForCurrentHost}">
+                                        <span class="text-warning" th:text="${crawlConfig.targetHost}"></span>
+                                        <span class="badge bg-warning text-dark ms-1">mismatch</span>
+                                    </span>
+                                </dd>
                             </dl>
                         </div>
                     </div>
@@ -173,6 +206,12 @@
 
                         <dt class="col-sm-3">Freshness Hours:</dt>
                         <dd class="col-sm-9">[[${crawlConfig.freshnessHours ?: 'Default (24)'}]]</dd>
+
+                        <dt class="col-sm-3">[[#{targetHost.label}]]:</dt>
+                        <dd class="col-sm-9">
+                            <span th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any host</span>
+                            <span th:if="${crawlConfig.targetHost != null}" th:text="${crawlConfig.targetHost}"></span>
+                        </dd>
                     </dl>
                 </div>
             </div>

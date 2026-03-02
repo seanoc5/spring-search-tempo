@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.Chunk
 import org.springframework.batch.item.ItemWriter
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * ItemWriter that saves ContentChunk to the database.
@@ -28,8 +29,8 @@ class ChunkWriter(
         private val log = LoggerFactory.getLogger(ChunkWriter::class.java)
     }
 
-    private var totalChunksSaved = 0
-    private var totalFilesMarked = 0
+    private val totalChunksSaved = AtomicInteger(0)
+    private val totalFilesMarked = AtomicInteger(0)
 
     override fun write(chunk: Chunk<out List<ContentChunkDTO>>) {
         var batchChunksSaved = 0
@@ -42,7 +43,7 @@ class ChunkWriter(
             try {
                 val ids = chunkService.createBulk(chunkList)
                 batchChunksSaved += ids.size
-                totalChunksSaved += ids.size
+                totalChunksSaved.addAndGet(ids.size)
                 if (fileId != null) processedFileIds.add(fileId)
             } catch (e: Exception) {
                 log.warn("Bulk chunk save failed for file {}, falling back to per-item: {}", fileId, e.message)
@@ -51,7 +52,7 @@ class ChunkWriter(
                     try {
                         chunkService.create(chunkDTO)
                         batchChunksSaved++
-                        totalChunksSaved++
+                        totalChunksSaved.incrementAndGet()
                     } catch (e2: Exception) {
                         log.error(
                             "Error saving chunk {} for file {}: {}",
@@ -74,7 +75,7 @@ class ChunkWriter(
             processedFileIds.forEach { fileId ->
                 try {
                     fileService.markAsChunked(fileId)
-                    totalFilesMarked++
+                    totalFilesMarked.incrementAndGet()
                 } catch (e: Exception) {
                     log.warn("Failed to mark file {} as chunked: {}", fileId, e.message)
                 }
@@ -83,7 +84,7 @@ class ChunkWriter(
 
         if (batchChunksSaved > 0) {
             log.debug("ChunkWriter: Saved {} chunks for {} files (total chunks: {}, total files marked: {})",
-                batchChunksSaved, processedFileIds.size, totalChunksSaved, totalFilesMarked)
+                batchChunksSaved, processedFileIds.size, totalChunksSaved.get(), totalFilesMarked.get())
         }
     }
 }

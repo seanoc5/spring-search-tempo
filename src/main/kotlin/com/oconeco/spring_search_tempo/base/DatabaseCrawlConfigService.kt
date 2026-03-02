@@ -26,4 +26,14 @@ interface DatabaseCrawlConfigService {
 
     fun toggleEnabled(id: Long): Boolean
 
+    fun findAllEnabledForHost(host: String): List<CrawlConfigDTO>
+
+    fun findAllEnabledForCurrentHost(): List<CrawlConfigDTO>
+
+    fun findDistinctTargetHosts(): List<String>
+
+    fun isForHost(config: CrawlConfigDTO, host: String): Boolean
+
+    fun isForCurrentHost(config: CrawlConfigDTO): Boolean
+
 }

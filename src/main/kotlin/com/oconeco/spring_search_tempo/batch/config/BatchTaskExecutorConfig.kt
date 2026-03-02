@@ -19,6 +19,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 @Configuration
 class BatchTaskExecutorConfig {
 
+    companion object {
+        /** Default throttle limit for multi-threaded steps (matches stepTaskExecutor core pool size) */
+        const val DEFAULT_THROTTLE_LIMIT = 4
+    }
+
     /**
      * Customizes the auto-configured JobLauncher to use async execution.
      * The auto-configured launcher is a TaskExecutorJobLauncher with a SyncTaskExecutor.

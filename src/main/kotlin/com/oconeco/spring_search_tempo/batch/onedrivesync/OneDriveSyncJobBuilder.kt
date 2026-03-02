@@ -10,6 +10,7 @@ import com.oconeco.spring_search_tempo.base.service.OneDriveConnectionService
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.ProgressTrackingItemWriteListener
+import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -17,6 +18,8 @@ import org.springframework.batch.core.job.builder.JobBuilder
 import org.springframework.batch.core.launch.support.RunIdIncrementer
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.builder.StepBuilder
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 
@@ -41,7 +44,8 @@ class OneDriveSyncJobBuilder(
     private val config: OneDriveConfiguration,
     private val jobRunTrackingListener: OneDriveJobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
-    private val progressTrackingItemWriteListener: ProgressTrackingItemWriteListener<Any>
+    private val progressTrackingItemWriteListener: ProgressTrackingItemWriteListener<Any>,
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(OneDriveSyncJobBuilder::class.java)
@@ -113,6 +117,8 @@ class OneDriveSyncJobBuilder(
             .listener(processor)  // Processor is a StepExecutionListener (creates temp dir)
             .listener(heartbeatChunkListener)
             .listener(progressTrackingItemWriteListener)
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 
@@ -128,6 +134,8 @@ class OneDriveSyncJobBuilder(
             .writer(OneDriveChunkWriter(chunkService, itemService))
             .listener(heartbeatChunkListener)
             .listener(progressTrackingItemWriteListener)
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 }

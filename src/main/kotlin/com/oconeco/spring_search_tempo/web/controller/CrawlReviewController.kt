@@ -32,7 +32,7 @@ class CrawlReviewController(
      */
     @GetMapping
     fun list(model: Model): String {
-        val configs = crawlConfigService.findAllEnabled()
+        val configs = crawlConfigService.findAllEnabledForCurrentHost()
         model.addAttribute("configs", configs)
         return "crawlReview/list"
     }

@@ -150,4 +150,16 @@ class ContentChunkServiceImpl(
         )
     }
 
+    @Transactional(readOnly = true)
+    override fun countFilesWithNlpByCrawlConfig(): Map<Long, Long> {
+        return contentChunkRepository.countFilesWithNlpGroupedByCrawlConfig()
+            .associate { (it[0] as Long) to (it[1] as Long) }
+    }
+
+    @Transactional(readOnly = true)
+    override fun countFilesWithEmbeddingByCrawlConfig(): Map<Long, Long> {
+        return contentChunkRepository.countFilesWithEmbeddingGroupedByCrawlConfig()
+            .associate { (it[0] as Long) to (it[1] as Long) }
+    }
+
 }

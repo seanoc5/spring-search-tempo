@@ -97,4 +97,10 @@ interface FSFileService {
      */
     fun countByStatus(): Map<String, Long>
 
+    /**
+     * Get searchable file counts (INDEX, ANALYZE, SEMANTIC) grouped by crawl config.
+     * @return Map of crawlConfigId to count
+     */
+    fun countSearchableByCrawlConfig(): Map<Long, Long>
+
 }

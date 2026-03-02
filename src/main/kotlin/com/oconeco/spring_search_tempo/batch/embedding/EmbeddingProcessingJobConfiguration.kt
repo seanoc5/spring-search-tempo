@@ -15,9 +15,11 @@ import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.item.ItemProcessor
 import org.springframework.batch.item.ItemWriter
 import org.springframework.batch.item.data.RepositoryItemReader
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.TaskExecutor
 import org.springframework.data.domain.Sort
 import org.springframework.transaction.PlatformTransactionManager
 import java.time.OffsetDateTime
@@ -39,7 +41,8 @@ class EmbeddingProcessingJobConfiguration(
     @Value("\${app.embedding.batch-size:10}")
     private val batchSize: Int,
     @Value("\${app.embedding.max-text-length:8192}")
-    private val maxTextLength: Int
+    private val maxTextLength: Int,
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
 
     companion object {
@@ -61,6 +64,8 @@ class EmbeddingProcessingJobConfiguration(
             .reader(embeddingChunkReader())
             .processor(embeddingChunkProcessor())
             .writer(embeddingChunkWriter())
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 

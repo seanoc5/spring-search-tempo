@@ -2,10 +2,12 @@ package com.oconeco.spring_search_tempo.web.controller
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.servlet.mvc.support.RedirectAttributes
 import java.time.Instant
+import java.util.TreeMap
 
 @Controller
 @RequestMapping("/crawlConfigs")
@@ -40,12 +43,19 @@ class CrawlConfigController(
     private val jobRunService: JobRunService,
     private val fileService: FSFileService,
     private val folderService: FSFolderService,
+    private val chunkService: ContentChunkService,
     private val jobLauncher: JobLauncher,
     private val jobBuilder: FsCrawlJobBuilder,
     private val configConverter: CrawlConfigConverter,
     private val cleanupService: CrawlDataCleanupService,
     private val objectMapper: ObjectMapper
 ) {
+
+    @ModelAttribute("currentHostName")
+    fun currentHostName(): String = HostNameHolder.currentHostName
+
+    @ModelAttribute("knownHosts")
+    fun knownHosts(): List<String> = crawlConfigService.findDistinctTargetHosts()
 
     @GetMapping
     fun list(
@@ -54,6 +64,13 @@ class CrawlConfigController(
         model: Model
     ): String {
         val crawlConfigs = crawlConfigService.findAll(filter, pageable)
+        val groupedBySourceHost = TreeMap<String, List<CrawlConfigDTO>>(String.CASE_INSENSITIVE_ORDER).apply {
+            putAll(
+                crawlConfigs.content.groupBy { config ->
+                    config.sourceHost?.takeIf { it.isNotBlank() } ?: "unknown"
+                }
+            )
+        }
 
         // Build file count map for each config (excludes SKIP by default)
         val fileCountsMap = crawlConfigs.content.associate { config ->
@@ -70,10 +87,19 @@ class CrawlConfigController(
             jobRunService.getLatestRunForConfig(config.id!!)?.let { config.id!! to it }
         }.toMap()
 
+        // Processing pipeline stats (bulk queries)
+        val searchableCountsMap = fileService.countSearchableByCrawlConfig()
+        val nlpProcessedCountsMap = chunkService.countFilesWithNlpByCrawlConfig()
+        val embeddingCountsMap = chunkService.countFilesWithEmbeddingByCrawlConfig()
+
         model.addAttribute("crawlConfigs", crawlConfigs)
+        model.addAttribute("crawlConfigsBySourceHost", groupedBySourceHost)
         model.addAttribute("fileCounts", fileCountsMap)
         model.addAttribute("folderCounts", folderCountsMap)
         model.addAttribute("lastRuns", lastRunMap)
+        model.addAttribute("searchableCounts", searchableCountsMap)
+        model.addAttribute("nlpProcessedCounts", nlpProcessedCountsMap)
+        model.addAttribute("embeddingCounts", embeddingCountsMap)
         model.addAttribute("filter", filter)
         model.addAttribute("page", crawlConfigs)
         return "crawlConfig/list"
@@ -86,6 +112,7 @@ class CrawlConfigController(
             maxDepth = 50
             followLinks = false
             parallel = false
+            targetHost = HostNameHolder.currentHostName
         })
         model.addAttribute("startPathsText", "")
         model.addAttribute("folderPatternsSkipText", "")
@@ -97,6 +124,85 @@ class CrawlConfigController(
         model.addAttribute("filePatternsIndexText", "")
         model.addAttribute("filePatternsAnalyzeText", "")
         return "crawlConfig/add"
+    }
+
+    @GetMapping("/wizard")
+    fun wizard(model: Model): String {
+        model.addAttribute("osOptions", WizardOs.entries.map { it.name })
+        model.addAttribute("defaultName", "HOME_DEFAULT")
+        model.addAttribute("defaultDisplayLabel", "Home Crawl (Default)")
+        model.addAttribute("defaultDescription", "Starter crawl configuration generated from OS preset")
+        model.addAttribute("defaultStartPath", defaultStartPathForOs(WizardOs.LINUX))
+        model.addAttribute("defaultMaxDepth", 20)
+        return "crawlConfig/wizard"
+    }
+
+    @PostMapping("/wizard/create")
+    fun wizardCreate(
+        @RequestParam(name = "os") os: String,
+        @RequestParam(name = "name") name: String,
+        @RequestParam(name = "displayLabel", required = false) displayLabel: String?,
+        @RequestParam(name = "description", required = false) description: String?,
+        @RequestParam(name = "startPath") startPath: String,
+        @RequestParam(name = "targetHost", required = false) targetHost: String?,
+        @RequestParam(name = "maxDepth", defaultValue = "20") maxDepth: Int,
+        @RequestParam(name = "enabled", defaultValue = "true") enabled: Boolean,
+        @RequestParam(name = "followLinks", defaultValue = "false") followLinks: Boolean,
+        @RequestParam(name = "parallel", defaultValue = "true") parallel: Boolean,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val osType = WizardOs.valueOf(os.uppercase())
+            val normalizedName = name.trim().uppercase()
+            val normalizedStartPath = startPath.trim()
+
+            if (normalizedName.isBlank()) {
+                redirectAttributes.addFlashAttribute("error", "Name is required")
+                return "redirect:/crawlConfigs/wizard"
+            }
+            if (normalizedStartPath.isBlank()) {
+                redirectAttributes.addFlashAttribute("error", "Start path is required")
+                return "redirect:/crawlConfigs/wizard"
+            }
+            if (crawlConfigService.nameExists(normalizedName)) {
+                redirectAttributes.addFlashAttribute("error", "A config named '$normalizedName' already exists")
+                return "redirect:/crawlConfigs/wizard"
+            }
+
+            val dto = CrawlConfigDTO().apply {
+                uri = "crawl-config:${normalizedName.lowercase().replace(Regex("[^a-z0-9]+"), "-")}"
+                this.name = normalizedName
+                this.displayLabel = displayLabel?.trim()?.ifBlank { null } ?: normalizedName
+                this.description = description?.trim()?.ifBlank { null }
+                this.enabled = enabled
+                this.startPaths = listOf(normalizedStartPath)
+                this.maxDepth = maxDepth
+                this.followLinks = followLinks
+                this.parallel = parallel
+                this.sourceHost = HostNameHolder.currentHostName
+                this.targetHost = targetHost?.trim()?.ifBlank { null } ?: HostNameHolder.currentHostName
+
+                folderPatternsSkip = listToJson(buildFolderSkipPatterns(osType))
+                folderPatternsLocate = listToJson(listOf(".*"))
+                filePatternsSkip = listToJson(buildFileSkipPatterns(osType))
+                filePatternsLocate = listToJson(defaultLocateFilePatterns())
+                filePatternsIndex = listToJson(defaultIndexFilePatterns())
+                filePatternsAnalyze = listToJson(defaultAnalyzeFilePatterns())
+            }
+
+            val id = crawlConfigService.create(dto)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Created starter config '${dto.displayLabel}' from ${osType.name} preset. Customize patterns as needed."
+            )
+            "redirect:/crawlConfigs/$id/edit"
+        } catch (_: IllegalArgumentException) {
+            redirectAttributes.addFlashAttribute("error", "Invalid OS selection")
+            "redirect:/crawlConfigs/wizard"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Failed to create preset config: ${e.message}")
+            "redirect:/crawlConfigs/wizard"
+        }
     }
 
     @PostMapping("/add")
@@ -183,6 +289,11 @@ class CrawlConfigController(
             jobRun.id!! to folderService.countByJobRunId(jobRun.id!!)
         }
 
+        // Processing pipeline stats for this config
+        val searchableCount = fileService.countSearchableByCrawlConfig()[id] ?: 0L
+        val nlpProcessedCount = chunkService.countFilesWithNlpByCrawlConfig()[id] ?: 0L
+        val embeddingCount = chunkService.countFilesWithEmbeddingByCrawlConfig()[id] ?: 0L
+
         model.addAttribute("crawlConfig", crawlConfig)
         model.addAttribute("jobRuns", jobRuns)
         model.addAttribute("page", jobRuns)
@@ -190,6 +301,10 @@ class CrawlConfigController(
         model.addAttribute("totalFolderCount", totalFolderCount)
         model.addAttribute("jobRunFileCounts", jobRunFileCounts)
         model.addAttribute("jobRunFolderCounts", jobRunFolderCounts)
+        model.addAttribute("searchableCount", searchableCount)
+        model.addAttribute("nlpProcessedCount", nlpProcessedCount)
+        model.addAttribute("embeddingCount", embeddingCount)
+        model.addAttribute("isForCurrentHost", crawlConfigService.isForCurrentHost(crawlConfig))
         return "crawlConfig/view"
     }
 
@@ -282,6 +397,12 @@ class CrawlConfigController(
         redirectAttributes: RedirectAttributes
     ): String {
         val crawlConfig = crawlConfigService.get(id)
+
+        if (!crawlConfigService.isForCurrentHost(crawlConfig)) {
+            redirectAttributes.addFlashAttribute("warning",
+                "This config targets host '${crawlConfig.targetHost}' but is running on '${HostNameHolder.currentHostName}'")
+            return "redirect:/crawlConfigs/$id"
+        }
 
         try {
             // Convert database config to CrawlDefinition
@@ -458,6 +579,10 @@ class CrawlConfigController(
                     errors.add("${crawlConfig.displayLabel ?: crawlConfig.name} (disabled)")
                     continue
                 }
+                if (!crawlConfigService.isForCurrentHost(crawlConfig)) {
+                    errors.add("${crawlConfig.displayLabel ?: crawlConfig.name} (target host mismatch)")
+                    continue
+                }
 
                 val crawlDefinition = configConverter.toDefinition(crawlConfig)
                 val job = jobBuilder.buildJob(
@@ -562,6 +687,93 @@ class CrawlConfigController(
             .filter { it.isNotBlank() }
         if (patterns.isEmpty()) return null
         return objectMapper.writeValueAsString(patterns)
+    }
+
+    private fun listToJson(patterns: List<String>): String? {
+        if (patterns.isEmpty()) return null
+        return objectMapper.writeValueAsString(patterns)
+    }
+
+    private fun defaultStartPathForOs(os: WizardOs): String {
+        return when (os) {
+            WizardOs.WINDOWS -> "C:\\Users"
+            WizardOs.MACOS -> "/Users"
+            WizardOs.LINUX -> "/home"
+        }
+    }
+
+    private fun buildFolderSkipPatterns(os: WizardOs): List<String> {
+        val common = mutableListOf(
+            ".*/\\.git/.*",
+            ".*/\\.gradle/.*",
+            ".*/\\.idea/.*",
+            ".*/node_modules/.*",
+            ".*/build/.*",
+            ".*/target/.*",
+            ".*/dist/.*",
+            ".*/\\.cache/.*"
+        )
+        when (os) {
+            WizardOs.WINDOWS -> common.addAll(
+                listOf(
+                    ".*/AppData/Local/Temp/.*",
+                    ".*/[$]Recycle\\.Bin/.*",
+                    ".*/System Volume Information/.*"
+                )
+            )
+            WizardOs.MACOS -> common.addAll(
+                listOf(
+                    ".*/Library/Caches/.*",
+                    ".*/\\.Trash/.*"
+                )
+            )
+            WizardOs.LINUX -> common.addAll(
+                listOf(
+                    ".*/\\.local/share/Trash/.*",
+                    ".*/snap/.*/.*"
+                )
+            )
+        }
+        return common
+    }
+
+    private fun buildFileSkipPatterns(os: WizardOs): List<String> {
+        val common = mutableListOf(
+            ".*\\.(lck|tmp|~|bak|bk1|bk2)$",
+            ".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg|bin)$"
+        )
+        if (os == WizardOs.WINDOWS) {
+            common.add(".*\\.(dll|sys)$")
+        }
+        return common
+    }
+
+    private fun defaultLocateFilePatterns(): List<String> = listOf(
+        ".*\\.(jpg|jpeg|png|gif|bmp|svg|webp|heic|heif|tiff|tif)$",
+        ".*\\.(mp4|avi|mov|mkv|flv|wmv|webm|m4v|mpeg|mpg|3gp|ogv)$",
+        ".*\\.(zip|tar|gz|bz2|7z|rar|xz)$"
+    )
+
+    private fun defaultIndexFilePatterns(): List<String> = listOf(
+        ".*\\.(kt|kts|java|scala)$",
+        ".*\\.(py|pyi)$",
+        ".*\\.(js|ts|jsx|tsx|mjs|cjs|vue|svelte)$",
+        ".*\\.(go|rs|c|cpp|h|hpp|sh|bash|zsh|fish|sql)$",
+        ".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$"
+    )
+
+    private fun defaultAnalyzeFilePatterns(): List<String> = listOf(
+        ".*\\.(md|txt|org|rst|adoc)$",
+        ".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",
+        ".*\\.(epub|mobi)$",
+        ".*\\.html?$",
+        ".*/(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$"
+    )
+
+    private enum class WizardOs {
+        LINUX,
+        WINDOWS,
+        MACOS
     }
 
 }

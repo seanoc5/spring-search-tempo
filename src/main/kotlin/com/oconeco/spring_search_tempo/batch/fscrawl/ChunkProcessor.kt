@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * ItemProcessor that splits FSFileDTO bodyText into sentence-level ContentChunk.
@@ -39,7 +40,7 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunkDTO>> {
         private const val MIN_CHUNK_LENGTH = 10
     }
 
-    private var totalChunksCreated = 0
+    private val totalChunksCreated = AtomicInteger(0)
 
     override fun process(item: FSFileDTO): List<ContentChunkDTO>? {
         val bodyText = item.bodyText
@@ -56,10 +57,10 @@ class ChunkProcessor : ItemProcessor<FSFileDTO, List<ContentChunkDTO>> {
                 return null
             }
 
-            totalChunksCreated += chunks.size
+            val newTotal = totalChunksCreated.addAndGet(chunks.size)
 
-            if (totalChunksCreated % 100 == 0) {
-                log.info("ChunkProcessor progress: {} chunks created", totalChunksCreated)
+            if (newTotal % 100 < chunks.size) {
+                log.info("ChunkProcessor progress: {} chunks created", newTotal)
             }
 
             log.debug("Created {} chunks for file {}", chunks.size, item.uri)

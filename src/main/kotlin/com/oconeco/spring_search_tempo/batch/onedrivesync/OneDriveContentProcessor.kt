@@ -17,6 +17,7 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.atomic.AtomicInteger
 
 
 /**
@@ -41,8 +42,8 @@ class OneDriveContentProcessor(
     }
 
     private val httpClient = HttpClient.newHttpClient()
-    private var processedCount = 0
-    private var errorCount = 0
+    private val processedCount = AtomicInteger(0)
+    private val errorCount = AtomicInteger(0)
     private val maxDownloadBytes = config.maxDownloadSizeMb.toLong() * 1024 * 1024
 
     override fun beforeStep(stepExecution: StepExecution) {
@@ -121,10 +122,10 @@ class OneDriveContentProcessor(
             // Extract text and metadata using Tika
             val result = textExtractionService.extractTextAndMetadata(tempFile!!)
 
-            processedCount++
-            if (processedCount % 20 == 0) {
+            val newCount = processedCount.incrementAndGet()
+            if (newCount % 20 == 0) {
                 log.info("Downloaded and extracted {} OneDrive files ({} errors)",
-                    processedCount, errorCount)
+                    newCount, errorCount.get())
             }
 
             return when (result) {
@@ -151,7 +152,7 @@ class OneDriveContentProcessor(
         } catch (e: Exception) {
             log.error("Error processing OneDrive item {} ({}): {}",
                 graphItemId, item.itemName, e.message, e)
-            errorCount++
+            errorCount.incrementAndGet()
             return OneDriveContentResult(
                 itemId = itemId,
                 failed = true,
@@ -170,10 +171,10 @@ class OneDriveContentProcessor(
     }
 
     override fun afterStep(stepExecution: StepExecution): org.springframework.batch.core.ExitStatus {
-        log.info("OneDrive content download complete: {} processed, {} errors", processedCount, errorCount)
+        log.info("OneDrive content download complete: {} processed, {} errors", processedCount.get(), errorCount.get())
         return org.springframework.batch.core.ExitStatus.COMPLETED
     }
 
-    fun getProcessedCount(): Int = processedCount
-    fun getErrorCount(): Int = errorCount
+    fun getProcessedCount(): Int = processedCount.get()
+    fun getErrorCount(): Int = errorCount.get()
 }

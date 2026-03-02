@@ -12,6 +12,7 @@ import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.base.service.StartPathValidator
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
+import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -23,6 +24,8 @@ import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.item.ItemProcessor
 import org.springframework.batch.item.ItemReader
 import org.springframework.batch.item.ItemWriter
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Component
 import org.springframework.transaction.PlatformTransactionManager
 import java.nio.file.Path
@@ -50,7 +53,8 @@ class FsCrawlJobBuilder(
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val nlpAutoTriggerListener: NLPAutoTriggerListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
-    private val jobRunService: JobRunService
+    private val jobRunService: JobRunService,
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -121,6 +125,8 @@ class FsCrawlJobBuilder(
             .writer(createChunkWriter())
             .listener(reader)  // Register reader as listener to get jobRunId
             .listener(heartbeatChunkListener)  // Update heartbeat after each chunk
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 
@@ -182,6 +188,8 @@ class FsCrawlJobBuilder(
             .listener(CrawlStepListener())
             .listener(writer) // Writer is also a step listener
             .listener(heartbeatChunkListener) // Update heartbeat after each chunk
+            .taskExecutor(stepTaskExecutor)
+            .throttleLimit(DEFAULT_THROTTLE_LIMIT)
             .build()
     }
 

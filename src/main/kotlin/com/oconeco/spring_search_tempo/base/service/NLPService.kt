@@ -131,6 +131,7 @@ class StanfordNLPService : NLPService {
         nlp
     }
 
+    @Synchronized
     override fun analyze(text: String): NLPAnalysisResult {
         if (text.isBlank()) {
             return NLPAnalysisResult(

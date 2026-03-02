@@ -10,6 +10,7 @@ import com.oconeco.spring_search_tempo.base.service.FirefoxPlacesService.Firefox
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 import java.net.URI
+import java.util.concurrent.atomic.AtomicInteger
 
 
 /**
@@ -30,16 +31,16 @@ class BookmarkImportProcessor(
         private val log = LoggerFactory.getLogger(BookmarkImportProcessor::class.java)
     }
 
-    private var processedCount = 0
-    private var skippedCount = 0
-    private var errorCount = 0
+    private val processedCount = AtomicInteger(0)
+    private val skippedCount = AtomicInteger(0)
+    private val errorCount = AtomicInteger(0)
 
     override fun process(item: FirefoxBookmarkData): BookmarkProcessorResult? {
-        processedCount++
+        processedCount.incrementAndGet()
 
         // Skip if bookmark already exists
         if (browserBookmarkService.urlExists(item.url)) {
-            skippedCount++
+            skippedCount.incrementAndGet()
             log.trace("Skipping existing bookmark: {}", item.url)
             return null
         }
@@ -80,7 +81,7 @@ class BookmarkImportProcessor(
             return BookmarkProcessorResult(dto, tags)
 
         } catch (e: Exception) {
-            errorCount++
+            errorCount.incrementAndGet()
             log.warn("Error processing bookmark {}: {}", item.url, e.message)
             return null
         }
@@ -107,7 +108,7 @@ class BookmarkImportProcessor(
         }
     }
 
-    fun getStats(): Triple<Int, Int, Int> = Triple(processedCount, skippedCount, errorCount)
+    fun getStats(): Triple<Int, Int, Int> = Triple(processedCount.get(), skippedCount.get(), errorCount.get())
 
 }
 

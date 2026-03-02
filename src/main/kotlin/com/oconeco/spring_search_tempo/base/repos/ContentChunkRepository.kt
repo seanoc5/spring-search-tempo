@@ -341,4 +341,34 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
         @Param("modelName") modelName: String
     )
 
+    // ==================== CRAWL CONFIG STATS ====================
+
+    /**
+     * Count distinct FSFiles with NLP-processed chunks, grouped by crawl config.
+     * Returns pairs of [crawlConfigId, fileCount].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(DISTINCT c.concept.id)
+        FROM ContentChunk c
+        JOIN c.concept f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE c.nlpProcessedAt IS NOT NULL
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countFilesWithNlpGroupedByCrawlConfig(): List<Array<Any>>
+
+    /**
+     * Count distinct FSFiles with embedded chunks, grouped by crawl config.
+     * Returns pairs of [crawlConfigId, fileCount].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(DISTINCT c.concept.id)
+        FROM ContentChunk c
+        JOIN c.concept f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE c.embeddingGeneratedAt IS NOT NULL
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countFilesWithEmbeddingGroupedByCrawlConfig(): List<Array<Any>>
+
 }

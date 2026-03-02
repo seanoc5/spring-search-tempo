@@ -50,4 +50,16 @@ interface ContentChunkService {
      */
     fun countByAnalysisLevel(): Map<String, Long>
 
+    /**
+     * Count distinct files with NLP-processed chunks, grouped by crawl config.
+     * @return Map of crawlConfigId to file count
+     */
+    fun countFilesWithNlpByCrawlConfig(): Map<Long, Long>
+
+    /**
+     * Count distinct files with embedded chunks, grouped by crawl config.
+     * @return Map of crawlConfigId to file count
+     */
+    fun countFilesWithEmbeddingByCrawlConfig(): Map<Long, Long>
+
 }
