@@ -24,12 +24,12 @@ BEGIN
             20, false, true, 1, false,
             NULL,
             NULL,
-            NULL,
             '[".*"]',
             NULL,
             NULL,
-            '[".*\\.(asc|csv|lst|tab)$","',
-            '[".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf)$",".*\\.(epub|mobi)$",".*\\.html?$"]'
+            NULL,
+            NULL,
+            '[".*\\.(md|txt|org|rst|adoc)$",".*/README.*$",".*/CHANGELOG.*$",".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(epub|mobi)$",".*\\.html?$"]'
         );
 
         INSERT INTO crawl_config (
@@ -126,8 +126,8 @@ BEGIN
             NULL,
             '[".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg|flatpak|snap)$"]',
             '[".*\\.(zip|tar|gz|bz2|7z|rar|xz)$",".*\\.(so|a|o)$"]',
-            '[".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash|fish|zsh)$",".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$",".*/\\.bashrc$",".*/\\.zshrc$",".*/\\.profile$",".*/\\.gitconfig$"]',
-            '[".*\\.(md|txt|org|rst|adoc)$"]'
+            '[".*\\.(kt|java|py|js|ts|go|rs|c|cpp|h|hpp|sh|bash|fish|zsh)$",".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$",".*/\\.bashrc$",".*/\\.zshrc$",".*/\\.profile$",".*/\\.gitconfig$"]',
+            '[".*\\.(md|txt|org|rst|adoc)$",".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(epub|mobi)$",".*\\.html?$"]'
         );
 
         INSERT INTO crawl_config (
@@ -150,8 +150,8 @@ BEGIN
             NULL,
             '[".*\\.(iso|dmg|exe|msi|app|deb|rpm|pkg)$"]',
             NULL,
-            '[".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|csv)$"]',
-            NULL
+            NULL,
+            '[".*\\.(pdf|txt|md|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(epub|mobi)$",".*\\.html?$"]'
         );
 
         INSERT INTO crawl_config (
@@ -174,8 +174,8 @@ BEGIN
             NULL,
             NULL,
             NULL,
-            '[".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf)$"]',
-            NULL
+            NULL,
+            '[".*\\.(txt|md|pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(epub|mobi)$",".*\\.html?$"]'
         );
 
         -- ===== PHASE 3: WORK =====
@@ -201,7 +201,7 @@ BEGIN
             NULL,
             NULL,
             '[".*\\.(kt|kts|java|scala)$",".*\\.(py|pyi)$",".*\\.(js|ts|jsx|tsx|mjs|cjs|vue|svelte)$",".*\\.(go)$",".*\\.(rs)$",".*\\.(c|h|cpp|hpp|cc|cxx|hxx)$",".*\\.(rb|rake)$",".*\\.(php)$",".*\\.(sh|bash|zsh|fish)$",".*\\.(cs|fs|vb)$",".*\\.(swift|m|mm)$",".*\\.(lua|r|R|sql|pl|perl)$",".*\\.(xml|json|ya?ml|toml|properties|conf|config|ini)$",".*\\.env\\.example$",".*/Dockerfile.*$",".*/docker-compose.*\\.ya?ml$",".*/(Makefile|Rakefile|Gemfile|CMakeLists\\.txt)$",".*/(package\\.json|composer\\.json|requirements\\.txt|Pipfile)$",".*/(build\\.gradle.*|settings\\.gradle.*|pom\\.xml)$",".*/(Cargo\\.toml|Cargo\\.lock|go\\.mod|go\\.sum)$",".*\\.(md|rst|adoc|txt)$"]',
-            '[".*/README.*$",".*/CONTRIBUTING.*$",".*/CHANGELOG.*$",".*/LICENSE.*$",".*/AUTHORS.*$",".*/NOTICE.*$",".*/TODO.*$",".*\\.(md|txt|adoc)$"]'
+            '[".*\\.(pdf|docx?|xlsx?|pptx?|odt|rtf|csv)$",".*\\.(epub|mobi)$",".*\\.html?$",".*/(README|CONTRIBUTING|CHANGELOG|LICENSE|AUTHORS|NOTICE|TODO).*$",".*\\.(md|txt|adoc|rst)$"]'
         );
 
         -- ===== PHASE 4: LOGGING =====

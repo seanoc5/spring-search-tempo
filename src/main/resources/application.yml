@@ -1,10 +1,18 @@
 server:
   port: 8082
+  servlet:
+    session:
+      cookie:
+        # Use a non-default cookie name to avoid collisions with other local apps.
+        # Including port prevents cross-port localhost overwrites.
+        name: ${SESSION_COOKIE_NAME:tempo-session-${server.port}}
+  tomcat:
+    max-swallow-size: 100MB
 
 spring:
   devtools:
     restart:
-      enabled: true  # Disable DevTools restart - can corrupt batch job transactions
+      enabled: false  # Reliability-first: avoid restart-induced auth/session churn
   batch:
     jdbc:
       initialize-schema: never
@@ -16,7 +24,7 @@ spring:
     password: ${JDBC_DATABASE_PASSWORD:password}
     hikari:
       connection-timeout: 30000
-      maximum-pool-size: 10
+      maximum-pool-size: 12
   jpa:
     hibernate:
       ddl-auto: validate
@@ -48,7 +56,14 @@ spring:
     jdbc:
       initialize-schema: never  # Tables created via docs/sql/013-add-session-remember-me.sql
       table-name: SPRING_SESSION
-    timeout: 8h  # Session timeout (8 hours of inactivity)
+    timeout: 30d  # Long-lived dev session window
+  # just in case, increase to '100MB'
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+
 
 error:
   handling:
@@ -76,6 +91,13 @@ app:
   host-name: "${TEMPO_HOST_NAME:localhost}"
   security:
     remember-me-key: "${REMEMBER_ME_KEY:spring-search-tempo-remember-me-key}"
+    # Separate cookie name avoids collisions with other localhost apps/ports.
+    remember-me-cookie-name: "${REMEMBER_ME_COOKIE_NAME:tempo-remember-me-${server.port}}"
+    # Reliability-first defaults (especially for local development use).
+    remember-me-validity-days: ${REMEMBER_ME_VALIDITY_DAYS:365}
+    remember-me-always: ${REMEMBER_ME_ALWAYS:true}
+    # true = DB-backed persistent tokens, false = stateless signed cookie.
+    remember-me-persistent: ${REMEMBER_ME_PERSISTENT:true}
   crawl:
     # Global defaults that all crawls inherit
     defaults:

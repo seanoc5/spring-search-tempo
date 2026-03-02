@@ -11,14 +11,24 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.rememberme.JdbcTokenRepositoryImpl
 import org.springframework.security.web.authentication.rememberme.PersistentTokenRepository
+import com.oconeco.spring_search_tempo.base.service.BasicUserDetailsService
 import javax.sql.DataSource
 
 
 @Configuration
 class BasicSecurityConfig(
     private val dataSource: DataSource,
+    private val basicUserDetailsService: BasicUserDetailsService,
     @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-key}")
-    private val rememberMeKey: String
+    private val rememberMeKey: String,
+    @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-cookie-name}")
+    private val rememberMeCookieName: String,
+    @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-validity-days:30}")
+    private val rememberMeValidityDays: Int,
+    @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-always:true}")
+    private val alwaysRememberMe: Boolean,
+    @org.springframework.beans.factory.annotation.Value("\${app.security.remember-me-persistent:true}")
+    private val persistentRememberMe: Boolean
 ) {
 
     @Bean
@@ -80,21 +90,24 @@ class BasicSecurityConfig(
             }
             .rememberMe { remember -> remember
                 .key(rememberMeKey)
-                .tokenRepository(persistentTokenRepository())
-                .tokenValiditySeconds(60 * 60 * 24 * 30) // 30 days
+                .userDetailsService(basicUserDetailsService)
+                .tokenValiditySeconds(60 * 60 * 24 * rememberMeValidityDays)
                 .rememberMeParameter("remember-me")
-                .rememberMeCookieName("remember-me")
-            }
-            .sessionManagement { session -> session
-                .invalidSessionUrl("/login?expired")
-                .maximumSessions(5)  // Allow up to 5 concurrent sessions per user
-                .expiredUrl("/login?expired")
+                .rememberMeCookieName(rememberMeCookieName)
+                .alwaysRemember(alwaysRememberMe)
+                .apply {
+                    // Persistent token mode rotates tokens in DB (more secure).
+                    // Stateless mode is more resilient in dev and avoids DB token races.
+                    if (persistentRememberMe) {
+                        tokenRepository(persistentTokenRepository())
+                    }
+                }
             }
             .logout { logout -> logout
                 .logoutUrl("/logout")
                 .logoutSuccessUrl("/login?logout")
                 .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID", "remember-me")
+                .deleteCookies("JSESSIONID", "SESSION", "remember-me", rememberMeCookieName)
                 .permitAll()
             }
             .httpBasic { basic -> basic.realmName("Spring Search Tempo") }

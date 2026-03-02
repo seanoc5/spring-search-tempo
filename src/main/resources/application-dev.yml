@@ -1,6 +1,11 @@
 server:
   port: 8082
 spring:
+  devtools:
+    restart:
+      # More reliable auth/session behavior during development.
+      # Frequent classloader restarts are a common source of re-auth surprises.
+      enabled: false
   batch:
     jdbc:
       initialize-schema: always
@@ -36,7 +41,17 @@ spring:
       # Docker profile overrides this to true.
       enabled: false
   session:
-    jdbc.initialize-schema: always
+    # Keep session state in DB for better resilience across app restarts.
+    store-type: jdbc
+    jdbc:
+      initialize-schema: never
+      table-name: SPRING_SESSION
+    timeout: 30d
+
+app:
+  security:
+    # In dev, stateless remember-me avoids DB token-rotation races and is very stable.
+    remember-me-persistent: false
 #error:
 #  handling:
 #    http-status-in-json-response: true

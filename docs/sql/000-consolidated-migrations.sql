@@ -6,7 +6,7 @@
 
 \set ON_ERROR_STOP on
 
-\echo 'Applying SQL migrations 001..020'
+\echo 'Applying SQL migrations 001..024'
 \ir 001-add-metadata-columns.sql
 \ir 002-migrate-to-generated-fts.sql
 \ir 003-add-nlp-to-fts.sql
@@ -27,4 +27,8 @@
 \ir 018-add-onedrive-tables.sql
 \ir 019-add-content-chunk-onedrive-fk.sql
 \ir 020-multi-host-support.sql
+\ir 021-add-credential-env-var.sql
+\ir 022-promote-user-content-to-analyze.sql
+\ir 023-add-crawl-config-target-host.sql
+\ir 024-fix-fs-analysis-status-checks.sql
 \echo 'Done'
