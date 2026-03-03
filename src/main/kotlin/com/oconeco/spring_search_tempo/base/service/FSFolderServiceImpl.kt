@@ -35,12 +35,25 @@ class FSFolderServiceImpl(
     @Transactional(readOnly = true)
     override fun findAll(filter: String?, pageable: Pageable, showSkipped: Boolean): Page<FSFolderDTO> {
         if (filter != null) {
-            // Filter mode: use simple queries without jobRunLabel (less common use case)
-            val filterId = filter.toLongOrNull()
-            val page = if (showSkipped) {
-                fSFolderRepository.findAllById(filterId, pageable)
+            // Filter mode: support numeric ID or URI substring.
+            val trimmedFilter = filter.trim()
+            val filterId = trimmedFilter.toLongOrNull()
+            val page = if (filterId != null) {
+                if (showSkipped) {
+                    fSFolderRepository.findAllById(filterId, pageable)
+                } else {
+                    fSFolderRepository.findByIdAndAnalysisStatusNot(filterId, AnalysisStatus.SKIP, pageable)
+                }
             } else {
-                fSFolderRepository.findByIdAndAnalysisStatusNot(filterId ?: 0L, AnalysisStatus.SKIP, pageable)
+                if (showSkipped) {
+                    fSFolderRepository.findByUriContainingIgnoreCase(trimmedFilter, pageable)
+                } else {
+                    fSFolderRepository.findByUriContainingIgnoreCaseAndAnalysisStatusNot(
+                        trimmedFilter,
+                        AnalysisStatus.SKIP,
+                        pageable
+                    )
+                }
             }
             return PageImpl(
                 page.content.map { fSFolder -> fSFolderMapper.updateFSFolderDTO(fSFolder, FSFolderDTO()) },

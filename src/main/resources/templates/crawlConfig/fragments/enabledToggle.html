@@ -1,9 +1,22 @@
-<button xmlns:th="http://www.thymeleaf.org"
-        type="button"
-        th:class="${enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
-        th:text="${enabled} ? 'Enabled' : 'Disabled'"
-        th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${id})}"
-        hx-swap="outerHTML"
-        th:title="${enabled} ? 'Click to disable' : 'Click to enable'"
-        style="cursor: pointer;">
-</button>
+<th:block xmlns:th="http://www.thymeleaf.org">
+    <button th:if="${dashboard}"
+            type="button"
+            th:class="${enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+            th:text="${enabled} ? 'On' : 'Off'"
+            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${id}, dashboard=true)}"
+            hx-swap="outerHTML"
+            th:attr="hx-on--after-request=|onConfigToggle(${id})|"
+            th:title="${enabled} ? 'Click to disable' : 'Click to enable'"
+            style="cursor: pointer;">
+    </button>
+
+    <button th:unless="${dashboard}"
+            type="button"
+            th:class="${enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+            th:text="${enabled} ? 'Enabled' : 'Disabled'"
+            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${id})}"
+            hx-swap="outerHTML"
+            th:title="${enabled} ? 'Click to disable' : 'Click to enable'"
+            style="cursor: pointer;">
+    </button>
+</th:block>

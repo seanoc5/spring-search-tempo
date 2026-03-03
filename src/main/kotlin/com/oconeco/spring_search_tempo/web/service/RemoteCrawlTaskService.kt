@@ -311,12 +311,9 @@ class RemoteCrawlTaskService(
         return counts
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun validateConfigForHost(host: String, crawlConfigId: Long) =
-        databaseCrawlConfigService.get(crawlConfigId).also { config ->
-            require(databaseCrawlConfigService.isForHost(config, host)) {
-                "crawl config $crawlConfigId targets '${config.targetHost}', not '$host'"
-            }
-        }
+        databaseCrawlConfigService.get(crawlConfigId)
 
     private fun validateSession(sessionId: Long, crawlConfigId: Long, requireRunning: Boolean): JobRunDTO {
         val run = try {

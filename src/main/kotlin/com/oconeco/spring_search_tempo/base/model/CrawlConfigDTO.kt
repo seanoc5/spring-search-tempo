@@ -71,10 +71,4 @@ class CrawlConfigDTO {
      */
     var freshnessHours: Int? = null
 
-    /**
-     * Which host this config is intended to run on.
-     * Null means "runs on any host."
-     */
-    var targetHost: String? = null
-
 }

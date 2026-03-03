@@ -3,6 +3,10 @@
         layout:decorate="~{layout}">
     <head>
         <title>Crawl Configuration Details</title>
+        <style>
+            .compact-table th, .compact-table td { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+            .inline-label { min-width: 55px; }
+        </style>
     </head>
     <body>
         <script th:inline="javascript">
@@ -24,215 +28,277 @@
                     }
                 });
             });
+
+            // Inline edit helpers
+            function handleInlineEditKey(event, input) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelInlineEdit(input.closest('form'));
+                } else if (event.key === 'Enter') {
+                    event.preventDefault();
+                    input.closest('form').requestSubmit();
+                }
+            }
+
+            function submitInlineEdit(input) {
+                const form = input.closest('form');
+                if (!form.dataset.submitting) {
+                    form.dataset.submitting = 'true';
+                    form.requestSubmit();
+                }
+            }
+
+            function cancelInlineEdit(form) {
+                const cancelUrl = form.dataset.cancelUrl;
+                if (cancelUrl) {
+                    htmx.ajax('GET', cancelUrl, { target: form, swap: 'outerHTML' });
+                }
+            }
         </script>
         <div layout:fragment="content">
-            <nav aria-label="breadcrumb" class="mb-3">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
-                    <li class="breadcrumb-item active">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</li>
-                </ol>
-            </nav>
-
-            <div class="d-flex flex-wrap mb-4">
-                <h1 class="flex-grow-1">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</h1>
-                <div class="d-flex align-items-center gap-2">
-                    <a th:href="@{/crawlConfigs/{id}/edit(id=${crawlConfig.id})}" class="btn btn-outline-secondary">
-                        <i class="bi bi-pencil me-1"></i>Edit
-                    </a>
-                    <form th:action="@{/crawlConfigs/{id}/run(id=${crawlConfig.id})}" method="post" class="d-inline" id="crawlForm">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="forceFullRecrawl" id="forceFullRecrawl" value="true">
-                                <label class="form-check-label" for="forceFullRecrawl">
-                                    Force full recrawl
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="chunkProcessAll" id="chunkProcessAll" value="true">
-                                <label class="form-check-label" for="chunkProcessAll" title="Chunk ALL files needing chunking (backfill mode)">
-                                    Chunk all files
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input border-danger" type="checkbox" name="deleteExistingData" id="deleteExistingData" value="true">
-                                <label class="form-check-label text-danger" for="deleteExistingData">
-                                    Delete existing data
-                                </label>
-                            </div>
-                            <button type="submit"
-                                    th:class="${!isForCurrentHost} ? 'btn btn-warning' : 'btn btn-primary'"
-                                    th:disabled="${!crawlConfig.enabled}"
-                                    th:title="${!isForCurrentHost} ? |This config targets '${crawlConfig.targetHost}', not this host| : ''">
-                                Run Crawl
-                            </button>
+            <!-- Breadcrumb + Header -->
+            <div class="d-flex flex-wrap align-items-center mb-2">
+                <nav aria-label="breadcrumb" class="flex-grow-1">
+                    <ol class="breadcrumb mb-0 small">
+                        <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configs</a></li>
+                        <li class="breadcrumb-item active">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</li>
+                    </ol>
+                </nav>
+                <form th:action="@{/crawlConfigs/{id}/run(id=${crawlConfig.id})}" method="post" class="d-inline" id="crawlForm">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="forceFullRecrawl" id="forceFullRecrawl" value="true">
+                            <label class="form-check-label small" for="forceFullRecrawl">Force</label>
                         </div>
-                    </form>
-                </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input" type="checkbox" name="chunkProcessAll" id="chunkProcessAll" value="true">
+                            <label class="form-check-label small" for="chunkProcessAll">Chunk</label>
+                        </div>
+                        <div class="form-check form-check-inline mb-0">
+                            <input class="form-check-input border-danger" type="checkbox" name="deleteExistingData" id="deleteExistingData" value="true">
+                            <label class="form-check-label small text-danger" for="deleteExistingData">Delete</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm" th:disabled="${!crawlConfig.enabled}">
+                            <i class="bi bi-play-fill"></i> Run
+                        </button>
+                        <a th:href="@{/crawlConfigs/{id}/edit(id=${crawlConfig.id})}" class="btn btn-outline-secondary btn-sm" title="Full edit form">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                    </div>
+                </form>
             </div>
 
-            <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+            <!-- Alerts -->
+            <div th:if="${message}" class="alert alert-success alert-dismissible fade show py-2 small" role="alert">
                 [[${message}]]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
             </div>
-
-            <div th:if="${warning}" class="alert alert-warning alert-dismissible fade show" role="alert">
+            <div th:if="${warning}" class="alert alert-warning alert-dismissible fade show py-2 small" role="alert">
                 [[${warning}]]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
             </div>
-
-            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show py-2 small" role="alert">
                 [[${error}]]
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button>
             </div>
 
-            <div class="row mb-4">
-                <div class="col-md-6">
+            <!-- ========== TOP ROW: 3 columns ========== -->
+            <div class="row g-2 mb-2">
+                <!-- LEFT 1/3: Configuration -->
+                <div class="col-lg-4">
                     <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-files me-2"></i>Content Summary</h5>
+                        <div class="card-header d-flex justify-content-between align-items-center py-1 px-2">
+                            <small class="fw-semibold"><i class="bi bi-sliders me-1"></i>Configuration</small>
+                            <small class="text-muted" style="font-size: 0.7rem;">click to edit</small>
                         </div>
-                        <div class="card-body">
-                            <div class="row text-center">
+                        <div class="card-body py-2 px-2" style="font-size: 0.85rem;">
+                            <!-- Name -->
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Name:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: textDisplay(id=${crawlConfig.id}, field='name', value=${crawlConfig.name}, label='Name')}"/>
+                            </div>
+                            <!-- Label -->
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Label:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: textDisplay(id=${crawlConfig.id}, field='displayLabel', value=${crawlConfig.displayLabel}, label='Label')}"/>
+                            </div>
+                            <!-- Status + Parallel -->
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Status:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='enabled', value=${crawlConfig.enabled}, trueLabel='Enabled', falseLabel='Disabled')}"/>
+                                <span class="text-muted ms-3 inline-label">Parallel:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='parallel', value=${crawlConfig.parallel ?: false}, trueLabel='true', falseLabel='false')}"/>
+                            </div>
+                            <!-- Max Depth + Follow Links -->
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Depth:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: numberDisplay(id=${crawlConfig.id}, field='maxDepth', value=${crawlConfig.maxDepth}, label='Max Depth', defaultText='-')}"/>
+                                <span class="text-muted ms-3 inline-label">Links:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='followLinks', value=${crawlConfig.followLinks ?: false}, trueLabel='follow', falseLabel='skip')}"/>
+                            </div>
+                            <!-- Freshness + Host -->
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Fresh:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: numberDisplay(id=${crawlConfig.id}, field='freshnessHours', value=${crawlConfig.freshnessHours}, label='Freshness', defaultText='24h')}"/>
+                                <span class="text-muted ms-3 inline-label">Host:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: hostDisplay(id=${crawlConfig.id}, field='sourceHost', value=${crawlConfig.sourceHost}, label='Host')}"/>
+                            </div>
+                            <!-- Start Paths -->
+                            <div class="d-flex align-items-start border-top pt-1 mt-1">
+                                <span class="text-muted inline-label">Paths:</span>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: pathsDisplay(id=${crawlConfig.id}, field='startPaths', paths=${crawlConfig.startPaths})}"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MIDDLE 1/3: Content Summary -->
+                <div class="col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header py-1 px-2">
+                            <small class="fw-semibold"><i class="bi bi-files me-1"></i>Content Summary</small>
+                        </div>
+                        <div class="card-body py-2 px-2">
+                            <div class="row text-center mb-2">
                                 <div class="col-6">
-                                    <div class="display-6 text-primary">[[${totalFileCount}]]</div>
-                                    <div class="text-muted">
-                                        <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}" class="text-decoration-none">
-                                            <i class="bi bi-file-earmark me-1"></i>Files
-                                        </a>
-                                    </div>
+                                    <div class="h4 mb-0 text-primary">[[${totalFileCount}]]</div>
+                                    <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}" class="text-decoration-none small">
+                                        <i class="bi bi-file-earmark"></i> Files
+                                    </a>
                                 </div>
                                 <div class="col-6">
-                                    <div class="display-6 text-success">[[${totalFolderCount}]]</div>
-                                    <div class="text-muted">
-                                        <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}" class="text-decoration-none">
-                                            <i class="bi bi-folder me-1"></i>Folders
-                                        </a>
+                                    <div class="h4 mb-0 text-success">[[${totalFolderCount}]]</div>
+                                    <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}" class="text-decoration-none small">
+                                        <i class="bi bi-folder"></i> Folders
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="border-top pt-2">
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="fw-bold text-primary">[[${searchableCount}]]</div>
+                                        <small class="text-muted">Searchable</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="fw-bold text-success">[[${nlpProcessedCount}]]</div>
+                                        <small class="text-muted">NLP</small>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="fw-bold text-warning">[[${embeddingCount}]]</div>
+                                        <small class="text-muted">Embed</small>
                                     </div>
                                 </div>
                             </div>
-                            <hr class="my-3">
-                            <h6 class="text-muted mb-2">Processing Pipeline</h6>
-                            <div class="row text-center">
-                                <div class="col-4">
-                                    <div class="h5 text-primary mb-0">[[${searchableCount}]]</div>
-                                    <small class="text-muted">Searchable</small>
-                                </div>
-                                <div class="col-4">
-                                    <div class="h5 text-success mb-0">[[${nlpProcessedCount}]]</div>
-                                    <small class="text-muted">NLP</small>
-                                </div>
-                                <div class="col-4">
-                                    <div class="h5 text-warning mb-0">[[${embeddingCount}]]</div>
-                                    <small class="text-muted">Embed</small>
-                                </div>
-                            </div>
-                            <div class="text-center mt-3">
-                                <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}" class="btn btn-outline-primary btn-sm me-2">
-                                    <i class="bi bi-file-earmark-text me-1"></i>Browse Files
+                            <div class="text-center mt-2">
+                                <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}" class="btn btn-outline-primary btn-sm py-0 me-1">
+                                    <i class="bi bi-file-earmark-text"></i> Files
                                 </a>
-                                <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}" class="btn btn-outline-success btn-sm">
-                                    <i class="bi bi-folder2-open me-1"></i>Browse Folders
+                                <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}" class="btn btn-outline-success btn-sm py-0">
+                                    <i class="bi bi-folder2-open"></i> Folders
                                 </a>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+
+                <!-- RIGHT 1/3: Job History (combined) -->
+                <div class="col-lg-4">
                     <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Quick Stats</h5>
+                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center">
+                            <small class="fw-semibold"><i class="bi bi-clock-history me-1"></i>Job History</small>
+                            <span class="badge bg-primary">[[${page.totalElements}]] runs</span>
                         </div>
-                        <div class="card-body">
-                            <dl class="row mb-0">
-                                <dt class="col-sm-5">Status:</dt>
-                                <dd class="col-sm-7">
-                                    <span th:if="${crawlConfig.enabled}" class="badge bg-success">Enabled</span>
-                                    <span th:unless="${crawlConfig.enabled}" class="badge bg-secondary">Disabled</span>
-                                </dd>
-                                <dt class="col-sm-5">Total Job Runs:</dt>
-                                <dd class="col-sm-7">[[${page.totalElements}]]</dd>
-                                <dt class="col-sm-5">Max Depth:</dt>
-                                <dd class="col-sm-7">[[${crawlConfig.maxDepth}]]</dd>
-                                <dt class="col-sm-5">Parallel:</dt>
-                                <dd class="col-sm-7">[[${crawlConfig.parallel}]]</dd>
-                                <dt class="col-sm-5">[[#{targetHost.label}]]:</dt>
-                                <dd class="col-sm-7">
-                                    <span th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any</span>
-                                    <span th:if="${crawlConfig.targetHost != null && isForCurrentHost}" class="text-success" th:text="${crawlConfig.targetHost}"></span>
-                                    <span th:if="${crawlConfig.targetHost != null && !isForCurrentHost}">
-                                        <span class="text-warning" th:text="${crawlConfig.targetHost}"></span>
-                                        <span class="badge bg-warning text-dark ms-1">mismatch</span>
-                                    </span>
-                                </dd>
-                            </dl>
+                        <div class="card-body py-1 px-2" style="font-size: 0.8rem; max-height: 200px; overflow-y: auto;">
+                            <div th:if="${jobRuns.empty}" class="text-muted text-center py-3">
+                                <i class="bi bi-inbox"></i> No job runs yet
+                            </div>
+                            <table th:unless="${jobRuns.empty}" class="table table-sm compact-table mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th>Files</th>
+                                        <th>Folders</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="jobRun : ${jobRuns}">
+                                        <td th:text="${#temporals.format(jobRun.startTime, 'MM-dd HH:mm')}"></td>
+                                        <td>
+                                            <span th:switch="${jobRun.runStatus.name()}">
+                                                <span th:case="'RUNNING'" class="badge bg-primary">Run</span>
+                                                <span th:case="'COMPLETED'" class="badge bg-success">OK</span>
+                                                <span th:case="'FAILED'" class="badge bg-danger">Fail</span>
+                                                <span th:case="'CANCELLED'" class="badge bg-warning">Stop</span>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-success" th:text="${jobRun.filesNew}"></span>/<span class="text-primary" th:text="${jobRun.filesUpdated}"></span>/<span class="text-muted" th:text="${jobRun.filesSkipped}"></span>
+                                        </td>
+                                        <td>
+                                            <span class="text-success" th:text="${jobRun.foldersNew}"></span>/<span class="text-primary" th:text="${jobRun.foldersUpdated}"></span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div th:unless="${jobRuns.empty}" class="card-footer py-1 px-2 bg-light">
+                            <div th:replace="~{fragments/utils::pagination()}" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Configuration Details</h5>
-                </div>
-                <div class="card-body">
-                    <dl class="row">
-                        <dt class="col-sm-3">Name:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.name}]]</dd>
-
-                        <dt class="col-sm-3">Display Label:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.displayLabel}]]</dd>
-
-                        <dt class="col-sm-3">Status:</dt>
-                        <dd class="col-sm-9">
-                            <span th:if="${crawlConfig.enabled}" class="badge bg-success">Enabled</span>
-                            <span th:unless="${crawlConfig.enabled}" class="badge bg-secondary">Disabled</span>
-                        </dd>
-
-                        <dt class="col-sm-3">Start Paths:</dt>
-                        <dd class="col-sm-9">
-                            <ul th:if="${crawlConfig.startPaths != null && !crawlConfig.startPaths.empty}">
-                                <li th:each="path : ${crawlConfig.startPaths}">[[${path}]]</li>
-                            </ul>
-                        </dd>
-
-                        <dt class="col-sm-3">Max Depth:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.maxDepth}]]</dd>
-
-                        <dt class="col-sm-3">Follow Links:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.followLinks}]]</dd>
-
-                        <dt class="col-sm-3">Parallel:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.parallel}]]</dd>
-
-                        <dt class="col-sm-3">Freshness Hours:</dt>
-                        <dd class="col-sm-9">[[${crawlConfig.freshnessHours ?: 'Default (24)'}]]</dd>
-
-                        <dt class="col-sm-3">[[#{targetHost.label}]]:</dt>
-                        <dd class="col-sm-9">
-                            <span th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any host</span>
-                            <span th:if="${crawlConfig.targetHost != null}" th:text="${crawlConfig.targetHost}"></span>
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-
-            <!-- Data Management -->
-            <div class="card mb-4 border-danger">
-                <div class="card-header bg-danger bg-opacity-10">
-                    <h5 class="mb-0 text-danger">
-                        <i class="bi bi-exclamation-triangle me-2"></i>Data Management
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h6 class="mb-1">Delete All Crawl Data</h6>
-                            <p class="text-muted mb-0 small">
-                                Permanently delete all files, folders, and content chunks associated with this crawl configuration.
-                                This action cannot be undone.
-                            </p>
+            <!-- ========== SECOND ROW: 2 columns ========== -->
+            <div class="row g-2">
+                <!-- LEFT 1/2: Pattern Configuration -->
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center">
+                            <a class="text-decoration-none small fw-semibold" data-bs-toggle="collapse" href="#patternConfig" role="button" aria-expanded="false">
+                                <i class="bi bi-regex me-1"></i>Pattern Configuration
+                                <i class="bi bi-chevron-down ms-1"></i>
+                            </a>
+                            <small class="text-muted" style="font-size: 0.7rem;">click to edit</small>
                         </div>
-                        <div class="col-md-4 text-end">
+                        <div class="collapse" id="patternConfig">
+                            <div class="card-body py-2 px-2" style="font-size: 0.8rem;">
+                                <div class="row">
+                                    <!-- Folder Patterns -->
+                                    <div class="col-6">
+                                        <div class="fw-semibold mb-1"><i class="bi bi-folder me-1"></i>Folder</div>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='folderPatternsSkip', patternsText=${folderPatternsSkipText}, badgeClass='bg-secondary', badgeLabel='SKIP')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='folderPatternsLocate', patternsText=${folderPatternsLocateText}, badgeClass='bg-info', badgeLabel='LOCATE')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='folderPatternsIndex', patternsText=${folderPatternsIndexText}, badgeClass='bg-primary', badgeLabel='INDEX')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='folderPatternsAnalyze', patternsText=${folderPatternsAnalyzeText}, badgeClass='bg-success', badgeLabel='ANALYZE')}"/>
+                                    </div>
+                                    <!-- File Patterns -->
+                                    <div class="col-6">
+                                        <div class="fw-semibold mb-1"><i class="bi bi-file-earmark me-1"></i>File</div>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='filePatternsSkip', patternsText=${filePatternsSkipText}, badgeClass='bg-secondary', badgeLabel='SKIP')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='filePatternsLocate', patternsText=${filePatternsLocateText}, badgeClass='bg-info', badgeLabel='LOCATE')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='filePatternsIndex', patternsText=${filePatternsIndexText}, badgeClass='bg-primary', badgeLabel='INDEX')}"/>
+                                        <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: patternDisplay(id=${crawlConfig.id}, field='filePatternsAnalyze', patternsText=${filePatternsAnalyzeText}, badgeClass='bg-success', badgeLabel='ANALYZE')}"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT 1/2: Data Management -->
+                <div class="col-lg-6">
+                    <div class="card h-100 border-danger">
+                        <div class="card-header bg-danger bg-opacity-10 py-1 px-2">
+                            <small class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Data Management</small>
+                        </div>
+                        <div class="card-body py-2 px-2 d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold small">Delete All Crawl Data</div>
+                                <small class="text-muted">
+                                    Remove [[${totalFileCount}]] files, [[${totalFolderCount}]] folders and all chunks.
+                                </small>
+                            </div>
                             <form th:action="@{/crawlConfigs/{id}/delete-data(id=${crawlConfig.id})}" method="post" class="d-inline"
                                   onsubmit="return confirm('WARNING: This will permanently delete ALL data for this crawl configuration:\n\n' +
                                       '• ' + [[${totalFileCount}]] + ' files\n' +
@@ -240,159 +306,13 @@
                                       '• All associated content chunks\n\n' +
                                       'This action CANNOT be undone.\n\n' +
                                       'Are you sure you want to proceed?');">
-                                <button type="submit" class="btn btn-outline-danger"
+                                <button type="submit" class="btn btn-outline-danger btn-sm"
                                         th:disabled="${totalFileCount == 0 and totalFolderCount == 0}">
-                                    <i class="bi bi-trash me-1"></i>Delete All Data
+                                    <i class="bi bi-trash"></i> Delete
                                 </button>
                             </form>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Pattern Configuration (Collapsible) -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <a class="text-decoration-none" data-bs-toggle="collapse" href="#patternConfig" role="button" aria-expanded="false" aria-controls="patternConfig">
-                            <i class="bi bi-regex me-2"></i>Pattern Configuration
-                            <i class="bi bi-chevron-down float-end"></i>
-                        </a>
-                    </h5>
-                </div>
-                <div class="collapse" id="patternConfig">
-                    <div class="card-body">
-                        <div class="row">
-                            <!-- Folder Patterns -->
-                            <div class="col-lg-6">
-                                <h6 class="text-muted mb-3"><i class="bi bi-folder me-1"></i>Folder Patterns</h6>
-
-                                <div th:if="${crawlConfig.folderPatternsSkip != null}" class="mb-3">
-                                    <strong><span class="badge bg-secondary">SKIP</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsSkip}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.folderPatternsLocate != null}" class="mb-3">
-                                    <strong><span class="badge bg-info">LOCATE</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsLocate}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.folderPatternsIndex != null}" class="mb-3">
-                                    <strong><span class="badge bg-primary">INDEX</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsIndex}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.folderPatternsAnalyze != null}" class="mb-3">
-                                    <strong><span class="badge bg-success">ANALYZE</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.folderPatternsAnalyze}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.folderPatternsSkip == null && crawlConfig.folderPatternsLocate == null && crawlConfig.folderPatternsIndex == null && crawlConfig.folderPatternsAnalyze == null}" class="text-muted">
-                                    <em>No folder patterns configured (using defaults)</em>
-                                </div>
-                            </div>
-
-                            <!-- File Patterns -->
-                            <div class="col-lg-6">
-                                <h6 class="text-muted mb-3"><i class="bi bi-file-earmark me-1"></i>File Patterns</h6>
-
-                                <div th:if="${crawlConfig.filePatternsSkip != null}" class="mb-3">
-                                    <strong><span class="badge bg-secondary">SKIP</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsSkip}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.filePatternsLocate != null}" class="mb-3">
-                                    <strong><span class="badge bg-info">LOCATE</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsLocate}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.filePatternsIndex != null}" class="mb-3">
-                                    <strong><span class="badge bg-primary">INDEX</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsIndex}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.filePatternsAnalyze != null}" class="mb-3">
-                                    <strong><span class="badge bg-success">ANALYZE</span></strong>
-                                    <pre class="bg-light p-2 rounded mt-1 mb-0 small"><code th:text="${crawlConfig.filePatternsAnalyze}"></code></pre>
-                                </div>
-
-                                <div th:if="${crawlConfig.filePatternsSkip == null && crawlConfig.filePatternsLocate == null && crawlConfig.filePatternsIndex == null && crawlConfig.filePatternsAnalyze == null}" class="text-muted">
-                                    <em>No file patterns configured (using defaults)</em>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="alert alert-secondary mt-3 mb-0">
-                            <small><i class="bi bi-info-circle me-1"></i>Global default patterns (from application.yml) are merged with these config-specific patterns. SKIP patterns accumulate; other levels follow priority order.</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Job Run History</h5>
-                </div>
-                <div class="card-body">
-                    <div th:if="${jobRuns.empty}">No job runs found for this configuration.</div>
-                    <div th:if="${!jobRuns.empty}" class="table-responsive">
-                        <table class="table table-striped table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Run ID</th>
-                                    <th scope="col">Job Name</th>
-                                    <th scope="col">Start Time</th>
-                                    <th scope="col">Finish Time</th>
-                                    <th scope="col">Status</th>
-                                    <th scope="col">Files Processed</th>
-                                    <th scope="col">Files Owned</th>
-                                    <th scope="col">Folders Processed</th>
-                                    <th scope="col">Folders Owned</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr th:each="jobRun : ${jobRuns}">
-                                    <td>[[${jobRun.id}]]</td>
-                                    <td>[[${jobRun.jobName}]]</td>
-                                    <td>[[${#temporals.format(jobRun.startTime, 'yyyy-MM-dd HH:mm:ss')}]]</td>
-                                    <td>
-                                        <span th:if="${jobRun.finishTime != null}">
-                                            [[${#temporals.format(jobRun.finishTime, 'yyyy-MM-dd HH:mm:ss')}]]
-                                        </span>
-                                        <span th:if="${jobRun.finishTime == null}">-</span>
-                                    </td>
-                                    <td>
-                                        <span th:switch="${jobRun.runStatus.name()}">
-                                            <span th:case="'RUNNING'" class="badge bg-primary">Running</span>
-                                            <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
-                                            <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
-                                            <span th:case="'CANCELLED'" class="badge bg-warning">Cancelled</span>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <small>
-                                            New: [[${jobRun.filesNew}]] |
-                                            Upd: [[${jobRun.filesUpdated}]] |
-                                            Skip: [[${jobRun.filesSkipped}]]
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-primary">[[${jobRunFileCounts[jobRun.id] ?: 0}]]</span>
-                                    </td>
-                                    <td>
-                                        <small>
-                                            New: [[${jobRun.foldersNew}]] |
-                                            Upd: [[${jobRun.foldersUpdated}]]
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-success">[[${jobRunFolderCounts[jobRun.id] ?: 0}]]</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div th:replace="~{fragments/utils::pagination()}" />
                 </div>
             </div>
         </div>

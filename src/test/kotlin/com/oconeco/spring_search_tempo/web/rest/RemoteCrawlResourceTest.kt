@@ -24,9 +24,8 @@ class RemoteCrawlResourceTest : BaseIT() {
 
     @Test
     fun `remote queue lifecycle should support start enqueue claim ingest ack and complete`() {
-        val targetHost = "win11-devbox"
         val requestHost = "WIN11-DEVBOX"
-        val crawlConfigId = createRemoteTestCrawlConfig(targetHost)
+        val crawlConfigId = createRemoteTestCrawlConfig()
 
         val startResponse = RestAssured
             .given()
@@ -183,7 +182,7 @@ class RemoteCrawlResourceTest : BaseIT() {
                 .body("runStatus", equalTo("COMPLETED"))
     }
 
-    private fun createRemoteTestCrawlConfig(targetHostName: String): Long {
+    private fun createRemoteTestCrawlConfig(): Long {
         val suffix = System.currentTimeMillis()
         return crawlConfigService.create(CrawlConfigDTO().apply {
             uri = "crawl-config:remote-it-$suffix"
@@ -195,7 +194,6 @@ class RemoteCrawlResourceTest : BaseIT() {
             maxDepth = 20
             followLinks = false
             parallel = false
-            this.targetHost = targetHostName
             version = 0L
             folderPatternsSkip = "[\".*/skip-me$\"]"
             folderPatternsLocate = "[\".*\"]"

@@ -18,10 +18,7 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
 
     fun existsByName(name: String): Boolean
 
-    @Query("SELECT c FROM CrawlConfig c WHERE c.enabled = :enabled AND (c.targetHost IS NULL OR c.targetHost = :host)")
-    fun findEnabledForHost(enabled: Boolean, host: String): List<CrawlConfig>
-
-    @Query("SELECT DISTINCT c.targetHost FROM CrawlConfig c WHERE c.targetHost IS NOT NULL ORDER BY c.targetHost")
-    fun findDistinctTargetHosts(): List<String>
+    @Query("SELECT DISTINCT c.sourceHost FROM CrawlConfig c WHERE c.sourceHost IS NOT NULL ORDER BY c.sourceHost")
+    fun findDistinctSourceHosts(): List<String>
 
 }

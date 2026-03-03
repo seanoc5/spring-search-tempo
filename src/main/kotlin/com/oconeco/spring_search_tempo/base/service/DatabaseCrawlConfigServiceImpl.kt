@@ -1,7 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
-import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.CrawlConfig
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
@@ -56,6 +55,10 @@ class DatabaseCrawlConfigServiceImpl(
     override fun create(crawlConfigDTO: CrawlConfigDTO): Long {
         val crawlConfig = CrawlConfig()
         crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        // New DTOs may not carry an explicit version from forms/wizard.
+        if (crawlConfig.version == null) {
+            crawlConfig.version = 0L
+        }
         return crawlConfigRepository.save(crawlConfig).id!!
     }
 
@@ -82,31 +85,8 @@ class DatabaseCrawlConfigServiceImpl(
         return crawlConfig.enabled
     }
 
-    override fun findAllEnabledForHost(host: String): List<CrawlConfigDTO> {
-        val normalizedHost = host.trim()
-        return crawlConfigRepository.findByEnabled(true)
-            .filter { config ->
-                val target = config.targetHost?.trim()
-                target.isNullOrBlank() || target.equals(normalizedHost, ignoreCase = true)
-            }
-            .map { crawlConfigMapper.updateCrawlConfigDTO(it, CrawlConfigDTO()) }
-    }
-
-    override fun findAllEnabledForCurrentHost(): List<CrawlConfigDTO> {
-        return findAllEnabledForHost(HostNameHolder.currentHostName)
-    }
-
-    override fun findDistinctTargetHosts(): List<String> {
-        return crawlConfigRepository.findDistinctTargetHosts()
-    }
-
-    override fun isForHost(config: CrawlConfigDTO, host: String): Boolean {
-        val target = config.targetHost?.trim()
-        return target.isNullOrBlank() || target.equals(host.trim(), ignoreCase = true)
-    }
-
-    override fun isForCurrentHost(config: CrawlConfigDTO): Boolean {
-        return isForHost(config, HostNameHolder.currentHostName)
+    override fun findDistinctSourceHosts(): List<String> {
+        return crawlConfigRepository.findDistinctSourceHosts()
     }
 
 }

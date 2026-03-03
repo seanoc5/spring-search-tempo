@@ -4,18 +4,27 @@ import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.web.model.CrawlConfigRowMetrics
 import com.oconeco.spring_search_tempo.web.model.CrawlConfigFacet
 import com.oconeco.spring_search_tempo.web.model.CrawlConfigSummary
 import com.oconeco.spring_search_tempo.web.model.DashboardStatsDTO
+import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 @Service
 class DashboardService(
     private val fileService: FSFileService,
     private val folderService: FSFolderService,
     private val chunkService: ContentChunkService,
-    private val crawlConfigService: DatabaseCrawlConfigService
+    private val crawlConfigService: DatabaseCrawlConfigService,
+    private val fileRepository: FSFileRepository,
+    private val folderRepository: FSFolderRepository,
+    private val chunkRepository: ContentChunkRepository
 ) {
 
     /**
@@ -127,5 +136,65 @@ class DashboardService(
         }
 
         return stats
+    }
+
+    @Transactional(readOnly = true)
+    fun getCrawlConfigRowMetrics(configIds: Collection<Long>): Map<Long, CrawlConfigRowMetrics> {
+        if (configIds.isEmpty()) {
+            return emptyMap()
+        }
+
+        val fileCounts = fileRepository.countTotalGroupedByCrawlConfigIds(configIds)
+            .associate { toLong(it[0]) to toLong(it[1]) }
+        val folderCounts = folderRepository.countTotalGroupedByCrawlConfigIds(configIds)
+            .associate { toLong(it[0]) to toLong(it[1]) }
+        val fileSizes = fileRepository.sumSizeGroupedByCrawlConfigIds(configIds)
+            .associate { toLong(it[0]) to toLong(it[1]) }
+
+        return configIds.associateWith { configId ->
+            CrawlConfigRowMetrics(
+                folderCount = folderCounts[configId] ?: 0,
+                fileCount = fileCounts[configId] ?: 0,
+                totalFileSize = fileSizes[configId] ?: 0
+            )
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun getFolderRowMetrics(folderIds: Collection<Long>): Map<Long, FolderRowMetrics> {
+        if (folderIds.isEmpty()) {
+            return emptyMap()
+        }
+        return folderRepository.findDashboardFolderMetrics(folderIds).associate { row ->
+            val folderId = toLong(row[0])
+            folderId to FolderRowMetrics(
+                directFolderCount = toLong(row[1]),
+                recursiveFolderCount = toLong(row[2]),
+                directFileCount = toLong(row[3]),
+                recursiveFileCount = toLong(row[4]),
+                totalFileSize = toLong(row[5])
+            )
+        }
+    }
+
+    @Transactional(readOnly = true)
+    fun getFileFragmentCounts(fileIds: Collection<Long>): Map<Long, Long> {
+        if (fileIds.isEmpty()) {
+            return emptyMap()
+        }
+        return chunkRepository.countGroupedByFileIds(fileIds)
+            .associate { toLong(it[0]) to toLong(it[1]) }
+    }
+
+    private fun toLong(value: Any?): Long {
+        return when (value) {
+            null -> 0
+            is Long -> value
+            is Int -> value.toLong()
+            is java.math.BigInteger -> value.toLong()
+            is java.math.BigDecimal -> value.toLong()
+            is Number -> value.toLong()
+            else -> value.toString().toLongOrNull() ?: 0
+        }
     }
 }

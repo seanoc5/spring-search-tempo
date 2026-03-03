@@ -21,7 +21,7 @@ class RemoteCrawlPlannerService(
         require(trimmedHost.isNotBlank()) { "host is required" }
 
         val defaults = runtimeCrawlConfigService.getDefaults()
-        val configs = databaseCrawlConfigService.findAllEnabledForHost(trimmedHost).map { config ->
+        val configs = databaseCrawlConfigService.findAllEnabled().map { config ->
             val definition = crawlConfigConverter.toDefinition(config)
             val effectivePatterns = runtimeCrawlConfigService.getEffectivePatterns(definition)
             RemoteCrawlConfigAssignment(
@@ -30,7 +30,6 @@ class RemoteCrawlPlannerService(
                 displayLabel = config.displayLabel ?: config.name ?: "Unnamed Crawl",
                 description = config.description,
                 sourceHost = config.sourceHost,
-                targetHost = config.targetHost,
                 startPaths = definition.startPaths,
                 maxDepth = definition.getMaxDepth(defaults),
                 followLinks = definition.getFollowLinks(defaults),
@@ -65,9 +64,6 @@ class RemoteCrawlPlannerService(
 
         val config = databaseCrawlConfigService.get(request.crawlConfigId)
         require(config.enabled) { "crawl config ${request.crawlConfigId} is disabled" }
-        require(databaseCrawlConfigService.isForHost(config, host)) {
-            "crawl config ${request.crawlConfigId} targets '${config.targetHost}', not '$host'"
-        }
 
         val definition = crawlConfigConverter.toDefinition(config)
         val effectivePatterns = runtimeCrawlConfigService.getEffectivePatterns(definition)
@@ -159,7 +155,6 @@ data class RemoteCrawlConfigAssignment(
     val displayLabel: String,
     val description: String?,
     val sourceHost: String?,
-    val targetHost: String?,
     val startPaths: List<String>,
     val maxDepth: Int,
     val followLinks: Boolean,

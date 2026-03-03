@@ -3,90 +3,136 @@
 <body>
     <!-- Running Jobs Fragment - auto-refreshed via HTMX -->
     <th:block th:fragment="running-jobs">
-        <div th:if="${!runningJobs.empty}" class="card border-primary mb-4">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-arrow-repeat spin me-2"></i>
-                    Running Jobs ([[${#lists.size(runningJobs)}]])
-                </h5>
-                <small class="text-white-50">Auto-refreshes every 5 seconds</small>
+        <div th:if="${!runningJobs.empty}"
+             th:with="staleCount=${#lists.size(runningJobs.?[duration != null and duration.toHours() >= 4])}"
+             class="card border-primary mb-3">
+            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <strong class="mb-0">
+                        <i class="bi bi-arrow-repeat spin me-1"></i>
+                        Running Jobs
+                    </strong>
+                    <span class="badge bg-light text-primary">[[${#lists.size(runningJobs)}]]</span>
+                    <span th:if="${staleCount > 0}" class="badge bg-warning text-dark">[[${staleCount}]] stale</span>
+                    <small class="text-white-50">auto-refresh: 5s</small>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <button type="button" class="btn btn-sm btn-outline-light"
+                            hx-get="/batch/running"
+                            hx-target="#runningJobsContainer"
+                            hx-swap="innerHTML"
+                            title="Refresh now">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-light"
+                            hx-post="/batch/running/stop-all"
+                            hx-target="#runningJobsContainer"
+                            hx-swap="innerHTML"
+                            hx-confirm="Stop all currently running jobs?">
+                        <i class="bi bi-stop-fill"></i> Stop All
+                    </button>
+                    <button type="button" class="btn btn-sm btn-warning"
+                            hx-post="/batch/running/mark-all-failed"
+                            hx-target="#runningJobsContainer"
+                            hx-swap="innerHTML"
+                            hx-confirm="Mark ALL running jobs as FAILED? Use this only when jobs are orphaned or stuck.">
+                        <i class="bi bi-exclamation-triangle"></i> Mark All Failed
+                    </button>
+                </div>
             </div>
             <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead>
-                        <tr>
-                            <th>Execution ID</th>
-                            <th>Job Name</th>
-                            <th>Started</th>
-                            <th>Running For</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Stale threshold: 4 hours = 240 minutes -->
-                        <tr th:each="job : ${runningJobs}"
-                            th:classappend="${job.duration != null and job.duration.toHours() >= 4} ? 'table-warning' : ''">
-                            <td>
-                                <a th:href="@{/batch/{id}(id=${job.executionId})}"
-                                   class="text-decoration-none fw-semibold">
-                                    #[[${job.executionId}]]
-                                </a>
-                            </td>
-                            <td>[[${job.jobName}]]</td>
-                            <td>
-                                <span th:if="${job.startTime != null}"
-                                      th:text="${#temporals.format(job.startTime, 'yyyy-MM-dd HH:mm:ss')}"></span>
-                            </td>
-                            <td>
-                                <span th:if="${job.duration != null}"
-                                      th:classappend="${job.duration.toHours() >= 4} ? 'text-danger fw-bold' : ''">
-                                    <span th:if="${job.duration.toHours() > 0}"
-                                          th:text="${job.duration.toHours() + ' hr ' + (job.duration.toMinutes() % 60) + ' min'}"></span>
-                                    <span th:if="${job.duration.toHours() == 0 && job.duration.toMinutes() > 0}"
-                                          th:text="${job.duration.toMinutes() + ' min ' + (job.duration.toSeconds() % 60) + ' sec'}"></span>
-                                    <span th:if="${job.duration.toMinutes() == 0}"
-                                          th:text="${job.duration.toSeconds() + ' sec'}"></span>
-                                </span>
-                            </td>
-                            <td>
-                                <!-- Show stale warning for jobs running > 4 hours -->
-                                <span th:if="${job.duration != null and job.duration.toHours() >= 4}"
-                                      class="badge bg-warning text-dark">
-                                    <i class="bi bi-exclamation-triangle"></i> Likely Stale
-                                </span>
-                                <span th:if="${job.duration == null or job.duration.toHours() < 4}"
-                                      class="badge bg-primary">
-                                    <i class="bi bi-arrow-repeat spin"></i> Running
-                                </span>
-                            </td>
-                            <td>
-                                <!-- For stale jobs, show Mark as Failed button (HTMX with toast) -->
-                                <th:block th:if="${job.duration != null and job.duration.toHours() >= 4}">
-                                    <button type="button" class="btn btn-sm btn-danger"
-                                            th:hx-post="@{/batch/{id}/mark-failed(id=${job.executionId})}"
-                                            hx-target="#runningJobsContainer"
-                                            hx-swap="innerHTML"
-                                            hx-confirm="Mark this stale job as FAILED?">
-                                        <i class="bi bi-x-circle"></i> Mark Failed
-                                    </button>
-                                </th:block>
-                                <!-- For running jobs, show Stop button (HTMX with toast) -->
-                                <th:block th:if="${job.duration == null or job.duration.toHours() < 4}">
-                                    <button type="button" class="btn btn-sm btn-outline-warning"
-                                            th:hx-post="@{/batch/{id}/stop(id=${job.executionId})}"
-                                            hx-target="#runningJobsContainer"
-                                            hx-swap="innerHTML"
-                                            hx-confirm="Stop this job execution?">
-                                        <i class="bi bi-stop-fill"></i> Stop
-                                    </button>
-                                </th:block>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Job</th>
+                                <th>Started</th>
+                                <th>Age</th>
+                                <th class="text-end">Prm</th>
+                                <th>State</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="job : ${runningJobs}"
+                                th:with="isStale=${job.duration != null and job.duration.toHours() >= 4}"
+                                th:classappend="${isStale} ? 'table-warning' : ''">
+                                <td class="text-nowrap">
+                                    <a th:href="@{/batch/{id}(id=${job.executionId})}" class="text-decoration-none fw-semibold">
+                                        #[[${job.executionId}]]
+                                    </a>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-truncate" style="max-width: 260px;" th:title="${job.jobName}">[[${job.jobName}]]</div>
+                                    <div th:if="${job.jobRunId != null}" class="small text-muted">JobRun #[[${job.jobRunId}]]</div>
+                                </td>
+                                <td class="text-nowrap small">
+                                    <span th:if="${job.startTime != null}"
+                                          th:text="${#temporals.format(job.startTime, 'MM-dd HH:mm:ss')}"></span>
+                                    <span th:if="${job.startTime == null}" class="text-muted">-</span>
+                                </td>
+                                <td class="text-nowrap small">
+                                    <span th:if="${job.duration != null}"
+                                          th:classappend="${isStale} ? 'text-danger fw-bold' : ''">
+                                        <span th:if="${job.duration.toHours() > 0}"
+                                              th:text="${job.duration.toHours() + 'h ' + (job.duration.toMinutes() % 60) + 'm'}"></span>
+                                        <span th:if="${job.duration.toHours() == 0 and job.duration.toMinutes() > 0}"
+                                              th:text="${job.duration.toMinutes() + 'm ' + (job.duration.toSeconds() % 60) + 's'}"></span>
+                                        <span th:if="${job.duration.toMinutes() == 0}"
+                                              th:text="${job.duration.toSeconds() + 's'}"></span>
+                                    </span>
+                                    <span th:if="${job.duration == null}" class="text-muted">-</span>
+                                </td>
+                                <td class="text-end small">
+                                    <span th:text="${#maps.size(job.parameters)}">0</span>
+                                </td>
+                                <td>
+                                    <span th:if="${isStale}" class="badge bg-warning text-dark">Stale</span>
+                                    <span th:unless="${isStale}" class="badge bg-primary">Running</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex justify-content-end gap-1">
+                                        <a th:href="@{/batch/{id}(id=${job.executionId})}" class="btn btn-sm btn-outline-primary" title="View details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-warning"
+                                                th:hx-post="@{/batch/{id}/stop(id=${job.executionId})}"
+                                                hx-target="#runningJobsContainer"
+                                                hx-swap="innerHTML"
+                                                hx-confirm="Stop this job execution?"
+                                                title="Request stop">
+                                            <i class="bi bi-stop-fill"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-danger"
+                                                th:hx-post="@{/batch/{id}/mark-failed(id=${job.executionId})}"
+                                                hx-target="#runningJobsContainer"
+                                                hx-swap="innerHTML"
+                                                hx-confirm="Mark this execution as FAILED?"
+                                                title="Force fail">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
+
+        <div th:if="${runningJobs.empty}" class="card mb-3 border-light">
+            <div class="card-body py-2 px-3 small text-muted d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-check-circle me-1"></i>No running jobs</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        hx-get="/batch/running"
+                        hx-target="#runningJobsContainer"
+                        hx-swap="innerHTML">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+
         <style>
             @keyframes spin {
                 from { transform: rotate(0deg); }

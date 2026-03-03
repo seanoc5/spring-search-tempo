@@ -288,6 +288,21 @@ class BatchAdminService(
     }
 
     /**
+     * Stop all currently running job executions.
+     * Returns the number of executions for which stop was successfully requested.
+     */
+    fun stopAllRunningJobs(): Int {
+        val runningIds = getRunningJobExecutions().map { it.executionId }.distinct()
+        var stopped = 0
+        for (executionId in runningIds) {
+            if (stopJob(executionId)) {
+                stopped++
+            }
+        }
+        return stopped
+    }
+
+    /**
      * Restart a failed or stopped job execution.
      * Returns the new execution ID if restart was successful, null otherwise.
      *
@@ -454,6 +469,22 @@ class BatchAdminService(
             log.error("Failed to mark job execution {} as failed: {}", executionId, e.message)
             false
         }
+    }
+
+    /**
+     * Mark all running job executions as FAILED.
+     * Returns the number of executions updated.
+     */
+    @Transactional
+    fun markAllRunningJobsAsFailed(reason: String = "Bulk marked as failed by admin"): Int {
+        val runningIds = getRunningJobExecutions().map { it.executionId }.distinct()
+        var failed = 0
+        for (executionId in runningIds) {
+            if (markJobAsFailed(executionId, reason)) {
+                failed++
+            }
+        }
+        return failed
     }
 
     /**

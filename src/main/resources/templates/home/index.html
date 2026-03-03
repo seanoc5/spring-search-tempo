@@ -13,39 +13,64 @@
         .stat-breakdown { font-size: 0.75rem; margin-top: 0.5rem; }
         .stat-breakdown .badge { font-weight: 500; }
 
+        .dashboard-card-title-inline {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.25rem;
+        }
+        .analysis-badge-skip {
+            background: #f8f9fa;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+        .analysis-badge-locate {
+            background: #495057;
+            color: #fff;
+        }
+
         /* Compact config list styles */
-        .compact-config-list { max-height: 400px; overflow-y: auto; }
+        .compact-config-list { max-height: 420px; overflow-y: auto; }
         .compact-config-row {
-            display: flex;
+            display: grid;
+            grid-template-columns: 24px minmax(120px, 1.3fr) minmax(140px, 1.6fr) minmax(130px, 1fr) 74px;
+            gap: 0.4rem;
             align-items: center;
-            padding: 0.4rem 0.5rem;
+            padding: 0.35rem 0.5rem;
             border-bottom: 1px solid #f0f0f0;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
+            line-height: 1.1rem;
         }
         .compact-config-row:hover { background: #f8f9fa; }
         .compact-config-row:last-child { border-bottom: none; }
-        .compact-config-check { flex-shrink: 0; margin-right: 0.5rem; }
-        .compact-config-name {
-            flex: 1;
+        .compact-config-check { display: flex; justify-content: center; }
+        .compact-config-name,
+        .compact-config-paths,
+        .compact-config-metrics {
             min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         .compact-config-name a { text-decoration: none; }
-        .compact-config-status { flex-shrink: 0; margin-left: 0.5rem; }
-        /* Hide start paths on smaller screens */
-        .compact-config-paths {
-            flex-shrink: 0;
-            max-width: 120px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 0.75rem;
-            color: #6c757d;
+        .compact-config-paths code {
+            font-size: 0.72rem;
+            color: #495057;
         }
-        @media (max-width: 1400px) {
-            .compact-config-paths { display: none; }
+        .compact-config-toggle {
+            display: flex;
+            justify-content: flex-end;
+        }
+        @media (max-width: 1450px) {
+            .compact-config-row {
+                grid-template-columns: 24px minmax(120px, 1fr) minmax(130px, 1.4fr) minmax(120px, 1fr) 64px;
+            }
+        }
+        @media (max-width: 1200px) {
+            .compact-config-row {
+                grid-template-columns: 24px minmax(110px, 1fr) minmax(120px, 1.2fr) minmax(110px, 1fr) 58px;
+                font-size: 0.78rem;
+            }
         }
 
         /* Run selected toolbar */
@@ -65,11 +90,28 @@
         .content-tabs .nav-link.active {
             font-weight: 600;
         }
-        .tab-table { font-size: 0.85rem; }
-        .tab-table th { font-weight: 600; font-size: 0.8rem; }
-        .tab-table td { padding: 0.4rem 0.5rem; }
+        .tab-table { font-size: 0.8rem; }
+        .tab-table th { font-weight: 600; font-size: 0.75rem; }
+        .tab-table td { padding: 0.32rem 0.45rem; vertical-align: middle; }
         .tab-pagination { font-size: 0.85rem; }
         .tab-pagination .page-link { padding: 0.25rem 0.5rem; }
+        .tab-pagination .page-summary { width: 33%; min-width: 180px; }
+        .tab-pagination .page-controls { width: 67%; min-width: 260px; }
+        .status-icon {
+            width: 0.8rem;
+            display: inline-block;
+            text-align: center;
+            margin-right: 0.2rem;
+        }
+        .text-size-review {
+            color: #b02a37;
+            font-weight: 700;
+        }
+        .sort-link {
+            color: inherit;
+            text-decoration: none;
+        }
+        .sort-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -94,12 +136,15 @@
             <div class="dashboard-card">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <div class="dashboard-card-title">Files Indexed</div>
-                        <div class="dashboard-card-value" th:text="${stats.totalFiles}">0</div>
+                        <div class="dashboard-card-title-inline">
+                            Files Indexed:
+                            <span th:text="${stats.totalFiles >= 1000000 ? #numbers.formatInteger(stats.totalFiles / 1000000, 1) + 'm' :
+                                           (stats.totalFiles >= 1000 ? #numbers.formatInteger(stats.totalFiles / 1000, 1) + 'k' : stats.totalFiles)}">0</span>
+                        </div>
                     </div>
                     <i class="bi bi-file-earmark dashboard-card-icon text-primary"></i>
                 </div>
-                <div class="mt-3">
+                <div class="mt-2">
                     <small class="text-muted d-block mb-1">By Status:</small>
                     <div class="d-flex flex-wrap gap-1 mb-2">
                         <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.filesStatusNew}]]</span>
@@ -109,8 +154,8 @@
                     </div>
                     <small class="text-muted d-block mb-1">By Analysis:</small>
                     <div class="d-flex flex-wrap gap-1">
-                        <span class="badge bg-secondary" th:title="SKIP">S: [[${stats.filesSkip}]]</span>
-                        <span class="badge bg-light text-dark border" th:title="LOCATE">L: [[${stats.filesLocate}]]</span>
+                        <span class="badge analysis-badge-skip" th:title="SKIP">S: [[${stats.filesSkip}]]</span>
+                        <span class="badge analysis-badge-locate" th:title="LOCATE">L: [[${stats.filesLocate}]]</span>
                         <span class="badge bg-primary" th:title="INDEX">I: [[${stats.filesIndex}]]</span>
                         <span class="badge bg-success" th:title="ANALYZE">A: [[${stats.filesAnalyze}]]</span>
                         <span th:if="${stats.filesSemantic > 0}" class="badge bg-warning text-dark" th:title="SEMANTIC">E: [[${stats.filesSemantic}]]</span>
@@ -122,12 +167,15 @@
             <div class="dashboard-card">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <div class="dashboard-card-title">Folders Scanned</div>
-                        <div class="dashboard-card-value" th:text="${stats.totalFolders}">0</div>
+                        <div class="dashboard-card-title-inline">
+                            Folders Scanned:
+                            <span th:text="${stats.totalFolders >= 1000000 ? #numbers.formatInteger(stats.totalFolders / 1000000, 1) + 'm' :
+                                           (stats.totalFolders >= 1000 ? #numbers.formatInteger(stats.totalFolders / 1000, 1) + 'k' : stats.totalFolders)}">0</span>
+                        </div>
                     </div>
                     <i class="bi bi-folder dashboard-card-icon text-warning"></i>
                 </div>
-                <div class="mt-3">
+                <div class="mt-2">
                     <small class="text-muted d-block mb-1">By Status:</small>
                     <div class="d-flex flex-wrap gap-1 mb-2">
                         <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.foldersStatusNew}]]</span>
@@ -137,8 +185,8 @@
                     </div>
                     <small class="text-muted d-block mb-1">By Analysis:</small>
                     <div class="d-flex flex-wrap gap-1">
-                        <span class="badge bg-secondary" th:title="SKIP">S: [[${stats.foldersSkip}]]</span>
-                        <span class="badge bg-light text-dark border" th:title="LOCATE">L: [[${stats.foldersLocate}]]</span>
+                        <span class="badge analysis-badge-skip" th:title="SKIP">S: [[${stats.foldersSkip}]]</span>
+                        <span class="badge analysis-badge-locate" th:title="LOCATE">L: [[${stats.foldersLocate}]]</span>
                         <span class="badge bg-primary" th:title="INDEX">I: [[${stats.foldersIndex}]]</span>
                         <span class="badge bg-success" th:title="ANALYZE">A: [[${stats.foldersAnalyze}]]</span>
                         <span th:if="${stats.foldersSemantic > 0}" class="badge bg-warning text-dark" th:title="SEMANTIC">E: [[${stats.foldersSemantic}]]</span>
@@ -150,12 +198,15 @@
             <div class="dashboard-card">
                 <div class="d-flex justify-content-between align-items-start">
                     <div class="flex-grow-1">
-                        <div class="dashboard-card-title">Content Chunks</div>
-                        <div class="dashboard-card-value" th:text="${stats.totalChunks}">0</div>
+                        <div class="dashboard-card-title-inline">
+                            Content Chunks:
+                            <span th:text="${stats.totalChunks >= 1000000 ? #numbers.formatInteger(stats.totalChunks / 1000000, 1) + 'm' :
+                                           (stats.totalChunks >= 1000 ? #numbers.formatInteger(stats.totalChunks / 1000, 1) + 'k' : stats.totalChunks)}">0</span>
+                        </div>
                     </div>
                     <i class="bi bi-puzzle dashboard-card-icon text-success"></i>
                 </div>
-                <div class="mt-3" th:if="${stats.totalChunks > 0}">
+                <div class="mt-2" th:if="${stats.totalChunks > 0}">
                     <small class="text-muted d-block mb-1">By Status:</small>
                     <div class="d-flex flex-wrap gap-1 mb-2">
                         <span class="badge bg-info" th:title="NEW"><i class="bi bi-plus-circle me-1"></i>[[${stats.chunksStatusNew}]]</span>
@@ -208,7 +259,8 @@
                     </div>
                     <div class="card-body p-0">
                         <div th:if="${crawlConfigs != null and !crawlConfigs.empty}" class="compact-config-list">
-                            <div th:each="config : ${crawlConfigs}" class="compact-config-row">
+                            <div th:each="config : ${crawlConfigs}" class="compact-config-row"
+                                 th:with="metrics=${crawlConfigMetrics[config.id]}">
                                 <div class="compact-config-check">
                                     <input type="checkbox" class="form-check-input config-select-cb"
                                            th:value="${config.id}"
@@ -220,13 +272,40 @@
                                        th:text="${config.displayLabel ?: config.name}"
                                        th:title="${config.name}">Config</a>
                                 </div>
-                                <div class="compact-config-paths" th:if="${config.startPaths != null and !config.startPaths.empty}"
-                                     th:title="${#strings.listJoin(config.startPaths, ', ')}">
-                                    [[${config.startPaths[0]}]]
+                                <div class="compact-config-paths"
+                                     th:title="${config.startPaths != null and !config.startPaths.empty ? #strings.listJoin(config.startPaths, ', ') : 'No start path'}">
+                                    <th:block th:if="${config.startPaths != null and !config.startPaths.empty}">
+                                        <code>[[${config.startPaths[0]}]]</code>
+                                        <a th:href="@{/dashboard/open-folder(uri=${config.startPaths[0]})}"
+                                           target="_blank"
+                                           rel="noopener"
+                                           class="ms-1 text-decoration-none"
+                                           title="Open folder detail in new window">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    </th:block>
+                                    <span th:if="${config.startPaths == null or config.startPaths.empty}" class="text-muted">-</span>
                                 </div>
-                                <div class="compact-config-status">
-                                    <span th:if="${config.enabled}" class="badge bg-success" style="font-size: 0.65rem;">On</span>
-                                    <span th:unless="${config.enabled}" class="badge bg-secondary" style="font-size: 0.65rem;">Off</span>
+                                <div class="compact-config-metrics"
+                                     th:title="|Folders: ${metrics != null ? metrics.folderCount : 0}, Files: ${metrics != null ? metrics.fileCount : 0}|">
+                                    F: [[${metrics != null ? metrics.folderCount : 0}]]
+                                    <span class="text-muted mx-1">|</span>
+                                    I: [[${metrics != null ? metrics.fileCount : 0}]]
+                                    <span class="text-muted mx-1">|</span>
+                                    <span th:text="${(metrics != null and metrics.totalFileSize >= 1073741824) ? #numbers.formatDecimal(metrics.totalFileSize / 1073741824.0, 0, 1) + 'G' :
+                                                   ((metrics != null and metrics.totalFileSize >= 1048576) ? #numbers.formatDecimal(metrics.totalFileSize / 1048576.0, 0, 1) + 'M' :
+                                                   ((metrics != null and metrics.totalFileSize >= 1024) ? #numbers.formatDecimal(metrics.totalFileSize / 1024.0, 0, 1) + 'K' : ((metrics != null ? metrics.totalFileSize : 0) + 'B')))}">0B</span>
+                                </div>
+                                <div class="compact-config-toggle">
+                                    <button type="button"
+                                            th:class="${config.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+                                            th:text="${config.enabled} ? 'On' : 'Off'"
+                                            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${config.id}, dashboard=true)}"
+                                            hx-swap="outerHTML"
+                                            th:attr="hx-on--after-request=|onConfigToggle(${config.id})|"
+                                            th:title="${config.enabled} ? 'Click to disable' : 'Click to enable'"
+                                            style="cursor: pointer;">
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -297,16 +376,28 @@
                                                 <thead class="sticky-top bg-white">
                                                     <tr>
                                                         <th>
-                                                            <a href="#" onclick="sortFolders('label')" class="text-decoration-none">Name</a>
+                                                            <a href="#" onclick="sortFolders('label'); return false;" class="sort-link">Name</a>
                                                         </th>
                                                         <th>
-                                                            <a href="#" onclick="sortFolders('uri')" class="text-decoration-none">Path</a>
+                                                            <a href="#" onclick="sortFolders('uri'); return false;" class="sort-link">Path</a>
                                                         </th>
-                                                        <th>Status</th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFolders('directFolderCount'); return false;" class="sort-link"
+                                                               title="Direct folders : recursive folders">Fldr</a>
+                                                        </th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFolders('directFileCount'); return false;" class="sort-link"
+                                                               title="Direct files : recursive files">Files</a>
+                                                        </th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFolders('totalFileSize'); return false;" class="sort-link">Size</a>
+                                                        </th>
+                                                        <th><span title="Status of folder in crawl config">STS</span></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     <tr th:each="folder : ${folders}"
+                                                        th:with="folderMetrics=${folderMetricsById[folder.id]}"
                                                         th:classappend="${folder.analysisStatus?.name() == 'SKIP'} ? 'table-secondary' : ''">
                                                         <td class="text-truncate" style="max-width: 150px;">
                                                             <a th:href="@{/fSFolders/{id}(id=${folder.id})}"
@@ -316,40 +407,73 @@
                                                         <td class="text-truncate" style="max-width: 250px;">
                                                             <code class="small" th:text="${folder.uri}" th:title="${folder.uri}"></code>
                                                         </td>
+                                                        <td class="text-nowrap">
+                                                            <span th:text="${folderMetrics != null ? folderMetrics.directFolderCount : 0}">0</span>:<span
+                                                                th:text="${folderMetrics != null ? folderMetrics.recursiveFolderCount : 0}">0</span>
+                                                        </td>
+                                                        <td class="text-nowrap">
+                                                            <span th:text="${folderMetrics != null ? folderMetrics.directFileCount : 0}">0</span>:<span
+                                                                th:text="${folderMetrics != null ? folderMetrics.recursiveFileCount : 0}">0</span>
+                                                        </td>
+                                                        <td class="text-nowrap">
+                                                            <span th:text="${(folderMetrics != null and folderMetrics.totalFileSize >= 1073741824) ? #numbers.formatDecimal(folderMetrics.totalFileSize / 1073741824.0, 0, 1) + ' GB' :
+                                                                           ((folderMetrics != null and folderMetrics.totalFileSize >= 1048576) ? #numbers.formatDecimal(folderMetrics.totalFileSize / 1048576.0, 0, 1) + ' MB' :
+                                                                           ((folderMetrics != null and folderMetrics.totalFileSize >= 1024) ? #numbers.formatDecimal(folderMetrics.totalFileSize / 1024.0, 0, 1) + ' KB' :
+                                                                           ((folderMetrics != null ? folderMetrics.totalFileSize : 0) + ' B')))}">0 B</span>
+                                                        </td>
                                                         <td>
                                                             <span th:if="${folder.analysisStatus}"
                                                                   th:class="${'badge ' +
-                                                                      (folder.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
-                                                                       folder.analysisStatus.name() == 'LOCATE' ? 'bg-light text-dark' :
+                                                                      (folder.analysisStatus.name() == 'SKIP' ? 'analysis-badge-skip' :
+                                                                       folder.analysisStatus.name() == 'LOCATE' ? 'analysis-badge-locate' :
                                                                        folder.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
                                                                        folder.analysisStatus.name() == 'ANALYZE' ? 'bg-success' : 'bg-warning')}"
-                                                                  th:text="${folder.analysisStatus}" style="font-size: 0.7rem;"></span>
+                                                                  style="font-size: 0.68rem;">
+                                                                <span class="status-icon">
+                                                                    <i class="bi bi-circle-fill"></i>
+                                                                </span>
+                                                                <span th:text="${folder.analysisStatus}"></span>
+                                                            </span>
                                                         </td>
                                                     </tr>
                                                 </tbody>
                                             </table>
                                         </div>
                                         <!-- Pagination -->
-                                        <div th:if="${folders.totalPages > 1}" class="d-flex justify-content-between align-items-center px-3 py-2 border-top tab-pagination">
-                                            <small class="text-muted">
-                                                [[${folders.number * folders.size + 1}]]-[[${folders.number * folders.size + folders.numberOfElements}]]
-                                                of [[${folders.totalElements}]]
-                                            </small>
-                                            <nav>
-                                                <ul class="pagination pagination-sm mb-0">
-                                                    <li class="page-item" th:classappend="${folders.first} ? 'disabled'">
-                                                        <a class="page-link" href="#"
-                                                           th:onclick="|loadFolders(${folders.number - 1})|">&laquo;</a>
-                                                    </li>
-                                                    <li class="page-item active">
-                                                        <span class="page-link">[[${folders.number + 1}]]</span>
-                                                    </li>
-                                                    <li class="page-item" th:classappend="${folders.last} ? 'disabled'">
-                                                        <a class="page-link" href="#"
-                                                           th:onclick="|loadFolders(${folders.number + 1})|">&raquo;</a>
-                                                    </li>
-                                                </ul>
-                                            </nav>
+                                        <div th:if="${!folders.empty}" class="d-flex align-items-center px-3 py-2 border-top tab-pagination">
+                                            <div class="page-summary">
+                                                <small class="text-muted">
+                                                    [[${folders.number * folders.size + 1}]]-[[${folders.number * folders.size + folders.numberOfElements}]]
+                                                    of [[${folders.totalElements}]]
+                                                </small>
+                                            </div>
+                                            <div class="page-controls d-flex justify-content-between align-items-center">
+                                                <div class="d-flex align-items-center gap-1">
+                                                    <label class="small text-muted mb-0" for="foldersPageSize">Page</label>
+                                                    <select id="foldersPageSize" class="form-select form-select-sm" style="width: auto;"
+                                                            onchange="setDashboardPageSize(this.value)">
+                                                        <option value="10" th:selected="${folders.size == 10}">10</option>
+                                                        <option value="20" th:selected="${folders.size == 20}">20</option>
+                                                        <option value="50" th:selected="${folders.size == 50}">50</option>
+                                                        <option value="100" th:selected="${folders.size == 100}">100</option>
+                                                    </select>
+                                                </div>
+                                                <nav>
+                                                    <ul class="pagination pagination-sm mb-0">
+                                                        <li class="page-item" th:classappend="${folders.first} ? 'disabled'">
+                                                            <a class="page-link" href="#"
+                                                               th:onclick="|loadFolders(${folders.number - 1}); return false;|">&laquo;</a>
+                                                        </li>
+                                                        <li class="page-item active">
+                                                            <span class="page-link">[[${folders.number + 1}]]</span>
+                                                        </li>
+                                                        <li class="page-item" th:classappend="${folders.last} ? 'disabled'">
+                                                            <a class="page-link" href="#"
+                                                               th:onclick="|loadFolders(${folders.number + 1}); return false;|">&raquo;</a>
+                                                        </li>
+                                                    </ul>
+                                                </nav>
+                                            </div>
                                         </div>
                                     </th:block>
                                 </div>
@@ -367,17 +491,26 @@
                                                 <thead class="sticky-top bg-white">
                                                     <tr>
                                                         <th>
-                                                            <a href="#" onclick="sortFiles('label')" class="text-decoration-none">Name</a>
+                                                            <a href="#" onclick="sortFiles('label'); return false;" class="sort-link">Name</a>
                                                         </th>
                                                         <th>
-                                                            <a href="#" onclick="sortFiles('uri')" class="text-decoration-none">Path</a>
+                                                            <a href="#" onclick="sortFiles('uri'); return false;" class="sort-link">Path</a>
                                                         </th>
-                                                        <th>Size</th>
-                                                        <th>Status</th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFiles('size'); return false;" class="sort-link">Size</a>
+                                                        </th>
+                                                        <th><span title="Status of item in crawl config">STS</span></th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFiles('bodySize'); return false;" class="sort-link">TextSize</a>
+                                                        </th>
+                                                        <th>
+                                                            <a href="#" onclick="sortFiles('fragmentCount'); return false;" class="sort-link">Frgs</a>
+                                                        </th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     <tr th:each="file : ${files}"
+                                                        th:with="fragmentCount=${fileFragmentCounts[file.id] ?: 0}"
                                                         th:classappend="${file.analysisStatus?.name() == 'SKIP'} ? 'table-secondary' : ''">
                                                         <td class="text-truncate" style="max-width: 150px;">
                                                             <a th:href="@{/fSFiles/{id}(id=${file.id})}"
@@ -388,42 +521,78 @@
                                                             <code class="small" th:text="${file.uri}" th:title="${file.uri}"></code>
                                                         </td>
                                                         <td class="text-nowrap small">
-                                                            <span th:if="${file.size != null}" th:text="${#numbers.formatDecimal(file.size / 1024.0, 0, 1) + ' KB'}"></span>
+                                                            <span th:if="${file.size != null}"
+                                                                  th:text="${(file.size >= 1073741824) ? #numbers.formatDecimal(file.size / 1073741824.0, 0, 1) + ' GB' :
+                                                                          ((file.size >= 1048576) ? #numbers.formatDecimal(file.size / 1048576.0, 0, 1) + ' MB' :
+                                                                          ((file.size >= 1024) ? #numbers.formatDecimal(file.size / 1024.0, 0, 1) + ' KB' : file.size + ' B'))}"></span>
+                                                            <span th:if="${file.size == null}" class="text-muted">-</span>
                                                         </td>
                                                         <td>
                                                             <span th:if="${file.analysisStatus}"
                                                                   th:class="${'badge ' +
-                                                                      (file.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
-                                                                       file.analysisStatus.name() == 'LOCATE' ? 'bg-light text-dark' :
+                                                                      (file.analysisStatus.name() == 'SKIP' ? 'analysis-badge-skip' :
+                                                                       file.analysisStatus.name() == 'LOCATE' ? 'analysis-badge-locate' :
                                                                        file.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
                                                                        file.analysisStatus.name() == 'ANALYZE' ? 'bg-success' : 'bg-warning')}"
-                                                                  th:text="${file.analysisStatus}" style="font-size: 0.7rem;"></span>
+                                                                  style="font-size: 0.68rem;">
+                                                                <span class="status-icon">
+                                                                    <i class="bi bi-circle-fill"></i>
+                                                                </span>
+                                                                <span th:text="${file.analysisStatus}"></span>
+                                                            </span>
+                                                        </td>
+                                                        <td class="text-nowrap">
+                                                            <span th:if="${file.bodySize != null and file.size != null and file.bodySize != file.size}"
+                                                                  th:classappend="${file.bodySize > file.size} ? 'text-size-review' : ''"
+                                                                  th:title="${file.bodySize > file.size} ? 'Text size exceeds file size; this item may need review.' : ''"
+                                                                  th:text="${(file.bodySize >= 1073741824) ? #numbers.formatDecimal(file.bodySize / 1073741824.0, 0, 1) + ' GB' :
+                                                                          ((file.bodySize >= 1048576) ? #numbers.formatDecimal(file.bodySize / 1048576.0, 0, 1) + ' MB' :
+                                                                          ((file.bodySize >= 1024) ? #numbers.formatDecimal(file.bodySize / 1024.0, 0, 1) + ' KB' : file.bodySize + ' B'))}">0 B</span>
+                                                            <span th:unless="${file.bodySize != null and file.size != null and file.bodySize != file.size}" class="text-muted">-</span>
+                                                        </td>
+                                                        <td class="text-nowrap">
+                                                            <span th:if="${fragmentCount > 0}" th:text="${fragmentCount}">0</span>
+                                                            <span th:unless="${fragmentCount > 0}" class="text-muted">-</span>
                                                         </td>
                                                     </tr>
                                                 </tbody>
                                             </table>
                                         </div>
                                         <!-- Pagination -->
-                                        <div th:if="${files.totalPages > 1}" class="d-flex justify-content-between align-items-center px-3 py-2 border-top tab-pagination">
-                                            <small class="text-muted">
-                                                [[${files.number * files.size + 1}]]-[[${files.number * files.size + files.numberOfElements}]]
-                                                of [[${files.totalElements}]]
-                                            </small>
-                                            <nav>
-                                                <ul class="pagination pagination-sm mb-0">
-                                                    <li class="page-item" th:classappend="${files.first} ? 'disabled'">
-                                                        <a class="page-link" href="#"
-                                                           th:onclick="|loadFiles(${files.number - 1})|">&laquo;</a>
-                                                    </li>
-                                                    <li class="page-item active">
-                                                        <span class="page-link">[[${files.number + 1}]]</span>
-                                                    </li>
-                                                    <li class="page-item" th:classappend="${files.last} ? 'disabled'">
-                                                        <a class="page-link" href="#"
-                                                           th:onclick="|loadFiles(${files.number + 1})|">&raquo;</a>
-                                                    </li>
-                                                </ul>
-                                            </nav>
+                                        <div th:if="${!files.empty}" class="d-flex align-items-center px-3 py-2 border-top tab-pagination">
+                                            <div class="page-summary">
+                                                <small class="text-muted">
+                                                    [[${files.number * files.size + 1}]]-[[${files.number * files.size + files.numberOfElements}]]
+                                                    of [[${files.totalElements}]]
+                                                </small>
+                                            </div>
+                                            <div class="page-controls d-flex justify-content-between align-items-center">
+                                                <div class="d-flex align-items-center gap-1">
+                                                    <label class="small text-muted mb-0" for="filesPageSize">Page</label>
+                                                    <select id="filesPageSize" class="form-select form-select-sm" style="width: auto;"
+                                                            onchange="setDashboardPageSize(this.value)">
+                                                        <option value="10" th:selected="${files.size == 10}">10</option>
+                                                        <option value="20" th:selected="${files.size == 20}">20</option>
+                                                        <option value="50" th:selected="${files.size == 50}">50</option>
+                                                        <option value="100" th:selected="${files.size == 100}">100</option>
+                                                    </select>
+                                                </div>
+                                                <nav>
+                                                    <ul class="pagination pagination-sm mb-0">
+                                                        <li class="page-item" th:classappend="${files.first} ? 'disabled'">
+                                                            <a class="page-link" href="#"
+                                                               th:onclick="|loadFiles(${files.number - 1}); return false;|">&laquo;</a>
+                                                        </li>
+                                                        <li class="page-item active">
+                                                            <span class="page-link">[[${files.number + 1}]]</span>
+                                                        </li>
+                                                        <li class="page-item" th:classappend="${files.last} ? 'disabled'">
+                                                            <a class="page-link" href="#"
+                                                               th:onclick="|loadFiles(${files.number + 1}); return false;|">&raquo;</a>
+                                                        </li>
+                                                    </ul>
+                                                </nav>
+                                            </div>
                                         </div>
                                     </th:block>
                                 </div>
@@ -521,6 +690,9 @@
     let currentFilesPage = 0;
     let currentFoldersSort = 'uri';
     let currentFilesSort = 'uri';
+    let currentFoldersSortDir = 'ASC';
+    let currentFilesSortDir = 'ASC';
+    let currentDashboardPageSize = 10;
 
     // Get selected config IDs
     function getSelectedConfigIds() {
@@ -561,11 +733,21 @@
         onConfigSelectionChange();
     }
 
+    // Keep selected row metadata in sync when On/Off is toggled inline
+    function onConfigToggle(configId) {
+        const checkbox = document.querySelector(`.config-select-cb[value=\"${configId}\"]`);
+        if (checkbox) {
+            checkbox.dataset.enabled = checkbox.dataset.enabled === 'true' ? 'false' : 'true';
+        }
+        onConfigSelectionChange();
+    }
+
     // Build query string for HTMX requests
-    function buildQueryString(page, sort, includeConfigs = true) {
+    function buildQueryString(page, sortField, sortDirection, includeConfigs = true) {
         const params = new URLSearchParams();
         params.set('page', page);
-        params.set('sort', sort + ',ASC');
+        params.set('size', currentDashboardPageSize);
+        params.set('sort', sortField + ',' + sortDirection);
 
         const showSkipped = document.getElementById('dashboardShowSkipped').checked;
         if (showSkipped) {
@@ -584,7 +766,7 @@
     function loadFolders(page) {
         if (page < 0) return;
         currentFoldersPage = page;
-        const url = '/dashboard/folders?' + buildQueryString(page, currentFoldersSort);
+        const url = '/dashboard/folders?' + buildQueryString(page, currentFoldersSort, currentFoldersSortDir);
         htmx.ajax('GET', url, {target: '#folders-table-container', swap: 'innerHTML'});
     }
 
@@ -592,22 +774,40 @@
     function loadFiles(page) {
         if (page < 0) return;
         currentFilesPage = page;
-        const url = '/dashboard/files?' + buildQueryString(page, currentFilesSort);
+        const url = '/dashboard/files?' + buildQueryString(page, currentFilesSort, currentFilesSortDir);
         htmx.ajax('GET', url, {target: '#files-table-container', swap: 'innerHTML'});
     }
 
     // Sort folders
     function sortFolders(field) {
-        currentFoldersSort = field;
+        if (currentFoldersSort === field) {
+            currentFoldersSortDir = currentFoldersSortDir === 'ASC' ? 'DESC' : 'ASC';
+        } else {
+            currentFoldersSort = field;
+            currentFoldersSortDir = 'ASC';
+        }
         currentFoldersPage = 0;
         loadFolders(0);
     }
 
     // Sort files
     function sortFiles(field) {
-        currentFilesSort = field;
+        if (currentFilesSort === field) {
+            currentFilesSortDir = currentFilesSortDir === 'ASC' ? 'DESC' : 'ASC';
+        } else {
+            currentFilesSort = field;
+            currentFilesSortDir = 'ASC';
+        }
         currentFilesPage = 0;
         loadFiles(0);
+    }
+
+    function setDashboardPageSize(size) {
+        const parsed = parseInt(size, 10);
+        currentDashboardPageSize = Number.isNaN(parsed) ? 10 : parsed;
+        currentFoldersPage = 0;
+        currentFilesPage = 0;
+        refreshContentTabs();
     }
 
     // Refresh both content tabs
@@ -615,6 +815,17 @@
         loadFolders(0);
         loadFiles(0);
     }
+
+    function syncDashboardPageSizeFromDom() {
+        const folderSize = document.getElementById('foldersPageSize');
+        const fileSize = document.getElementById('filesPageSize');
+        const raw = folderSize ? folderSize.value : (fileSize ? fileSize.value : '10');
+        const parsed = parseInt(raw, 10);
+        currentDashboardPageSize = Number.isNaN(parsed) ? 10 : parsed;
+    }
+
+    document.addEventListener('DOMContentLoaded', syncDashboardPageSizeFromDom);
+    document.body.addEventListener('htmx:afterSwap', syncDashboardPageSizeFromDom);
     </script>
 </div>
 

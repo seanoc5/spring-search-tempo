@@ -35,8 +35,8 @@
                 </div>
             </th:block>
 
-            <div class="d-flex flex-wrap mb-4 align-items-center">
-                <h1 class="flex-grow-1">
+            <div class="mb-3">
+                <h1 class="mb-0">
                     Job Execution #[[${execution.executionId}]]
                     <span th:switch="${execution.status}" class="ms-2">
                         <!-- For running jobs, check if stale -->
@@ -59,52 +59,58 @@
                         <span th:case="*" class="badge bg-secondary fs-6" th:text="${execution.status}">Unknown</span>
                     </span>
                 </h1>
-                <div class="d-flex gap-2">
-                    <!-- For running jobs (HTMX with toast notifications) -->
-                    <th:block th:if="${execution.status == 'STARTED' || execution.status == 'STARTING'}">
-                        <!-- Stop button -->
-                        <button type="button" class="btn btn-warning"
-                                th:hx-post="@{/batch/{id}/stop(id=${execution.executionId})}"
-                                hx-swap="none"
-                                hx-confirm="Stop this job execution?">
-                            <i class="bi bi-stop-fill"></i> Stop Job
-                        </button>
-                        <!-- Mark as Failed button for stale jobs (running > 4 hours) -->
-                        <button th:if="${execution.duration != null and execution.duration.toHours() >= 4}"
-                                type="button" class="btn btn-danger"
-                                th:hx-post="@{/batch/{id}/mark-failed(id=${execution.executionId})}"
-                                hx-swap="none"
-                                hx-confirm="Mark this stale job as FAILED? Use this for orphaned jobs that are no longer actually running.">
-                            <i class="bi bi-x-circle"></i> Mark as Failed
-                        </button>
-                    </th:block>
-                    <!-- Re-run button (for completed, failed, or stopped jobs) -->
-                    <form th:if="${execution.status == 'COMPLETED' || execution.status == 'FAILED' || execution.status == 'STOPPED'}"
-                          th:action="@{/batch/{id}/rerun(id=${execution.executionId})}"
-                          method="post" class="d-inline">
-                        <button type="submit" class="btn btn-success"
-                                onclick="return confirm('Start a new execution of this job?')">
-                            <i class="bi bi-play-fill"></i> Run Again
-                        </button>
-                    </form>
-                    <!-- Restart button for failed/stopped jobs (continues from where it left off) -->
-                    <form th:if="${execution.status == 'FAILED' || execution.status == 'STOPPED'}"
-                          th:action="@{/batch/{id}/restart(id=${execution.executionId})}"
-                          method="post" class="d-inline">
-                        <button type="submit" class="btn btn-outline-primary"
-                                onclick="return confirm('Restart this job execution from where it left off?')">
-                            <i class="bi bi-arrow-clockwise"></i> Restart
-                        </button>
-                    </form>
-                    <!-- Abandon button for failed jobs -->
-                    <form th:if="${execution.status == 'FAILED'}"
-                          th:action="@{/batch/{id}/abandon(id=${execution.executionId})}"
-                          method="post" class="d-inline">
-                        <button type="submit" class="btn btn-outline-secondary"
-                                onclick="return confirm('Abandon this job execution? This allows starting a fresh execution.')">
-                            <i class="bi bi-x-circle"></i> Abandon
-                        </button>
-                    </form>
+            </div>
+
+            <div class="batch-action-bar mb-4">
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                    <span class="small text-muted">Execution controls</span>
+                    <div class="d-flex flex-wrap gap-2">
+                        <!-- For running jobs (HTMX with toast notifications) -->
+                        <th:block th:if="${execution.status == 'STARTED' || execution.status == 'STARTING'}">
+                            <!-- Stop button -->
+                            <button type="button" class="btn btn-warning btn-sm"
+                                    th:hx-post="@{/batch/{id}/stop(id=${execution.executionId})}"
+                                    hx-swap="none"
+                                    hx-confirm="Stop this job execution?">
+                                <i class="bi bi-stop-fill"></i> Stop Job
+                            </button>
+                            <!-- Mark as Failed button for stale jobs (running > 4 hours) -->
+                            <button th:if="${execution.duration != null and execution.duration.toHours() >= 4}"
+                                    type="button" class="btn btn-danger btn-sm"
+                                    th:hx-post="@{/batch/{id}/mark-failed(id=${execution.executionId})}"
+                                    hx-swap="none"
+                                    hx-confirm="Mark this stale job as FAILED? Use this for orphaned jobs that are no longer actually running.">
+                                <i class="bi bi-x-circle"></i> Mark as Failed
+                            </button>
+                        </th:block>
+                        <!-- Re-run button (for completed, failed, or stopped jobs) -->
+                        <form th:if="${execution.status == 'COMPLETED' || execution.status == 'FAILED' || execution.status == 'STOPPED'}"
+                              th:action="@{/batch/{id}/rerun(id=${execution.executionId})}"
+                              method="post" class="d-inline">
+                            <button type="submit" class="btn btn-success btn-sm"
+                                    onclick="return confirm('Start a new execution of this job?')">
+                                <i class="bi bi-play-fill"></i> Run Again
+                            </button>
+                        </form>
+                        <!-- Restart button for failed/stopped jobs (continues from where it left off) -->
+                        <form th:if="${execution.status == 'FAILED' || execution.status == 'STOPPED'}"
+                              th:action="@{/batch/{id}/restart(id=${execution.executionId})}"
+                              method="post" class="d-inline">
+                            <button type="submit" class="btn btn-outline-primary btn-sm"
+                                    onclick="return confirm('Restart this job execution from where it left off?')">
+                                <i class="bi bi-arrow-clockwise"></i> Restart
+                            </button>
+                        </form>
+                        <!-- Abandon button for failed jobs -->
+                        <form th:if="${execution.status == 'FAILED'}"
+                              th:action="@{/batch/{id}/abandon(id=${execution.executionId})}"
+                              method="post" class="d-inline">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm"
+                                    onclick="return confirm('Abandon this job execution? This allows starting a fresh execution.')">
+                                <i class="bi bi-x-circle"></i> Abandon
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
 
@@ -244,24 +250,60 @@
                 <div class="card-body p-0">
                     <div th:if="${steps.empty}" class="p-3 text-muted">No steps executed yet.</div>
                     <div th:if="${!steps.empty}" class="table-responsive">
-                        <table class="table table-sm mb-0">
+                        <table id="stepExecutionsTable" class="table table-sm mb-0 step-metrics-table">
                             <thead>
                                 <tr>
-                                    <th>Step Name</th>
-                                    <th>Status</th>
-                                    <th class="text-end">Read</th>
-                                    <th class="text-end">Write</th>
-                                    <th class="text-end">Filter</th>
-                                    <th class="text-end">Skip</th>
-                                    <th class="text-end">Commit</th>
-                                    <th>Duration</th>
-                                    <th>Exit</th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="step" data-type="string">
+                                            Step Name <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="status" data-type="string">
+                                            Status <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th class="text-end">
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="read" data-type="number">
+                                            Read <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th class="text-end">
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="write" data-type="number">
+                                            Write <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th class="text-end">
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="filter" data-type="number">
+                                            Filter <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th class="text-end">
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="skip" data-type="number">
+                                            Skip <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th class="text-end">
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="commit" data-type="number">
+                                            Commit <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="duration" data-type="number">
+                                            Duration <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 table-sort" data-key="exit" data-type="string">
+                                            Exit <i class="bi bi-arrow-down-up text-muted"></i>
+                                        </button>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:each="step : ${steps}">
-                                    <td><code th:text="${step.stepName}">step</code></td>
-                                    <td>
+                                    <td data-col="step" th:attr="data-sort-value=${step.stepName}"><code th:text="${step.stepName}">step</code></td>
+                                    <td data-col="status" th:attr="data-sort-value=${step.status}">
                                         <span th:switch="${step.status}">
                                             <span th:case="'STARTED'" class="badge bg-primary">Running</span>
                                             <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
@@ -270,16 +312,16 @@
                                             <span th:case="*" class="badge bg-secondary" th:text="${step.status}">Unknown</span>
                                         </span>
                                     </td>
-                                    <td class="text-end" th:text="${step.readCount}">0</td>
-                                    <td class="text-end" th:text="${step.writeCount}">0</td>
-                                    <td class="text-end" th:text="${step.filterCount}">0</td>
-                                    <td class="text-end">
+                                    <td class="text-end" data-col="read" th:attr="data-sort-value=${step.readCount}" th:text="${step.readCount}">0</td>
+                                    <td class="text-end" data-col="write" th:attr="data-sort-value=${step.writeCount}" th:text="${step.writeCount}">0</td>
+                                    <td class="text-end" data-col="filter" th:attr="data-sort-value=${step.filterCount}" th:text="${step.filterCount}">0</td>
+                                    <td class="text-end" data-col="skip" th:attr="data-sort-value=${step.skipCount}">
                                         <span th:if="${step.skipCount > 0}" class="text-warning"
                                               th:text="${step.skipCount}">0</span>
                                         <span th:if="${step.skipCount == 0}">0</span>
                                     </td>
-                                    <td class="text-end" th:text="${step.commitCount}">0</td>
-                                    <td>
+                                    <td class="text-end" data-col="commit" th:attr="data-sort-value=${step.commitCount}" th:text="${step.commitCount}">0</td>
+                                    <td data-col="duration" th:attr="data-sort-value=${step.duration != null ? step.duration.toSeconds() : -1}">
                                         <span th:if="${step.duration != null}">
                                             <span th:if="${step.duration.toMinutes() > 0}"
                                                   th:text="${step.duration.toMinutes() + ' min'}"></span>
@@ -288,11 +330,16 @@
                                         </span>
                                         <span th:if="${step.duration == null}">-</span>
                                     </td>
-                                    <td>
-                                        <span th:if="${step.exitDescription != null}"
-                                              th:text="${#strings.abbreviate(step.exitDescription, 50)}"
-                                              th:title="${step.exitDescription}" data-bs-toggle="tooltip"
-                                              class="text-danger small"></span>
+                                    <td data-col="exit" th:attr="data-sort-value=${step.exitDescription != null ? step.exitDescription : ''}">
+                                        <span th:if="${step.exitDescription == null or #strings.isEmpty(step.exitDescription)}"
+                                              class="text-muted small">-</span>
+                                        <details th:if="${step.exitDescription != null and !#strings.isEmpty(step.exitDescription)}" class="small">
+                                            <summary class="text-danger">
+                                                <span th:text="${#strings.abbreviate(step.exitDescription, 90)}"></span>
+                                            </summary>
+                                            <pre class="mb-0 mt-1 text-danger-emphasis step-detail-pre"
+                                                 th:text="${step.exitDescription}"></pre>
+                                        </details>
                                     </td>
                                 </tr>
                             </tbody>
@@ -408,13 +455,61 @@
                 <div class="card-body">
                     <ul class="list-unstyled mb-0">
                         <li th:each="ex : ${failureExceptions}" class="mb-2">
-                            <code class="text-danger" th:text="${ex}">Exception message</code>
+                            <details class="small">
+                                <summary class="text-danger">
+                                    <span th:text="${#strings.abbreviate(ex, 110)}">Exception message</span>
+                                </summary>
+                                <pre class="mb-0 mt-1 text-danger-emphasis step-detail-pre"
+                                     th:text="${ex}">Exception message</pre>
+                            </details>
                         </li>
                     </ul>
                 </div>
             </div>
 
             <style>
+                .batch-action-bar {
+                    position: sticky;
+                    top: 0.5rem;
+                    z-index: 1020;
+                    background: rgba(255, 255, 255, 0.96);
+                    border: 1px solid var(--bs-border-color);
+                    border-radius: 0.375rem;
+                    padding: 0.5rem 0.75rem;
+                }
+                .table-sort {
+                    text-decoration: none;
+                    color: var(--bs-body-color);
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+                .table-sort:hover {
+                    color: var(--bs-primary);
+                }
+                .step-metrics-table th,
+                .step-metrics-table td {
+                    white-space: nowrap;
+                    vertical-align: top;
+                }
+                details > summary {
+                    cursor: pointer;
+                    list-style: none;
+                }
+                details > summary::-webkit-details-marker {
+                    display: none;
+                }
+                details > summary::before {
+                    content: "▸ ";
+                    color: var(--bs-secondary-color);
+                }
+                details[open] > summary::before {
+                    content: "▾ ";
+                }
+                .step-detail-pre {
+                    max-height: 12rem;
+                    overflow: auto;
+                    white-space: pre-wrap;
+                }
                 @keyframes spin {
                     from { transform: rotate(0deg); }
                     to { transform: rotate(360deg); }
@@ -432,7 +527,74 @@
                     tooltipTriggerList.forEach(function (tooltipTriggerEl) {
                         new bootstrap.Tooltip(tooltipTriggerEl);
                     });
+
+                    initializeStepSorting();
                 });
+
+                function initializeStepSorting() {
+                    var table = document.getElementById('stepExecutionsTable');
+                    if (!table || !table.tBodies.length) {
+                        return;
+                    }
+
+                    var tbody = table.tBodies[0];
+                    var sortButtons = table.querySelectorAll('.table-sort');
+                    var activeKey = null;
+                    var activeDirection = 'asc';
+
+                    function readSortValue(row, key, type) {
+                        var cell = row.querySelector('[data-col="' + key + '"]');
+                        if (!cell) {
+                            return type === 'number' ? Number.NEGATIVE_INFINITY : '';
+                        }
+                        var raw = (cell.dataset && cell.dataset.sortValue) ? cell.dataset.sortValue : cell.textContent.trim();
+                        if (type === 'number') {
+                            var parsed = Number(raw);
+                            return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+                        }
+                        return raw.toLowerCase();
+                    }
+
+                    function updateIndicators(activeButton, direction) {
+                        sortButtons.forEach(function(button) {
+                            var icon = button.querySelector('i');
+                            if (icon) {
+                                icon.className = 'bi bi-arrow-down-up text-muted';
+                            }
+                        });
+                        var activeIcon = activeButton.querySelector('i');
+                        if (activeIcon) {
+                            activeIcon.className = direction === 'asc' ? 'bi bi-sort-down-alt text-primary' : 'bi bi-sort-up text-primary';
+                        }
+                    }
+
+                    sortButtons.forEach(function(button) {
+                        button.addEventListener('click', function() {
+                            var key = button.dataset.key;
+                            var type = button.dataset.type || 'string';
+                            var direction = (activeKey === key && activeDirection === 'asc') ? 'desc' : 'asc';
+                            activeKey = key;
+                            activeDirection = direction;
+
+                            var rows = Array.from(tbody.querySelectorAll('tr'));
+                            rows.sort(function(a, b) {
+                                var aValue = readSortValue(a, key, type);
+                                var bValue = readSortValue(b, key, type);
+                                if (type === 'number') {
+                                    return aValue - bValue;
+                                }
+                                return String(aValue).localeCompare(String(bValue));
+                            });
+                            if (direction === 'desc') {
+                                rows.reverse();
+                            }
+                            rows.forEach(function(row) {
+                                tbody.appendChild(row);
+                            });
+                            updateIndicators(button, direction);
+                        });
+                    });
+                }
             </script>
         </div>
     </body>

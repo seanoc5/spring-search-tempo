@@ -201,6 +201,18 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun countByNamedEntitiesIsNotNull(): Long
 
     /**
+     * Count content fragments grouped by FSFile ID.
+     * Returns pairs of [fileId, fragmentCount].
+     */
+    @Query("""
+        SELECT c.concept.id, COUNT(c)
+        FROM ContentChunk c
+        WHERE c.concept.id IN :fileIds
+        GROUP BY c.concept.id
+    """)
+    fun countGroupedByFileIds(@Param("fileIds") fileIds: Collection<Long>): List<Array<Any>>
+
+    /**
      * Count chunks that have been NLP processed (nlpProcessedAt is not null).
      */
     fun countByNlpProcessedAtIsNotNull(): Long

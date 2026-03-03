@@ -165,6 +165,32 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun countGroupedByCrawlConfig(@Param("excludedStatus") excludedStatus: AnalysisStatus): List<Array<Any>>
 
     /**
+     * Get total file counts grouped by crawl config for the given config IDs.
+     * Returns pairs of [crawlConfigId, count].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(f)
+        FROM FSFile f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE jr.crawlConfig.id IN :configIds
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countTotalGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
+
+    /**
+     * Get total file size (sum of bytes) grouped by crawl config for the given config IDs.
+     * Returns pairs of [crawlConfigId, totalSize].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COALESCE(SUM(f.size), 0)
+        FROM FSFile f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE jr.crawlConfig.id IN :configIds
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun sumSizeGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
+
+    /**
      * Get SKIP file counts grouped by crawl config.
      * Returns pairs of [crawlConfigId, count].
      */

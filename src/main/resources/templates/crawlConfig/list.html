@@ -62,7 +62,7 @@
                             <th scope="col" title="Files with extracted text (INDEX/ANALYZE/SEMANTIC)">Search</th>
                             <th scope="col" title="Files with NLP-processed chunks">NLP</th>
                             <th scope="col" title="Files with vector embeddings">Embed</th>
-                            <th scope="col">[[#{targetHost.label}]]</th>
+                            <th scope="col">[[#{sourceHost.label}]]</th>
                             <th scope="col">Last Run</th>
                         </tr>
                     </thead>
@@ -130,9 +130,8 @@
                                     <span class="badge bg-warning text-dark" th:text="${embeddingCounts[crawlConfig.id] ?: 0}">0</span>
                                 </td>
                                 <td>
-                                    <small th:if="${crawlConfig.targetHost == null}" class="text-muted fst-italic">any</small>
-                                    <small th:if="${crawlConfig.targetHost != null && crawlConfig.targetHost == currentHostName}" class="text-success fw-semibold" th:text="${crawlConfig.targetHost}"></small>
-                                    <small th:if="${crawlConfig.targetHost != null && crawlConfig.targetHost != currentHostName}" class="text-warning fw-semibold" th:text="${crawlConfig.targetHost}"></small>
+                                    <small th:if="${crawlConfig.sourceHost == null}" class="text-muted fst-italic">unknown</small>
+                                    <small th:if="${crawlConfig.sourceHost != null}" class="text-body fw-semibold" th:text="${crawlConfig.sourceHost}"></small>
                                 </td>
                                 <td>
                                     <th:block th:if="${lastRuns[crawlConfig.id] != null}"

@@ -21,7 +21,8 @@
     </div>
 
     <div class="alert alert-info">
-        Creates a starter crawl config from an OS preset, then redirects to the full editor for customization.
+        Creates an opinionated <strong>POWER_USER</strong> bundle for Linux, macOS, or Windows 11.
+        Presets are split by purpose (docs, media, work, config, logs, locate-all) to keep control explicit.
     </div>
 
     <form th:action="@{/crawlConfigs/wizard/create}" method="post">
@@ -33,24 +34,19 @@
                         <div class="mb-3">
                             <label for="os" class="form-label">Operating System</label>
                             <select class="form-select" id="os" name="os" required>
-                                <option th:each="os : ${osOptions}" th:value="${os}" th:text="${os}"></option>
+                                <option th:each="osOption : ${osOptions}"
+                                        th:value="${osOption.value}"
+                                        th:selected="${osOption.value == defaultOs}"
+                                        th:text="${osOption.label}"></option>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Name</label>
-                            <input type="text" id="name" name="name" class="form-control"
-                                   th:value="${defaultName}" required />
-                            <small class="text-muted">Unique config identifier.</small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="displayLabel" class="form-label">Display Label</label>
-                            <input type="text" id="displayLabel" name="displayLabel" class="form-control"
-                                   th:value="${defaultDisplayLabel}" />
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea id="description" name="description" class="form-control" rows="2"
-                                      th:text="${defaultDescription}"></textarea>
+
+                        <div class="border rounded p-3 bg-light-subtle">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold">Bundle Preview</span>
+                                <span class="badge bg-secondary" id="presetCountBadge">0 configs</span>
+                            </div>
+                            <ul class="small mb-0 ps-3" id="presetPreviewList"></ul>
                         </div>
                     </div>
                 </div>
@@ -58,37 +54,28 @@
 
             <div class="col-lg-6">
                 <div class="card mb-4">
-                    <div class="card-header"><h5 class="mb-0">Base Crawl Settings</h5></div>
+                    <div class="card-header"><h5 class="mb-0">Creation Settings</h5></div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="startPath" class="form-label">Start Path</label>
-                            <input type="text" id="startPath" name="startPath" class="form-control font-monospace"
-                                   th:value="${defaultStartPath}" required />
-                            <small class="text-muted">Adjust to the local user scope before creating.</small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="targetHost" class="form-label">[[#{targetHost.label}]]</label>
-                            <input type="text" class="form-control" id="targetHost" name="targetHost"
-                                   th:value="${currentHostName}" list="knownHostsList" />
+                            <label for="sourceHost" class="form-label">[[#{sourceHost.label}]]</label>
+                            <input type="text" class="form-control" id="sourceHost" name="sourceHost"
+                                   th:value="${defaultSourceHost}" list="knownHostsList" />
                             <datalist id="knownHostsList">
                                 <option th:each="host : ${knownHosts}" th:value="${host}"></option>
                             </datalist>
+                            <small class="text-muted">Created configs are grouped under this source host profile.</small>
                         </div>
-                        <div class="mb-3">
-                            <label for="maxDepth" class="form-label">Max Depth</label>
-                            <input type="number" id="maxDepth" name="maxDepth" class="form-control"
-                                   min="1" max="100" th:value="${defaultMaxDepth}" />
+
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="enabled" name="enabled" checked>
+                            <label class="form-check-label" for="enabled">Enable Created Configs</label>
                         </div>
                         <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="enabled" name="enabled" checked />
-                            <label class="form-check-label" for="enabled">Enabled</label>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="parallel" name="parallel" checked />
+                            <input class="form-check-input" type="checkbox" id="parallel" name="parallel" checked>
                             <label class="form-check-label" for="parallel">Parallel Processing</label>
                         </div>
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="followLinks" name="followLinks" />
+                            <input class="form-check-input" type="checkbox" id="followLinks" name="followLinks">
                             <label class="form-check-label" for="followLinks">Follow Symbolic Links</label>
                         </div>
                     </div>
@@ -97,27 +84,39 @@
         </div>
 
         <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Create Starter Config</button>
+            <button type="submit" class="btn btn-primary">Create Recommended Bundle</button>
             <a th:href="@{/crawlConfigs/add}" class="btn btn-outline-secondary">Manual Add Instead</a>
         </div>
     </form>
 
-    <script>
+    <script th:inline="javascript">
         (function () {
             const osSelect = document.getElementById('os');
-            const startPathInput = document.getElementById('startPath');
-            if (!osSelect || !startPathInput) return;
+            const previewList = document.getElementById('presetPreviewList');
+            const countBadge = document.getElementById('presetCountBadge');
+            if (!osSelect || !previewList || !countBadge) return;
 
-            const pathByOs = {
-                LINUX: '/home',
-                WINDOWS: 'C:\\Users',
-                MACOS: '/Users'
-            };
+            const previewByOs = /*[[${presetPreviewByOs}]]*/ {};
+            const countsByOs = /*[[${presetCountsByOs}]]*/ {};
 
-            osSelect.addEventListener('change', function () {
-                const preset = pathByOs[osSelect.value];
-                if (preset) startPathInput.value = preset;
-            });
+            function renderPreview() {
+                const os = osSelect.value;
+                const items = previewByOs[os] || [];
+                const count = countsByOs[os] || items.length;
+
+                countBadge.textContent = count + (count === 1 ? ' config' : ' configs');
+                previewList.innerHTML = '';
+
+                items.forEach((item) => {
+                    const li = document.createElement('li');
+                    li.className = 'text-muted';
+                    li.textContent = item;
+                    previewList.appendChild(li);
+                });
+            }
+
+            osSelect.addEventListener('change', renderPreview);
+            renderPreview();
         })();
     </script>
 </div>

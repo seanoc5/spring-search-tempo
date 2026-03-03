@@ -6,7 +6,7 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 ## Endpoints
 
 - `GET /api/remote-crawl/bootstrap?host=<hostname>`
-  - Returns enabled crawl configs assigned to that host (`targetHost = host` or `targetHost IS NULL`).
+  - Returns enabled crawl configs (host value is used for request identity and provenance, not assignment filtering).
   - Includes effective folder/file pattern sets (defaults + config-specific patterns).
   - Includes effective runtime settings (`startPaths`, `maxDepth`, `followLinks`, `parallel`).
 

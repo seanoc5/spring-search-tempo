@@ -411,6 +411,7 @@ DELETE FROM batch_job_execution;
 - [Apache Tika Documentation](https://tika.apache.org/documentation.html)
 - [Thymeleaf Documentation](https://www.thymeleaf.org/documentation.html)
 - [HTMX in a Nutshell](https://htmx.org/docs/)
+- [Local: Thymeleaf + HTMX + SpEL Notes](docs/guides/thymeleaf-htmx-spel-notes.md)
 
 ## License
 

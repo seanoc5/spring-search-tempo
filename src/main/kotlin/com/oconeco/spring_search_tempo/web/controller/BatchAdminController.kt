@@ -108,6 +108,74 @@ class BatchAdminController(
     }
 
     /**
+     * Stop all currently running jobs.
+     * Supports HTMX requests with toast notifications.
+     */
+    @PostMapping("/running/stop-all")
+    fun stopAllRunning(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        redirectAttributes: RedirectAttributes,
+        model: Model
+    ): String {
+        val stopped = batchAdminService.stopAllRunningJobs()
+        val isHtmx = request.getHeader("HX-Request") == "true"
+
+        return if (isHtmx) {
+            val type = if (stopped > 0) "success" else "info"
+            val message = if (stopped > 0) {
+                "Stop requested for $stopped running job(s)"
+            } else {
+                "No running jobs found to stop"
+            }
+            setToastHeaders(response, message, type)
+            model.addAttribute("runningJobs", batchAdminService.getRunningJobExecutions())
+            "batch/fragments/runningJobs :: running-jobs"
+        } else {
+            if (stopped > 0) {
+                redirectAttributes.addFlashAttribute("message", "Stop requested for $stopped running job(s)")
+            } else {
+                redirectAttributes.addFlashAttribute("MSG_INFO", "No running jobs found to stop")
+            }
+            "redirect:/batch"
+        }
+    }
+
+    /**
+     * Mark all currently running jobs as FAILED.
+     * Supports HTMX requests with toast notifications.
+     */
+    @PostMapping("/running/mark-all-failed")
+    fun markAllRunningFailed(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        redirectAttributes: RedirectAttributes,
+        model: Model
+    ): String {
+        val marked = batchAdminService.markAllRunningJobsAsFailed("Bulk mark-failed from Batch Admin")
+        val isHtmx = request.getHeader("HX-Request") == "true"
+
+        return if (isHtmx) {
+            val type = if (marked > 0) "warning" else "info"
+            val message = if (marked > 0) {
+                "Marked $marked running job(s) as FAILED"
+            } else {
+                "No running jobs found to mark as FAILED"
+            }
+            setToastHeaders(response, message, type)
+            model.addAttribute("runningJobs", batchAdminService.getRunningJobExecutions())
+            "batch/fragments/runningJobs :: running-jobs"
+        } else {
+            if (marked > 0) {
+                redirectAttributes.addFlashAttribute("message", "Marked $marked running job(s) as FAILED")
+            } else {
+                redirectAttributes.addFlashAttribute("MSG_INFO", "No running jobs found to mark as FAILED")
+            }
+            "redirect:/batch"
+        }
+    }
+
+    /**
      * View details of a specific job execution.
      */
     @GetMapping("/{executionId}")

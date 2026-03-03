@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!--
+  Inline Editing Fragments for CrawlConfig View
+  Pattern: Click to edit, blur/enter to save, escape to cancel
+-->
+
+<!-- Text Field Display (click to edit) -->
+<th:block th:fragment="textDisplay(id, field, value, label)">
+    <span class="inline-edit-display"
+          th:hx-get="@{/crawlConfigs/{id}/field/{field}/edit(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          hx-trigger="click"
+          th:title="|Click to edit ${label}|"
+          style="cursor: pointer; border-bottom: 1px dashed #6c757d;">
+        <span th:if="${value != null && !#strings.isEmpty(value)}" th:text="${value}"></span>
+        <span th:if="${value == null || #strings.isEmpty(value)}" class="text-muted fst-italic">not set</span>
+        <i class="bi bi-pencil-fill text-muted ms-1" style="font-size: 0.65rem; opacity: 0.5;"></i>
+    </span>
+</th:block>
+
+<!-- Text Field Edit Form -->
+<th:block th:fragment="textEdit(id, field, value, label)">
+    <form th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          class="d-inline"
+          th:data-cancel-url="@{/crawlConfigs/{id}/field/{field}/display(id=${id}, field=${field})}">
+        <input type="text"
+               th:name="${field}"
+               th:value="${value}"
+               class="form-control form-control-sm d-inline-block"
+               style="width: auto; min-width: 150px;"
+               th:placeholder="|Enter ${label}|"
+               onfocus="this.select()"
+               onkeydown="handleInlineEditKey(event, this)"
+               onblur="submitInlineEdit(this)"
+               autofocus>
+    </form>
+</th:block>
+
+<!-- Number Field Display (click to edit) -->
+<th:block th:fragment="numberDisplay(id, field, value, label, defaultText)">
+    <span class="inline-edit-display"
+          th:hx-get="@{/crawlConfigs/{id}/field/{field}/edit(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          hx-trigger="click"
+          th:title="|Click to edit ${label}|"
+          style="cursor: pointer; border-bottom: 1px dashed #6c757d;">
+        <span th:if="${value != null}" th:text="${value}"></span>
+        <span th:if="${value == null}" class="text-muted fst-italic" th:text="${defaultText ?: 'not set'}"></span>
+        <i class="bi bi-pencil-fill text-muted ms-1" style="font-size: 0.65rem; opacity: 0.5;"></i>
+    </span>
+</th:block>
+
+<!-- Number Field Edit Form -->
+<th:block th:fragment="numberEdit(id, field, value, label, min, max)">
+    <form th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          class="d-inline"
+          th:data-cancel-url="@{/crawlConfigs/{id}/field/{field}/display(id=${id}, field=${field})}">
+        <input type="number"
+               th:name="${field}"
+               th:value="${value}"
+               th:min="${min}"
+               th:max="${max}"
+               class="form-control form-control-sm d-inline-block"
+               style="width: 80px;"
+               onfocus="this.select()"
+               onkeydown="handleInlineEditKey(event, this)"
+               onblur="submitInlineEdit(this)"
+               autofocus>
+    </form>
+</th:block>
+
+<!-- Boolean Toggle Display -->
+<th:block th:fragment="booleanDisplay(id, field, value, trueLabel, falseLabel)">
+    <span class="inline-edit-display"
+          th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field}, value=${!value})}"
+          hx-swap="outerHTML"
+          hx-trigger="click"
+          th:title="|Click to toggle|"
+          style="cursor: pointer;">
+        <span th:if="${value}" class="badge bg-success" th:text="${trueLabel ?: 'true'}"></span>
+        <span th:unless="${value}" class="badge bg-secondary" th:text="${falseLabel ?: 'false'}"></span>
+    </span>
+</th:block>
+
+<!-- Host Field Display (with datalist) -->
+<th:block th:fragment="hostDisplay(id, field, value, label)">
+    <span class="inline-edit-display"
+          th:hx-get="@{/crawlConfigs/{id}/field/{field}/edit(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          hx-trigger="click"
+          th:title="|Click to edit ${label}|"
+          style="cursor: pointer; border-bottom: 1px dashed #6c757d;">
+        <span th:if="${value != null && !#strings.isEmpty(value)}" th:text="${value}"></span>
+        <span th:if="${value == null || #strings.isEmpty(value)}" class="text-muted fst-italic">unknown</span>
+        <i class="bi bi-pencil-fill text-muted ms-1" style="font-size: 0.65rem; opacity: 0.5;"></i>
+    </span>
+</th:block>
+
+<!-- Host Field Edit Form -->
+<th:block th:fragment="hostEdit(id, field, value, knownHosts)">
+    <form th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          class="d-inline"
+          th:data-cancel-url="@{/crawlConfigs/{id}/field/{field}/display(id=${id}, field=${field})}">
+        <input type="text"
+               th:name="${field}"
+               th:value="${value}"
+               th:list="|hostList_${id}|"
+               class="form-control form-control-sm d-inline-block"
+               style="width: auto; min-width: 150px;"
+               placeholder="Enter host name"
+               onfocus="this.select()"
+               onkeydown="handleInlineEditKey(event, this)"
+               onblur="submitInlineEdit(this)"
+               autofocus>
+        <datalist th:id="|hostList_${id}|">
+            <option th:each="host : ${knownHosts}" th:value="${host}"></option>
+        </datalist>
+    </form>
+</th:block>
+
+<!-- Start Paths Display (multiline) -->
+<th:block th:fragment="pathsDisplay(id, field, paths)">
+    <span class="inline-edit-display"
+          th:hx-get="@{/crawlConfigs/{id}/field/{field}/edit(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          hx-trigger="click"
+          title="Click to edit start paths"
+          style="cursor: pointer; border-bottom: 1px dashed #6c757d;">
+        <ul th:if="${paths != null && !paths.empty}" class="mb-0 ps-3" style="display: inline-block;">
+            <li th:each="path : ${paths}" th:text="${path}"></li>
+        </ul>
+        <span th:if="${paths == null || paths.empty}" class="text-muted fst-italic">No paths configured</span>
+        <i class="bi bi-pencil-fill text-muted ms-1" style="font-size: 0.65rem; opacity: 0.5;"></i>
+    </span>
+</th:block>
+
+<!-- Start Paths Edit Form -->
+<th:block th:fragment="pathsEdit(id, field, pathsText)">
+    <form th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field})}"
+          hx-swap="outerHTML"
+          class="d-inline-block"
+          th:data-cancel-url="@{/crawlConfigs/{id}/field/{field}/display(id=${id}, field=${field})}">
+        <div class="input-group input-group-sm">
+            <textarea th:name="${field}"
+                      th:text="${pathsText}"
+                      class="form-control form-control-sm font-monospace"
+                      rows="3"
+                      placeholder="One path per line"
+                      style="min-width: 280px;"
+                      onkeydown="if(event.key==='Escape'){cancelInlineEdit(this.closest('form'));}"
+                      autofocus></textarea>
+            <button type="submit" class="btn btn-sm btn-primary" title="Save">
+                <i class="bi bi-check"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Cancel"
+                    onclick="cancelInlineEdit(this.closest('form'))">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </form>
+</th:block>
+
+<!-- Pattern Field Display (for regex patterns stored as JSON) -->
+<th:block th:fragment="patternDisplay(id, field, patternsText, badgeClass, badgeLabel)">
+    <div class="pattern-display mb-2"
+         th:hx-get="@{/crawlConfigs/{id}/field/{field}/edit(id=${id}, field=${field})}"
+         hx-swap="outerHTML"
+         hx-trigger="click"
+         title="Click to edit patterns"
+         style="cursor: pointer;">
+        <span class="badge" th:classappend="${badgeClass}" th:text="${badgeLabel}"></span>
+        <pre th:if="${patternsText != null && !#strings.isEmpty(patternsText)}"
+             class="bg-light p-1 rounded mt-1 mb-0 small font-monospace"
+             style="max-height: 80px; overflow: auto; border: 1px dashed #6c757d;"
+             th:text="${patternsText}"></pre>
+        <span th:if="${patternsText == null || #strings.isEmpty(patternsText)}"
+              class="text-muted fst-italic small ms-2">none</span>
+    </div>
+</th:block>
+
+<!-- Pattern Field Edit Form -->
+<th:block th:fragment="patternEdit(id, field, patternsText, badgeClass, badgeLabel)">
+    <div class="pattern-edit mb-2">
+        <span class="badge" th:classappend="${badgeClass}" th:text="${badgeLabel}"></span>
+        <form th:hx-patch="@{/crawlConfigs/{id}/field/{field}(id=${id}, field=${field})}"
+              hx-swap="outerHTML"
+              class="mt-1"
+              th:data-cancel-url="@{/crawlConfigs/{id}/field/{field}/display(id=${id}, field=${field})}">
+            <div class="input-group input-group-sm">
+                <textarea th:name="${field}"
+                          th:text="${patternsText}"
+                          class="form-control form-control-sm font-monospace"
+                          rows="4"
+                          placeholder="One pattern per line (Java regex)"
+                          style="font-size: 0.75rem;"
+                          onkeydown="if(event.key==='Escape'){cancelInlineEdit(this.closest('form'));}"
+                          autofocus></textarea>
+                <div class="d-flex flex-column">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1" title="Save">
+                        <i class="bi bi-check"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1" title="Cancel"
+                            onclick="cancelInlineEdit(this.closest('form'))">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</th:block>
+
+<!-- JavaScript for inline editing -->
+<script th:fragment="inlineEditScript">
+    function handleInlineEditKey(event, input) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            cancelInlineEdit(input.closest('form'));
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            input.closest('form').requestSubmit();
+        }
+    }
+
+    function submitInlineEdit(input) {
+        const form = input.closest('form');
+        if (!form.dataset.submitting) {
+            form.dataset.submitting = 'true';
+            form.requestSubmit();
+        }
+    }
+
+    function cancelInlineEdit(form) {
+        const cancelUrl = form.dataset.cancelUrl;
+        if (cancelUrl) {
+            htmx.ajax('GET', cancelUrl, { target: form, swap: 'outerHTML' });
+        }
+    }
+</script>
+
+</html>

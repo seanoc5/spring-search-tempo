@@ -48,6 +48,19 @@ class CrawlConfigIntegrationTest : BaseIT() {
     }
 
     @Test
+    fun `crawl config preset wizard page loads successfully`() {
+        RestAssured
+            .given()
+                .accept(ContentType.HTML)
+            .`when`()
+                .get("/crawlConfigs/wizard")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body(containsString("Preset Wizard"))
+                .body(containsString("POWER_USER"))
+    }
+
+    @Test
     fun `job runs list page loads successfully`() {
         RestAssured
             .given()

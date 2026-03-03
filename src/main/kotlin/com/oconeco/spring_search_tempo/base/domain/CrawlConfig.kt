@@ -73,11 +73,4 @@ class CrawlConfig : SaveableObject() {
     @Column
     var freshnessHours: Int? = null
 
-    /**
-     * Which host this config is intended to run on.
-     * Null means "runs on any host." Compared against HostNameHolder.currentHostName.
-     */
-    @Column(length = 50)
-    var targetHost: String? = null
-
 }

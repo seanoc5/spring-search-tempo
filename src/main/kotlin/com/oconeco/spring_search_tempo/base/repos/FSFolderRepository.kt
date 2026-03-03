@@ -57,6 +57,20 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     fun findByIdAndAnalysisStatusNot(id: Long, analysisStatus: AnalysisStatus, pageable: Pageable): Page<FSFolder>
 
     /**
+     * Find folders by URI substring.
+     */
+    fun findByUriContainingIgnoreCase(uri: String, pageable: Pageable): Page<FSFolder>
+
+    /**
+     * Find folders by URI substring, excluding SKIP status.
+     */
+    fun findByUriContainingIgnoreCaseAndAnalysisStatusNot(
+        uri: String,
+        analysisStatus: AnalysisStatus,
+        pageable: Pageable
+    ): Page<FSFolder>
+
+    /**
      * Count folders owned by a specific job run.
      */
     fun countByJobRunId(jobRunId: Long): Long
@@ -189,6 +203,19 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     fun countGroupedByCrawlConfig(@Param("excludedStatus") excludedStatus: AnalysisStatus): List<Array<Any>>
 
     /**
+     * Get total folder counts grouped by crawl config for the given config IDs.
+     * Returns pairs of [crawlConfigId, count].
+     */
+    @Query("""
+        SELECT jr.crawlConfig.id, COUNT(f)
+        FROM FSFolder f
+        JOIN JobRun jr ON f.jobRunId = jr.id
+        WHERE jr.crawlConfig.id IN :configIds
+        GROUP BY jr.crawlConfig.id
+    """)
+    fun countTotalGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
+
+    /**
      * Get SKIP folder counts grouped by crawl config.
      * Returns pairs of [crawlConfigId, count].
      */
@@ -224,6 +251,56 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
         )
     """)
     fun findAllByCrawlConfigId(@Param("configId") configId: Long): List<FSFolder>
+
+    /**
+     * Compute dense dashboard metrics for a set of folders.
+     * Returns rows of:
+     * [folderId, directFolderCount, recursiveFolderCount, directFileCount, recursiveFileCount, totalFileSize].
+     */
+    @Query(
+        value = """
+            SELECT
+                p.id AS folder_id,
+                (
+                    SELECT COUNT(*)
+                    FROM fsfolder c
+                    WHERE c.id <> p.id
+                      AND LEFT(c.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
+                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
+                      AND POSITION('/' IN SUBSTRING(c.uri FROM LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) + 1)) = 0
+                ) AS direct_folder_count,
+                (
+                    SELECT COUNT(*)
+                    FROM fsfolder c
+                    WHERE c.id <> p.id
+                      AND LEFT(c.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
+                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
+                ) AS recursive_folder_count,
+                (
+                    SELECT COUNT(*)
+                    FROM fsfile f
+                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
+                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
+                      AND POSITION('/' IN SUBSTRING(f.uri FROM LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) + 1)) = 0
+                ) AS direct_file_count,
+                (
+                    SELECT COUNT(*)
+                    FROM fsfile f
+                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
+                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
+                ) AS recursive_file_count,
+                (
+                    SELECT COALESCE(SUM(f.size), 0)
+                    FROM fsfile f
+                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
+                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
+                ) AS total_file_size
+            FROM fsfolder p
+            WHERE p.id IN (:folderIds)
+        """,
+        nativeQuery = true
+    )
+    fun findDashboardFolderMetrics(@Param("folderIds") folderIds: Collection<Long>): List<Array<Any?>>
 
     /**
      * Find immediate child folders by parent URI prefix.
