@@ -1,6 +1,8 @@
 package com.oconeco.spring_search_tempo.web.rest
 
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import com.oconeco.spring_search_tempo.web.service.DiscoveryService
+import com.oconeco.spring_search_tempo.web.service.DiscoveryUploadRequest
 import com.oconeco.spring_search_tempo.web.service.RemoteClassifyRequest
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlPlannerService
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlSessionService
@@ -27,7 +29,8 @@ import org.springframework.web.bind.annotation.RestController
 class RemoteCrawlResource(
     private val remoteCrawlPlannerService: RemoteCrawlPlannerService,
     private val remoteCrawlSessionService: RemoteCrawlSessionService,
-    private val remoteCrawlTaskService: RemoteCrawlTaskService
+    private val remoteCrawlTaskService: RemoteCrawlTaskService,
+    private val discoveryService: DiscoveryService
 ) {
 
     companion object {
@@ -38,6 +41,7 @@ class RemoteCrawlResource(
     fun bootstrap(
         @RequestParam(name = "host") host: String
     ): ResponseEntity<Any> {
+        log.info("Remote bootstrap request for host {}", host)
         return try {
             val response = remoteCrawlPlannerService.buildBootstrap(host)
             ResponseEntity.ok(response)
@@ -61,6 +65,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/classify")
     fun classify(@RequestBody request: RemoteClassifyRequest): ResponseEntity<Any> {
+        log.info("Remote classify request for config {}", request.crawlConfigId)
         return try {
             val response = remoteCrawlPlannerService.classify(request)
             ResponseEntity.ok(response)
@@ -94,6 +99,7 @@ class RemoteCrawlResource(
         return try {
             ResponseEntity.ok(remoteCrawlSessionService.start(request))
         } catch (e: NotFoundException) {
+            log.error("Remote session start failed for config {}", request.crawlConfigId, e)
             ResponseEntity.status(404).body(
                 mapOf(
                     "status" to "FAILED",
@@ -120,6 +126,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/heartbeat")
     fun heartbeat(@RequestBody request: RemoteSessionHeartbeatRequest): ResponseEntity<Any> {
+        log.info("Remote session heartbeat for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlSessionService.heartbeat(request))
         } catch (e: NotFoundException) {
@@ -149,6 +156,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/ingest")
     fun ingest(@RequestBody request: RemoteIngestRequest): ResponseEntity<Any> {
+        log.info("Remote ingest request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlSessionService.ingest(request))
         } catch (e: NotFoundException) {
@@ -178,6 +186,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/complete")
     fun complete(@RequestBody request: RemoteSessionCompleteRequest): ResponseEntity<Any> {
+        log.info("Remote session complete request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlSessionService.complete(request))
         } catch (e: NotFoundException) {
@@ -207,6 +216,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/tasks/enqueue-folders")
     fun enqueueFolders(@RequestBody request: RemoteEnqueueFoldersRequest): ResponseEntity<Any> {
+        log.info("Remote enqueue-folders request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlTaskService.enqueueFolders(request))
         } catch (e: NotFoundException) {
@@ -236,6 +246,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/tasks/next")
     fun nextTasks(@RequestBody request: RemoteTaskClaimRequest): ResponseEntity<Any> {
+        log.info("Remote task claim request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlTaskService.claimNext(request))
         } catch (e: NotFoundException) {
@@ -265,6 +276,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/tasks/ack")
     fun ackTasks(@RequestBody request: RemoteTaskAckRequest): ResponseEntity<Any> {
+        log.info("Remote task ack request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlTaskService.ack(request))
         } catch (e: NotFoundException) {
@@ -294,6 +306,7 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/tasks/status")
     fun taskStatus(@RequestBody request: RemoteTaskStatusRequest): ResponseEntity<Any> {
+        log.info("Remote task status request for session {}", request.sessionId)
         return try {
             ResponseEntity.ok(remoteCrawlTaskService.status(request))
         } catch (e: NotFoundException) {
@@ -316,6 +329,70 @@ class RemoteCrawlResource(
                 mapOf(
                     "status" to "FAILED",
                     "message" to "Failed to get remote task status: ${e.message}"
+                )
+            )
+        }
+    }
+
+    // ============ Discovery (Onboarding) Endpoints ============
+
+    @PostMapping("/discovery/upload")
+    fun uploadDiscovery(@RequestBody request: DiscoveryUploadRequest): ResponseEntity<Any> {
+        log.info("Discovery upload from host {} with {} folders", request.host, request.folders.size)
+        return try {
+            ResponseEntity.ok(discoveryService.uploadDiscovery(request))
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Discovery upload failed for host {}", request.host, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to process discovery upload: ${e.message}"
+                )
+            )
+        }
+    }
+
+    @GetMapping("/discovery/status")
+    fun discoveryStatus(
+        @RequestParam(name = "sessionId") sessionId: Long
+    ): ResponseEntity<Any> {
+        return try {
+            ResponseEntity.ok(discoveryService.getStatus(sessionId))
+        } catch (e: NotFoundException) {
+            ResponseEntity.status(404).body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Discovery session not found")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Discovery status failed for session {}", sessionId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to get discovery status: ${e.message}"
+                )
+            )
+        }
+    }
+
+    @GetMapping("/discovery/pending")
+    fun pendingDiscoveries(): ResponseEntity<Any> {
+        return try {
+            ResponseEntity.ok(discoveryService.getPendingSessions())
+        } catch (e: Exception) {
+            log.error("Failed to get pending discoveries", e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to get pending discoveries: ${e.message}"
                 )
             )
         }

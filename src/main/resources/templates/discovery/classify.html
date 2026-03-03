@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="|Classify - ${session.host}|">Classify Folders</title>
+    <style>
+        .folder-tree {
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .folder-item {
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 1px 0;
+        }
+        .folder-item:hover {
+            background-color: #f8f9fa;
+        }
+        .folder-name {
+            cursor: pointer;
+        }
+        .folder-children {
+            margin-left: 20px;
+            border-left: 1px dashed #dee2e6;
+            padding-left: 8px;
+        }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+        }
+        .status-skip { background-color: #dc3545; color: white; }
+        .status-locate { background-color: #ffc107; color: black; }
+        .status-index { background-color: #198754; color: white; }
+        .status-analyze { background-color: #0d6efd; color: white; }
+        .status-unknown { background-color: #6c757d; color: white; }
+        .suggested {
+            opacity: 0.7;
+            font-style: italic;
+        }
+        .stats-panel {
+            position: sticky;
+            top: 80px;
+        }
+        .action-btn {
+            padding: 2px 6px;
+            font-size: 0.75rem;
+        }
+        .hidden-folder {
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+<main layout:fragment="content">
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-1">
+                    <i class="bi bi-folder-check me-2"></i>
+                    Classify Folders
+                </h2>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-pc-display me-1"></i>
+                    <span th:text="${session.host}">hostname</span>
+                    <span class="mx-2">|</span>
+                    <span th:text="${session.totalFolders}">0</span> folders discovered
+                </p>
+            </div>
+            <div>
+                <a th:href="@{/discovery}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i>
+                    Back
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Folder Tree -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-diagram-3 me-2"></i>
+                            Folder Structure
+                        </h5>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-2"
+                                    onclick="expandAll()">
+                                <i class="bi bi-arrows-expand"></i> Expand All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    onclick="collapseAll()">
+                                <i class="bi bi-arrows-collapse"></i> Collapse All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body folder-tree" style="max-height: 70vh; overflow-y: auto;">
+                        <div th:each="folder : ${rootFolders}">
+                            <th:block th:replace="~{discovery/classify :: folderNode(${folder}, ${foldersByParent}, 0, ${session.id})}"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats & Actions Panel -->
+            <div class="col-lg-4">
+                <div class="stats-panel">
+                    <!-- Status Counts -->
+                    <div class="card mb-3" id="statusPanel"
+                         hx-get th:hx-get="@{/discovery/{id}/status(id=${session.id})}"
+                         hx-trigger="classificationChanged from:body"
+                         hx-swap="innerHTML">
+                        <th:block th:replace="~{discovery/fragments :: statusPanel(${session})}"/>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="bi bi-lightning me-2"></i>
+                                Quick Actions
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <button type="button" class="btn btn-outline-primary w-100 mb-2"
+                                    hx-post th:hx-post="@{/discovery/{id}/apply-suggestions(id=${session.id})}"
+                                    hx-swap="none"
+                                    hx-on::after-request="handleSuggestionsApplied(event)">
+                                <i class="bi bi-magic me-1"></i>
+                                Apply All Suggestions
+                            </button>
+
+                            <hr>
+
+                            <p class="small text-muted mb-2">Mark selected as:</p>
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="classifySelected('SKIP')">
+                                    SKIP
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm"
+                                        onclick="classifySelected('LOCATE')">
+                                    LOCATE
+                                </button>
+                                <button type="button" class="btn btn-outline-success btn-sm"
+                                        onclick="classifySelected('INDEX')">
+                                    INDEX
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Legend
+                            </h6>
+                        </div>
+                        <div class="card-body small">
+                            <div class="mb-2">
+                                <span class="badge status-skip">SKIP</span>
+                                Don't process (caches, build dirs)
+                            </div>
+                            <div class="mb-2">
+                                <span class="badge status-locate">LOCATE</span>
+                                Metadata only (media, binaries)
+                            </div>
+                            <div class="mb-2">
+                                <span class="badge status-index">INDEX</span>
+                                Full text extraction (docs, code)
+                            </div>
+                            <div>
+                                <span class="badge status-analyze">ANALYZE</span>
+                                Index + NLP processing
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        const sessionId = /*[[${session.id}]]*/ 0;
+
+        function toggleFolder(element) {
+            const children = element.closest('.folder-item').querySelector('.folder-children');
+            const icon = element.querySelector('.toggle-icon');
+            if (children) {
+                children.classList.toggle('d-none');
+                if (icon) {
+                    icon.classList.toggle('bi-chevron-right');
+                    icon.classList.toggle('bi-chevron-down');
+                }
+            }
+        }
+
+        function expandAll() {
+            document.querySelectorAll('.folder-children').forEach(el => el.classList.remove('d-none'));
+            document.querySelectorAll('.toggle-icon').forEach(el => {
+                el.classList.remove('bi-chevron-right');
+                el.classList.add('bi-chevron-down');
+            });
+        }
+
+        function collapseAll() {
+            document.querySelectorAll('.folder-children').forEach(el => el.classList.add('d-none'));
+            document.querySelectorAll('.toggle-icon').forEach(el => {
+                el.classList.add('bi-chevron-right');
+                el.classList.remove('bi-chevron-down');
+            });
+        }
+
+        function classifyFolder(folderId, folderPath, status, includeSubtree = false) {
+            fetch(`/discovery/${sessionId}/classify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    [document.querySelector('meta[name="_csrf_header"]').content]:
+                        document.querySelector('meta[name="_csrf"]').content
+                },
+                body: JSON.stringify({
+                    folderId: folderId,
+                    folderPath: folderPath,
+                    status: status,
+                    includeSubtree: includeSubtree
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the folder's badge
+                    const badge = document.querySelector(`[data-folder-id="${folderId}"] .status-badge`);
+                    if (badge) {
+                        badge.className = `badge status-badge status-${status.toLowerCase()}`;
+                        badge.textContent = status;
+                        badge.classList.remove('suggested');
+                    }
+                    // Trigger status panel refresh
+                    htmx.trigger(document.body, 'classificationChanged');
+                }
+            });
+        }
+
+        function classifySubtree(folderPath, status) {
+            classifyFolder(null, folderPath, status, true);
+        }
+
+        function classifySelected(status) {
+            const selected = document.querySelectorAll('.folder-checkbox:checked');
+            selected.forEach(cb => {
+                const folderId = cb.dataset.folderId;
+                classifyFolder(folderId, null, status, false);
+            });
+        }
+
+        function handleSuggestionsApplied(event) {
+            if (event.detail.successful) {
+                htmx.trigger(document.body, 'classificationChanged');
+                // Reload page to show updated badges
+                location.reload();
+            }
+        }
+    </script>
+</main>
+
+<!-- Folder Node Fragment -->
+<th:block th:fragment="folderNode(folder, foldersByParent, depth, sessionId)">
+    <div class="folder-item" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''"
+         th:data-folder-id="${folder.id}">
+        <div class="d-flex align-items-center">
+            <!-- Checkbox -->
+            <input type="checkbox" class="form-check-input me-2 folder-checkbox"
+                   th:data-folder-id="${folder.id}">
+
+            <!-- Expand/Collapse Toggle -->
+            <span th:if="${foldersByParent.containsKey(folder.path)}"
+                  class="folder-name me-1" onclick="toggleFolder(this)">
+                <i class="bi bi-chevron-right toggle-icon"></i>
+            </span>
+            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="me-3"></span>
+
+            <!-- Folder Icon -->
+            <i class="bi bi-folder me-1 text-warning"></i>
+
+            <!-- Folder Name -->
+            <span class="folder-name flex-grow-1" th:text="${folder.name}">folder</span>
+
+            <!-- Stats -->
+            <span class="text-muted small me-2">
+                <span th:if="${folder.folderCount > 0}" th:text="|${folder.folderCount} dirs|"></span>
+                <span th:if="${folder.fileCount > 0}" th:text="|, ${folder.fileCount} files|"></span>
+            </span>
+
+            <!-- Status Badge -->
+            <span th:if="${folder.assignedStatus != null}"
+                  class="badge status-badge"
+                  th:classappend="|status-${folder.assignedStatus.toLowerCase()}|"
+                  th:text="${folder.assignedStatus}">STATUS</span>
+            <span th:if="${folder.assignedStatus == null && folder.suggestedStatus != null}"
+                  class="badge status-badge suggested"
+                  th:classappend="|status-${folder.suggestedStatus.toLowerCase()}|"
+                  th:text="${folder.suggestedStatus}">SUGGESTED</span>
+
+            <!-- Quick Actions -->
+            <div class="btn-group ms-2" role="group">
+                <button type="button" class="btn btn-outline-danger action-btn"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
+                        title="Mark as SKIP">S</button>
+                <button type="button" class="btn btn-outline-warning action-btn"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
+                        title="Mark as LOCATE">L</button>
+                <button type="button" class="btn btn-outline-success action-btn"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
+                        title="Mark as INDEX">I</button>
+            </div>
+
+            <!-- Subtree Action -->
+            <div class="dropdown ms-1" th:if="${foldersByParent.containsKey(folder.path)}">
+                <button class="btn btn-outline-secondary action-btn dropdown-toggle" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-three-dots-vertical"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><h6 class="dropdown-header">Mark entire subtree as:</h6></li>
+                    <li>
+                        <a class="dropdown-item text-danger" href="#"
+                           th:onclick="|classifySubtree('${folder.path}', 'SKIP'); return false;|">
+                            <i class="bi bi-x-circle me-1"></i> SKIP
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item text-warning" href="#"
+                           th:onclick="|classifySubtree('${folder.path}', 'LOCATE'); return false;|">
+                            <i class="bi bi-geo-alt me-1"></i> LOCATE
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item text-success" href="#"
+                           th:onclick="|classifySubtree('${folder.path}', 'INDEX'); return false;|">
+                            <i class="bi bi-file-text me-1"></i> INDEX
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Children (recursive) -->
+        <div th:if="${foldersByParent.containsKey(folder.path)}"
+             class="folder-children d-none">
+            <div th:each="child : ${foldersByParent.get(folder.path)}">
+                <th:block th:replace="~{discovery/classify :: folderNode(${child}, ${foldersByParent}, ${depth + 1}, ${sessionId})}"/>
+            </div>
+        </div>
+    </div>
+</th:block>
+
+</body>
+</html>

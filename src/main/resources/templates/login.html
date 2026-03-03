@@ -39,7 +39,7 @@
                     </div>
 
                     <!-- Session expired message -->
-                    <div th:if="${param.expired}" class="alert alert-warning" role="alert">
+                    <div th:if="${param.expired != null || param.sessionExpired != null}" class="alert alert-warning" role="alert">
                         <i class="bi bi-clock-history me-2"></i>
                         Your session has expired. Please sign in again.
                     </div>
@@ -88,7 +88,7 @@
             </div>
 
             <p class="text-center text-white-50 mt-3 small">
-                Default accounts: <strong>admin</strong> / password or <strong>user</strong> / password
+                Default accounts: <strong>admin</strong> / admin or <strong>user</strong> / password
             </p>
         </div>
     </div>

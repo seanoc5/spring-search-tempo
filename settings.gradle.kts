@@ -3,3 +3,5 @@ plugins {
 }
 
 rootProject.name = "spring-search-tempo"
+
+include("remote-crawler-cli")
