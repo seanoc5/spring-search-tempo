@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- Job Types Content Fragment -->
+<th:block th:fragment="job-types-content">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <span class="fw-semibold">
+                <i class="bi bi-collection me-2"></i>Available Job Types
+            </span>
+            <div class="d-flex align-items-center gap-2">
+                <span th:if="${runningJobTypeCount > 0}" class="badge bg-primary">
+                    <i class="bi bi-arrow-repeat spin"></i> [[${runningJobTypeCount}]] running
+                </span>
+                <span class="badge bg-secondary">[[${#lists.size(availableJobTypes)}]] types</span>
+            </div>
+        </div>
+        <div class="card-body p-2">
+            <!-- Group by category -->
+            <div class="row g-2">
+                <th:block th:each="category : ${ {'Crawl', 'Processing', 'Sync'} }">
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header py-1 px-2 bg-light">
+                                <small class="fw-semibold text-muted" th:text="${category}">Category</small>
+                            </div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush">
+                                    <li th:each="job : ${availableJobTypes}"
+                                        th:if="${job.category == category}"
+                                        class="list-group-item py-2 px-2"
+                                        th:classappend="${job.isRunning} ? 'list-group-item-primary' : ''">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1 me-2">
+                                                <!-- Job name and execution count -->
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <span th:if="${job.hasRunHistory}">
+                                                        <a th:href="@{/batch(jobName=${job.jobTypeId})}"
+                                                           class="text-decoration-none fw-semibold"
+                                                           th:classappend="${job.isRunning} ? 'text-primary' : ''"
+                                                           th:text="${job.displayName}">Job Name</a>
+                                                    </span>
+                                                    <span th:unless="${job.hasRunHistory}"
+                                                          class="fw-semibold text-muted"
+                                                          th:text="${job.displayName}">Job Name</span>
+
+                                                    <!-- Running indicator with count -->
+                                                    <span th:if="${job.isRunning}" class="badge bg-primary">
+                                                        <i class="bi bi-arrow-repeat spin"></i>
+                                                        <span th:if="${job.runningCount > 1}" th:text="${job.runningCount}"></span>
+                                                    </span>
+
+                                                    <!-- Execution count badge -->
+                                                    <span th:if="${job.hasRunHistory && !job.isRunning}"
+                                                          class="badge bg-secondary small"
+                                                          th:text="${job.totalExecutions}">0</span>
+                                                    <span th:if="${!job.hasRunHistory && !job.isRunning}"
+                                                          class="badge bg-light text-muted small">
+                                                        never run
+                                                    </span>
+                                                </div>
+
+                                                <!-- Description -->
+                                                <small class="text-muted d-block" style="font-size: 0.75rem;"
+                                                       th:text="${job.description}">Description</small>
+
+                                                <!-- Last run status (when not running) -->
+                                                <div th:if="${job.lastStatus != null && !job.isRunning}" class="mt-1">
+                                                    <span th:switch="${job.lastStatus}" style="font-size: 0.7rem;">
+                                                        <span th:case="'COMPLETED'" class="badge bg-success">Last: OK</span>
+                                                        <span th:case="'FAILED'" class="badge bg-danger">Last: Failed</span>
+                                                        <span th:case="'STOPPED'" class="badge bg-warning text-dark">Last: Stopped</span>
+                                                        <span th:case="*" class="badge bg-secondary" th:text="${'Last: ' + job.lastStatus}">Unknown</span>
+                                                    </span>
+                                                    <small th:if="${job.lastExecutionTime != null}" class="text-muted ms-1"
+                                                           th:text="${#temporals.format(job.lastExecutionTime, 'MM-dd HH:mm')}"></small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Action buttons -->
+                                            <div class="d-flex gap-1">
+                                                <!-- STOP button (when running) -->
+                                                <th:block th:if="${job.isRunning}">
+                                                    <button th:each="execId : ${job.runningExecutionIds}"
+                                                            type="button"
+                                                            class="btn btn-sm btn-warning"
+                                                            th:hx-post="@{/batch/{id}/stop(id=${execId})}"
+                                                            hx-target="#runningJobsContainer"
+                                                            hx-swap="innerHTML"
+                                                            th:title="|Stop execution #${execId}|">
+                                                        <i class="bi bi-stop-fill"></i>
+                                                    </button>
+                                                </th:block>
+
+                                                <!-- RUN button (when not running) -->
+                                                <form th:if="${job.canRunDirectly && !job.isRunning}"
+                                                      th:action="@{/batch/run}" method="post" class="d-inline">
+                                                    <input type="hidden" name="jobName" th:value="${job.jobTypeId}">
+                                                    <button type="submit" class="btn btn-sm btn-success"
+                                                            title="Run this job now">
+                                                        <i class="bi bi-play-fill"></i>
+                                                    </button>
+                                                </form>
+
+                                                <!-- Config link (always shown if available) -->
+                                                <a th:if="${job.runLink != null}"
+                                                   th:href="${job.runLink}"
+                                                   class="btn btn-sm btn-outline-secondary"
+                                                   title="Open configuration">
+                                                    <i class="bi bi-gear"></i>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </th:block>
+            </div>
+        </div>
+    </div>
+</th:block>
+
+</html>

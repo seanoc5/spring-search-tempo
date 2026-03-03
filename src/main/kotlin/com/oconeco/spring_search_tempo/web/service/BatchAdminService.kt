@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.web.service
 
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
+import com.oconeco.spring_search_tempo.web.model.AvailableJobTypeDTO
 import com.oconeco.spring_search_tempo.web.model.BatchJobSummaryDTO
 import com.oconeco.spring_search_tempo.web.model.ConfiguredJobDTO
 import com.oconeco.spring_search_tempo.web.model.JobExecutionDetailDTO
@@ -55,9 +56,16 @@ class BatchAdminService(
     fun getConfiguredJobs(): List<ConfiguredJobDTO> {
         val jobDescriptions = mapOf(
             "fsCrawlJob" to "File system crawl",
+            "discoveryJob" to "Discovery crawl",
+            "assignmentJob" to "Analysis assignment",
+            "globalAssignmentJob" to "Analysis assignment (global)",
+            "progressiveAnalysisJob" to "Progressive analysis",
             "nlpProcessingJob" to "NLP text analysis",
+            "embeddingProcessingJob" to "Embedding generation",
             "emailQuickSync" to "Email synchronization",
-            "bookmarkImportJob" to "Bookmark import"
+            "bookmarkImportJob" to "Bookmark import",
+            "oneDriveSync" to "OneDrive synchronization",
+            "oneDriveSyncJob" to "OneDrive synchronization"
         )
 
         return jobExplorer.jobNames.map { jobName ->
@@ -80,6 +88,181 @@ class BatchAdminService(
             )
         }.sortedByDescending { it.lastExecutionTime }
     }
+
+    /**
+     * Get all available job types - both defined in code and those with run history.
+     * This provides a complete view of what jobs can be run, not just what has run.
+     */
+    fun getAvailableJobTypes(): List<AvailableJobTypeDTO> {
+        // Define all known job types in the system (static registry)
+        val knownJobTypes = listOf(
+            JobTypeDefinition(
+                jobTypeId = "fsCrawlJob",
+                displayName = "File System Crawl",
+                description = "Crawl filesystem paths to index files and folders",
+                category = "Crawl",
+                canRunDirectly = true,
+                runLink = "/crawlConfigs"
+            ),
+            JobTypeDefinition(
+                jobTypeId = "nlpProcessingJob",
+                displayName = "NLP Processing",
+                description = "Run NLP analysis (NER, POS, sentiment) on indexed content",
+                category = "Processing",
+                canRunDirectly = true,
+                runLink = null
+            ),
+            JobTypeDefinition(
+                jobTypeId = "embeddingProcessingJob",
+                displayName = "Embedding Generation",
+                description = "Generate vector embeddings for semantic search",
+                category = "Processing",
+                canRunDirectly = true,
+                runLink = null
+            ),
+            JobTypeDefinition(
+                jobTypeId = "emailQuickSync",
+                displayName = "Email Sync",
+                description = "Synchronize email messages from configured accounts",
+                category = "Sync",
+                canRunDirectly = true,
+                runLink = "/emailAccounts"
+            ),
+            JobTypeDefinition(
+                jobTypeId = "bookmarkImportJob",
+                displayName = "Bookmark Import",
+                description = "Import bookmarks and history from browser profiles",
+                category = "Sync",
+                canRunDirectly = true,
+                runLink = "/browserProfiles"
+            ),
+            JobTypeDefinition(
+                jobTypeId = "oneDriveSyncJob",
+                displayName = "OneDrive Sync",
+                description = "Synchronize files from OneDrive cloud storage",
+                category = "Sync",
+                canRunDirectly = true,
+                runLink = "/oneDriveAccounts"
+            ),
+            JobTypeDefinition(
+                jobTypeId = "discoveryJob",
+                displayName = "Discovery",
+                description = "Discover folder structure for onboarding new hosts",
+                category = "Crawl",
+                canRunDirectly = true,
+                runLink = "/discovery"
+            ),
+            JobTypeDefinition(
+                jobTypeId = "analysisAssignmentJob",
+                displayName = "Analysis Assignment",
+                description = "Assign analysis levels to discovered content",
+                category = "Processing",
+                canRunDirectly = true,
+                runLink = null
+            ),
+            JobTypeDefinition(
+                jobTypeId = "progressiveAnalysisJob",
+                displayName = "Progressive Analysis",
+                description = "Run progressive analysis pipeline (locate → index → NLP → embed)",
+                category = "Processing",
+                canRunDirectly = true,
+                runLink = null
+            )
+        )
+
+        // Get running jobs per type
+        val runningByType = mutableMapOf<String, MutableList<Long>>()
+        for (jobName in jobExplorer.jobNames) {
+            val running = jobExplorer.findRunningJobExecutions(jobName)
+            if (running.isNotEmpty()) {
+                val baseJobType = normalizeJobName(jobName)
+                val list = runningByType.getOrPut(baseJobType) { mutableListOf() }
+                running.forEach { exec -> exec.id?.let { list.add(it) } }
+            }
+        }
+
+        // Get execution stats for jobs that have actually run
+        val executionStats = mutableMapOf<String, ExecutionStats>()
+        for (jobName in jobExplorer.jobNames) {
+            val recentInstances = jobExplorer.getJobInstances(jobName, 0, 10)
+            val recentExecutions = recentInstances.flatMap { jobExplorer.getJobExecutions(it) }
+            val lastExecution = recentExecutions.maxByOrNull { it.startTime ?: LocalDateTime.MIN }
+
+            // Normalize to base job type (strip suffixes like _1234)
+            val baseJobType = normalizeJobName(jobName)
+
+            // Accumulate stats by base type
+            val existing = executionStats[baseJobType]
+            if (existing == null || (lastExecution?.startTime ?: LocalDateTime.MIN) > (existing.lastExecutionTime ?: LocalDateTime.MIN)) {
+                executionStats[baseJobType] = ExecutionStats(
+                    totalExecutions = (existing?.totalExecutions ?: 0) + recentExecutions.size.toLong(),
+                    lastExecutionTime = lastExecution?.startTime,
+                    lastStatus = lastExecution?.status?.name
+                )
+            } else {
+                executionStats[baseJobType] = existing.copy(
+                    totalExecutions = existing.totalExecutions + recentExecutions.size.toLong()
+                )
+            }
+        }
+
+        // Merge known types with execution stats and running info
+        return knownJobTypes.map { def ->
+            val stats = executionStats[def.jobTypeId]
+            val runningIds = runningByType[def.jobTypeId] ?: emptyList()
+            AvailableJobTypeDTO(
+                jobTypeId = def.jobTypeId,
+                displayName = def.displayName,
+                description = def.description,
+                category = def.category,
+                hasRunHistory = stats != null,
+                totalExecutions = stats?.totalExecutions ?: 0,
+                lastExecutionTime = stats?.lastExecutionTime?.atZone(ZoneId.systemDefault())?.toInstant(),
+                lastStatus = stats?.lastStatus,
+                canRunDirectly = def.canRunDirectly,
+                runLink = def.runLink,
+                isRunning = runningIds.isNotEmpty(),
+                runningExecutionIds = runningIds,
+                runningCount = runningIds.size
+            )
+        }.sortedWith(compareBy({ it.category }, { it.displayName }))
+    }
+
+    /**
+     * Normalize a job name to its base type (strips instance-specific suffixes).
+     * e.g., "emailQuickSync_2051023" → "emailQuickSync"
+     */
+    private fun normalizeJobName(jobName: String): String {
+        return when {
+            jobName.startsWith("emailQuickSync_") -> "emailQuickSync"
+            jobName.startsWith("bookmarkImportJob_") -> "bookmarkImportJob"
+            jobName.startsWith("oneDriveSync_") -> "oneDriveSyncJob"
+            jobName.startsWith("oneDriveSyncJob_") -> "oneDriveSyncJob"
+            jobName.startsWith("discoveryJob_") -> "discoveryJob"
+            jobName.startsWith("assignmentJob_") -> "analysisAssignmentJob"
+            jobName == "globalAssignmentJob" -> "analysisAssignmentJob"
+            jobName.startsWith("analysisAssignmentJob_") -> "analysisAssignmentJob"
+            jobName == "progressiveAnalysisJob" || jobName.startsWith("progressiveAnalysisJob_") -> "progressiveAnalysisJob"
+            else -> jobName
+        }
+    }
+
+    /** Internal definition of a job type */
+    private data class JobTypeDefinition(
+        val jobTypeId: String,
+        val displayName: String,
+        val description: String,
+        val category: String,
+        val canRunDirectly: Boolean,
+        val runLink: String?
+    )
+
+    /** Internal execution stats holder */
+    private data class ExecutionStats(
+        val totalExecutions: Long,
+        val lastExecutionTime: LocalDateTime?,
+        val lastStatus: String?
+    )
 
     /**
      * Get paginated job executions filtered by status.

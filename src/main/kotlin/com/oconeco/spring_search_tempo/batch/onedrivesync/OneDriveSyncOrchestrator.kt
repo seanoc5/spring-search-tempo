@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.batch.onedrivesync
 import com.oconeco.spring_search_tempo.base.OneDriveAccountService
 import com.oconeco.spring_search_tempo.base.config.OneDriveConfiguration
 import com.oconeco.spring_search_tempo.base.service.OneDriveConnectionService
+import org.springframework.batch.core.JobExecution
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher
@@ -48,8 +49,8 @@ class OneDriveSyncOrchestrator(
 
         accounts.forEach { account ->
             try {
-                val status = runSyncForAccount(account.id!!, forceFullSync)
-                results[account.email ?: "unknown"] = status
+                val execution = runSyncExecutionForAccount(account.id!!, forceFullSync)
+                results[account.email ?: "unknown"] = execution.status.toString()
             } catch (e: Exception) {
                 log.error("Error running OneDrive sync for {}: {}", account.email, e.message, e)
                 results[account.email ?: "unknown"] = "ERROR: ${e.message}"
@@ -74,6 +75,38 @@ class OneDriveSyncOrchestrator(
      * @return Job execution status string
      */
     fun runSyncForAccount(accountId: Long, forceFullSync: Boolean = false): String {
+        val execution = runSyncExecutionForAccount(accountId, forceFullSync)
+        return execution.status.toString()
+    }
+
+    /**
+     * Run sync for all enabled OneDrive accounts and return executions.
+     */
+    fun runSyncExecutions(forceFullSync: Boolean = false): Map<Long, JobExecution> {
+        if (!config.enabled) {
+            log.info("OneDrive integration is disabled in configuration")
+            return emptyMap()
+        }
+
+        val accounts = accountService.findEnabled()
+        val results = mutableMapOf<Long, JobExecution>()
+
+        accounts.forEach { account ->
+            try {
+                val accountId = account.id ?: throw IllegalStateException("OneDrive account ID is required")
+                results[accountId] = runSyncExecutionForAccount(accountId, forceFullSync)
+            } catch (e: Exception) {
+                log.error("Failed to launch OneDrive sync for account {}: {}", account.email, e.message, e)
+            }
+        }
+
+        return results
+    }
+
+    /**
+     * Run sync for a specific account and return the JobExecution.
+     */
+    fun runSyncExecutionForAccount(accountId: Long, forceFullSync: Boolean = false): JobExecution {
         val account = accountService.get(accountId)
 
         log.info("Running OneDrive {} for account: {}",
@@ -90,7 +123,7 @@ class OneDriveSyncOrchestrator(
         val execution = jobLauncher.run(job, jobParameters)
 
         log.info("OneDrive sync for {} completed with status: {}", account.email, execution.status)
-        return execution.status.toString()
+        return execution
     }
 
     /**

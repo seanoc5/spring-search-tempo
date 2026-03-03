@@ -64,6 +64,7 @@ data class BatchJobSummaryDTO(
 
 /**
  * Represents a configured/known batch job type with its execution statistics.
+ * These are jobs that have been run at least once.
  */
 data class ConfiguredJobDTO(
     val jobName: String,
@@ -71,4 +72,37 @@ data class ConfiguredJobDTO(
     val totalExecutions: Long,
     val lastExecutionTime: Instant?,
     val lastStatus: String?
+)
+
+/**
+ * Represents an available job type that can be launched.
+ * This includes both static beans and dynamic job builders.
+ */
+data class AvailableJobTypeDTO(
+    /** Unique identifier for this job type (e.g., "fsCrawlJob", "nlpProcessingJob") */
+    val jobTypeId: String,
+    /** Human-readable name */
+    val displayName: String,
+    /** Brief description of what this job does */
+    val description: String,
+    /** Category for grouping (e.g., "Crawl", "Processing", "Sync") */
+    val category: String,
+    /** Whether this job has been run at least once */
+    val hasRunHistory: Boolean,
+    /** Total executions if any */
+    val totalExecutions: Long,
+    /** Last run timestamp if any */
+    val lastExecutionTime: Instant?,
+    /** Last status if any */
+    val lastStatus: String?,
+    /** Whether this job can be run directly from the batch admin (vs requiring special params) */
+    val canRunDirectly: Boolean,
+    /** Link to where to run this job if not directly runnable (e.g., "/crawlConfigs") */
+    val runLink: String?,
+    /** Whether any instance of this job type is currently running */
+    val isRunning: Boolean = false,
+    /** Execution IDs of currently running instances (for stop functionality) */
+    val runningExecutionIds: List<Long> = emptyList(),
+    /** Count of currently running instances */
+    val runningCount: Int = 0
 )
