@@ -47,4 +47,16 @@ class FSFolderDTO {
 
     var jobRunLabel: String? = null
 
+    /** When filesystem metadata was last synced during discovery */
+    var locatedAt: java.time.OffsetDateTime? = null
+
+    /** True if a SKIP pattern matched during discovery */
+    var skipDetected: Boolean? = null
+
+    /** Explains why the current analysisStatus was assigned */
+    var analysisStatusReason: String? = null
+
+    /** Who/what assigned the current analysisStatus (PATTERN, MANUAL, INHERITED, DEFAULT) */
+    var analysisStatusSetBy: String? = null
+
 }

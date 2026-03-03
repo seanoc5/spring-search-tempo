@@ -29,8 +29,7 @@ abstract class SaveableObject {
     @SequenceGenerator(
         name = "primary_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
@@ -90,6 +89,38 @@ abstract class SaveableObject {
 
     @Column(length = 50)
     var sourceHost: String? = null
+
+    /**
+     * When filesystem metadata was last synced during discovery.
+     * Used to track when the item was last "located" in the filesystem.
+     */
+    @Column
+    var locatedAt: OffsetDateTime? = null
+
+    /**
+     * True if a SKIP pattern matched during discovery phase.
+     * This flag is set before full pattern assignment runs, enabling
+     * SKIP_SUBTREE optimization (children never enumerated).
+     */
+    @Column
+    var skipDetected: Boolean? = null
+
+    /**
+     * Explains why the current analysisStatus was assigned.
+     * Examples:
+     * - "PATTERN: .*\.git.*" (matched a SKIP folder pattern)
+     * - "MANUAL: User request via API" (manually overridden)
+     * - "INHERITED: parent folder" (inherited from parent's status)
+     */
+    @Column(columnDefinition = "text")
+    var analysisStatusReason: String? = null
+
+    /**
+     * Who/what assigned the current analysisStatus.
+     * Values: PATTERN, MANUAL, INHERITED, DEFAULT
+     */
+    @Column(columnDefinition = "text")
+    var analysisStatusSetBy: String? = null
 
     @PrePersist
     fun prePersistSourceHost() {

@@ -29,7 +29,29 @@ interface EmbeddingService {
      * Get the name of the embedding model being used.
      */
     fun getModelName(): String
+
+    /**
+     * Check if the embedding model is running with GPU acceleration.
+     * This helps warn users when embeddings will be slow due to CPU-only mode.
+     *
+     * @return GpuStatus indicating GPU availability and details
+     */
+    fun checkGpuStatus(): GpuStatus
 }
+
+/**
+ * GPU status information for embedding service.
+ */
+data class GpuStatus(
+    /** Whether GPU is being used for embeddings */
+    val gpuAvailable: Boolean,
+    /** GPU device name if available */
+    val gpuDevice: String? = null,
+    /** Mode description for UI display */
+    val mode: String = if (gpuAvailable) "GPU" else "CPU",
+    /** Warning message if GPU is not available */
+    val warning: String? = if (!gpuAvailable) "Embeddings running in CPU mode - expect slow performance" else null
+)
 
 /**
  * Result of an embedding generation call.

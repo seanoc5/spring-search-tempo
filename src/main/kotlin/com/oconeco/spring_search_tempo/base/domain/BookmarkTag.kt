@@ -7,8 +7,8 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.ManyToMany
-import jakarta.persistence.SequenceGenerator
 import jakarta.persistence.Table
+import jakarta.persistence.SequenceGenerator
 import java.time.OffsetDateTime
 import org.springframework.data.annotation.CreatedDate
 import org.springframework.data.annotation.LastModifiedDate
@@ -29,14 +29,13 @@ class BookmarkTag {
     @Id
     @Column(nullable = false, updatable = false)
     @SequenceGenerator(
-        name = "primary_sequence",
+        name = "bookmark_tag_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
-        generator = "primary_sequence"
+        generator = "bookmark_tag_sequence"
     )
     var id: Long? = null
 

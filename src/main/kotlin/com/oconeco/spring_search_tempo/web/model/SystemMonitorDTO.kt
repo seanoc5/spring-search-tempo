@@ -8,7 +8,8 @@ data class SystemMonitorDTO(
     val health: HealthStatusDTO,
     val database: DatabaseInfoDTO,
     val jvm: JvmInfoDTO,
-    val system: SystemInfoDTO
+    val system: SystemInfoDTO,
+    val embedding: EmbeddingStatusDTO? = null
 )
 
 data class AppInfoDTO(
@@ -73,4 +74,22 @@ data class SystemInfoDTO(
     val diskFree: Long,
     val diskUsable: Long,
     val diskUsagePercent: Int
+)
+
+/**
+ * Status of the embedding service (Ollama + GPU).
+ */
+data class EmbeddingStatusDTO(
+    /** Whether embedding service is available */
+    val available: Boolean,
+    /** GPU mode: "GPU" or "CPU" */
+    val mode: String,
+    /** GPU device name if available */
+    val gpuDevice: String?,
+    /** True if GPU is being used */
+    val gpuAvailable: Boolean,
+    /** Warning message if GPU not available */
+    val warning: String?,
+    /** Embedding model name */
+    val modelName: String
 )

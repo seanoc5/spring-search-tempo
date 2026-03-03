@@ -23,14 +23,13 @@ class Annotation {
         updatable = false
     )
     @SequenceGenerator(
-        name = "primary_sequence",
+        name = "annotation_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
-        generator = "primary_sequence"
+        generator = "annotation_sequence"
     )
     var id: Long? = null
 

@@ -24,14 +24,13 @@ class SpringUser {
         updatable = false
     )
     @SequenceGenerator(
-        name = "primary_sequence",
+        name = "spring_user_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
-        generator = "primary_sequence"
+        generator = "spring_user_sequence"
     )
     var id: Long? = null
 

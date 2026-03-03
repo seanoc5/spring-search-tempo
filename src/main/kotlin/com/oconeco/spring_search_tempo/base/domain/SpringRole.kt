@@ -26,14 +26,13 @@ class SpringRole {
         updatable = false
     )
     @SequenceGenerator(
-        name = "primary_sequence",
+        name = "spring_role_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
-        generator = "primary_sequence"
+        generator = "spring_role_sequence"
     )
     var id: Long? = null
 

@@ -47,7 +47,7 @@ class DataInitializer(
             lastName = "Administrator"
             email = "admin@localhost"
             enabled = true
-            password = passwordEncoder.encode("password")
+            password = passwordEncoder.encode("admin")
         }
         springUserRepository.save(adminUser)
 

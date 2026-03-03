@@ -86,7 +86,7 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 - Example:
   - `CRAWL_CONFIG_ID=123 scripts/remote/remote-crawler-smoke.sh /home/sean/Documents /home/sean/Downloads`
 - Optional env:
-  - `BASE_URL` (default `http://localhost:8085`)
+  - `BASE_URL` (default `http://localhost:8082`)
   - `USERNAME` / `PASSWORD` (default `admin` / `admin`)
   - `HOST_NAME` (default machine hostname)
 

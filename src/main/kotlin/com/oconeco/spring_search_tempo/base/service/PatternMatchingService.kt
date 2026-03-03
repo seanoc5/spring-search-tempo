@@ -124,6 +124,33 @@ class PatternMatchingService {
     }
 
     /**
+     * Quick check if a folder path matches SKIP patterns only.
+     *
+     * This method is optimized for the discovery phase where we only need to know
+     * if a folder should be skipped (SKIP_SUBTREE optimization). It avoids the
+     * overhead of checking all pattern types.
+     *
+     * Performance critical: Called during filesystem enumeration for every folder.
+     *
+     * @param path The folder path to check
+     * @param skipPatterns List of SKIP regex patterns
+     * @return SkipCheckResult containing match info
+     */
+    fun matchesSkipPatternOnly(path: String, skipPatterns: List<String>): SkipCheckResult {
+        for (pattern in skipPatterns) {
+            try {
+                if (getCompiledPattern(pattern).matcher(path).matches()) {
+                    logger.debug("Folder {} matched SKIP pattern: {}", path, pattern)
+                    return SkipCheckResult(isSkip = true, matchedPattern = pattern)
+                }
+            } catch (e: Exception) {
+                logger.warn("Invalid SKIP regex pattern '{}': {}", pattern, e.message)
+            }
+        }
+        return SkipCheckResult(isSkip = false, matchedPattern = null)
+    }
+
+    /**
      * Check if a path matches any pattern in the list.
      *
      * @param path The path to match
@@ -166,3 +193,14 @@ class PatternMatchingService {
      */
     fun getCacheSize(): Int = patternCache.size
 }
+
+/**
+ * Result of a SKIP pattern check.
+ * Contains both the match result and the pattern that matched (for audit trail).
+ */
+data class SkipCheckResult(
+    /** True if the path matched a SKIP pattern */
+    val isSkip: Boolean,
+    /** The pattern that matched, for analysisStatusReason field */
+    val matchedPattern: String?
+)

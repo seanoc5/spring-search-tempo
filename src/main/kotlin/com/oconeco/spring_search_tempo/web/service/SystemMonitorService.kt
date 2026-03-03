@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.web.service
 
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
+import com.oconeco.spring_search_tempo.base.service.EmbeddingService
 import com.oconeco.spring_search_tempo.web.model.*
 import com.zaxxer.hikari.HikariDataSource
 import org.slf4j.LoggerFactory
@@ -22,7 +23,8 @@ import javax.sql.DataSource
 class SystemMonitorService(
     private val dataSource: DataSource,
     private val healthEndpoint: HealthEndpoint,
-    private val environment: Environment
+    private val environment: Environment,
+    private val embeddingService: EmbeddingService? = null
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(SystemMonitorService::class.java)
@@ -47,7 +49,8 @@ class SystemMonitorService(
             health = getHealthStatus(),
             database = getDatabaseInfo(),
             jvm = getJvmInfo(),
-            system = getSystemInfo()
+            system = getSystemInfo(),
+            embedding = getEmbeddingStatus()
         )
     }
 
@@ -58,8 +61,39 @@ class SystemMonitorService(
             health = getHealthStatus(),
             database = getDatabaseInfo(),
             jvm = getJvmInfo(),
-            system = getSystemInfo()
+            system = getSystemInfo(),
+            embedding = getEmbeddingStatus()
         )
+    }
+
+    private fun getEmbeddingStatus(): EmbeddingStatusDTO? {
+        if (embeddingService == null) {
+            return null
+        }
+
+        return try {
+            val available = embeddingService.isAvailable()
+            val gpuStatus = embeddingService.checkGpuStatus()
+
+            EmbeddingStatusDTO(
+                available = available,
+                mode = gpuStatus.mode,
+                gpuDevice = gpuStatus.gpuDevice,
+                gpuAvailable = gpuStatus.gpuAvailable,
+                warning = gpuStatus.warning,
+                modelName = embeddingService.getModelName()
+            )
+        } catch (e: Exception) {
+            log.debug("Failed to get embedding status: {}", e.message)
+            EmbeddingStatusDTO(
+                available = false,
+                mode = "unavailable",
+                gpuDevice = null,
+                gpuAvailable = false,
+                warning = "Embedding service unavailable: ${e.message}",
+                modelName = embeddingService.getModelName()
+            )
+        }
     }
 
     private fun getAppInfo(): AppInfoDTO {

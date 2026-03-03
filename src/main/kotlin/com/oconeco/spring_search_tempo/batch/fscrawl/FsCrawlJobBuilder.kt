@@ -12,6 +12,7 @@ import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.base.service.StartPathValidator
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
+import com.oconeco.spring_search_tempo.batch.chunking.ChunkingStrategySelector
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
@@ -54,6 +55,7 @@ class FsCrawlJobBuilder(
     private val nlpAutoTriggerListener: NLPAutoTriggerListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val jobRunService: JobRunService,
+    private val chunkingStrategySelector: ChunkingStrategySelector,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -145,11 +147,12 @@ class FsCrawlJobBuilder(
     }
 
     /**
-     * Create a chunk processor that splits text into sentences.
+     * Create a chunk processor that splits text using pluggable chunking strategies.
+     * The strategy is selected based on content type (code, markdown, prose, etc.).
      */
     private fun createChunkProcessor(): ItemProcessor<com.oconeco.spring_search_tempo.base.model.FSFileDTO, List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>> {
-        log.debug("Creating ChunkProcessor")
-        return ChunkProcessor()
+        log.debug("Creating ChunkProcessor with strategy selector")
+        return ChunkProcessor(strategySelector = chunkingStrategySelector)
     }
 
     /**

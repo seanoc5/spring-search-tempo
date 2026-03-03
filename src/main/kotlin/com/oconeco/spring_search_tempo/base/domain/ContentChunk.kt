@@ -12,8 +12,8 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import jakarta.persistence.PrePersist
-import jakarta.persistence.SequenceGenerator
 import jakarta.persistence.Table
+import jakarta.persistence.SequenceGenerator
 import java.time.OffsetDateTime
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
@@ -33,14 +33,13 @@ class ContentChunk {
         updatable = false
     )
     @SequenceGenerator(
-        name = "primary_sequence",
+        name = "content_chunk_sequence",
         sequenceName = "primary_sequence",
-        allocationSize = 200,
-        initialValue = 10000
+        allocationSize = 1
     )
     @GeneratedValue(
         strategy = GenerationType.SEQUENCE,
-        generator = "primary_sequence"
+        generator = "content_chunk_sequence"
     )
     var id: Long? = null
 

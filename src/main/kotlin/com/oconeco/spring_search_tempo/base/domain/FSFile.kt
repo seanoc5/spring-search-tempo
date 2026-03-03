@@ -57,6 +57,32 @@ class FSFile : FSObject() {
     @Column
     var chunkedAt: java.time.OffsetDateTime? = null
 
+    /**
+     * When Tika text extraction was performed.
+     * Used for progressive analysis: files with analysisStatus >= INDEX
+     * but indexedAt = null need text extraction.
+     */
+    @Column
+    var indexedAt: java.time.OffsetDateTime? = null
+
+    /**
+     * Stores Tika extraction error message if text extraction failed.
+     * Allows distinguishing between "not yet indexed" (indexedAt=null, indexError=null)
+     * and "failed to index" (indexedAt=timestamp, indexError=message).
+     */
+    @Column(columnDefinition = "text")
+    var indexError: String? = null
+
+    /**
+     * JSON metadata for archive files (zip, tar, rar, 7z, etc.).
+     * Stores entry names/sizes without extracting full contents.
+     * Example: [{"name": "file1.txt", "size": 1234}, {"name": "dir/file2.txt", "size": 5678}]
+     * This allows search by archive contents without expensive extraction.
+     */
+    @Column(columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    var archiveContents: String? = null
+
     @OneToMany(mappedBy = "concept")
     var contentChunks = mutableSetOf<ContentChunk>()
 

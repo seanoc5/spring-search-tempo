@@ -6,7 +6,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-BASE_URL="${BASE_URL:-http://localhost:8085}"
+BASE_URL="${BASE_URL:-http://localhost:8082}"
 API_BASE="${API_BASE:-$BASE_URL/api/remote-crawl}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin}"

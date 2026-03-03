@@ -246,4 +246,32 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      */
     fun countByAnalysisStatus(analysisStatus: AnalysisStatus): Long
 
+    /**
+     * Find folders needing analysis status assignment.
+     * Returns folders where analysisStatusSetBy is DEFAULT or null.
+     * Ordered by URI to ensure parents are processed before children.
+     */
+    @Query("""
+        SELECT f FROM FSFolder f
+        WHERE f.analysisStatusSetBy = 'DEFAULT'
+        OR f.analysisStatusSetBy IS NULL
+        ORDER BY f.uri
+    """)
+    fun findFoldersNeedingAssignment(pageable: Pageable): Page<FSFolder>
+
+    /**
+     * Find a folder's parent by deriving parent URI from the folder's URI.
+     * Used for inheritance during assignment.
+     */
+    @Query(
+        value = """
+            SELECT f.*
+            FROM fsfolder f
+            WHERE f.uri = regexp_replace(:childUri, '/[^/]+$', '')
+            LIMIT 1
+        """,
+        nativeQuery = true
+    )
+    fun findParentByChildUri(@Param("childUri") childUri: String): FSFolder?
+
 }

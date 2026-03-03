@@ -93,4 +93,25 @@ class FSFileDTO {
     @Transient
     var extractionError: Boolean = false
 
+    /** When filesystem metadata was last synced during discovery */
+    var locatedAt: java.time.OffsetDateTime? = null
+
+    /** True if a SKIP pattern matched during discovery (inherited from parent) */
+    var skipDetected: Boolean? = null
+
+    /** Explains why the current analysisStatus was assigned */
+    var analysisStatusReason: String? = null
+
+    /** Who/what assigned the current analysisStatus (PATTERN, MANUAL, INHERITED, DEFAULT) */
+    var analysisStatusSetBy: String? = null
+
+    /** When Tika text extraction was performed */
+    var indexedAt: java.time.OffsetDateTime? = null
+
+    /** Tika error message if extraction failed */
+    var indexError: String? = null
+
+    /** JSON metadata for archive files (entry names/sizes) */
+    var archiveContents: String? = null
+
 }

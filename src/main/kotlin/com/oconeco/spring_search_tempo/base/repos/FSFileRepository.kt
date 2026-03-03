@@ -218,6 +218,33 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun countByStatus(status: Status): Long
 
     /**
+     * Find files needing analysis status assignment.
+     * Returns files where analysisStatusSetBy is DEFAULT or null.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.analysisStatusSetBy = 'DEFAULT'
+        OR f.analysisStatusSetBy IS NULL
+    """)
+    fun findFilesNeedingAssignment(pageable: Pageable): Page<FSFile>
+
+    /**
+     * Find files needing indexing (text extraction).
+     * Returns files where:
+     * - analysisStatus is INDEX, ANALYZE, or SEMANTIC
+     * - indexedAt is null (never indexed) OR lastUpdated > indexedAt (modified since)
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.analysisStatus IN :statuses
+        AND (f.indexedAt IS NULL OR f.lastUpdated > f.indexedAt)
+    """)
+    fun findFilesNeedingIndexing(
+        @Param("statuses") statuses: List<AnalysisStatus>,
+        pageable: Pageable
+    ): Page<FSFile>
+
+    /**
      * Count searchable files (INDEX, ANALYZE, SEMANTIC) grouped by crawl config.
      * Returns pairs of [crawlConfigId, count].
      */
