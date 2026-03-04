@@ -6,7 +6,7 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 ## Endpoints
 
 - `GET /api/remote-crawl/bootstrap?host=<hostname>`
-  - Returns enabled crawl configs (host value is used for request identity and provenance, not assignment filtering).
+  - Returns enabled crawl configs assigned to the requested host (`sourceHost` case-insensitive match), plus host-agnostic configs with blank `sourceHost`.
   - Includes effective folder/file pattern sets (defaults + config-specific patterns).
   - Includes effective runtime settings (`startPaths`, `maxDepth`, `followLinks`, `parallel`).
 
@@ -94,3 +94,8 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 
 - Dedicated remote ingest staging tables (instead of direct upsert into `fsfolder`/`fsfile`).
 - Optional host/path display normalization for UI routes that currently expect native local paths.
+
+## Publishing Remote Client
+
+- GitHub release automation guide:
+  - `docs/guides/remote-crawler-github-publishing.md`

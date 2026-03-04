@@ -8,7 +8,9 @@ plugins {
 }
 
 group = "com.oconeco"
-version = "0.1.0"
+version = providers.gradleProperty("remoteCrawlerVersion")
+    .orElse("0.1.0")
+    .get()
 
 kotlin {
     jvmToolchain {

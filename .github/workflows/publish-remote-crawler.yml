@@ -1,0 +1,78 @@
+name: Publish Remote Crawler
+
+on:
+  push:
+    tags:
+      - "remote-crawler-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (example: 0.1.1)"
+        required: true
+        type: string
+      make_latest:
+        description: "Mark this GitHub release as latest"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+            tag="remote-crawler-v${version}"
+            latest="${{ inputs.make_latest }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#remote-crawler-v}"
+            latest="true"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "jar=remote-crawler-${version}.jar" >> "$GITHUB_OUTPUT"
+          echo "sha=remote-crawler-${version}.jar.sha256" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Build remote crawler fat JAR
+        run: |
+          ./gradlew :remote-crawler-cli:clean :remote-crawler-cli:shadowJar \
+            -PremoteCrawlerVersion=${{ steps.release.outputs.version }}
+
+      - name: Create SHA256 checksum
+        working-directory: remote-crawler-cli/build/libs
+        run: |
+          sha256sum "${{ steps.release.outputs.jar }}" > "${{ steps.release.outputs.sha }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: Remote Crawler v${{ steps.release.outputs.version }}
+          generate_release_notes: true
+          make_latest: ${{ steps.release.outputs.latest }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            remote-crawler-cli/build/libs/${{ steps.release.outputs.jar }}
+            remote-crawler-cli/build/libs/${{ steps.release.outputs.sha }}
