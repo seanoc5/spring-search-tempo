@@ -12,6 +12,7 @@ import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
 import com.oconeco.spring_search_tempo.web.service.DashboardService
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -21,6 +22,7 @@ import org.springframework.data.web.PageableDefault
 import org.springframework.data.web.SortDefault
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.util.StopWatch
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.util.UriComponentsBuilder
@@ -33,11 +35,23 @@ class HomeController(
     private val fileService: FSFileService,
     private val folderService: FSFolderService
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @GetMapping("/")
     fun index(model: Model): String {
+        val stopWatch = StopWatch("Dashboard")
+
+        stopWatch.start("getStats")
         model.addAttribute("stats", dashboardService.getStats())
-        populateDashboardContent(model)
+        stopWatch.stop()
+
+        stopWatch.start("populateDashboardContent")
+        populateDashboardContent(model, stopWatch)
+        stopWatch.stop()
+
+        log.info("Dashboard render times:\n{}", stopWatch.prettyPrint())
+        model.addAttribute("renderTimeMs", stopWatch.totalTimeMillis)
+
         return "home/index"
     }
 
@@ -246,47 +260,59 @@ class HomeController(
         return "home/fragments/activityTable :: activity-table"
     }
 
-    private fun populateDashboardContent(model: Model) {
+    private fun populateDashboardContent(model: Model, stopWatch: StopWatch? = null) {
+        fun <T> timed(name: String, block: () -> T): T {
+            stopWatch?.start(name)
+            return block().also { stopWatch?.stop() }
+        }
+
         // Recent activity (paginated)
-        val recentJobRuns = jobRunService.findAll(
-            null,
-            PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "startTime"))
-        )
+        val recentJobRuns = timed("jobRuns.findAll") {
+            jobRunService.findAll(null, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "startTime")))
+        }
         model.addAttribute("recentJobRuns", recentJobRuns)
         model.addAttribute("activityPagination", WebUtils.getPaginationModel(recentJobRuns))
 
         // Get distinct job names for activity filter
-        val allJobs = jobRunService.findAll(null, PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "startTime")))
+        val allJobs = timed("jobRuns.findAll(1000)") {
+            jobRunService.findAll(null, PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "startTime")))
+        }
         model.addAttribute("jobNames", allJobs.content.mapNotNull { it.jobName }.distinct().sorted())
 
         // Crawl configs (grouped by sourceHost)
-        populateCrawlConfigsModel(
-            model,
-            analysisStatus = null,
-            enabled = null,
-            sourceHost = null,
-            parallel = null,
-            filter = null,
-            pageable = PageRequest.of(0, 1000, Sort.by("name"))
-        )
+        timed("crawlConfigs") {
+            populateCrawlConfigsModel(
+                model,
+                analysisStatus = null,
+                enabled = null,
+                sourceHost = null,
+                parallel = null,
+                filter = null,
+                pageable = PageRequest.of(0, 1000, Sort.by("name"))
+            )
+        }
 
-        val folders = folderService.findAll(
-            null,
-            PageRequest.of(0, DEFAULT_WIDGET_PAGE_SIZE, Sort.by("uri")),
-            showSkipped = false
-        )
+        val folders = timed("folders.findAll") {
+            folderService.findAll(null, PageRequest.of(0, DEFAULT_WIDGET_PAGE_SIZE, Sort.by("uri")), showSkipped = false)
+        }
         model.addAttribute("folders", folders)
         model.addAttribute("folderPaginationModel", WebUtils.getPaginationModel(folders))
-        model.addAttribute("folderMetricsById", dashboardService.getFolderRowMetrics(folders.content.mapNotNull { it.id }))
 
-        val files = fileService.findAll(
-            null,
-            PageRequest.of(0, DEFAULT_WIDGET_PAGE_SIZE, Sort.by("uri")),
-            showSkipped = false
-        )
+        val folderMetrics = timed("folders.metrics") {
+            dashboardService.getFolderRowMetrics(folders.content.mapNotNull { it.id })
+        }
+        model.addAttribute("folderMetricsById", folderMetrics)
+
+        val files = timed("files.findAll") {
+            fileService.findAll(null, PageRequest.of(0, DEFAULT_WIDGET_PAGE_SIZE, Sort.by("uri")), showSkipped = false)
+        }
         model.addAttribute("files", files)
         model.addAttribute("filePaginationModel", WebUtils.getPaginationModel(files))
-        model.addAttribute("fileFragmentCounts", dashboardService.getFileFragmentCounts(files.content.mapNotNull { it.id }))
+
+        val fileFragmentCounts = timed("files.fragmentCounts") {
+            dashboardService.getFileFragmentCounts(files.content.mapNotNull { it.id })
+        }
+        model.addAttribute("fileFragmentCounts", fileFragmentCounts)
     }
 
     private fun toQueryPageableForFolders(pageable: Pageable, sortOrder: Sort.Order?): Pageable {
