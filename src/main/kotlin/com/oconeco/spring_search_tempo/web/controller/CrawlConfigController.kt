@@ -12,6 +12,9 @@ import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
+import com.oconeco.spring_search_tempo.web.model.BaselineSamplingPolicy
+import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
+import com.oconeco.spring_search_tempo.web.service.CrawlConfigValidationService
 import jakarta.servlet.http.HttpServletRequest
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlCleanupListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.FsCrawlJobBuilder
@@ -49,7 +52,8 @@ class CrawlConfigController(
     private val jobBuilder: FsCrawlJobBuilder,
     private val configConverter: CrawlConfigConverter,
     private val cleanupService: CrawlDataCleanupService,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val crawlConfigValidationService: CrawlConfigValidationService
 ) {
 
     @ModelAttribute("currentHostName")
@@ -322,6 +326,7 @@ class CrawlConfigController(
         val embeddingCount = chunkService.countFilesWithEmbeddingByCrawlConfig()[id] ?: 0L
 
         model.addAttribute("crawlConfig", crawlConfig)
+        model.addAttribute("crawlConfigId", id)
         model.addAttribute("jobRuns", jobRuns)
         model.addAttribute("page", jobRuns)
         model.addAttribute("totalFileCount", totalFileCount)
@@ -341,8 +346,84 @@ class CrawlConfigController(
         model.addAttribute("filePatternsLocateText", jsonToText(crawlConfig.filePatternsLocate))
         model.addAttribute("filePatternsIndexText", jsonToText(crawlConfig.filePatternsIndex))
         model.addAttribute("filePatternsAnalyzeText", jsonToText(crawlConfig.filePatternsAnalyze))
+        model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
 
         return "crawlConfig/view"
+    }
+
+    @GetMapping("/{id}/validate/folders")
+    fun validationFolders(
+        @PathVariable(name = "id") id: Long,
+        model: Model
+    ): String {
+        model.addAttribute("crawlConfigId", id)
+        model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
+        return "crawlConfig/fragments/validation :: folderSummaryTable"
+    }
+
+    @GetMapping("/{id}/validate/folders/{folderId}")
+    fun validationFolderDiff(
+        @PathVariable(name = "id") id: Long,
+        @PathVariable(name = "folderId") folderId: Long,
+        @RequestParam(name = "onlyMismatches", required = false, defaultValue = "true") onlyMismatches: Boolean,
+        @RequestParam(name = "onlyStatusDrift", required = false, defaultValue = "false") onlyStatusDrift: Boolean,
+        @RequestParam(name = "onlyMissingOrNew", required = false, defaultValue = "false") onlyMissingOrNew: Boolean,
+        @RequestParam(name = "status", required = false) status: String?,
+        model: Model
+    ): String {
+        val statusFilter = status?.takeIf { it.isNotBlank() }?.let {
+            runCatching { com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.valueOf(it.uppercase()) }.getOrNull()
+        }
+        val filter = ValidationFilterDTO(
+            onlyMismatches = onlyMismatches,
+            onlyStatusDrift = onlyStatusDrift,
+            onlyMissingOrNew = onlyMissingOrNew,
+            statusFilter = statusFilter
+        )
+        val diff = crawlConfigValidationService.getFolderDiff(id, folderId, filter)
+        model.addAttribute("diff", diff)
+        model.addAttribute("crawlConfigId", id)
+        return "crawlConfig/fragments/validation :: diffPanel"
+    }
+
+    @PostMapping("/{id}/validate/folders/{folderId}/baseline/capture")
+    fun captureFolderBaseline(
+        @PathVariable(name = "id") id: Long,
+        @PathVariable(name = "folderId") folderId: Long,
+        @RequestParam(name = "maxSamples", required = false, defaultValue = "50") maxSamples: Int,
+        @RequestParam(name = "policy", required = false, defaultValue = "REPRESENTATIVE_50") policy: String,
+        @RequestParam(name = "seed", required = false) seed: String?,
+        model: Model
+    ): String {
+        val samplingPolicy = runCatching {
+            BaselineSamplingPolicy.valueOf(policy.uppercase())
+        }.getOrDefault(BaselineSamplingPolicy.REPRESENTATIVE_50)
+
+        crawlConfigValidationService.captureFolderBaseline(
+            crawlConfigId = id,
+            folderId = folderId,
+            request = com.oconeco.spring_search_tempo.web.model.BaselineCaptureRequestDTO(
+                maxSamples = maxSamples,
+                samplingPolicy = samplingPolicy,
+                seed = seed
+            )
+        )
+
+        model.addAttribute("crawlConfigId", id)
+        model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
+        return "crawlConfig/fragments/validation :: folderSummaryTable"
+    }
+
+    @PostMapping("/{id}/validate/folders/{folderId}/baseline/clear")
+    fun clearFolderBaseline(
+        @PathVariable(name = "id") id: Long,
+        @PathVariable(name = "folderId") folderId: Long,
+        model: Model
+    ): String {
+        crawlConfigValidationService.clearFolderBaseline(id, folderId)
+        model.addAttribute("crawlConfigId", id)
+        model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
+        return "crawlConfig/fragments/validation :: folderSummaryTable"
     }
 
     @GetMapping("/{id}/edit")

@@ -228,6 +228,38 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun findAllByCrawlConfigId(@Param("configId") configId: Long): List<FSFile>
 
     /**
+     * Find files for a crawl config under a folder URI prefix (recursive).
+     * The folderPrefix should include trailing slash except root.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.jobRunId IN (
+            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
+        )
+        AND f.uri LIKE CONCAT(:folderPrefix, '%')
+        ORDER BY f.uri
+    """)
+    fun findByCrawlConfigIdAndUriPrefix(
+        @Param("crawlConfigId") crawlConfigId: Long,
+        @Param("folderPrefix") folderPrefix: String
+    ): List<FSFile>
+
+    /**
+     * Count files for a crawl config under a folder URI prefix (recursive).
+     */
+    @Query("""
+        SELECT COUNT(f) FROM FSFile f
+        WHERE f.jobRunId IN (
+            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
+        )
+        AND f.uri LIKE CONCAT(:folderPrefix, '%')
+    """)
+    fun countByCrawlConfigIdAndUriPrefix(
+        @Param("crawlConfigId") crawlConfigId: Long,
+        @Param("folderPrefix") folderPrefix: String
+    ): Long
+
+    /**
      * Find immediate child files by parent folder URI prefix.
      * The folderUri should end with '/' for proper prefix matching.
      */

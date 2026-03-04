@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="folderSummaryTable">
+    <div th:if="${#lists.isEmpty(validationSummaries)}" class="text-muted small py-2">
+        No baseline snapshots yet. Capture baseline on one or more folders to enable validation diff.
+    </div>
+    <div th:unless="${#lists.isEmpty(validationSummaries)}" class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Folder</th>
+                <th class="text-end">Sample</th>
+                <th class="text-end">Current</th>
+                <th class="text-end">Mismatch</th>
+                <th class="text-end">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${validationSummaries}">
+                <td class="small font-monospace" th:text="${row.folderPath}">/path</td>
+                <td class="text-end small">
+                    <span th:if="${row.baselineCapturedAt != null}">
+                        <span th:text="${row.baselineSampleFiles ?: 0}">0</span>
+                        <span class="text-muted">/</span>
+                        <span th:text="${row.baselineTotalFiles ?: 0}">0</span>
+                    </span>
+                    <span th:if="${row.baselineCapturedAt == null}" class="text-muted">-</span>
+                </td>
+                <td class="text-end small" th:text="${row.currentFileCount}">0</td>
+                <td class="text-end">
+                    <span th:classappend="${row.mismatchCount > 0} ? 'badge bg-warning text-dark' : 'badge bg-success'"
+                          th:text="${row.mismatchCount}">0</span>
+                </td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <button type="button"
+                                class="btn btn-outline-primary"
+                                th:hx-get="@{/crawlConfigs/{id}/validate/folders/{folderId}(id=${crawlConfigId}, folderId=${row.folderId}, onlyMismatches=true)}"
+                                hx-target="#validationDiffContainer"
+                                hx-swap="innerHTML"
+                                title="View diff">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                th:hx-post="@{/crawlConfigs/{id}/validate/folders/{folderId}/baseline/capture(id=${crawlConfigId}, folderId=${row.folderId})}"
+                                hx-vals='{"maxSamples":50,"policy":"REPRESENTATIVE_50"}'
+                                hx-target="#validationSummaryContainer"
+                                hx-swap="innerHTML"
+                                title="Refresh baseline sample">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-danger"
+                                th:hx-post="@{/crawlConfigs/{id}/validate/folders/{folderId}/baseline/clear(id=${crawlConfigId}, folderId=${row.folderId})}"
+                                th:disabled="${row.baselineCapturedAt == null}"
+                                hx-confirm="Clear baseline snapshot for this folder?"
+                                hx-target="#validationSummaryContainer"
+                                hx-swap="innerHTML"
+                                title="Clear baseline">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</th:block>
+
+<th:block th:fragment="diffPanel">
+    <div th:if="${diff == null}" class="text-muted small py-2">
+        Select a folder to view validation diff.
+    </div>
+    <div th:if="${diff != null}">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="small">
+                <span class="fw-semibold">Folder:</span>
+                <span class="font-monospace" th:text="${diff.folderPath}">/path</span>
+            </div>
+            <div class="small text-muted">
+                baseline:
+                <span th:text="${diff.baselineSampleFiles ?: 0}">0</span>/<span th:text="${diff.baselineTotalFiles ?: 0}">0</span>,
+                current: <span th:text="${diff.currentFileCount}">0</span>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap small mb-2">
+            <span class="badge bg-success">OK [[${diff.totals.ok}]]</span>
+            <span class="badge bg-warning text-dark">Mismatch [[${diff.totals.totalRows - diff.totals.ok}]]</span>
+            <span class="badge bg-danger">Status [[${diff.totals.statusDrift}]]</span>
+            <span class="badge bg-secondary">Assign [[${diff.totals.assignmentMismatch}]]</span>
+            <span class="badge bg-info text-dark">Meta [[${diff.totals.metadataDrift}]]</span>
+            <span class="badge bg-dark">Missing [[${diff.totals.missingInCurrent}]]</span>
+            <span class="badge bg-primary">New [[${diff.totals.newInCurrent}]]</span>
+        </div>
+        <div th:if="${#lists.isEmpty(diff.rows)}" class="text-muted small">
+            No rows for current filter.
+        </div>
+        <div th:unless="${#lists.isEmpty(diff.rows)}" class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th>Path</th>
+                    <th>STS</th>
+                    <th class="text-end">Sample</th>
+                    <th class="text-end">Current</th>
+                    <th class="text-end">DB</th>
+                    <th class="text-end">Expected</th>
+                    <th>Reason</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${diff.rows}">
+                    <td class="small font-monospace" th:text="${row.path}">file.txt</td>
+                    <td>
+                        <span th:switch="${row.diffType.name()}">
+                            <span th:case="'OK'" class="badge bg-success">OK</span>
+                            <span th:case="'STATUS_DRIFT'" class="badge bg-danger">STATUS</span>
+                            <span th:case="'ASSIGNMENT_MISMATCH'" class="badge bg-secondary">ASSIGN</span>
+                            <span th:case="'METADATA_DRIFT'" class="badge bg-info text-dark">META</span>
+                            <span th:case="'MISSING_IN_CURRENT'" class="badge bg-dark">MISSING</span>
+                            <span th:case="'NEW_IN_CURRENT'" class="badge bg-primary">NEW</span>
+                            <span th:case="*" class="badge bg-light text-dark" th:text="${row.diffType.name()}">-</span>
+                        </span>
+                    </td>
+                    <td class="text-end small" th:text="${row.baselineSize != null ? #numbers.formatInteger(row.baselineSize, 1, 'COMMA') : '-'}">-</td>
+                    <td class="text-end small" th:text="${row.currentSize != null ? #numbers.formatInteger(row.currentSize, 1, 'COMMA') : '-'}">-</td>
+                    <td class="text-end small" th:text="${row.dbAssignedStatus != null ? row.dbAssignedStatus.name() : '-'}">-</td>
+                    <td class="text-end small" th:text="${row.currentPredictedStatus != null ? row.currentPredictedStatus.name() : (row.baselinePredictedStatus != null ? row.baselinePredictedStatus.name() : '-')}">-</td>
+                    <td class="small text-muted" th:text="${row.currentTrace?.reason ?: row.baselineTrace?.reason ?: '-'}">-</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</th:block>
+</body>
+</html>

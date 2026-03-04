@@ -59,4 +59,28 @@ class FSFolderDTO {
     /** Who/what assigned the current analysisStatus (PATTERN, MANUAL, INHERITED, DEFAULT) */
     var analysisStatusSetBy: String? = null
 
+    /** Baseline manifest JSON used for CrawlConfig validation and diff testing */
+    var baselineManifest: String? = null
+
+    /** Timestamp when baselineManifest was captured */
+    var baselineCapturedAt: OffsetDateTime? = null
+
+    /** Job run that produced the current baseline snapshot (if known) */
+    var baselineSourceJobRunId: Long? = null
+
+    /** Total files seen when baseline was captured (before capping/sampling) */
+    var baselineTotalFiles: Int? = null
+
+    /** Number of files included in baselineManifest sample */
+    var baselineSampleFiles: Int? = null
+
+    /** Sampling policy used to create baselineManifest */
+    var baselineSamplingPolicy: String? = null
+
+    /** Deterministic seed used for hash/random style sampling */
+    var baselineSeed: String? = null
+
+    /** Schema/contract version for baselineManifest payload */
+    var baselineVersion: Int? = null
+
 }
