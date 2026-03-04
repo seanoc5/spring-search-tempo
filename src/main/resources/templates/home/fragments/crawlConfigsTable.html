@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- Crawl Configs Table Fragment -->
+<th:block th:fragment="crawl-configs-table">
+    <!-- Filter Row -->
+    <div class="d-flex flex-wrap gap-2 p-2 border-bottom bg-light align-items-center">
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Analysis:</label>
+            <select id="ccFilterAnalysis" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadCrawlConfigs()">
+                <option value="">All</option>
+                <option value="SKIP" th:selected="${filterAnalysisStatus == 'SKIP'}">SKIP</option>
+                <option value="LOCATE" th:selected="${filterAnalysisStatus == 'LOCATE'}">LOCATE</option>
+                <option value="INDEX" th:selected="${filterAnalysisStatus == 'INDEX'}">INDEX</option>
+                <option value="ANALYZE" th:selected="${filterAnalysisStatus == 'ANALYZE'}">ANALYZE</option>
+                <option value="SEMANTIC" th:selected="${filterAnalysisStatus == 'SEMANTIC'}">SEMANTIC</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Enabled:</label>
+            <select id="ccFilterEnabled" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadCrawlConfigs()">
+                <option value="">All</option>
+                <option value="true" th:selected="${filterEnabled == true}">Yes</option>
+                <option value="false" th:selected="${filterEnabled == false}">No</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Host:</label>
+            <select id="ccFilterHost" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadCrawlConfigs()">
+                <option value="">All</option>
+                <option th:each="host : ${sourceHosts}" th:value="${host}" th:text="${host}"
+                        th:selected="${host == filterSourceHost}"></option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Parallel:</label>
+            <select id="ccFilterParallel" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadCrawlConfigs()">
+                <option value="">All</option>
+                <option value="true" th:selected="${filterParallel == true}">Yes</option>
+                <option value="false" th:selected="${filterParallel == false}">No</option>
+            </select>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-1">
+            <input type="text" id="ccFilterText" class="form-control form-control-sm" style="width: 120px;"
+                   placeholder="Search..."
+                   th:value="${filterText}"
+                   onkeydown="if(event.key==='Enter'){loadCrawlConfigs();}">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearCrawlConfigFilters()"
+                    title="Clear filters">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Empty state -->
+    <div th:if="${configsBySourceHost == null || configsBySourceHost.empty}" class="p-3 text-muted small">
+        <i class="bi bi-inbox me-2"></i>No crawl configs match the filters.
+    </div>
+
+    <!-- Grouped Configs with collapsible host sections -->
+    <div th:if="${configsBySourceHost != null && !configsBySourceHost.empty}">
+        <!-- Table Header (fixed) -->
+        <table class="table table-sm mb-0" style="font-size: 0.8rem;">
+            <thead class="bg-white">
+                <tr>
+                    <th style="width: 30px;">
+                        <input type="checkbox" class="form-check-input" id="ccSelectAll"
+                               onchange="toggleAllCrawlConfigs(this.checked)">
+                    </th>
+                    <th>
+                        <a href="#" onclick="sortCrawlConfigs('name'); return false;" class="sort-link">Name</a>
+                    </th>
+                    <th style="width: 40px;">
+                        <a href="#" onclick="sortCrawlConfigs('analysisStatus'); return false;" class="sort-link">Lvl</a>
+                    </th>
+                    <th class="text-center" style="width: 40px;">
+                        <a href="#" onclick="sortCrawlConfigs('maxDepth'); return false;" class="sort-link"
+                           title="Maximum crawl depth">Dpth</a>
+                    </th>
+                    <th class="text-center" style="width: 40px;">
+                        <a href="#" onclick="sortCrawlConfigs('freshnessHours'); return false;" class="sort-link"
+                           title="Freshness threshold (hours)">Frsh</a>
+                    </th>
+                    <th class="text-center" style="width: 80px;" title="Folders / Files / Size">Metrics</th>
+                    <th class="text-center" style="width: 40px;">On</th>
+                </tr>
+            </thead>
+        </table>
+
+        <!-- Scrollable accordion body -->
+        <div class="accordion accordion-flush" id="ccHostAccordion" style="max-height: 300px; overflow-y: auto;">
+            <div th:each="entry, iterStat : ${configsBySourceHost}" class="accordion-item border-0">
+                <h2 class="accordion-header">
+                    <button class="accordion-button py-1 px-2"
+                            th:classappend="${iterStat.first} ? '' : 'collapsed'"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            th:data-bs-target="'#ccHost-' + ${iterStat.index}"
+                            th:attr="aria-expanded=${iterStat.first ? 'true' : 'false'}"
+                            th:aria-controls="'ccHost-' + ${iterStat.index}"
+                            style="font-size: 0.8rem; background: #e9ecef; min-height: 32px;">
+                        <i class="bi bi-pc-display me-1" style="font-size: 0.75rem;"></i>
+                        <span th:text="${entry.key}">Host</span>
+                        <span class="badge bg-secondary ms-2" style="font-size: 0.65rem;" th:text="${entry.value.size()}">0</span>
+                    </button>
+                </h2>
+                <div th:id="'ccHost-' + ${iterStat.index}"
+                     class="accordion-collapse collapse"
+                     th:classappend="${iterStat.first} ? 'show' : ''"
+                     data-bs-parent="#ccHostAccordion">
+                    <div class="accordion-body p-0">
+                        <table class="table table-sm table-striped table-hover mb-0" style="font-size: 0.8rem;">
+                            <tbody>
+                                <tr th:each="config : ${entry.value}"
+                                    th:with="metrics=${crawlConfigMetrics[config.id]}"
+                                    th:classappend="${!config.enabled} ? 'table-secondary' : ''">
+                                    <td style="width: 30px;">
+                                        <input type="checkbox" class="form-check-input cc-select-cb"
+                                               th:value="${config.id}"
+                                               th:data-enabled="${config.enabled}"
+                                               onchange="onCrawlConfigSelection()">
+                                    </td>
+                                    <td class="text-truncate" style="max-width: 160px;">
+                                        <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
+                                           th:text="${config.displayLabel ?: config.name}"
+                                           th:title="${config.name}"
+                                           class="text-decoration-none fw-semibold">Config</a>
+                                        <div th:if="${config.startPaths != null && !config.startPaths.empty}"
+                                             class="text-muted small text-truncate" style="font-size: 0.68rem;">
+                                            <code th:text="${config.startPaths[0]}" th:title="${#strings.listJoin(config.startPaths, ', ')}"></code>
+                                        </div>
+                                    </td>
+                                    <td style="width: 40px;">
+                                        <span th:if="${config.analysisStatus}"
+                                              th:class="${'badge ' +
+                                                  (config.analysisStatus.name() == 'SKIP' ? 'bg-secondary' :
+                                                   config.analysisStatus.name() == 'LOCATE' ? 'bg-dark' :
+                                                   config.analysisStatus.name() == 'INDEX' ? 'bg-primary' :
+                                                   config.analysisStatus.name() == 'ANALYZE' ? 'bg-success' : 'bg-warning text-dark')}"
+                                              style="font-size: 0.6rem;"
+                                              th:text="${config.analysisStatus.name().substring(0, 1)}"></span>
+                                        <span th:unless="${config.analysisStatus}" class="text-muted">-</span>
+                                    </td>
+                                    <td class="text-center" style="width: 40px;">
+                                        <span th:if="${config.maxDepth != null}"
+                                              class="inline-edit-display"
+                                              th:hx-get="@{/crawlConfigs/{id}/field/maxDepth/edit(id=${config.id})}"
+                                              hx-swap="outerHTML"
+                                              hx-trigger="click"
+                                              title="Click to edit"
+                                              style="cursor: pointer; border-bottom: 1px dashed #6c757d;"
+                                              th:text="${config.maxDepth}">5</span>
+                                        <span th:unless="${config.maxDepth != null}"
+                                              class="inline-edit-display text-muted"
+                                              th:hx-get="@{/crawlConfigs/{id}/field/maxDepth/edit(id=${config.id})}"
+                                              hx-swap="outerHTML"
+                                              hx-trigger="click"
+                                              title="Click to edit"
+                                              style="cursor: pointer;">-</span>
+                                    </td>
+                                    <td class="text-center" style="width: 40px;">
+                                        <span th:if="${config.freshnessHours != null}"
+                                              class="inline-edit-display"
+                                              th:hx-get="@{/crawlConfigs/{id}/field/freshnessHours/edit(id=${config.id})}"
+                                              hx-swap="outerHTML"
+                                              hx-trigger="click"
+                                              title="Click to edit"
+                                              style="cursor: pointer; border-bottom: 1px dashed #6c757d;"
+                                              th:text="${config.freshnessHours}">24</span>
+                                        <span th:unless="${config.freshnessHours != null}"
+                                              class="inline-edit-display text-muted"
+                                              th:hx-get="@{/crawlConfigs/{id}/field/freshnessHours/edit(id=${config.id})}"
+                                              hx-swap="outerHTML"
+                                              hx-trigger="click"
+                                              title="Click to edit"
+                                              style="cursor: pointer;">-</span>
+                                    </td>
+                                    <td class="text-center small text-nowrap" style="width: 80px;">
+                                        <span th:text="${metrics != null ? metrics.folderCount : 0}">0</span>/<span
+                                            th:text="${metrics != null ? metrics.fileCount : 0}">0</span>/<span
+                                            th:text="${(metrics != null && metrics.totalFileSize >= 1073741824) ? #numbers.formatDecimal(metrics.totalFileSize / 1073741824.0, 0, 1) + 'G' :
+                                                       ((metrics != null && metrics.totalFileSize >= 1048576) ? #numbers.formatDecimal(metrics.totalFileSize / 1048576.0, 0, 1) + 'M' :
+                                                       ((metrics != null && metrics.totalFileSize >= 1024) ? #numbers.formatDecimal(metrics.totalFileSize / 1024.0, 0, 1) + 'K' : ((metrics != null ? metrics.totalFileSize : 0) + 'B')))}">0B</span>
+                                    </td>
+                                    <td class="text-center" style="width: 40px;">
+                                        <button type="button"
+                                                th:class="${config.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+                                                th:text="${config.enabled} ? 'On' : 'Off'"
+                                                th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${config.id}, dashboard=true)}"
+                                                hx-swap="outerHTML"
+                                                th:title="${config.enabled} ? 'Click to disable' : 'Click to enable'"
+                                                style="cursor: pointer; font-size: 0.6rem;">
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selected toolbar -->
+    <div class="d-none justify-content-between align-items-center p-2 bg-primary bg-opacity-10 border-top"
+         id="ccToolbar">
+        <span class="small"><strong id="ccSelectedCount">0</strong> selected</span>
+        <div class="d-flex gap-2">
+            <form th:action="@{/crawlConfigs/run-selected}" method="post" class="d-inline" id="ccRunForm">
+                <input type="hidden" name="selectedIds" id="ccSelectedIds">
+                <button type="submit" class="btn btn-primary btn-sm" id="ccRunBtn">
+                    <i class="bi bi-play-fill"></i> Run
+                </button>
+            </form>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearCrawlConfigSelection()">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </div>
+</th:block>
+
+</html>

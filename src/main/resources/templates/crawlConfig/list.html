@@ -17,6 +17,20 @@
             .action-toolbar.show {
                 display: flex;
             }
+            /* Collapsible host group styles */
+            .host-group-header {
+                cursor: pointer;
+                user-select: none;
+            }
+            .host-group-header:hover {
+                background-color: #e9ecef !important;
+            }
+            .host-group-header .collapse-icon {
+                transition: transform 0.2s ease;
+            }
+            .host-group-header.collapsed .collapse-icon {
+                transform: rotate(-90deg);
+            }
         </style>
     </head>
     <body>
@@ -67,16 +81,20 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <th:block th:each="hostGroup : ${crawlConfigsBySourceHost}">
-                            <tr class="table-light">
+                        <th:block th:each="hostGroup, hostStat : ${crawlConfigsBySourceHost}">
+                            <tr class="table-light host-group-header"
+                                th:data-host-group="${hostStat.index}"
+                                th:onclick="|toggleHostGroup(${hostStat.index})|">
                                 <td colspan="11">
+                                    <i class="bi bi-chevron-down collapse-icon me-2" th:id="'host-icon-' + ${hostStat.index}"></i>
                                     <strong>Source Host:</strong>
                                     <span class="badge bg-dark ms-2" th:text="${hostGroup.key}"></span>
                                     <span class="text-muted ms-2"
                                           th:text="|(${#lists.size(hostGroup.value)} configs on this page)|"></span>
                                 </td>
                             </tr>
-                            <tr th:each="crawlConfig : ${hostGroup.value}">
+                            <tr th:each="crawlConfig : ${hostGroup.value}"
+                                th:class="'host-group-row host-group-' + ${hostStat.index}">
                                 <td>
                                     <input type="checkbox" class="form-check-input config-checkbox"
                                            th:value="${crawlConfig.id}"
@@ -201,6 +219,24 @@
             </div>
 
             <script th:inline="javascript">
+                function toggleHostGroup(groupIndex) {
+                    const rows = document.querySelectorAll('.host-group-' + groupIndex);
+                    const icon = document.getElementById('host-icon-' + groupIndex);
+                    const header = document.querySelector('[data-host-group="' + groupIndex + '"]');
+
+                    const isCollapsed = header.classList.contains('collapsed');
+
+                    if (isCollapsed) {
+                        // Expand
+                        rows.forEach(row => row.style.display = '');
+                        header.classList.remove('collapsed');
+                    } else {
+                        // Collapse
+                        rows.forEach(row => row.style.display = 'none');
+                        header.classList.add('collapsed');
+                    }
+                }
+
                 function toggleSelectAll(checkbox) {
                     const checkboxes = document.querySelectorAll('.config-checkbox');
                     checkboxes.forEach(cb => cb.checked = checkbox.checked);

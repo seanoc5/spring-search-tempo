@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- Activity/Job Runs Table Fragment -->
+<th:block th:fragment="activity-table">
+    <!-- Filter Row -->
+    <div class="d-flex flex-wrap gap-2 p-2 border-bottom bg-light align-items-center">
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Status:</label>
+            <select id="actFilterStatus" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadActivity(0)">
+                <option value="">All</option>
+                <option value="RUNNING" th:selected="${filterStatus == 'RUNNING'}">Running</option>
+                <option value="COMPLETED" th:selected="${filterStatus == 'COMPLETED'}">Completed</option>
+                <option value="FAILED" th:selected="${filterStatus == 'FAILED'}">Failed</option>
+                <option value="CANCELLED" th:selected="${filterStatus == 'CANCELLED'}">Cancelled</option>
+            </select>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">Job:</label>
+            <select id="actFilterJobName" class="form-select form-select-sm" style="width: auto;"
+                    onchange="loadActivity(0)">
+                <option value="">All</option>
+                <option th:each="name : ${jobNames}" th:value="${name}" th:text="${name}"
+                        th:selected="${name == filterJobName}"></option>
+            </select>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-1">
+            <input type="text" id="actFilterText" class="form-control form-control-sm" style="width: 120px;"
+                   placeholder="Search..."
+                   th:value="${filterText}"
+                   onkeydown="if(event.key==='Enter'){loadActivity(0);}">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearActivityFilters()"
+                    title="Clear filters">
+                <i class="bi bi-x"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div th:if="${recentJobRuns.empty}" class="p-3 text-muted small">
+        <i class="bi bi-inbox me-2"></i>No job runs match the filters.
+        <a th:href="@{/crawlConfigs}">Start a crawl</a>
+    </div>
+    <div th:if="${!recentJobRuns.empty}" class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+        <table class="table table-sm table-striped table-hover mb-0" style="font-size: 0.8rem;">
+            <thead class="sticky-top bg-white">
+                <tr>
+                    <th style="width: 30px;"></th>
+                    <th>
+                        <a href="#" onclick="sortActivity('jobName'); return false;" class="sort-link">Job</a>
+                    </th>
+                    <th>Config</th>
+                    <th class="text-end">
+                        <a href="#" onclick="sortActivity('filesDiscovered'); return false;" class="sort-link">Files</a>
+                    </th>
+                    <th class="text-end">
+                        <a href="#" onclick="sortActivity('foldersDiscovered'); return false;" class="sort-link">Folders</a>
+                    </th>
+                    <th>
+                        <a href="#" onclick="sortActivity('startTime'); return false;" class="sort-link">Started</a>
+                    </th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="job : ${recentJobRuns}"
+                    th:classappend="${job.runStatus?.name() == 'FAILED'} ? 'table-danger' :
+                                   (${job.runStatus?.name() == 'RUNNING'} ? 'table-primary' : '')">
+                    <td class="text-center">
+                        <span th:switch="${job.runStatus?.name()}">
+                            <i th:case="'COMPLETED'" class="bi bi-check-circle-fill text-success"></i>
+                            <i th:case="'FAILED'" class="bi bi-x-circle-fill text-danger"></i>
+                            <i th:case="'RUNNING'" class="bi bi-arrow-repeat spin text-primary"></i>
+                            <i th:case="'CANCELLED'" class="bi bi-slash-circle text-secondary"></i>
+                            <i th:case="*" class="bi bi-question-circle text-muted"></i>
+                        </span>
+                    </td>
+                    <td class="text-truncate" style="max-width: 150px;">
+                        <a th:if="${job.id != null}" th:href="@{/crawlConfigs/jobRuns/{id}(id=${job.id})}"
+                           th:text="${job.jobName}"
+                           th:title="${job.jobName}"
+                           class="text-decoration-none">Job</a>
+                        <span th:unless="${job.id != null}" th:text="${job.jobName}">Job</span>
+                    </td>
+                    <td class="text-truncate" style="max-width: 120px;">
+                        <a th:if="${job.crawlConfig != null}" th:href="@{/crawlConfigs/{id}(id=${job.crawlConfig})}"
+                           th:text="${job.crawlConfigDisplayLabel ?: job.crawlConfig}"
+                           class="text-decoration-none small">Config</a>
+                        <span th:unless="${job.crawlConfig != null}" class="text-muted small">-</span>
+                    </td>
+                    <td class="text-end">
+                        <span th:text="${job.filesDiscovered}">0</span>
+                        <span th:if="${job.filesNew > 0}" class="text-success small"
+                              th:title="|New: ${job.filesNew}|">+[[${job.filesNew}]]</span>
+                    </td>
+                    <td class="text-end">
+                        <span th:text="${job.foldersDiscovered}">0</span>
+                        <span th:if="${job.foldersNew > 0}" class="text-success small"
+                              th:title="|New: ${job.foldersNew}|">+[[${job.foldersNew}]]</span>
+                    </td>
+                    <td class="text-nowrap small">
+                        <span th:if="${job.startTime != null}"
+                              th:text="${#temporals.format(job.startTime, 'MM-dd HH:mm')}"></span>
+                        <span th:unless="${job.startTime != null}" class="text-muted">-</span>
+                    </td>
+                    <td class="text-nowrap small">
+                        <span th:if="${job.startTime != null && job.finishTime != null}"
+                              th:with="duration=${T(java.time.Duration).between(job.startTime, job.finishTime)}"
+                              th:text="${duration.toMinutes() > 0 ? duration.toMinutes() + 'm' : duration.toSeconds() + 's'}">0s</span>
+                        <span th:if="${job.runStatus?.name() == 'RUNNING'}" class="text-primary small">
+                            <i class="bi bi-arrow-repeat spin"></i>
+                        </span>
+                        <span th:if="${job.startTime == null || (job.finishTime == null && job.runStatus?.name() != 'RUNNING')}"
+                              class="text-muted">-</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div th:if="${!recentJobRuns.empty}" class="d-flex align-items-center justify-content-between px-2 py-1 border-top"
+         style="font-size: 0.8rem;">
+        <div>
+            <small class="text-muted">
+                [[${recentJobRuns.number * recentJobRuns.size + 1}]]-[[${recentJobRuns.number * recentJobRuns.size + recentJobRuns.numberOfElements}]]
+                of [[${recentJobRuns.totalElements}]]
+            </small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <select id="actPageSize" class="form-select form-select-sm" style="width: auto; font-size: 0.75rem;"
+                    onchange="setActivityPageSize(this.value)">
+                <option value="5" th:selected="${recentJobRuns.size == 5}">5</option>
+                <option value="10" th:selected="${recentJobRuns.size == 10}">10</option>
+                <option value="20" th:selected="${recentJobRuns.size == 20}">20</option>
+            </select>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item" th:classappend="${recentJobRuns.first} ? 'disabled'">
+                        <a class="page-link" href="#" style="font-size: 0.75rem;"
+                           th:onclick="|loadActivity(${recentJobRuns.number - 1}); return false;|">&laquo;</a>
+                    </li>
+                    <li class="page-item active">
+                        <span class="page-link" style="font-size: 0.75rem;">[[${recentJobRuns.number + 1}]]</span>
+                    </li>
+                    <li class="page-item" th:classappend="${recentJobRuns.last} ? 'disabled'">
+                        <a class="page-link" href="#" style="font-size: 0.75rem;"
+                           th:onclick="|loadActivity(${recentJobRuns.number + 1}); return false;|">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+            <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-sm btn-outline-secondary" style="font-size: 0.75rem;">
+                All
+            </a>
+        </div>
+    </div>
+</th:block>
+
+</html>

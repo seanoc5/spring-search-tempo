@@ -4,8 +4,11 @@ import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
 import com.oconeco.spring_search_tempo.web.service.DashboardService
@@ -139,18 +142,133 @@ class HomeController(
         return "home/index :: files-table"
     }
 
+    /**
+     * HTMX endpoint for crawl configs table with filtering and sorting.
+     */
+    @GetMapping("/dashboard/crawl-configs")
+    fun dashboardCrawlConfigs(
+        @RequestParam(name = "analysisStatus", required = false) analysisStatus: String?,
+        @RequestParam(name = "enabled", required = false) enabled: Boolean?,
+        @RequestParam(name = "sourceHost", required = false) sourceHost: String?,
+        @RequestParam(name = "parallel", required = false) parallel: Boolean?,
+        @RequestParam(name = "filter", required = false) filter: String?,
+        @SortDefault(sort = ["name"]) @PageableDefault(size = 10) pageable: Pageable,
+        model: Model
+    ): String {
+        populateCrawlConfigsModel(model, analysisStatus, enabled, sourceHost, parallel, filter, pageable)
+        return "home/fragments/crawlConfigsTable :: crawl-configs-table"
+    }
+
+    private fun populateCrawlConfigsModel(
+        model: Model,
+        analysisStatus: String?,
+        enabled: Boolean?,
+        sourceHost: String?,
+        parallel: Boolean?,
+        filter: String?,
+        pageable: Pageable
+    ) {
+        // Fetch all configs to enable grouping by sourceHost
+        val allConfigs = crawlConfigService.findAll(filter, PageRequest.of(0, 1000, pageable.sort))
+
+        // Apply in-memory filters
+        val filtered = allConfigs.content.filter { config ->
+            val matchesAnalysis = analysisStatus.isNullOrBlank() ||
+                config.analysisStatus?.name == analysisStatus
+            val matchesEnabled = enabled == null || config.enabled == enabled
+            val matchesHost = sourceHost.isNullOrBlank() ||
+                config.sourceHost?.contains(sourceHost, ignoreCase = true) == true
+            val matchesParallel = parallel == null || config.parallel == parallel
+
+            matchesAnalysis && matchesEnabled && matchesHost && matchesParallel
+        }
+
+        // Group by sourceHost (null -> "Unknown")
+        val groupedConfigs = filtered.groupBy { it.sourceHost ?: "Unknown" }
+            .toSortedMap()
+
+        val crawlConfigMetrics = dashboardService.getCrawlConfigRowMetrics(filtered.mapNotNull { it.id })
+
+        model.addAttribute("configsBySourceHost", groupedConfigs)
+        model.addAttribute("crawlConfigMetrics", crawlConfigMetrics)
+
+        // Pass current filter values back
+        model.addAttribute("filterAnalysisStatus", analysisStatus)
+        model.addAttribute("filterEnabled", enabled)
+        model.addAttribute("filterSourceHost", sourceHost)
+        model.addAttribute("filterParallel", parallel)
+        model.addAttribute("filterText", filter)
+
+        // Get distinct source hosts for filter dropdown
+        val sourceHosts = allConfigs.content.mapNotNull { it.sourceHost }.distinct().sorted()
+        model.addAttribute("sourceHosts", sourceHosts)
+    }
+
+    /**
+     * HTMX endpoint for recent activity (job runs) table with filtering and sorting.
+     */
+    @GetMapping("/dashboard/activity")
+    fun dashboardActivity(
+        @RequestParam(name = "status", required = false) status: String?,
+        @RequestParam(name = "jobName", required = false) jobName: String?,
+        @RequestParam(name = "filter", required = false) filter: String?,
+        @SortDefault(sort = ["startTime"], direction = Sort.Direction.DESC)
+        @PageableDefault(size = 10) pageable: Pageable,
+        model: Model
+    ): String {
+        val jobRuns = jobRunService.findAll(filter, pageable)
+
+        // Apply in-memory filters for status
+        val filtered = jobRuns.content.filter { job ->
+            val matchesStatus = status.isNullOrBlank() ||
+                job.runStatus?.name == status
+            val matchesJobName = jobName.isNullOrBlank() ||
+                job.jobName?.contains(jobName, ignoreCase = true) == true
+
+            matchesStatus && matchesJobName
+        }
+
+        val filteredPage = PageImpl(filtered, pageable, filtered.size.toLong())
+
+        model.addAttribute("recentJobRuns", filteredPage)
+        model.addAttribute("activityPagination", WebUtils.getPaginationModel(filteredPage))
+
+        // Pass current filter values back
+        model.addAttribute("filterStatus", status)
+        model.addAttribute("filterJobName", jobName)
+        model.addAttribute("filterText", filter)
+
+        // Get distinct job names for filter dropdown
+        val allJobs = jobRunService.findAll(null, PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "startTime")))
+        val jobNames = allJobs.content.mapNotNull { it.jobName }.distinct().sorted()
+        model.addAttribute("jobNames", jobNames)
+
+        return "home/fragments/activityTable :: activity-table"
+    }
+
     private fun populateDashboardContent(model: Model) {
+        // Recent activity (paginated)
         val recentJobRuns = jobRunService.findAll(
             null,
-            PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "startTime"))
-        ).content
+            PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "startTime"))
+        )
         model.addAttribute("recentJobRuns", recentJobRuns)
+        model.addAttribute("activityPagination", WebUtils.getPaginationModel(recentJobRuns))
 
-        val crawlConfigs = crawlConfigService.findAll(null, PageRequest.of(0, 20, Sort.by("name")))
-        model.addAttribute("crawlConfigs", crawlConfigs)
+        // Get distinct job names for activity filter
+        val allJobs = jobRunService.findAll(null, PageRequest.of(0, 1000, Sort.by(Sort.Direction.DESC, "startTime")))
+        model.addAttribute("jobNames", allJobs.content.mapNotNull { it.jobName }.distinct().sorted())
 
-        val crawlConfigMetrics = dashboardService.getCrawlConfigRowMetrics(crawlConfigs.content.mapNotNull { it.id })
-        model.addAttribute("crawlConfigMetrics", crawlConfigMetrics)
+        // Crawl configs (grouped by sourceHost)
+        populateCrawlConfigsModel(
+            model,
+            analysisStatus = null,
+            enabled = null,
+            sourceHost = null,
+            parallel = null,
+            filter = null,
+            pageable = PageRequest.of(0, 1000, Sort.by("name"))
+        )
 
         val folders = folderService.findAll(
             null,

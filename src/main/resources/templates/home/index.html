@@ -112,6 +112,23 @@
             text-decoration: none;
         }
         .sort-link:hover { text-decoration: underline; }
+
+        /* Crawl config accordion styles */
+        #ccHostAccordion .accordion-button {
+            padding: 0.4rem 0.6rem;
+        }
+        #ccHostAccordion .accordion-button:not(.collapsed) {
+            background: #dee2e6;
+            color: #212529;
+        }
+        #ccHostAccordion .accordion-button::after {
+            width: 0.8rem;
+            height: 0.8rem;
+            background-size: 0.8rem;
+        }
+        #ccHostAccordion .accordion-button:focus {
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -245,11 +262,11 @@
 
         <!-- Row 2: Crawl Configs (1/3) + Tabbed Content (2/3) -->
         <div class="row mb-4">
-            <!-- Crawl Configs (compact list, 1/3 width) -->
+            <!-- Crawl Configs (compact table, 1/3 width) -->
             <div class="col-lg-4 mb-4 mb-lg-0">
                 <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center py-2">
-                        <h6 class="card-title mb-0">
+                    <div class="card-header d-flex justify-content-between align-items-center py-1">
+                        <h6 class="card-title mb-0" style="font-size: 0.9rem;">
                             <i class="bi bi-gear-wide-connected me-1"></i>Crawl Configs
                             <span class="badge bg-secondary ms-1">[[${stats.totalConfigs}]]</span>
                         </h6>
@@ -258,75 +275,8 @@
                         </a>
                     </div>
                     <div class="card-body p-0">
-                        <div th:if="${crawlConfigs != null and !crawlConfigs.empty}" class="compact-config-list">
-                            <div th:each="config : ${crawlConfigs}" class="compact-config-row"
-                                 th:with="metrics=${crawlConfigMetrics[config.id]}">
-                                <div class="compact-config-check">
-                                    <input type="checkbox" class="form-check-input config-select-cb"
-                                           th:value="${config.id}"
-                                           th:data-enabled="${config.enabled}"
-                                           onchange="onConfigSelectionChange()">
-                                </div>
-                                <div class="compact-config-name">
-                                    <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
-                                       th:text="${config.displayLabel ?: config.name}"
-                                       th:title="${config.name}">Config</a>
-                                </div>
-                                <div class="compact-config-paths"
-                                     th:title="${config.startPaths != null and !config.startPaths.empty ? #strings.listJoin(config.startPaths, ', ') : 'No start path'}">
-                                    <th:block th:if="${config.startPaths != null and !config.startPaths.empty}">
-                                        <code>[[${config.startPaths[0]}]]</code>
-                                        <a th:href="@{/dashboard/open-folder(uri=${config.startPaths[0]})}"
-                                           target="_blank"
-                                           rel="noopener"
-                                           class="ms-1 text-decoration-none"
-                                           title="Open folder detail in new window">
-                                            <i class="bi bi-box-arrow-up-right"></i>
-                                        </a>
-                                    </th:block>
-                                    <span th:if="${config.startPaths == null or config.startPaths.empty}" class="text-muted">-</span>
-                                </div>
-                                <div class="compact-config-metrics"
-                                     th:title="|Folders: ${metrics != null ? metrics.folderCount : 0}, Files: ${metrics != null ? metrics.fileCount : 0}|">
-                                    F: [[${metrics != null ? metrics.folderCount : 0}]]
-                                    <span class="text-muted mx-1">|</span>
-                                    I: [[${metrics != null ? metrics.fileCount : 0}]]
-                                    <span class="text-muted mx-1">|</span>
-                                    <span th:text="${(metrics != null and metrics.totalFileSize >= 1073741824) ? #numbers.formatDecimal(metrics.totalFileSize / 1073741824.0, 0, 1) + 'G' :
-                                                   ((metrics != null and metrics.totalFileSize >= 1048576) ? #numbers.formatDecimal(metrics.totalFileSize / 1048576.0, 0, 1) + 'M' :
-                                                   ((metrics != null and metrics.totalFileSize >= 1024) ? #numbers.formatDecimal(metrics.totalFileSize / 1024.0, 0, 1) + 'K' : ((metrics != null ? metrics.totalFileSize : 0) + 'B')))}">0B</span>
-                                </div>
-                                <div class="compact-config-toggle">
-                                    <button type="button"
-                                            th:class="${config.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
-                                            th:text="${config.enabled} ? 'On' : 'Off'"
-                                            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${config.id}, dashboard=true)}"
-                                            hx-swap="outerHTML"
-                                            th:attr="hx-on--after-request=|onConfigToggle(${config.id})|"
-                                            th:title="${config.enabled} ? 'Click to disable' : 'Click to enable'"
-                                            style="cursor: pointer;">
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div th:if="${crawlConfigs == null or crawlConfigs.empty}" class="p-3 text-muted small">
-                            <i class="bi bi-inbox me-2"></i>No crawl configs.
-                            <a th:href="@{/crawlConfigs}">Create one</a>
-                        </div>
-                    </div>
-                    <!-- Run Selected toolbar (appears when configs selected) -->
-                    <div class="config-toolbar justify-content-between align-items-center" id="configToolbar">
-                        <span class="small"><strong id="selectedConfigCount">0</strong> selected</span>
-                        <div class="d-flex gap-2">
-                            <form th:action="@{/crawlConfigs/run-selected}" method="post" class="d-inline" id="dashboardRunForm">
-                                <input type="hidden" name="selectedIds" id="dashboardSelectedIds">
-                                <button type="submit" class="btn btn-primary btn-sm" id="dashboardRunBtn">
-                                    <i class="bi bi-play-fill"></i> Run
-                                </button>
-                            </form>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearConfigSelection()">
-                                <i class="bi bi-x"></i>
-                            </button>
+                        <div id="crawl-configs-container">
+                            <th:block th:replace="~{home/fragments/crawlConfigsTable :: crawl-configs-table}"></th:block>
                         </div>
                     </div>
                 </div>
@@ -608,39 +558,14 @@
             <!-- Recent Activity -->
             <div class="col-lg-6 mb-4">
                 <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">
-                            <i class="bi bi-activity me-2"></i>Recent Activity
-                        </h5>
-                        <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-clock-history me-1"></i>All Jobs
-                        </a>
+                    <div class="card-header d-flex justify-content-between align-items-center py-1">
+                        <h6 class="card-title mb-0" style="font-size: 0.9rem;">
+                            <i class="bi bi-activity me-1"></i>Recent Activity
+                        </h6>
                     </div>
                     <div class="card-body p-0">
-                        <div th:if="${recentJobRuns != null and !recentJobRuns.empty}" class="list-group list-group-flush">
-                            <div th:each="job : ${recentJobRuns}" class="list-group-item d-flex align-items-center py-2">
-                                <div class="activity-icon me-2"
-                                     th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bg-success-subtle text-success' :
-                                                     (${job.runStatus?.name() == 'FAILED'} ? 'bg-danger-subtle text-danger' : 'bg-info-subtle text-info')">
-                                    <i class="bi"
-                                       th:classappend="${job.runStatus?.name() == 'COMPLETED'} ? 'bi-check' :
-                                                      (${job.runStatus?.name() == 'FAILED'} ? 'bi-x' : 'bi-arrow-repeat')"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div class="fw-medium small" th:text="${job.jobName}">Crawl Job</div>
-                                    <small class="text-muted">
-                                        [[${job.filesDiscovered}]] files, [[${job.foldersDiscovered}]] folders
-                                    </small>
-                                </div>
-                                <small class="text-muted" th:if="${job.startTime != null}"
-                                       th:text="${#temporals.format(job.startTime, 'MMM d, HH:mm')}">
-                                    Jan 1, 12:00
-                                </small>
-                            </div>
-                        </div>
-                        <div th:if="${recentJobRuns == null or recentJobRuns.empty}" class="p-3 text-muted">
-                            <i class="bi bi-inbox me-2"></i>No recent activity.
-                            <a th:href="@{/crawlConfigs}">Start a crawl</a>
+                        <div id="activity-container">
+                            <th:block th:replace="~{home/fragments/activityTable :: activity-table}"></th:block>
                         </div>
                     </div>
                 </div>
@@ -685,7 +610,7 @@
 
     <!-- Dashboard JavaScript for config selection and content tabs -->
     <script th:inline="javascript">
-    // Track current state
+    // Track current state for folders/files tabs
     let currentFoldersPage = 0;
     let currentFilesPage = 0;
     let currentFoldersSort = 'uri';
@@ -694,52 +619,10 @@
     let currentFilesSortDir = 'ASC';
     let currentDashboardPageSize = 10;
 
-    // Get selected config IDs
+    // Get selected config IDs (for filtering folders/files tabs)
     function getSelectedConfigIds() {
-        const checkboxes = document.querySelectorAll('.config-select-cb:checked');
+        const checkboxes = document.querySelectorAll('.cc-select-cb:checked');
         return Array.from(checkboxes).map(cb => cb.value);
-    }
-
-    // Update toolbar visibility and form fields
-    function onConfigSelectionChange() {
-        const selectedIds = getSelectedConfigIds();
-        const toolbar = document.getElementById('configToolbar');
-        const countSpan = document.getElementById('selectedConfigCount');
-        const hiddenInput = document.getElementById('dashboardSelectedIds');
-        const runBtn = document.getElementById('dashboardRunBtn');
-
-        countSpan.textContent = selectedIds.length;
-        hiddenInput.value = selectedIds.join(',');
-
-        if (selectedIds.length > 0) {
-            toolbar.classList.add('show');
-
-            // Check if any enabled configs selected
-            const enabledSelected = Array.from(document.querySelectorAll('.config-select-cb:checked'))
-                .filter(cb => cb.dataset.enabled === 'true').length;
-            runBtn.disabled = enabledSelected === 0;
-            runBtn.title = enabledSelected === 0 ? 'No enabled configs selected' : '';
-        } else {
-            toolbar.classList.remove('show');
-        }
-
-        // Refresh content tabs with new filter
-        refreshContentTabs();
-    }
-
-    // Clear all config selections
-    function clearConfigSelection() {
-        document.querySelectorAll('.config-select-cb').forEach(cb => cb.checked = false);
-        onConfigSelectionChange();
-    }
-
-    // Keep selected row metadata in sync when On/Off is toggled inline
-    function onConfigToggle(configId) {
-        const checkbox = document.querySelector(`.config-select-cb[value=\"${configId}\"]`);
-        if (checkbox) {
-            checkbox.dataset.enabled = checkbox.dataset.enabled === 'true' ? 'false' : 'true';
-        }
-        onConfigSelectionChange();
     }
 
     // Build query string for HTMX requests
@@ -826,6 +709,138 @@
 
     document.addEventListener('DOMContentLoaded', syncDashboardPageSizeFromDom);
     document.body.addEventListener('htmx:afterSwap', syncDashboardPageSizeFromDom);
+
+    // ====== Crawl Configs Table (grouped by sourceHost) ======
+    let ccSort = 'name';
+    let ccSortDir = 'ASC';
+
+    function loadCrawlConfigs() {
+        const params = new URLSearchParams();
+        params.set('sort', ccSort + ',' + ccSortDir);
+
+        const analysis = document.getElementById('ccFilterAnalysis')?.value;
+        const enabled = document.getElementById('ccFilterEnabled')?.value;
+        const host = document.getElementById('ccFilterHost')?.value;
+        const parallel = document.getElementById('ccFilterParallel')?.value;
+        const filter = document.getElementById('ccFilterText')?.value;
+
+        if (analysis) params.set('analysisStatus', analysis);
+        if (enabled) params.set('enabled', enabled);
+        if (host) params.set('sourceHost', host);
+        if (parallel) params.set('parallel', parallel);
+        if (filter) params.set('filter', filter);
+
+        htmx.ajax('GET', '/dashboard/crawl-configs?' + params.toString(),
+            {target: '#crawl-configs-container', swap: 'innerHTML'});
+    }
+
+    function sortCrawlConfigs(field) {
+        if (ccSort === field) {
+            ccSortDir = ccSortDir === 'ASC' ? 'DESC' : 'ASC';
+        } else {
+            ccSort = field;
+            ccSortDir = 'ASC';
+        }
+        loadCrawlConfigs();
+    }
+
+    function clearCrawlConfigFilters() {
+        const analysis = document.getElementById('ccFilterAnalysis');
+        const enabled = document.getElementById('ccFilterEnabled');
+        const host = document.getElementById('ccFilterHost');
+        const parallel = document.getElementById('ccFilterParallel');
+        const filter = document.getElementById('ccFilterText');
+        if (analysis) analysis.value = '';
+        if (enabled) enabled.value = '';
+        if (host) host.value = '';
+        if (parallel) parallel.value = '';
+        if (filter) filter.value = '';
+        loadCrawlConfigs();
+    }
+
+    function toggleAllCrawlConfigs(checked) {
+        document.querySelectorAll('.cc-select-cb').forEach(cb => cb.checked = checked);
+        onCrawlConfigSelection();
+    }
+
+    function onCrawlConfigSelection() {
+        const selected = document.querySelectorAll('.cc-select-cb:checked');
+        const toolbar = document.getElementById('ccToolbar');
+        const countSpan = document.getElementById('ccSelectedCount');
+        const hiddenInput = document.getElementById('ccSelectedIds');
+
+        const ids = Array.from(selected).map(cb => cb.value);
+        if (countSpan) countSpan.textContent = ids.length;
+        if (hiddenInput) hiddenInput.value = ids.join(',');
+
+        if (toolbar) {
+            if (ids.length > 0) {
+                toolbar.classList.remove('d-none');
+                toolbar.classList.add('d-flex');
+            } else {
+                toolbar.classList.add('d-none');
+                toolbar.classList.remove('d-flex');
+            }
+        }
+    }
+
+    function clearCrawlConfigSelection() {
+        document.querySelectorAll('.cc-select-cb').forEach(cb => cb.checked = false);
+        const selectAll = document.getElementById('ccSelectAll');
+        if (selectAll) selectAll.checked = false;
+        onCrawlConfigSelection();
+    }
+
+    // ====== Activity Table ======
+    let actCurrentPage = 0;
+    let actPageSize = 10;
+    let actSort = 'startTime';
+    let actSortDir = 'DESC';
+
+    function loadActivity(page) {
+        if (page < 0) return;
+        actCurrentPage = page;
+        const params = new URLSearchParams();
+        params.set('page', page);
+        params.set('size', actPageSize);
+        params.set('sort', actSort + ',' + actSortDir);
+
+        const status = document.getElementById('actFilterStatus')?.value;
+        const jobName = document.getElementById('actFilterJobName')?.value;
+        const filter = document.getElementById('actFilterText')?.value;
+
+        if (status) params.set('status', status);
+        if (jobName) params.set('jobName', jobName);
+        if (filter) params.set('filter', filter);
+
+        htmx.ajax('GET', '/dashboard/activity?' + params.toString(),
+            {target: '#activity-container', swap: 'innerHTML'});
+    }
+
+    function sortActivity(field) {
+        if (actSort === field) {
+            actSortDir = actSortDir === 'ASC' ? 'DESC' : 'ASC';
+        } else {
+            actSort = field;
+            actSortDir = field === 'startTime' ? 'DESC' : 'ASC';
+        }
+        loadActivity(0);
+    }
+
+    function setActivityPageSize(size) {
+        actPageSize = parseInt(size, 10) || 10;
+        loadActivity(0);
+    }
+
+    function clearActivityFilters() {
+        const status = document.getElementById('actFilterStatus');
+        const jobName = document.getElementById('actFilterJobName');
+        const filter = document.getElementById('actFilterText');
+        if (status) status.value = '';
+        if (jobName) jobName.value = '';
+        if (filter) filter.value = '';
+        loadActivity(0);
+    }
     </script>
 </div>
 
