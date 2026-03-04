@@ -20,14 +20,14 @@ This guide packages Spring Search Tempo as a native Windows installer (`.msi` or
 From repo root on Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-jpackage.ps1 `
+``powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-jpackage.ps1 `
   -InstallerType msi `
   -InstallMode per-user `
   -DbHost minti9 `
   -DbPort 5432 `
   -DbName tempo `
   -DbUser tempo `
-  -DbPassword "password"
+  -DbPassword "password"``
 ```
 
 Output goes to:
