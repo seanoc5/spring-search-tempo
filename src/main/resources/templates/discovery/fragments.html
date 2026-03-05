@@ -25,19 +25,35 @@
         <table class="table table-sm mb-0">
             <tr>
                 <td><span class="badge status-skip">SKIP</span></td>
-                <td class="text-end" th:text="${discoverySession.skipCount}">0</td>
+                <td class="text-end">
+                    <a class="text-decoration-none"
+                       th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=SKIP&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
+                       th:text="${discoverySession.skipCount}">0</a>
+                </td>
             </tr>
             <tr>
                 <td><span class="badge status-locate">LOCATE</span></td>
-                <td class="text-end" th:text="${discoverySession.locateCount}">0</td>
+                <td class="text-end">
+                    <a class="text-decoration-none"
+                       th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=LOCATE&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
+                       th:text="${discoverySession.locateCount}">0</a>
+                </td>
             </tr>
             <tr>
                 <td><span class="badge status-index">INDEX</span></td>
-                <td class="text-end" th:text="${discoverySession.indexCount}">0</td>
+                <td class="text-end">
+                    <a class="text-decoration-none"
+                       th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=INDEX&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
+                       th:text="${discoverySession.indexCount}">0</a>
+                </td>
             </tr>
             <tr th:if="${discoverySession.analyzeCount != null && discoverySession.analyzeCount > 0}">
                 <td><span class="badge status-analyze">ANALYZE</span></td>
-                <td class="text-end" th:text="${discoverySession.analyzeCount}">0</td>
+                <td class="text-end">
+                    <a class="text-decoration-none"
+                       th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=ANALYZE&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
+                       th:text="${discoverySession.analyzeCount}">0</a>
+                </td>
             </tr>
         </table>
     </div>
@@ -72,6 +88,8 @@
                         th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|">L</button>
                 <button type="button" class="btn btn-outline-success action-btn"
                         th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|">I</button>
+                <button type="button" class="btn btn-outline-primary action-btn"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|">E</button>
             </div>
         </div>
     </div>

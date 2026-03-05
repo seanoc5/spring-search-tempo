@@ -9,7 +9,9 @@ import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Paths
@@ -21,7 +23,8 @@ class DiscoveryService(
     private val folderRepository: DiscoveredFolderRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigService: DatabaseCrawlConfigService,
-    private val crawlConfigConverter: CrawlConfigConverter
+    private val crawlConfigConverter: CrawlConfigConverter,
+    private val discoveryTemplateClassifier: DiscoveryTemplateClassifier
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -32,6 +35,12 @@ class DiscoveryService(
     fun uploadDiscovery(request: DiscoveryUploadRequest): DiscoveryUploadResponse {
         log.info("Processing discovery upload from host {} with {} folders",
             request.host, request.folders.size)
+
+        val templatePlan = discoveryTemplateClassifier.buildPlan(
+            osType = request.osType,
+            rootPaths = request.rootPaths,
+            folders = request.folders.map { TemplateFolderInput(it.path, it.name, it.depth) }
+        )
 
         // Create session
         val session = DiscoverySession().apply {
@@ -46,20 +55,13 @@ class DiscoveryService(
         sessionRepository.save(session)
 
         // Create folder entities
-        var skipSuggested = 0
-        var locateSuggested = 0
-        var indexSuggested = 0
-
         val folders = request.folders.map { dto ->
-            val suggestedStatus = dto.suggestedStatus?.let {
-                try { SuggestedStatus.valueOf(it) } catch (e: Exception) { null }
-            }
-
-            when (suggestedStatus) {
-                SuggestedStatus.SKIP -> skipSuggested++
-                SuggestedStatus.LOCATE -> locateSuggested++
-                SuggestedStatus.INDEX -> indexSuggested++
-                else -> {}
+            val suggestedStatus = templatePlan.statusByPath[dto.path] ?: dto.suggestedStatus?.let {
+                try {
+                    SuggestedStatus.valueOf(it.uppercase())
+                } catch (_: Exception) {
+                    null
+                }
             }
 
             DiscoveredFolder().apply {
@@ -78,8 +80,21 @@ class DiscoveryService(
 
         folderRepository.saveAll(folders)
 
-        log.info("Created discovery session {} with {} folders (suggested: {} skip, {} locate, {} index)",
-            session.id, folders.size, skipSuggested, locateSuggested, indexSuggested)
+        val skipSuggested = templatePlan.counts[SuggestedStatus.SKIP] ?: 0
+        val locateSuggested = templatePlan.counts[SuggestedStatus.LOCATE] ?: 0
+        val indexSuggested = templatePlan.counts[SuggestedStatus.INDEX] ?: 0
+        val analyzeSuggested = templatePlan.counts[SuggestedStatus.ANALYZE] ?: 0
+        log.info(
+            "Created discovery session {} with {} folders (profile={} {}%, suggested: {} skip, {} locate, {} index, {} analyze)",
+            session.id,
+            folders.size,
+            templatePlan.profile,
+            templatePlan.confidencePercent,
+            skipSuggested,
+            locateSuggested,
+            indexSuggested,
+            analyzeSuggested
+        )
 
         val baseUrl = "/discovery/${session.id}/classify"
 
@@ -116,11 +131,33 @@ class DiscoveryService(
      * Get session with folder tree for classification UI.
      */
     @Transactional(readOnly = true)
-    fun getSessionForClassification(sessionId: Long): DiscoverySessionDTO {
+    fun getSessionForClassification(sessionId: Long, maxDepth: Int = 3): DiscoverySessionDTO {
+        val startedAt = System.nanoTime()
         val session = sessionRepository.findById(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
 
-        val folders = folderRepository.findBySessionIdOrderByPath(sessionId)
+        val folders = folderRepository.findBySessionIdAndMaxDepth(sessionId, maxDepth)
+        val loadedAt = System.nanoTime()
+        val templatePlan = discoveryTemplateClassifier.buildPlan(
+            osType = session.osType ?: "",
+            rootPaths = session.rootPaths?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
+            folders = folders.map {
+                TemplateFolderInput(
+                    path = it.path ?: "",
+                    name = it.name ?: "",
+                    depth = it.depth
+                )
+            }
+        )
+        val plannedAt = System.nanoTime()
+        log.info(
+            "Classification page load session {} maxDepth={} loaded {} folders in {} ms, template plan in {} ms",
+            sessionId,
+            maxDepth,
+            folders.size,
+            (loadedAt - startedAt) / 1_000_000,
+            (plannedAt - loadedAt) / 1_000_000
+        )
 
         return DiscoverySessionDTO(
             id = session.id!!,
@@ -130,6 +167,13 @@ class DiscoveryService(
             status = session.status.name,
             totalFolders = session.totalFolders,
             classifiedFolders = session.classifiedFolders,
+            skipCount = session.skipCount,
+            locateCount = session.locateCount,
+            indexCount = session.indexCount,
+            analyzeCount = session.analyzeCount,
+            suggestedProfile = templatePlan.profile.name,
+            profileConfidencePercent = templatePlan.confidencePercent,
+            profileReason = templatePlan.reason,
             folders = folders.map { toFolderDTO(it) }
         )
     }
@@ -148,6 +192,60 @@ class DiscoveryService(
     fun getChildFolders(sessionId: Long, parentPath: String): List<DiscoveredFolderDTO> {
         val folders = folderRepository.findBySessionIdAndParentPath(sessionId, parentPath)
         return folders.map { toFolderDTO(it) }
+    }
+
+    /**
+     * Get folders explicitly assigned a classification status.
+     */
+    @Transactional(readOnly = true)
+    fun getAssignedFolders(
+        sessionId: Long,
+        status: AnalysisStatus,
+        page: Int = 0,
+        size: Int = 100,
+        sortBy: String = "path",
+        sortDir: String = "asc",
+        pathFilter: String? = null
+    ): AssignedFolderPageResponse {
+        val normalizedFilter = pathFilter?.trim().orEmpty()
+        val safeSort = when (sortBy.trim().lowercase()) {
+            "path" -> "path"
+            "name" -> "name"
+            "depth" -> "depth"
+            "foldercount" -> "folderCount"
+            "filecount" -> "fileCount"
+            "totalsize" -> "totalSize"
+            else -> "path"
+        }
+        val direction = if (sortDir.equals("desc", ignoreCase = true)) {
+            Sort.Direction.DESC
+        } else {
+            Sort.Direction.ASC
+        }
+        val pageable = PageRequest.of(
+            page.coerceAtLeast(0),
+            size.coerceIn(10, 500),
+            Sort.by(direction, safeSort)
+        )
+        val resultPage = folderRepository.findBySessionIdAndAssignedStatusAndPathContainingIgnoreCase(
+            sessionId = sessionId,
+            status = status,
+            path = normalizedFilter,
+            pageable = pageable
+        )
+        return AssignedFolderPageResponse(
+            status = status.name,
+            totalCount = resultPage.totalElements,
+            totalPages = resultPage.totalPages,
+            pageNumber = resultPage.number,
+            pageSize = resultPage.size,
+            hasPrevious = resultPage.hasPrevious(),
+            hasNext = resultPage.hasNext(),
+            sortBy = safeSort,
+            sortDir = direction.name.lowercase(),
+            filter = normalizedFilter,
+            folders = resultPage.content.map { toFolderDTO(it) }
+        )
     }
 
     /**
@@ -188,6 +286,7 @@ class DiscoveryService(
         var skipApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.SKIP, AnalysisStatus.SKIP)
         var locateApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.LOCATE, AnalysisStatus.LOCATE)
         var indexApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.INDEX, AnalysisStatus.INDEX)
+        var analyzeApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.ANALYZE, AnalysisStatus.ANALYZE)
 
         updateSessionCounts(sessionId)
 
@@ -196,7 +295,56 @@ class DiscoveryService(
             skipApplied = skipApplied,
             locateApplied = locateApplied,
             indexApplied = indexApplied,
-            totalApplied = skipApplied + locateApplied + indexApplied
+            analyzeApplied = analyzeApplied,
+            totalApplied = skipApplied + locateApplied + indexApplied + analyzeApplied
+        )
+    }
+
+    /**
+     * Rebuild suggested statuses for a session using a selected profile template.
+     */
+    @Transactional
+    fun applySuggestedTemplate(sessionId: Long, profile: DiscoveryUserProfile): TemplateApplyResponse {
+        val session = sessionRepository.findByIdWithFolders(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+
+        val rootPaths = session.rootPaths
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+        val templatePlan = discoveryTemplateClassifier.buildPlan(
+            osType = session.osType ?: "",
+            rootPaths = rootPaths,
+            folders = session.folders.map {
+                TemplateFolderInput(
+                    path = it.path ?: "",
+                    name = it.name ?: "",
+                    depth = it.depth
+                )
+            },
+            forcedProfile = profile
+        )
+
+        session.folders.forEach { folder ->
+            val path = folder.path ?: return@forEach
+            val suggested = templatePlan.statusByPath[path] ?: SuggestedStatus.LOCATE
+            folder.suggestedStatus = suggested
+        }
+
+        val skipSuggested = templatePlan.counts[SuggestedStatus.SKIP] ?: 0
+        val locateSuggested = templatePlan.counts[SuggestedStatus.LOCATE] ?: 0
+        val indexSuggested = templatePlan.counts[SuggestedStatus.INDEX] ?: 0
+        val analyzeSuggested = templatePlan.counts[SuggestedStatus.ANALYZE] ?: 0
+
+        return TemplateApplyResponse(
+            sessionId = sessionId,
+            profile = profile.name,
+            skipSuggested = skipSuggested,
+            locateSuggested = locateSuggested,
+            indexSuggested = indexSuggested,
+            analyzeSuggested = analyzeSuggested
         )
     }
 
@@ -359,15 +507,19 @@ class DiscoveryService(
     }
 
     private fun computeParentPath(path: String, osType: String): String? {
-        return try {
-            val p = Paths.get(path)
-            p.parent?.toString()
-        } catch (e: Exception) {
-            // Fallback for paths that might not parse on this OS
-            val separator = if (osType == "WINDOWS") "\\" else "/"
-            val lastSep = path.lastIndexOf(separator)
-            if (lastSep > 0) path.substring(0, lastSep) else null
+        // For cross-platform compatibility (e.g., processing Windows paths on Linux),
+        // use string-based parsing based on the source OS type
+        val separator = if (osType == "WINDOWS") "\\" else "/"
+        val lastSep = path.lastIndexOf(separator)
+
+        if (lastSep <= 0) return null
+
+        // For Windows drive roots (e.g., C:\Users -> C:\), include the trailing backslash
+        if (osType == "WINDOWS" && lastSep == 2 && path.length > 2 && path[1] == ':') {
+            return path.substring(0, lastSep + 1) // Include the backslash: "C:\"
         }
+
+        return path.substring(0, lastSep)
     }
 
     private fun toFolderDTO(folder: DiscoveredFolder): DiscoveredFolderDTO {
@@ -404,6 +556,7 @@ class DiscoveryService(
             SuggestedStatus.SKIP -> AnalysisStatus.SKIP
             SuggestedStatus.LOCATE -> AnalysisStatus.LOCATE
             SuggestedStatus.INDEX -> AnalysisStatus.INDEX
+            SuggestedStatus.ANALYZE -> AnalysisStatus.ANALYZE
             else -> null
         }
     }
@@ -514,6 +667,13 @@ data class DiscoverySessionDTO(
     val status: String,
     val totalFolders: Int,
     val classifiedFolders: Int,
+    val skipCount: Int,
+    val locateCount: Int,
+    val indexCount: Int,
+    val analyzeCount: Int = 0,
+    val suggestedProfile: String,
+    val profileConfidencePercent: Int,
+    val profileReason: String,
     val folders: List<DiscoveredFolderDTO>
 )
 
@@ -584,7 +744,31 @@ data class ApplySuggestionsResponse(
     val skipApplied: Int,
     val locateApplied: Int,
     val indexApplied: Int,
+    val analyzeApplied: Int = 0,
     val totalApplied: Int
+)
+
+data class TemplateApplyResponse(
+    val sessionId: Long,
+    val profile: String,
+    val skipSuggested: Int,
+    val locateSuggested: Int,
+    val indexSuggested: Int,
+    val analyzeSuggested: Int
+)
+
+data class AssignedFolderPageResponse(
+    val status: String,
+    val totalCount: Long,
+    val totalPages: Int,
+    val pageNumber: Int,
+    val pageSize: Int,
+    val hasPrevious: Boolean,
+    val hasNext: Boolean,
+    val sortBy: String,
+    val sortDir: String,
+    val filter: String,
+    val folders: List<DiscoveredFolderDTO>
 )
 
 data class ClassifyFolderRequest(

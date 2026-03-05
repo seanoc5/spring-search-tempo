@@ -81,11 +81,12 @@ class DiscoveredFolder {
 }
 
 /**
- * Status suggested by the crawler based on folder name heuristics.
+ * Status suggested by server-side templates based on OS + profile heuristics.
  */
 enum class SuggestedStatus {
     SKIP,
     LOCATE,
     INDEX,
+    ANALYZE,
     UNKNOWN
 }

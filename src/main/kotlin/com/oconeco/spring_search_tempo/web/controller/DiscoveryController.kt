@@ -1,10 +1,15 @@
 package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleGroup
+import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleOperation
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryMode
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryRequest
 import com.oconeco.spring_search_tempo.web.service.ClassifyFolderRequest
+import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleAdminService
+import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleUpsertRequest
+import com.oconeco.spring_search_tempo.web.service.DiscoveryUserProfile
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -24,7 +29,8 @@ import org.springframework.web.bind.annotation.*
 @Controller
 @RequestMapping("/discovery")
 class DiscoveryController(
-    private val discoveryService: DiscoveryService
+    private val discoveryService: DiscoveryService,
+    private val discoveryRuleAdminService: DiscoveryRuleAdminService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -39,26 +45,178 @@ class DiscoveryController(
     }
 
     /**
+     * Manage dynamic classification rules used by onboarding templates.
+     */
+    @GetMapping("/rules")
+    fun rules(
+        @RequestParam(name = "previewSessionId", required = false) previewSessionId: Long?,
+        @RequestParam(name = "previewProfile", required = false) previewProfile: String?,
+        model: Model
+    ): String {
+        model.addAttribute("rules", discoveryRuleAdminService.listRules())
+        model.addAttribute("ruleGroups", DiscoveryRuleGroup.entries)
+        model.addAttribute("ruleOperations", DiscoveryRuleOperation.entries)
+        model.addAttribute("profileOptions", DiscoveryUserProfile.entries)
+        model.addAttribute("sessionOptions", discoveryRuleAdminService.listSessionOptions())
+        model.addAttribute("selectedPreviewSessionId", previewSessionId)
+        model.addAttribute("selectedPreviewProfile", previewProfile ?: "")
+
+        if (previewSessionId != null) {
+            runCatching {
+                val forcedProfile = previewProfile
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { DiscoveryUserProfile.valueOf(it.uppercase()) }
+                discoveryRuleAdminService.previewImpact(previewSessionId, forcedProfile)
+            }.onSuccess {
+                model.addAttribute("preview", it)
+            }.onFailure { ex ->
+                model.addAttribute("error", "Preview failed: ${ex.message}")
+            }
+        }
+
+        return "discovery/rules"
+    }
+
+    @PostMapping("/rules")
+    fun createRule(
+        @RequestParam(name = "ruleGroup") ruleGroup: String,
+        @RequestParam(name = "operation") operation: String,
+        @RequestParam(name = "matchValue") matchValue: String,
+        @RequestParam(name = "enabled", required = false, defaultValue = "false") enabled: Boolean,
+        @RequestParam(name = "note", required = false) note: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            discoveryRuleAdminService.createRule(
+                DiscoveryRuleUpsertRequest(
+                    ruleGroup = ruleGroup,
+                    operation = operation,
+                    matchValue = matchValue,
+                    enabled = enabled,
+                    note = note
+                )
+            )
+            redirectAttributes.addFlashAttribute("message", "Rule created.")
+            "redirect:/discovery/rules"
+        } catch (e: Exception) {
+            log.error("Failed to create discovery rule", e)
+            redirectAttributes.addFlashAttribute("error", "Create failed: ${e.message}")
+            "redirect:/discovery/rules"
+        }
+    }
+
+    @PostMapping("/rules/{ruleId}")
+    fun updateRule(
+        @PathVariable ruleId: Long,
+        @RequestParam(name = "ruleGroup") ruleGroup: String,
+        @RequestParam(name = "operation") operation: String,
+        @RequestParam(name = "matchValue") matchValue: String,
+        @RequestParam(name = "enabled", required = false, defaultValue = "false") enabled: Boolean,
+        @RequestParam(name = "note", required = false) note: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            discoveryRuleAdminService.updateRule(
+                ruleId = ruleId,
+                request = DiscoveryRuleUpsertRequest(
+                    ruleGroup = ruleGroup,
+                    operation = operation,
+                    matchValue = matchValue,
+                    enabled = enabled,
+                    note = note
+                )
+            )
+            redirectAttributes.addFlashAttribute("message", "Rule $ruleId updated.")
+            "redirect:/discovery/rules"
+        } catch (e: Exception) {
+            log.error("Failed to update discovery rule {}", ruleId, e)
+            redirectAttributes.addFlashAttribute("error", "Update failed: ${e.message}")
+            "redirect:/discovery/rules"
+        }
+    }
+
+    @PostMapping("/rules/{ruleId}/delete")
+    fun deleteRule(
+        @PathVariable ruleId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            discoveryRuleAdminService.deleteRule(ruleId)
+            redirectAttributes.addFlashAttribute("message", "Rule $ruleId deleted.")
+            "redirect:/discovery/rules"
+        } catch (e: Exception) {
+            log.error("Failed to delete discovery rule {}", ruleId, e)
+            redirectAttributes.addFlashAttribute("error", "Delete failed: ${e.message}")
+            "redirect:/discovery/rules"
+        }
+    }
+
+    /**
      * Show classification UI for a discovery session.
      */
     @GetMapping("/{sessionId}/classify")
     fun classify(
         @PathVariable sessionId: Long,
         @RequestParam(name = "maxDepth", defaultValue = "3") maxDepth: Int,
+        @RequestParam(name = "assignedStatus", required = false) assignedStatus: String?,
+        @RequestParam(name = "listPage", defaultValue = "0") listPage: Int,
+        @RequestParam(name = "listSize", defaultValue = "100") listSize: Int,
+        @RequestParam(name = "listSort", defaultValue = "path") listSort: String,
+        @RequestParam(name = "listDir", defaultValue = "asc") listDir: String,
+        @RequestParam(name = "listQuery", required = false) listQuery: String?,
         model: Model
     ): String {
         try {
-            val discoverySession = discoveryService.getSessionForClassification(sessionId)
+            val effectiveMaxDepth = maxDepth.coerceIn(0, 8)
+            val discoverySession = discoveryService.getSessionForClassification(sessionId, effectiveMaxDepth)
+            val selectedAssignedStatus = parseAnalysisStatus(assignedStatus)
+            val assignedFolders = selectedAssignedStatus?.let {
+                discoveryService.getAssignedFolders(
+                    sessionId = sessionId,
+                    status = it,
+                    page = listPage,
+                    size = listSize,
+                    sortBy = listSort,
+                    sortDir = listDir,
+                    pathFilter = listQuery
+                )
+            }
+            val assignedPageNumber = assignedFolders?.pageNumber ?: 0
+            val assignedPageSize = assignedFolders?.pageSize ?: listSize.coerceIn(10, 500)
+            val assignedTotal = assignedFolders?.totalCount ?: 0L
+            val assignedFrom = if (assignedTotal == 0L) 0L else (assignedPageNumber.toLong() * assignedPageSize) + 1L
+            val assignedTo = if (assignedTotal == 0L) {
+                0L
+            } else {
+                minOf(assignedTotal, (assignedPageNumber.toLong() + 1L) * assignedPageSize)
+            }
 
             // Build tree structure for display (limit depth for performance)
             val rootFolders = discoverySession.folders.filter { it.depth == 0 }
             val foldersByParent = discoverySession.folders.groupBy { it.parentPath }
 
             model.addAttribute("discoverySession", discoverySession)
+            model.addAttribute("sessionId", discoverySession.id)
             model.addAttribute("rootFolders", rootFolders)
             model.addAttribute("foldersByParent", foldersByParent)
-            model.addAttribute("maxDepth", maxDepth)
+            model.addAttribute("maxDepth", effectiveMaxDepth)
+            model.addAttribute("visibleFolders", discoverySession.folders.size)
+            model.addAttribute("selectedAssignedStatus", selectedAssignedStatus?.name)
+            model.addAttribute("assignedFolders", assignedFolders?.folders.orEmpty())
+            model.addAttribute("assignedFoldersTotal", assignedTotal)
+            model.addAttribute("assignedFoldersFrom", assignedFrom)
+            model.addAttribute("assignedFoldersTo", assignedTo)
+            model.addAttribute("assignedFoldersPage", assignedPageNumber)
+            model.addAttribute("assignedFoldersPageSize", assignedPageSize)
+            model.addAttribute("assignedFoldersTotalPages", assignedFolders?.totalPages ?: 0)
+            model.addAttribute("assignedFoldersHasPrevious", assignedFolders?.hasPrevious ?: false)
+            model.addAttribute("assignedFoldersHasNext", assignedFolders?.hasNext ?: false)
+            model.addAttribute("assignedFoldersSort", assignedFolders?.sortBy ?: listSort)
+            model.addAttribute("assignedFoldersDir", assignedFolders?.sortDir ?: listDir)
+            model.addAttribute("assignedFoldersQuery", assignedFolders?.filter ?: (listQuery?.trim() ?: ""))
+            model.addAttribute("listSize", assignedFolders?.pageSize ?: listSize.coerceIn(10, 500))
             model.addAttribute("analysisStatuses", AnalysisStatus.entries)
+            model.addAttribute("profileOptions", DiscoveryUserProfile.entries)
             model.addAttribute("hostCrawlConfigs", discoveryService.getCrawlConfigCandidates(discoverySession.host))
             model.addAttribute("defaultNewConfigName", "DISCOVERY_${discoverySession.host}_${discoverySession.id}")
             model.addAttribute("defaultNewDisplayLabel", "Discovery ${discoverySession.host} (${discoverySession.id})")
@@ -113,7 +271,8 @@ class DiscoveryController(
                 "classifiedFolders" to sessionStatus.classifiedFolders,
                 "skipCount" to sessionStatus.skipCount,
                 "locateCount" to sessionStatus.locateCount,
-                "indexCount" to sessionStatus.indexCount
+                "indexCount" to sessionStatus.indexCount,
+                "analyzeCount" to sessionStatus.analyzeCount
             ))
         } catch (e: Exception) {
             log.error("Failed to classify folder", e)
@@ -137,7 +296,8 @@ class DiscoveryController(
                 "totalApplied" to result.totalApplied,
                 "skipApplied" to result.skipApplied,
                 "locateApplied" to result.locateApplied,
-                "indexApplied" to result.indexApplied
+                "indexApplied" to result.indexApplied,
+                "analyzeApplied" to result.analyzeApplied
             ))
         } catch (e: Exception) {
             log.error("Failed to apply suggestions", e)
@@ -152,10 +312,46 @@ class DiscoveryController(
      * Get session status (HTMX polling).
      */
     @GetMapping("/{sessionId}/status")
-    fun getStatus(@PathVariable sessionId: Long, model: Model): String {
+    fun getStatus(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "maxDepth", defaultValue = "3") maxDepth: Int,
+        @RequestParam(name = "assignedStatus", required = false) assignedStatus: String?,
+        @RequestParam(name = "listSize", defaultValue = "100") listSize: Int,
+        model: Model
+    ): String {
         val status = discoveryService.getStatus(sessionId)
-        model.addAttribute("status", status)
+        model.addAttribute("discoverySession", status)
+        model.addAttribute("sessionId", sessionId)
+        model.addAttribute("maxDepth", maxDepth.coerceIn(0, 8))
+        model.addAttribute("selectedAssignedStatus", parseAnalysisStatus(assignedStatus)?.name)
+        model.addAttribute("listSize", listSize.coerceIn(10, 500))
         return "discovery/fragments :: statusPanel"
+    }
+
+    /**
+     * Rebuild suggestion template for a selected profile.
+     */
+    @PostMapping("/{sessionId}/apply-template")
+    fun applyTemplate(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "profile") profile: String,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val selected = DiscoveryUserProfile.valueOf(profile.uppercase())
+            val result = discoveryService.applySuggestedTemplate(sessionId, selected)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Applied ${result.profile} template suggestions: " +
+                    "skip=${result.skipSuggested}, locate=${result.locateSuggested}, " +
+                    "index=${result.indexSuggested}, analyze=${result.analyzeSuggested}."
+            )
+            "redirect:/discovery/$sessionId/classify"
+        } catch (e: Exception) {
+            log.error("Failed to apply template for session {}", sessionId, e)
+            redirectAttributes.addFlashAttribute("error", "Template apply failed: ${e.message}")
+            "redirect:/discovery/$sessionId/classify"
+        }
     }
 
     /**
@@ -198,5 +394,10 @@ class DiscoveryController(
             redirectAttributes.addFlashAttribute("error", "Apply failed: ${e.message}")
             "redirect:/discovery/$sessionId/classify"
         }
+    }
+
+    private fun parseAnalysisStatus(value: String?): AnalysisStatus? {
+        val normalized = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { AnalysisStatus.valueOf(normalized.uppercase()) }.getOrNull()
     }
 }

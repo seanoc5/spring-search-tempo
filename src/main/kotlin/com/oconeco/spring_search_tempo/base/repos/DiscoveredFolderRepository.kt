@@ -58,4 +58,23 @@ interface DiscoveredFolderRepository : JpaRepository<DiscoveredFolder, Long> {
         ORDER BY f.path
     """)
     fun findBySessionIdAndAssignedStatus(sessionId: Long, status: AnalysisStatus): List<DiscoveredFolder>
+
+    @Query("""
+        SELECT f FROM DiscoveredFolder f
+        WHERE f.session.id = :sessionId
+        AND f.assignedStatus = :status
+        ORDER BY f.path
+    """)
+    fun findBySessionIdAndAssignedStatus(
+        sessionId: Long,
+        status: AnalysisStatus,
+        pageable: Pageable
+    ): Page<DiscoveredFolder>
+
+    fun findBySessionIdAndAssignedStatusAndPathContainingIgnoreCase(
+        sessionId: Long,
+        status: AnalysisStatus,
+        path: String,
+        pageable: Pageable
+    ): Page<DiscoveredFolder>
 }

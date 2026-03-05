@@ -13,7 +13,7 @@ import java.time.OffsetDateTime
  * 1. Remote crawler runs `onboard` command
  * 2. Crawler does fast folder-only enumeration
  * 3. Uploads folder tree to server (creates DiscoverySession + DiscoveredFolders)
- * 4. User classifies folders in UI (SKIP/LOCATE/INDEX)
+ * 4. User classifies folders in UI (SKIP/LOCATE/INDEX/ANALYZE)
  * 5. Classifications are applied to create CrawlConfig or update patterns
  */
 @Entity

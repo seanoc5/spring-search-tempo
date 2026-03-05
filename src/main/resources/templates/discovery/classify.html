@@ -6,24 +6,47 @@
     <title th:text="|Classify - ${discoverySession.host}|">Classify Folders</title>
     <style>
         .folder-tree {
-            font-family: monospace;
             font-size: 0.9rem;
         }
-        .folder-item {
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin: 1px 0;
+        .folder-tree-table {
+            font-size: 0.85rem;
+            margin-bottom: 0;
         }
-        .folder-item:hover {
-            background-color: #f8f9fa;
+        .folder-tree-table thead th {
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+            z-index: 2;
+        }
+        .folder-tree-table td {
+            vertical-align: middle;
+        }
+        .row-hidden {
+            display: none;
+        }
+        .folder-col {
+            min-width: 360px;
+        }
+        .tree-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .tree-guides {
+            width: calc(var(--depth) * 16px);
+            min-width: calc(var(--depth) * 16px);
+            height: 16px;
+            background-image: repeating-linear-gradient(
+                to right,
+                rgba(108, 117, 125, 0.35),
+                rgba(108, 117, 125, 0.35) 1px,
+                transparent 1px,
+                transparent 16px
+            );
         }
         .folder-name {
             cursor: pointer;
-        }
-        .folder-children {
-            margin-left: 20px;
-            border-left: 1px dashed #dee2e6;
-            padding-left: 8px;
         }
         .status-badge {
             font-size: 0.75rem;
@@ -33,7 +56,14 @@
         .status-locate { background-color: #ffc107; color: black; }
         .status-index { background-color: #198754; color: white; }
         .status-analyze { background-color: #0d6efd; color: white; }
+        .status-semantic { background-color: #6610f2; color: white; }
         .status-unknown { background-color: #6c757d; color: white; }
+        .status-source {
+            font-size: 0.65rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
         .suggested {
             opacity: 0.7;
             font-style: italic;
@@ -45,6 +75,22 @@
         .action-btn {
             padding: 2px 6px;
             font-size: 0.75rem;
+        }
+        .action-btn-folder {
+            font-weight: 700;
+            min-width: 30px;
+            border-width: 1px;
+        }
+        .btn-outline-danger.action-btn-folder { background: rgba(220, 53, 69, 0.08); }
+        .btn-outline-warning.action-btn-folder { background: rgba(255, 193, 7, 0.15); }
+        .btn-outline-success.action-btn-folder { background: rgba(25, 135, 84, 0.1); }
+        .btn-outline-primary.action-btn-folder { background: rgba(13, 110, 253, 0.1); }
+        .action-col-folder {
+            width: 170px;
+        }
+        .action-col-branch {
+            width: 180px;
+            padding-left: 0.9rem;
         }
         .hidden-folder {
             opacity: 0.6;
@@ -69,6 +115,10 @@
                 </p>
             </div>
             <div>
+                <a th:href="@{/discovery/rules}" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-sliders me-1"></i>
+                    Rules
+                </a>
                 <a th:href="@{/discovery}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left me-1"></i>
                     Back
@@ -77,6 +127,30 @@
         </div>
         <div th:if="${message}" class="alert alert-success py-2 small" role="alert" th:text="${message}"></div>
         <div th:if="${error}" class="alert alert-danger py-2 small" role="alert" th:text="${error}"></div>
+        <div class="alert alert-info py-2 small d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+                Suggested profile:
+                <strong th:text="${discoverySession.suggestedProfile}">PROGRAMMER</strong>
+                (<span th:text="|${discoverySession.profileConfidencePercent}%|">75%</span>)
+                <span class="text-muted" th:text="${discoverySession.profileReason}">signals summary</span>
+                <span class="ms-2 badge status-analyze">EMBED = ANALYZE</span>
+            </div>
+            <form th:action="@{/discovery/{id}/apply-template(id=${discoverySession.id})}" method="post" class="d-flex align-items-center gap-2">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <select name="profile" class="form-select form-select-sm">
+                    <option th:each="p : ${profileOptions}" th:value="${p.name()}" th:text="${p.name()}"
+                            th:selected="${p.name() == discoverySession.suggestedProfile}">PROGRAMMER</option>
+                </select>
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                    Rebuild Suggestions
+                </button>
+            </form>
+        </div>
+        <div class="alert alert-warning py-2 small">
+            Showing <strong th:text="${visibleFolders}">0</strong> of
+            <strong th:text="${discoverySession.totalFolders}">0</strong> folders (depth <=
+            <strong th:text="${maxDepth}">3</strong>) for faster page load.
+        </div>
 
         <div class="row">
             <!-- Folder Tree -->
@@ -87,7 +161,16 @@
                             <i class="bi bi-diagram-3 me-2"></i>
                             Folder Structure
                         </h5>
-                        <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <form method="get" class="d-flex align-items-center gap-2">
+                                <label class="small text-muted mb-0" for="maxDepthSelect">Depth</label>
+                                <select id="maxDepthSelect" name="maxDepth" class="form-select form-select-sm" onchange="this.form.submit()">
+                                    <option th:each="d : ${#numbers.sequence(0,8)}"
+                                            th:value="${d}"
+                                            th:text="${d}"
+                                            th:selected="${d == maxDepth}">3</option>
+                                </select>
+                            </form>
                             <button type="button" class="btn btn-sm btn-outline-secondary me-2"
                                     onclick="expandAll()">
                                 <i class="bi bi-arrows-expand"></i> Expand All
@@ -98,10 +181,24 @@
                             </button>
                         </div>
                     </div>
-                    <div class="card-body folder-tree" style="max-height: 70vh; overflow-y: auto;">
-                        <div th:each="folder : ${rootFolders}">
-                            <th:block th:replace="~{discovery/classify :: folderNode(${folder}, ${foldersByParent}, 0, ${discoverySession.id})}"/>
-                        </div>
+                    <div class="card-body folder-tree p-0" style="max-height: 70vh; overflow-y: auto;">
+                        <table class="table table-sm table-hover folder-tree-table">
+                            <thead>
+                            <tr>
+                                <th class="folder-col">Folder</th>
+                                <th class="text-end" style="width: 120px;">Subfolders</th>
+                                <th class="text-end" style="width: 100px;">Files</th>
+                                <th style="width: 220px;">Status</th>
+                                <th class="text-end action-col-folder">Folder Actions</th>
+                                <th class="text-end action-col-branch">Branch Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <th:block th:each="folder : ${rootFolders}">
+                                <th:block th:replace="~{discovery/classify :: folderRow(${folder}, ${foldersByParent}, 0, ${discoverySession.id}, ${maxDepth}, ${null})}"/>
+                            </th:block>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -111,7 +208,7 @@
                 <div class="stats-panel">
                     <!-- Status Counts -->
                     <div class="card mb-3" id="statusPanel"
-                         hx-get th:hx-get="@{/discovery/{id}/status(id=${discoverySession.id})}"
+                         hx-get th:hx-get="|/discovery/${discoverySession.id}/status?maxDepth=${maxDepth}&listSize=${assignedFoldersPageSize}${selectedAssignedStatus != null ? '&assignedStatus=' + selectedAssignedStatus : ''}|"
                          hx-trigger="classificationChanged from:body"
                          hx-swap="innerHTML">
                         <th:block th:replace="~{discovery/fragments :: statusPanel(${discoverySession})}"/>
@@ -131,7 +228,7 @@
                                     hx-swap="none"
                                     hx-on::after-request="handleSuggestionsApplied(event)">
                                 <i class="bi bi-magic me-1"></i>
-                                Apply All Suggestions
+                                Apply Suggested Template
                             </button>
 
                             <hr>
@@ -149,6 +246,10 @@
                                 <button type="button" class="btn btn-outline-success btn-sm"
                                         onclick="classifySelected('INDEX')">
                                     INDEX
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                        onclick="classifySelected('ANALYZE')">
+                                    EMBED
                                 </button>
                             </div>
                         </div>
@@ -235,10 +336,151 @@
                                 Full text extraction (docs, code)
                             </div>
                             <div>
-                                <span class="badge status-analyze">ANALYZE</span>
-                                Index + NLP processing
+                                <span class="badge status-analyze">ANALYZE (EMBED)</span>
+                                Index + NLP + embedding-ready pipeline
+                            </div>
+                            <hr>
+                            <div class="small text-muted">
+                                Status source:
+                                <strong>ASSIGNED</strong> = explicitly set on this folder,
+                                <strong>INHERITED</strong> = inherited from nearest assigned parent,
+                                <strong>SUGGESTED</strong> = rule recommendation only (not assigned),
+                                <strong>NO MATCH</strong> = no rule recommendation yet.
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3" id="foldersList">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="bi bi-filter-square me-2"></i>
+                            Folders List
+                            <span th:if="${selectedAssignedStatus != null}">
+                                - <span th:text="${selectedAssignedStatus}">SKIP</span>
+                                (<span th:text="${assignedFoldersTotal}">0</span>)
+                            </span>
+                        </h6>
+                        <a class="btn btn-sm btn-outline-secondary"
+                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth})}">
+                            Clear Filter
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Click a count in <strong>Classification Status</strong> to load folders with that assigned status.
+                        </p>
+
+                        <div th:if="${selectedAssignedStatus == null}" class="text-muted small">
+                            No status selected yet.
+                        </div>
+
+                        <th:block th:if="${selectedAssignedStatus != null}">
+                            <form method="get" class="row g-2 align-items-end mb-3">
+                                <input type="hidden" name="maxDepth" th:value="${maxDepth}">
+                                <input type="hidden" name="assignedStatus" th:value="${selectedAssignedStatus}">
+                                <input type="hidden" name="listPage" value="0">
+                                <input type="hidden" name="listSort" th:value="${assignedFoldersSort}">
+                                <input type="hidden" name="listDir" th:value="${assignedFoldersDir}">
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-1" for="listQuery">Path filter</label>
+                                    <input id="listQuery"
+                                           name="listQuery"
+                                           class="form-control form-control-sm"
+                                           th:value="${assignedFoldersQuery}"
+                                           placeholder="contains text...">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small mb-1" for="listSize">Page size</label>
+                                    <select id="listSize" name="listSize" class="form-select form-select-sm">
+                                        <option value="50" th:selected="${assignedFoldersPageSize == 50}">50</option>
+                                        <option value="100" th:selected="${assignedFoldersPageSize == 100}">100</option>
+                                        <option value="200" th:selected="${assignedFoldersPageSize == 200}">200</option>
+                                        <option value="500" th:selected="${assignedFoldersPageSize == 500}">500</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                                </div>
+                            </form>
+
+                            <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                                <span>
+                                    Matches explicit assignments (same metric as status counts).
+                                </span>
+                                <span th:text="|Page ${assignedFoldersPage + 1} / ${assignedFoldersTotalPages == 0 ? 1 : assignedFoldersTotalPages}|">Page 1 / 1</span>
+                            </div>
+
+                            <div class="table-responsive" style="max-height: 34vh; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                <tr>
+                                    <th th:with="nextDir=${assignedFoldersSort == 'path' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                        <a class="text-decoration-none"
+                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='path', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                            Path
+                                        </a>
+                                    </th>
+                                    <th style="width: 100px;"
+                                        th:with="nextDir=${assignedFoldersSort == 'depth' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                        <a class="text-decoration-none"
+                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='depth', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                            Depth
+                                        </a>
+                                    </th>
+                                    <th style="width: 120px;"
+                                        th:with="nextDir=${assignedFoldersSort == 'folderCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                        <a class="text-decoration-none"
+                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='folderCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                            Subfolders
+                                        </a>
+                                    </th>
+                                    <th style="width: 100px;"
+                                        th:with="nextDir=${assignedFoldersSort == 'fileCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                        <a class="text-decoration-none"
+                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='fileCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                            Files
+                                        </a>
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:if="${#lists.isEmpty(assignedFolders)}">
+                                    <td colspan="4" class="text-muted">No folders match this status + filter.</td>
+                                </tr>
+                                <tr th:each="folder : ${assignedFolders}">
+                                    <td class="font-monospace" th:text="${folder.path}">C:\path</td>
+                                    <td th:text="${folder.depth}">0</td>
+                                    <td th:text="${folder.folderCount}">0</td>
+                                    <td th:text="${folder.fileCount}">0</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="small text-muted"
+                                     th:text="|Showing ${assignedFoldersFrom}-${assignedFoldersTo} of ${assignedFoldersTotal}|">
+                                    Showing 0-0 of 0
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <a class="btn btn-outline-secondary"
+                                       th:classappend="${!assignedFoldersHasPrevious} ? ' disabled'"
+                                       th:href="${assignedFoldersHasPrevious} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage - 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
+                                        Prev
+                                    </a>
+                                    <a class="btn btn-outline-secondary"
+                                       th:classappend="${!assignedFoldersHasNext} ? ' disabled'"
+                                       th:href="${assignedFoldersHasNext} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage + 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
+                                        Next
+                                    </a>
+                                </div>
+                            </div>
+                        </th:block>
                     </div>
                 </div>
             </div>
@@ -248,31 +490,71 @@
     <script th:inline="javascript">
         const sessionId = /*[[${discoverySession.id}]]*/ 0;
 
+        function normalizePath(path) {
+            return (path || '').replace(/\//g, '\\').toLowerCase();
+        }
+
+        function isDescendantPath(candidate, parent) {
+            const c = normalizePath(candidate);
+            const p = normalizePath(parent);
+            if (!c || !p || c === p) return false;
+            return p.endsWith('\\') ? c.startsWith(p) : c.startsWith(p + '\\');
+        }
+
+        function setRowExpanded(row, expanded) {
+            row.dataset.expanded = expanded ? 'true' : 'false';
+            const icon = row.querySelector('.toggle-icon');
+            if (!icon) return;
+            icon.classList.toggle('bi-chevron-down', expanded);
+            icon.classList.toggle('bi-chevron-right', !expanded);
+        }
+
         function toggleFolder(element) {
-            const children = element.closest('.folder-item').querySelector('.folder-children');
-            const icon = element.querySelector('.toggle-icon');
-            if (children) {
-                children.classList.toggle('d-none');
-                if (icon) {
-                    icon.classList.toggle('bi-chevron-right');
-                    icon.classList.toggle('bi-chevron-down');
-                }
+            const row = element.closest('tr');
+            if (!row) return;
+            const path = row.dataset.path;
+            const isExpanded = row.dataset.expanded === 'true';
+            const rows = document.querySelectorAll('.folder-row');
+
+            if (isExpanded) {
+                rows.forEach(r => {
+                    if (isDescendantPath(r.dataset.path, path)) {
+                        r.classList.add('row-hidden');
+                        setRowExpanded(r, false);
+                    }
+                });
+                setRowExpanded(row, false);
+                return;
             }
+
+            rows.forEach(r => {
+                if (r.dataset.parentPath === path) {
+                    r.classList.remove('row-hidden');
+                }
+            });
+            setRowExpanded(row, true);
         }
 
         function expandAll() {
-            document.querySelectorAll('.folder-children').forEach(el => el.classList.remove('d-none'));
-            document.querySelectorAll('.toggle-icon').forEach(el => {
-                el.classList.remove('bi-chevron-right');
-                el.classList.add('bi-chevron-down');
+            document.querySelectorAll('.folder-row').forEach(row => {
+                row.classList.remove('row-hidden');
+                if (row.querySelector('.toggle-icon')) {
+                    setRowExpanded(row, true);
+                }
             });
         }
 
         function collapseAll() {
-            document.querySelectorAll('.folder-children').forEach(el => el.classList.add('d-none'));
-            document.querySelectorAll('.toggle-icon').forEach(el => {
-                el.classList.add('bi-chevron-right');
-                el.classList.remove('bi-chevron-down');
+            document.querySelectorAll('.folder-row').forEach(row => {
+                const depth = parseInt(row.dataset.depth || '0', 10);
+                if (depth > 0) {
+                    row.classList.add('row-hidden');
+                } else {
+                    row.classList.remove('row-hidden');
+                }
+                if (row.querySelector('.toggle-icon')) {
+                    setRowExpanded(row, false);
+                }
             });
         }
 
@@ -298,8 +580,11 @@
                     const badge = document.querySelector(`[data-folder-id="${folderId}"] .status-badge`);
                     if (badge) {
                         badge.className = `badge status-badge status-${status.toLowerCase()}`;
-                        badge.textContent = status;
-                        badge.classList.remove('suggested');
+                        badge.textContent = status === 'ANALYZE' ? 'NLP' : (status === 'SEMANTIC' ? 'EMBED' : status);
+                    }
+                    const source = document.querySelector(`[data-folder-id="${folderId}"] .status-source`);
+                    if (source) {
+                        source.textContent = 'ASSIGNED';
                     }
                     // Trigger status panel refresh
                     htmx.trigger(document.body, 'classificationChanged');
@@ -343,99 +628,103 @@
             }
         }
 
+        // Event delegation for subtree classification actions
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('.subtree-action');
+            if (link) {
+                e.preventDefault();
+                const folderPath = link.dataset.folderPath;
+                const status = link.dataset.status;
+                classifySubtree(folderPath, status);
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', toggleApplyMode);
     </script>
 </main>
 
-<!-- Folder Node Fragment -->
-<th:block th:fragment="folderNode(folder, foldersByParent, depth, sessionId)">
-    <div class="folder-item" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''"
-         th:data-folder-id="${folder.id}">
-        <div class="d-flex align-items-center">
-            <!-- Checkbox -->
-            <input type="checkbox" class="form-check-input me-2 folder-checkbox"
-                   th:data-folder-id="${folder.id}">
+<!-- Folder Row Fragment -->
+<th:block th:fragment="folderRow(folder, foldersByParent, depth, sessionId, maxDepth, inheritedStatus)">
+    <tr class="folder-row"
+        th:classappend="${depth > 0} ? 'row-hidden' : ''"
+        th:data-folder-id="${folder.id}"
+        th:data-path="${folder.path}"
+        th:data-parent-path="${folder.parentPath}"
+        th:data-depth="${depth}"
+        data-expanded="false"
+        th:with="
+            effectiveStatus=${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : null))},
+            statusSource=${folder.assignedStatus != null ? 'ASSIGNED' : (inheritedStatus != null ? 'INHERITED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH'))},
+            statusLabel=${effectiveStatus == 'ANALYZE' ? 'NLP' : (effectiveStatus == 'SEMANTIC' ? 'EMBED' : effectiveStatus)}
+        ">
+        <td class="folder-col" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''">
+            <div class="tree-cell" th:style="|--depth:${depth};|">
+                <span class="tree-guides" aria-hidden="true"></span>
+                <input type="checkbox" class="form-check-input folder-checkbox"
+                       th:data-folder-id="${folder.id}">
 
-            <!-- Expand/Collapse Toggle -->
-            <span th:if="${foldersByParent.containsKey(folder.path)}"
-                  class="folder-name me-1" onclick="toggleFolder(this)">
-                <i class="bi bi-chevron-right toggle-icon"></i>
-            </span>
-            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="me-3"></span>
-
-            <!-- Folder Icon -->
-            <i class="bi bi-folder me-1 text-warning"></i>
-
-            <!-- Folder Name -->
-            <span class="folder-name flex-grow-1" th:text="${folder.name}">folder</span>
-
-            <!-- Stats -->
-            <span class="text-muted small me-2">
-                <span th:if="${folder.folderCount > 0}" th:text="|${folder.folderCount} dirs|"></span>
-                <span th:if="${folder.fileCount > 0}" th:text="|, ${folder.fileCount} files|"></span>
-            </span>
-
-            <!-- Status Badge -->
-            <span th:if="${folder.assignedStatus != null}"
-                  class="badge status-badge"
-                  th:classappend="|status-${folder.assignedStatus.toLowerCase()}|"
-                  th:text="${folder.assignedStatus}">STATUS</span>
-            <span th:if="${folder.assignedStatus == null && folder.suggestedStatus != null}"
-                  class="badge status-badge suggested"
-                  th:classappend="|status-${folder.suggestedStatus.toLowerCase()}|"
-                  th:text="${folder.suggestedStatus}">SUGGESTED</span>
-
-            <!-- Quick Actions -->
-            <div class="btn-group ms-2" role="group">
-                <button type="button" class="btn btn-outline-danger action-btn"
-                        th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
-                        title="Mark as SKIP">S</button>
-                <button type="button" class="btn btn-outline-warning action-btn"
-                        th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
-                        title="Mark as LOCATE">L</button>
-                <button type="button" class="btn btn-outline-success action-btn"
-                        th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
-                        title="Mark as INDEX">I</button>
-            </div>
-
-            <!-- Subtree Action -->
-            <div class="dropdown ms-1" th:if="${foldersByParent.containsKey(folder.path)}">
-                <button class="btn btn-outline-secondary action-btn dropdown-toggle" type="button"
-                        data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-three-dots-vertical"></i>
+                <button type="button"
+                        class="btn btn-link p-0 text-decoration-none folder-name"
+                        th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}"
+                        onclick="toggleFolder(this)">
+                    <i class="bi bi-chevron-right toggle-icon"></i>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><h6 class="dropdown-header">Mark entire subtree as:</h6></li>
-                    <li>
-                        <a class="dropdown-item text-danger" href="#"
-                           th:onclick="|classifySubtree('${folder.path}', 'SKIP'); return false;|">
-                            <i class="bi bi-x-circle me-1"></i> SKIP
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item text-warning" href="#"
-                           th:onclick="|classifySubtree('${folder.path}', 'LOCATE'); return false;|">
-                            <i class="bi bi-geo-alt me-1"></i> LOCATE
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item text-success" href="#"
-                           th:onclick="|classifySubtree('${folder.path}', 'INDEX'); return false;|">
-                            <i class="bi bi-file-text me-1"></i> INDEX
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
+                <span th:unless="${foldersByParent.containsKey(folder.path) and depth < maxDepth}" style="width: 12px;"></span>
 
-        <!-- Children (recursive) -->
-        <div th:if="${foldersByParent.containsKey(folder.path)}"
-             class="folder-children d-none">
-            <div th:each="child : ${foldersByParent.get(folder.path)}">
-                <th:block th:replace="~{discovery/classify :: folderNode(${child}, ${foldersByParent}, ${depth + 1}, ${sessionId})}"/>
+                <i class="bi bi-folder text-warning"></i>
+                <span class="folder-name fw-semibold" th:text="${folder.name}">folder</span>
             </div>
-        </div>
-    </div>
+        </td>
+
+        <td class="text-end" th:text="${folder.folderCount}">0</td>
+        <td class="text-end" th:text="${folder.fileCount}">0</td>
+
+        <td>
+            <span class="badge status-badge"
+                  th:classappend="${effectiveStatus != null} ? |status-${effectiveStatus.toLowerCase()}| : 'status-unknown'"
+                  th:text="${statusLabel != null ? statusLabel : 'UNKNOWN'}">UNKNOWN</span>
+            <span class="status-source ms-1" th:text="${statusSource}">ASSIGNED</span>
+        </td>
+
+        <td class="text-end action-col-folder">
+            <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
+                <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
+                        title="Folder: SKIP">S</button>
+                <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
+                        title="Folder: LOCATE">L</button>
+                <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
+                        title="Folder: INDEX">I</button>
+                <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
+                        title="Folder: NLP/EMBED">N</button>
+            </div>
+        </td>
+
+        <td class="text-end action-col-branch">
+            <div class="btn-group btn-group-sm" role="group"
+                 th:if="${foldersByParent.containsKey(folder.path)}"
+                 title="Entire-branch actions">
+                <button type="button" class="btn btn-outline-danger action-btn subtree-action"
+                        th:data-folder-path="${folder.path}" data-status="SKIP" title="Branch: SKIP">S*</button>
+                <button type="button" class="btn btn-outline-warning action-btn subtree-action"
+                        th:data-folder-path="${folder.path}" data-status="LOCATE" title="Branch: LOCATE">L*</button>
+                <button type="button" class="btn btn-outline-success action-btn subtree-action"
+                        th:data-folder-path="${folder.path}" data-status="INDEX" title="Branch: INDEX">I*</button>
+                <button type="button" class="btn btn-outline-primary action-btn subtree-action"
+                        th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: NLP/EMBED">N*</button>
+            </div>
+            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="text-muted small">-</span>
+        </td>
+    </tr>
+
+    <th:block th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}">
+        <th:block th:each="child : ${foldersByParent.get(folder.path)}">
+            <th:block th:replace="~{discovery/classify :: folderRow(${child}, ${foldersByParent}, ${depth + 1}, ${sessionId}, ${maxDepth}, ${folder.assignedStatus != null ? folder.assignedStatus : inheritedStatus})}"/>
+        </th:block>
+    </th:block>
 </th:block>
 
 </body>
