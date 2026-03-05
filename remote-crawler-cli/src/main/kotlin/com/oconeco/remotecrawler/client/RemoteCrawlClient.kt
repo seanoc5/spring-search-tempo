@@ -138,6 +138,26 @@ class RemoteCrawlClient(
     }
 
     /**
+     * Get dry run preview for a crawl config.
+     * Shows how folders would be classified during a crawl.
+     */
+    fun getDryRun(
+        configId: Long,
+        detailed: Boolean = false,
+        sessionId: Long? = null,
+        status: String? = null,
+        pathPrefix: String? = null,
+        limit: Int = 10000
+    ): DryRunResponse {
+        val params = mutableListOf("configId=$configId", "detailed=$detailed", "limit=$limit")
+        sessionId?.let { params.add("sessionId=$it") }
+        status?.let { params.add("status=$it") }
+        pathPrefix?.let { params.add("pathPrefix=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+        val response = get("$apiBase/dry-run?${params.joinToString("&")}")
+        return objectMapper.readValue(response)
+    }
+
+    /**
      * Test server connectivity.
      */
     fun testConnection(): Boolean {
@@ -469,4 +489,38 @@ data class DiscoveryStatusResponse(
     val skipCount: Int,
     val locateCount: Int,
     val indexCount: Int
+)
+
+// ============ Dry Run DTOs ============
+
+data class DryRunResponse(
+    val configId: Long,
+    val configName: String,
+    val sessionId: Long,
+    val host: String,
+    val detailed: Boolean,
+    val summary: DryRunSummary,
+    val folders: List<DryRunFolder>,
+    val totalFolders: Int,
+    val returnedFolders: Int,
+    val truncated: Boolean,
+    val durationMs: Long
+)
+
+data class DryRunSummary(
+    val skip: Int,
+    val locate: Int,
+    val index: Int,
+    val analyze: Int,
+    val semantic: Int,
+    val explicitCount: Int,
+    val inheritedCount: Int
+)
+
+data class DryRunFolder(
+    val path: String,
+    val status: String,
+    val explicit: Boolean,
+    val matchedPattern: String?,
+    val inheritedFrom: String?
 )

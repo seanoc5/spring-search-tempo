@@ -24,4 +24,7 @@ interface DiscoverySessionRepository : JpaRepository<DiscoverySession, Long> {
         WHERE s.id = :id
     """)
     fun findByIdWithFolders(id: Long): Optional<DiscoverySession>
+
+    @Query("SELECT s FROM DiscoverySession s WHERE s.crawlConfig.id = :crawlConfigId ORDER BY s.appliedAt DESC")
+    fun findByCrawlConfigIdOrderByAppliedAtDesc(crawlConfigId: Long): List<DiscoverySession>
 }

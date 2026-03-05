@@ -1,8 +1,10 @@
 package com.oconeco.spring_search_tempo.web.rest
 
+import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import com.oconeco.spring_search_tempo.web.service.DiscoveryUploadRequest
+import com.oconeco.spring_search_tempo.web.service.DryRunService
 import com.oconeco.spring_search_tempo.web.service.RemoteClassifyRequest
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlPlannerService
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlSessionService
@@ -30,7 +32,8 @@ class RemoteCrawlResource(
     private val remoteCrawlPlannerService: RemoteCrawlPlannerService,
     private val remoteCrawlSessionService: RemoteCrawlSessionService,
     private val remoteCrawlTaskService: RemoteCrawlTaskService,
-    private val discoveryService: DiscoveryService
+    private val discoveryService: DiscoveryService,
+    private val dryRunService: DryRunService
 ) {
 
     companion object {
@@ -89,6 +92,71 @@ class RemoteCrawlResource(
                 mapOf(
                     "status" to "FAILED",
                     "message" to "Failed to classify remote paths: ${e.message}"
+                )
+            )
+        }
+    }
+
+    /**
+     * Dry run endpoint: Preview how folders would be classified during a crawl.
+     *
+     * Uses discovery session data (from onboarding) to show what would happen
+     * without actually executing the crawl.
+     *
+     * @param configId Required crawl config ID
+     * @param detailed If true, return all folders. If false, only explicit pattern matches.
+     * @param sessionId Optional discovery session ID. If not provided, uses most recent.
+     * @param status Optional status filter (SKIP, LOCATE, INDEX, ANALYZE, SEMANTIC)
+     * @param pathPrefix Optional path prefix to filter results
+     * @param limit Maximum folders to return (default 10000)
+     */
+    @GetMapping("/dry-run")
+    fun dryRun(
+        @RequestParam(name = "configId") configId: Long,
+        @RequestParam(name = "detailed", required = false, defaultValue = "false") detailed: Boolean,
+        @RequestParam(name = "sessionId", required = false) sessionId: Long?,
+        @RequestParam(name = "status", required = false) status: String?,
+        @RequestParam(name = "pathPrefix", required = false) pathPrefix: String?,
+        @RequestParam(name = "limit", required = false, defaultValue = "10000") limit: Int
+    ): ResponseEntity<Any> {
+        log.info("Dry run request for config {}, detailed={}, sessionId={}", configId, detailed, sessionId)
+        return try {
+            val statusFilter = status?.uppercase()?.let {
+                try {
+                    AnalysisStatus.valueOf(it)
+                } catch (e: IllegalArgumentException) {
+                    throw IllegalArgumentException("Invalid status: $status. Valid values: SKIP, LOCATE, INDEX, ANALYZE, SEMANTIC")
+                }
+            }
+            val response = dryRunService.generateDryRun(
+                configId = configId,
+                detailed = detailed,
+                sessionId = sessionId,
+                statusFilter = statusFilter,
+                pathPrefix = pathPrefix,
+                limit = limit.coerceIn(1, 100000)
+            )
+            ResponseEntity.ok(response)
+        } catch (e: NotFoundException) {
+            ResponseEntity.status(404).body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Not found")
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Dry run failed for config {}", configId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to generate dry run: ${e.message}"
                 )
             )
         }

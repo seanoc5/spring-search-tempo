@@ -408,12 +408,161 @@ fun main(args: Array<String>) {
         }
     }
 
+    class DryRunCommand : Subcommand("dry-run", "Preview how folders would be classified during a crawl") {
+        val configId by option(
+            ArgType.Int,
+            shortName = "c",
+            fullName = "config",
+            description = "Crawl config ID (required)"
+        ).required()
+
+        val detailed by option(
+            ArgType.Boolean,
+            shortName = "d",
+            fullName = "detailed",
+            description = "Show all folders (default: only explicit pattern matches)"
+        ).default(false)
+
+        val sessionIdOpt by option(
+            ArgType.Int,
+            fullName = "session",
+            description = "Discovery session ID (default: most recent for config)"
+        )
+
+        val statusFilter by option(
+            ArgType.String,
+            fullName = "status",
+            description = "Filter by status (SKIP, LOCATE, INDEX, ANALYZE, SEMANTIC)"
+        )
+
+        val pathPrefix by option(
+            ArgType.String,
+            fullName = "path",
+            description = "Filter by path prefix (e.g., 'C:\\Users')"
+        )
+
+        val limit by option(
+            ArgType.Int,
+            shortName = "n",
+            fullName = "limit",
+            description = "Maximum folders to return"
+        ).default(500)
+
+        val outputFile by option(
+            ArgType.String,
+            shortName = "o",
+            fullName = "output",
+            description = "Output file for JSON results"
+        )
+
+        val showPatterns by option(
+            ArgType.Boolean,
+            fullName = "show-patterns",
+            description = "Show matched patterns in output"
+        ).default(false)
+
+        override fun execute() {
+            log.info("Running dry-run for config {}", configId)
+
+            val client = RemoteCrawlClient(serverUrl, username, password)
+
+            // Test connection first
+            if (!client.testConnection()) {
+                println("ERROR: Failed to connect to server at $serverUrl")
+                System.exit(1)
+            }
+
+            try {
+                val result = client.getDryRun(
+                    configId = configId.toLong(),
+                    detailed = detailed,
+                    sessionId = sessionIdOpt?.toLong(),
+                    status = statusFilter,
+                    pathPrefix = pathPrefix,
+                    limit = limit
+                )
+
+                // Print summary
+                println()
+                println("=".repeat(70))
+                println("  Dry Run: ${result.configName}")
+                println("=".repeat(70))
+                println()
+                println("Config ID:    ${result.configId}")
+                println("Session ID:   ${result.sessionId}")
+                println("Host:         ${result.host}")
+                println("Mode:         ${if (result.detailed) "Detailed (all folders)" else "Short (explicit matches only)"}")
+                println()
+                println("-".repeat(70))
+                println("  Classification Summary")
+                println("-".repeat(70))
+                println()
+                println("  SKIP:      ${result.summary.skip.toString().padStart(8)}")
+                println("  LOCATE:    ${result.summary.locate.toString().padStart(8)}")
+                println("  INDEX:     ${result.summary.index.toString().padStart(8)}")
+                println("  ANALYZE:   ${result.summary.analyze.toString().padStart(8)}")
+                println("  SEMANTIC:  ${result.summary.semantic.toString().padStart(8)}")
+                println()
+                println("  Explicit:  ${result.summary.explicitCount.toString().padStart(8)} (pattern matches)")
+                println("  Inherited: ${result.summary.inheritedCount.toString().padStart(8)} (from parent)")
+                println()
+                println("-".repeat(70))
+                println("  Folders (${result.returnedFolders} of ${result.totalFolders}${if (result.truncated) ", truncated" else ""})")
+                println("-".repeat(70))
+                println()
+
+                // Group by status for cleaner output
+                val byStatus = result.folders.groupBy { it.status }
+
+                for (status in listOf("SKIP", "LOCATE", "INDEX", "ANALYZE", "SEMANTIC")) {
+                    val folders = byStatus[status] ?: continue
+                    println("[$status] (${folders.size})")
+                    for (folder in folders.take(50)) {
+                        val marker = if (folder.explicit) "*" else " "
+                        print("  $marker ${folder.path}")
+                        if (showPatterns && folder.matchedPattern != null) {
+                            print("  <- ${folder.matchedPattern}")
+                        } else if (!folder.explicit && folder.inheritedFrom != null) {
+                            print("  (inherited)")
+                        }
+                        println()
+                    }
+                    if (folders.size > 50) {
+                        println("  ... and ${folders.size - 50} more")
+                    }
+                    println()
+                }
+
+                println("-".repeat(70))
+                println("Duration: ${result.durationMs}ms")
+                println()
+                println("Legend: * = explicit pattern match, (no marker) = inherited from parent")
+                println()
+
+                // Write to output file if specified
+                if (outputFile != null) {
+                    val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+                        .registerModule(com.fasterxml.jackson.module.kotlin.KotlinModule.Builder().build())
+                        .enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
+                    java.io.File(outputFile!!).writeText(mapper.writeValueAsString(result))
+                    println("Results written to: $outputFile")
+                }
+
+            } catch (e: Exception) {
+                println("ERROR: ${e.message}")
+                log.error("Dry run failed", e)
+                System.exit(1)
+            }
+        }
+    }
+
     val crawlCommand = CrawlCommand()
     val statusCommand = StatusCommand()
     val onboardCommand = OnboardCommand()
     val testCommand = TestCommand()
+    val dryRunCommand = DryRunCommand()
 
-    parser.subcommands(crawlCommand, statusCommand, onboardCommand, testCommand)
+    parser.subcommands(crawlCommand, statusCommand, onboardCommand, testCommand, dryRunCommand)
     parser.parse(args)
 }
 
