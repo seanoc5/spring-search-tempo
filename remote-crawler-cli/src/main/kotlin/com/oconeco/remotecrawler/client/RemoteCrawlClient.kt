@@ -159,20 +159,60 @@ class RemoteCrawlClient(
 
     /**
      * Test server connectivity.
+     * Use -v flag for DEBUG logging to see detailed connection diagnostics.
      */
     fun testConnection(): Boolean {
+        val healthUrl = "$baseUrl/actuator/health"
+        log.debug("Testing connection to: {}", healthUrl)
+        log.trace("Using Basic auth for user: {}", username)
+
         return try {
             val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/actuator/health"))
+                .uri(URI.create(healthUrl))
                 .header("Authorization", authHeader)
                 .timeout(Duration.ofSeconds(5))
                 .GET()
                 .build()
 
+            log.trace("Sending HTTP GET request...")
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-            response.statusCode() == 200
+            val statusCode = response.statusCode()
+
+            log.debug("Response status: {}", statusCode)
+            log.trace("Response body: {}", response.body())
+
+            if (statusCode == 200) {
+                log.debug("Connection test successful")
+                true
+            } else {
+                log.warn("Connection test failed with HTTP status: {}", statusCode)
+                log.debug("Response body: {}", response.body())
+                false
+            }
+        } catch (e: java.net.ConnectException) {
+            log.warn("Connection refused: {}", e.message)
+            log.debug("Could not connect to {} - is the server running?", healthUrl)
+            log.trace("Full exception:", e)
+            false
+        } catch (e: java.net.UnknownHostException) {
+            log.warn("Unknown host: {}", e.message)
+            log.debug("DNS lookup failed for server URL: {}", baseUrl)
+            log.trace("Full exception:", e)
+            false
+        } catch (e: java.net.http.HttpTimeoutException) {
+            log.warn("Connection timed out: {}", e.message)
+            log.debug("Request to {} timed out after 5 seconds", healthUrl)
+            log.trace("Full exception:", e)
+            false
+        } catch (e: javax.net.ssl.SSLException) {
+            log.warn("SSL/TLS error: {}", e.message)
+            log.debug("SSL handshake failed - check if server uses HTTPS and has valid certificate")
+            log.trace("Full exception:", e)
+            false
         } catch (e: Exception) {
-            log.warn("Connection test failed: {}", e.message)
+            log.warn("Connection test failed: {} - {}", e.javaClass.simpleName, e.message)
+            log.debug("Exception type: {}", e.javaClass.name)
+            log.trace("Full exception:", e)
             false
         }
     }

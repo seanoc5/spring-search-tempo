@@ -1,5 +1,7 @@
 package com.oconeco.remotecrawler
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import com.oconeco.remotecrawler.client.*
 import com.oconeco.remotecrawler.crawler.FilesystemCrawler
 import com.oconeco.remotecrawler.discovery.DiscoveredFolder
@@ -15,6 +17,13 @@ import java.util.*
 private val log = LoggerFactory.getLogger("RemoteCrawler")
 
 fun main(args: Array<String>) {
+    // Pre-parse verbosity flags (-v, -vv, --verbose)
+    val verbosity = countVerbosityFlags(args)
+    val filteredArgs = stripVerbosityFlags(args)
+
+    // Configure logging based on verbosity
+    configureLogging(verbosity)
+
     val parser = ArgParser("remote-crawler")
 
     // Global options
@@ -563,7 +572,68 @@ fun main(args: Array<String>) {
     val dryRunCommand = DryRunCommand()
 
     parser.subcommands(crawlCommand, statusCommand, onboardCommand, testCommand, dryRunCommand)
-    parser.parse(args)
+    parser.parse(filteredArgs)
+}
+
+/**
+ * Count verbosity flags in args.
+ * -v = 1, -vv = 2, -vvv = 3, etc.
+ * --verbose counts as 1
+ */
+private fun countVerbosityFlags(args: Array<String>): Int {
+    var count = 0
+    for (arg in args) {
+        when {
+            arg == "--verbose" -> count++
+            arg.startsWith("-") && !arg.startsWith("--") && arg.all { it == '-' || it == 'v' } -> {
+                // Count 'v' characters in flags like -v, -vv, -vvv
+                count += arg.count { it == 'v' }
+            }
+        }
+    }
+    return count
+}
+
+/**
+ * Strip verbosity flags from args so the parser doesn't complain about unknown options.
+ */
+private fun stripVerbosityFlags(args: Array<String>): Array<String> {
+    return args.filter { arg ->
+        when {
+            arg == "--verbose" -> false
+            arg.startsWith("-") && !arg.startsWith("--") && arg.all { it == '-' || it == 'v' } -> false
+            else -> true
+        }
+    }.toTypedArray()
+}
+
+/**
+ * Configure logging level based on verbosity.
+ * 0 = INFO (default)
+ * 1 = DEBUG for com.oconeco packages
+ * 2+ = TRACE for com.oconeco packages
+ */
+private fun configureLogging(verbosity: Int) {
+    if (verbosity <= 0) return
+
+    val level = if (verbosity >= 2) Level.TRACE else Level.DEBUG
+
+    // Configure the package logger and all relevant child loggers
+    val loggerNames = listOf(
+        "com.oconeco",
+        "com.oconeco.remotecrawler",
+        "com.oconeco.remotecrawler.client",
+        "com.oconeco.remotecrawler.crawler",
+        "com.oconeco.remotecrawler.discovery",
+        "RemoteCrawler"
+    )
+
+    for (loggerName in loggerNames) {
+        val logger = LoggerFactory.getLogger(loggerName) as? Logger
+        logger?.setLevel(level)
+    }
+
+    log.debug("Verbosity level {} - logging set to {}", verbosity, level)
 }
 
 private fun getHostName(): String {
