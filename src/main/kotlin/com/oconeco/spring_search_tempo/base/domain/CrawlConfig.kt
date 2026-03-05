@@ -13,13 +13,9 @@ class CrawlConfig : SaveableObject() {
 
     @Column(
         nullable = false,
-        unique = true,
         columnDefinition = "text"
     )
     var name: String? = null
-
-    @Column(columnDefinition = "text")
-    var displayLabel: String? = null
 
     @Column(nullable = false)
     var enabled: Boolean = true

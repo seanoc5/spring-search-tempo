@@ -128,6 +128,31 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
     fun updateReadStatus(@Param("id") id: Long, @Param("isRead") isRead: Boolean)
 
     /**
+     * Direct update for body enrichment - avoids SELECT+UPDATE pattern.
+     * PERFORMANCE: Single UPDATE statement vs findById + save (2 statements).
+     */
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE EmailMessage e SET
+            e.bodyText = :bodyText,
+            e.bodySize = :bodySize,
+            e.hasAttachments = :hasAttachments,
+            e.attachmentCount = :attachmentCount,
+            e.attachmentNames = :attachmentNames,
+            e.fetchStatus = com.oconeco.spring_search_tempo.base.domain.FetchStatus.COMPLETE
+        WHERE e.id = :id
+    """)
+    fun updateBodyDirect(
+        @Param("id") id: Long,
+        @Param("bodyText") bodyText: String?,
+        @Param("bodySize") bodySize: Long?,
+        @Param("hasAttachments") hasAttachments: Boolean,
+        @Param("attachmentCount") attachmentCount: Int,
+        @Param("attachmentNames") attachmentNames: String?
+    )
+
+    /**
      * Find message with tags eagerly loaded.
      */
     @Query("SELECT e FROM EmailMessage e LEFT JOIN FETCH e.tags WHERE e.id = :id")

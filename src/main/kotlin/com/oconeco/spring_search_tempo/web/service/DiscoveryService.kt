@@ -1,18 +1,27 @@
 package com.oconeco.spring_search_tempo.web.service
 
 import com.oconeco.spring_search_tempo.base.domain.*
+import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoveredFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Paths
+import java.time.OffsetDateTime
 
 @Service
 class DiscoveryService(
     private val sessionRepository: DiscoverySessionRepository,
-    private val folderRepository: DiscoveredFolderRepository
+    private val folderRepository: DiscoveredFolderRepository,
+    private val crawlConfigRepository: CrawlConfigRepository,
+    private val crawlConfigService: DatabaseCrawlConfigService,
+    private val crawlConfigConverter: CrawlConfigConverter
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -207,6 +216,132 @@ class DiscoveryService(
             .map { toSummaryDTO(it) }
     }
 
+    /**
+     * Find crawl configs that are candidates for updates for a discovered host.
+     */
+    fun getCrawlConfigCandidates(host: String): List<CrawlConfigCandidateDTO> {
+        val normalized = host.trim()
+        return crawlConfigService.findAll(null, Pageable.unpaged()).content
+            .filter { cfg ->
+                cfg.sourceHost?.trim()?.equals(normalized, ignoreCase = true) == true
+            }
+            .sortedBy { (it.label ?: it.name ?: "").lowercase() }
+            .map {
+                CrawlConfigCandidateDTO(
+                    id = it.id!!,
+                    name = it.name ?: "UNNAMED",
+                    displayLabel = it.label ?: it.name ?: "Unnamed Crawl",
+                    sourceHost = it.sourceHost
+                )
+            }
+    }
+
+    /**
+     * Apply classified discovery folders to create or update a crawl config.
+     */
+    @Transactional
+    fun applyToCrawlConfig(sessionId: Long, request: ApplyDiscoveryRequest): ApplyDiscoveryResult {
+        val session = sessionRepository.findByIdWithFolders(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+
+        val roots = session.rootPaths
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+
+        val statusToPaths = mutableMapOf<AnalysisStatus, MutableList<String>>()
+        session.folders.forEach { folder ->
+            val effective = effectiveStatus(folder) ?: return@forEach
+            val rawPath = folder.path?.trim()?.takeIf { it.isNotBlank() } ?: return@forEach
+            statusToPaths.computeIfAbsent(effective) { mutableListOf() }.add(rawPath)
+        }
+
+        val skipPatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.SKIP].orEmpty())
+        val locatePatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.LOCATE].orEmpty())
+        val indexPatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.INDEX].orEmpty())
+        val analyzePatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.ANALYZE].orEmpty())
+
+        val targetConfigId: Long
+        val action: ApplyDiscoveryAction
+
+        when (request.mode) {
+            ApplyDiscoveryMode.UPDATE -> {
+                val existingId = request.crawlConfigId
+                    ?: throw IllegalArgumentException("crawlConfigId is required for UPDATE mode")
+
+                val dto = crawlConfigService.get(existingId)
+                val existingHost = dto.sourceHost?.trim()
+                val sessionHost = session.host?.trim()
+                if (!existingHost.isNullOrBlank() &&
+                    !sessionHost.isNullOrBlank() &&
+                    !existingHost.equals(sessionHost, ignoreCase = true)
+                ) {
+                    throw IllegalArgumentException(
+                        "Config host mismatch: config host '$existingHost' does not match discovery host '$sessionHost'"
+                    )
+                }
+                dto.sourceHost = session.host
+                dto.startPaths = roots
+                dto.folderPatternsSkip = crawlConfigConverter.toJsonArray(skipPatterns)
+                dto.folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
+                dto.folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
+                dto.folderPatternsAnalyze = crawlConfigConverter.toJsonArray(analyzePatterns)
+                dto.enabled = request.enableConfig
+                dto.description = discoveryBackfilledDescription(dto.description, session)
+                crawlConfigService.update(existingId, dto)
+                targetConfigId = existingId
+                action = ApplyDiscoveryAction.UPDATED
+            }
+            ApplyDiscoveryMode.CREATE -> {
+                val dto = CrawlConfigDTO().apply {
+                    name = normalizedConfigName(request.newConfigName, session)
+                    label = normalizedDisplayLabel(request.newDisplayLabel, session)
+                    description = "Discovery-applied config for host ${session.host} (session ${session.id})"
+                    status = Status.NEW
+                    analysisStatus = AnalysisStatus.LOCATE
+                    version = 0L
+                    enabled = request.enableConfig
+                    sourceHost = session.host
+                    startPaths = roots
+                    maxDepth = 20
+                    followLinks = false
+                    parallel = true
+                    folderPatternsSkip = crawlConfigConverter.toJsonArray(skipPatterns)
+                    folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
+                    folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
+                    folderPatternsAnalyze = crawlConfigConverter.toJsonArray(analyzePatterns)
+                }
+
+                if (crawlConfigService.nameExists(dto.name!!, sourceHost = dto.sourceHost)) {
+                    throw IllegalArgumentException(
+                        "Crawl config name already exists for host '${dto.sourceHost}': ${dto.name}"
+                    )
+                }
+
+                targetConfigId = crawlConfigService.create(dto)
+                action = ApplyDiscoveryAction.CREATED
+            }
+        }
+
+        session.crawlConfig = crawlConfigRepository.findById(targetConfigId).orElse(null)
+        session.status = DiscoveryStatus.APPLIED
+        session.appliedAt = OffsetDateTime.now()
+        sessionRepository.save(session)
+
+        return ApplyDiscoveryResult(
+            sessionId = sessionId,
+            crawlConfigId = targetConfigId,
+            action = action,
+            host = session.host ?: "",
+            roots = roots,
+            skipPatterns = skipPatterns.size,
+            locatePatterns = locatePatterns.size,
+            indexPatterns = indexPatterns.size,
+            analyzePatterns = analyzePatterns.size
+        )
+    }
+
     private fun updateSessionCounts(sessionId: Long) {
         val session = sessionRepository.findById(sessionId).orElse(null) ?: return
 
@@ -262,6 +397,71 @@ class DiscoveryService(
             classifiedFolders = session.classifiedFolders,
             dateCreated = session.dateCreated?.toString() ?: ""
         )
+    }
+
+    private fun effectiveStatus(folder: DiscoveredFolder): AnalysisStatus? {
+        return folder.assignedStatus ?: when (folder.suggestedStatus) {
+            SuggestedStatus.SKIP -> AnalysisStatus.SKIP
+            SuggestedStatus.LOCATE -> AnalysisStatus.LOCATE
+            SuggestedStatus.INDEX -> AnalysisStatus.INDEX
+            else -> null
+        }
+    }
+
+    private fun buildFolderPatterns(rawPaths: List<String>): List<String> {
+        if (rawPaths.isEmpty()) return emptyList()
+
+        val compressed = compressPaths(rawPaths.map { canonicalPath(it) })
+        return compressed.map { canonical ->
+            if (canonical == "/") {
+                "^[\\\\/].*$"
+            } else {
+                val escaped = Regex.escape(canonical).replace("/", "[\\\\\\\\/]")
+                "^$escaped([\\\\\\\\/].*)?$"
+            }
+        }
+    }
+
+    private fun compressPaths(paths: List<String>): List<String> {
+        val sorted = paths.distinct().sortedWith(compareBy<String> { it.length }.thenBy { it })
+        val selected = mutableListOf<String>()
+        sorted.forEach { candidate ->
+            if (selected.none { isAncestor(it, candidate) }) {
+                selected.add(candidate)
+            }
+        }
+        return selected
+    }
+
+    private fun isAncestor(ancestor: String, child: String): Boolean {
+        if (ancestor == "/") return true
+        if (ancestor == child) return true
+        if (!child.startsWith(ancestor)) return false
+        val next = child.getOrNull(ancestor.length) ?: return false
+        return next == '/'
+    }
+
+    private fun canonicalPath(path: String): String {
+        val normalized = path.trim().replace('\\', '/')
+        if (normalized == "/") return "/"
+        return normalized.trimEnd('/').ifBlank { "/" }
+    }
+
+    private fun normalizedConfigName(input: String?, session: DiscoverySession): String {
+        val candidate = input?.trim()?.takeIf { it.isNotBlank() }
+            ?: "DISCOVERY_${session.host}_${session.id}"
+        return candidate.uppercase().replace(Regex("[^A-Z0-9_]+"), "_")
+    }
+
+    private fun normalizedDisplayLabel(input: String?, session: DiscoverySession): String {
+        return input?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Discovery ${session.host} (${session.id})"
+    }
+
+    private fun discoveryBackfilledDescription(existing: String?, session: DiscoverySession): String {
+        val prefix = existing?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Discovery-applied config"
+        return "$prefix | host=${session.host}, session=${session.id}"
     }
 }
 
@@ -340,6 +540,43 @@ data class DiscoverySessionSummaryDTO(
     val totalFolders: Int,
     val classifiedFolders: Int,
     val dateCreated: String
+)
+
+enum class ApplyDiscoveryMode {
+    CREATE,
+    UPDATE
+}
+
+enum class ApplyDiscoveryAction {
+    CREATED,
+    UPDATED
+}
+
+data class ApplyDiscoveryRequest(
+    val mode: ApplyDiscoveryMode,
+    val crawlConfigId: Long? = null,
+    val newConfigName: String? = null,
+    val newDisplayLabel: String? = null,
+    val enableConfig: Boolean = true
+)
+
+data class ApplyDiscoveryResult(
+    val sessionId: Long,
+    val crawlConfigId: Long,
+    val action: ApplyDiscoveryAction,
+    val host: String,
+    val roots: List<String>,
+    val skipPatterns: Int,
+    val locatePatterns: Int,
+    val indexPatterns: Int,
+    val analyzePatterns: Int
+)
+
+data class CrawlConfigCandidateDTO(
+    val id: Long,
+    val name: String,
+    val displayLabel: String,
+    val sourceHost: String?
 )
 
 data class ApplySuggestionsResponse(

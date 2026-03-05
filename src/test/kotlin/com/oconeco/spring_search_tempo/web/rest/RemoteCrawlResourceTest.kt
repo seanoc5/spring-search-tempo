@@ -185,9 +185,8 @@ class RemoteCrawlResourceTest : BaseIT() {
     private fun createRemoteTestCrawlConfig(): Long {
         val suffix = System.currentTimeMillis()
         return crawlConfigService.create(CrawlConfigDTO().apply {
-            uri = "crawl-config:remote-it-$suffix"
             name = "REMOTE_IT_$suffix"
-            displayLabel = "Remote IT $suffix"
+            label = "Remote IT $suffix"
             description = "Integration test crawl config"
             enabled = true
             startPaths = listOf("/data")

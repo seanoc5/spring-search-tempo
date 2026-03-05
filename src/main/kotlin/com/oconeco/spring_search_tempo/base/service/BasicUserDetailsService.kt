@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.model.BasicUserDetails
 import com.oconeco.spring_search_tempo.base.repos.SpringUserRepository
+import com.oconeco.spring_search_tempo.base.repos.UserSourceHostRepository
 import com.oconeco.spring_search_tempo.base.util.UserRoles
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -14,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class BasicUserDetailsService(
-    private val springUserRepository: SpringUserRepository
+    private val springUserRepository: SpringUserRepository,
+    private val userSourceHostRepository: UserSourceHostRepository
 ) : UserDetailsService {
 
     @Transactional(readOnly = true)
@@ -46,7 +48,12 @@ class BasicUserDetailsService(
             authorities.add(SimpleGrantedAuthority(UserRoles.USER))
         }
 
-        return BasicUserDetails(springUser.id, username, springUser.password, authorities)
+        // Load owned sourceHosts for visibility filtering
+        val sourceHosts = springUser.id?.let {
+            userSourceHostRepository.findSourceHostsByUserId(it)
+        } ?: emptyList()
+
+        return BasicUserDetails(springUser.id, username, springUser.password, authorities, sourceHosts)
     }
 
 

@@ -268,7 +268,124 @@ const ToastManager = {
   }
 };
 
+/* ==========================================================================
+   Global Loading Overlay
+   ========================================================================== */
+
+const GlobalLoadingOverlay = {
+  SHOW_DELAY_MS: 0,
+  MIN_VISIBLE_MS: 250,
+  fetchInFlightCount: 0,
+  htmxInFlight: new Set(),
+  showTimer: null,
+  shownAt: 0,
+  fetchPatched: false,
+
+  init() {
+    this.bindHtmx();
+    this.patchFetch();
+  },
+
+  bindHtmx() {
+    if (!window.htmx || !document.body) return;
+
+    document.body.addEventListener('htmx:beforeRequest', (evt) => this.htmxRequestStarted(evt));
+    document.body.addEventListener('htmx:afterRequest', (evt) => this.htmxRequestFinished(evt));
+    document.body.addEventListener('htmx:sendError', (evt) => this.htmxRequestFinished(evt));
+    document.body.addEventListener('htmx:timeout', (evt) => this.htmxRequestFinished(evt));
+    document.body.addEventListener('htmx:responseError', (evt) => this.htmxRequestFinished(evt));
+  },
+
+  patchFetch() {
+    if (this.fetchPatched || typeof window.fetch !== 'function') return;
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (...args) => {
+      this.fetchInFlightCount += 1;
+      this.updateVisibility();
+      try {
+        return originalFetch(...args).finally(() => {
+          this.fetchInFlightCount = Math.max(0, this.fetchInFlightCount - 1);
+          this.updateVisibility();
+        });
+      } catch (err) {
+        this.fetchInFlightCount = Math.max(0, this.fetchInFlightCount - 1);
+        this.updateVisibility();
+        throw err;
+      }
+    };
+
+    this.fetchPatched = true;
+  },
+
+  htmxRequestStarted(evt) {
+    const key = evt?.detail?.xhr;
+    if (!key) return;
+    this.htmxInFlight.add(key);
+    this.updateVisibility();
+  },
+
+  htmxRequestFinished(evt) {
+    const key = evt?.detail?.xhr;
+    if (!key) return;
+    this.htmxInFlight.delete(key);
+    this.updateVisibility();
+  },
+
+  totalInFlightCount() {
+    return this.fetchInFlightCount + this.htmxInFlight.size;
+  },
+
+  updateVisibility() {
+    const inFlightCount = this.totalInFlightCount();
+
+    if (inFlightCount > 0) {
+      if (!this.showTimer && !this.getOverlay()?.classList.contains('is-visible')) {
+        this.showTimer = setTimeout(() => {
+          this.showTimer = null;
+          if (this.totalInFlightCount() > 0) {
+            this.showNow();
+          }
+        }, this.SHOW_DELAY_MS);
+      }
+      return;
+    }
+
+    if (this.showTimer) {
+      clearTimeout(this.showTimer);
+      this.showTimer = null;
+    }
+
+    const overlay = this.getOverlay();
+    if (!overlay || !overlay.classList.contains('is-visible')) return;
+
+    const visibleForMs = Date.now() - this.shownAt;
+    const remainingMs = Math.max(0, this.MIN_VISIBLE_MS - visibleForMs);
+    window.setTimeout(() => this.hideNow(), remainingMs);
+  },
+
+  showNow() {
+    const overlay = this.getOverlay();
+    if (!overlay) return;
+    overlay.classList.add('is-visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    this.shownAt = Date.now();
+  },
+
+  hideNow() {
+    const overlay = this.getOverlay();
+    if (!overlay || this.totalInFlightCount() > 0) return;
+    overlay.classList.remove('is-visible');
+    overlay.setAttribute('aria-hidden', 'true');
+  },
+
+  getOverlay() {
+    return document.getElementById('globalLoadingOverlay');
+  }
+};
+
 // Initialize toast manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
   ToastManager.init();
+  GlobalLoadingOverlay.init();
 });

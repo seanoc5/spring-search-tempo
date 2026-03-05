@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
@@ -53,7 +54,8 @@ class CrawlConfigController(
     private val configConverter: CrawlConfigConverter,
     private val cleanupService: CrawlDataCleanupService,
     private val objectMapper: ObjectMapper,
-    private val crawlConfigValidationService: CrawlConfigValidationService
+    private val crawlConfigValidationService: CrawlConfigValidationService,
+    private val userOwnershipService: UserOwnershipService
 ) {
 
     @ModelAttribute("currentHostName")
@@ -65,10 +67,19 @@ class CrawlConfigController(
     @GetMapping
     fun list(
         @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
         @SortDefault(sort = ["id"]) @PageableDefault(size = 20) pageable: Pageable,
         model: Model
     ): String {
-        val crawlConfigs = crawlConfigService.findAll(filter, pageable)
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+        val crawlConfigs = if (showAll && isAdmin) {
+            crawlConfigService.findAll(filter, pageable)
+        } else {
+            crawlConfigService.findAllForCurrentUser(filter, pageable)
+        }
+
+        model.addAttribute("showAll", showAll)
+        model.addAttribute("isAdmin", isAdmin)
         val groupedBySourceHost = TreeMap<String, List<CrawlConfigDTO>>(String.CASE_INSENSITIVE_ORDER).apply {
             putAll(
                 crawlConfigs.content.groupBy { config ->
@@ -137,7 +148,7 @@ class CrawlConfigController(
             os.name to buildPresetBundle(os).size
         }
         val presetPreviewByOs = WizardOs.entries.associate { os ->
-            os.name to buildPresetBundle(os).map { "${it.name} - ${it.displayLabel}" }
+            os.name to buildPresetBundle(os).map { "${it.name} - ${it.label}" }
         }
 
         model.addAttribute("osOptions", WizardOs.entries.map { WizardOsOption(it.name, it.displayName) })
@@ -157,8 +168,12 @@ class CrawlConfigController(
         @RequestParam(name = "parallel", defaultValue = "true") parallel: Boolean,
         redirectAttributes: RedirectAttributes
     ): String {
+        val osType = runCatching { WizardOs.valueOf(os.uppercase()) }.getOrElse {
+            redirectAttributes.addFlashAttribute("error", "Invalid OS selection")
+            return "redirect:/crawlConfigs/wizard"
+        }
+
         return try {
-            val osType = WizardOs.valueOf(os.uppercase())
             val presets = buildPresetBundle(osType)
             if (presets.isEmpty()) {
                 redirectAttributes.addFlashAttribute("error", "No presets available for ${osType.displayName}")
@@ -171,15 +186,14 @@ class CrawlConfigController(
 
             for (preset in presets) {
                 val normalizedName = preset.name.trim().uppercase()
-                if (crawlConfigService.nameExists(normalizedName)) {
+                if (crawlConfigService.nameExists(normalizedName, sourceHost = resolvedSourceHost)) {
                     skipped.add(normalizedName)
                     continue
                 }
 
                 val dto = CrawlConfigDTO().apply {
-                    uri = "crawl-config:${normalizedName.lowercase().replace(Regex("[^a-z0-9]+"), "-")}"
                     this.name = normalizedName
-                    this.displayLabel = preset.displayLabel
+                    this.label = preset.label
                     this.description = preset.description
                     this.enabled = enableCreated && preset.enabledByDefault
                     this.startPaths = preset.startPaths
@@ -199,12 +213,12 @@ class CrawlConfigController(
                 }
 
                 val id = crawlConfigService.create(dto)
-                created.add(id to (dto.displayLabel ?: normalizedName))
+                created.add(id to (dto.label ?: normalizedName))
             }
 
             if (created.isEmpty()) {
                 val reason = if (skipped.isNotEmpty()) {
-                    "All ${presets.size} preset names already exist. Rename existing configs or remove duplicates."
+                    "All ${presets.size} preset names already exist for host '$resolvedSourceHost'. Rename existing configs or remove duplicates."
                 } else {
                     "No preset configs were created."
                 }
@@ -227,9 +241,6 @@ class CrawlConfigController(
                 return "redirect:/crawlConfigs/${created.first().first}/edit"
             }
             "redirect:/crawlConfigs"
-        } catch (_: IllegalArgumentException) {
-            redirectAttributes.addFlashAttribute("error", "Invalid OS selection")
-            "redirect:/crawlConfigs/wizard"
         } catch (e: Exception) {
             redirectAttributes.addFlashAttribute("error", "Failed to create preset config: ${e.message}")
             "redirect:/crawlConfigs/wizard"
@@ -269,11 +280,6 @@ class CrawlConfigController(
         crawlConfigDTO.filePatternsIndex = textToJson(filePatternsIndexText)
         crawlConfigDTO.filePatternsAnalyze = textToJson(filePatternsAnalyzeText)
 
-        // Generate URI from name if not provided
-        if (crawlConfigDTO.uri.isNullOrBlank()) {
-            crawlConfigDTO.uri = "crawl-config:${crawlConfigDTO.name?.lowercase()?.replace(Regex("[^a-z0-9]+"), "-") ?: "unnamed"}"
-        }
-
         if (bindingResult.hasErrors()) {
             model.addAttribute("startPathsText", startPathsText)
             model.addAttribute("folderPatternsSkipText", folderPatternsSkipText)
@@ -290,7 +296,7 @@ class CrawlConfigController(
         try {
             val newId = crawlConfigService.create(crawlConfigDTO)
             redirectAttributes.addFlashAttribute("message",
-                "Configuration created: ${crawlConfigDTO.displayLabel ?: crawlConfigDTO.name}")
+                "Configuration created: ${crawlConfigDTO.label ?: crawlConfigDTO.name}")
             return "redirect:/crawlConfigs/$newId"
         } catch (e: Exception) {
             redirectAttributes.addFlashAttribute("error",
@@ -497,7 +503,7 @@ class CrawlConfigController(
         try {
             crawlConfigService.update(id, crawlConfigDTO)
             redirectAttributes.addFlashAttribute("message",
-                "Configuration updated: ${crawlConfigDTO.displayLabel ?: crawlConfigDTO.name}")
+                "Configuration updated: ${crawlConfigDTO.label ?: crawlConfigDTO.name}")
         } catch (e: Exception) {
             redirectAttributes.addFlashAttribute("error",
                 "Failed to update configuration: ${e.message}")
@@ -547,7 +553,7 @@ class CrawlConfigController(
             val optionsText = if (options.isNotEmpty()) " (${options.joinToString(", ")})" else ""
 
             redirectAttributes.addFlashAttribute("message",
-                "Crawl job started for configuration: ${crawlConfig.displayLabel ?: crawlConfig.name}$optionsText")
+                "Crawl job started for configuration: ${crawlConfig.label ?: crawlConfig.name}$optionsText")
         } catch (e: Exception) {
             redirectAttributes.addFlashAttribute("error",
                 "Failed to start crawl: ${e.message}")
@@ -634,9 +640,9 @@ class CrawlConfigController(
                 model.addAttribute("label", "Name")
                 "crawlConfig/fragments/inlineEdit :: textEdit"
             }
-            "displayLabel" -> {
-                model.addAttribute("value", config.displayLabel)
-                model.addAttribute("label", "Display Label")
+            "label" -> {
+                model.addAttribute("value", config.label)
+                model.addAttribute("label", "Label")
                 "crawlConfig/fragments/inlineEdit :: textEdit"
             }
             "maxDepth" -> {
@@ -733,9 +739,9 @@ class CrawlConfigController(
                 model.addAttribute("label", "Name")
                 "crawlConfig/fragments/inlineEdit :: textDisplay"
             }
-            "displayLabel" -> {
-                model.addAttribute("value", config.displayLabel)
-                model.addAttribute("label", "Display Label")
+            "label" -> {
+                model.addAttribute("value", config.label)
+                model.addAttribute("label", "Label")
                 "crawlConfig/fragments/inlineEdit :: textDisplay"
             }
             "maxDepth" -> {
@@ -839,7 +845,7 @@ class CrawlConfigController(
         @PathVariable(name = "field") field: String,
         @RequestParam(required = false) value: String?,
         @RequestParam(required = false) name: String?,
-        @RequestParam(required = false) displayLabel: String?,
+        @RequestParam(required = false) label: String?,
         @RequestParam(required = false) maxDepth: Int?,
         @RequestParam(required = false) freshnessHours: Int?,
         @RequestParam(required = false) sourceHost: String?,
@@ -859,7 +865,7 @@ class CrawlConfigController(
         // Update the field based on which one was submitted
         when (field) {
             "name" -> config.name = name?.trim()?.takeIf { it.isNotBlank() }
-            "displayLabel" -> config.displayLabel = displayLabel?.trim()?.takeIf { it.isNotBlank() }
+            "label" -> config.label = label?.trim()?.takeIf { it.isNotBlank() }
             "maxDepth" -> config.maxDepth = maxDepth
             "freshnessHours" -> config.freshnessHours = freshnessHours
             "sourceHost" -> config.sourceHost = sourceHost?.trim()?.takeIf { it.isNotBlank() }
@@ -901,11 +907,11 @@ class CrawlConfigController(
         val summary = cleanupService.deleteAllDataForCrawlConfig(id)
 
         if (summary.isEmpty) {
-            redirectAttributes.addFlashAttribute("message", "No data to delete for '${crawlConfig.displayLabel ?: crawlConfig.name}'")
+            redirectAttributes.addFlashAttribute("message", "No data to delete for '${crawlConfig.label ?: crawlConfig.name}'")
         } else {
             redirectAttributes.addFlashAttribute(
                 "message",
-                "Deleted ${summary.filesDeleted} files, ${summary.foldersDeleted} folders, and ${summary.chunksDeleted} chunks for '${crawlConfig.displayLabel ?: crawlConfig.name}'"
+                "Deleted ${summary.filesDeleted} files, ${summary.foldersDeleted} folders, and ${summary.chunksDeleted} chunks for '${crawlConfig.label ?: crawlConfig.name}'"
             )
         }
         return "redirect:/crawlConfigs/$id"
@@ -970,7 +976,7 @@ class CrawlConfigController(
             try {
                 val crawlConfig = crawlConfigService.get(id)
                 if (!crawlConfig.enabled) {
-                    errors.add("${crawlConfig.displayLabel ?: crawlConfig.name} (disabled)")
+                    errors.add("${crawlConfig.label ?: crawlConfig.name} (disabled)")
                     continue
                 }
 
@@ -989,7 +995,7 @@ class CrawlConfigController(
                     .toJobParameters()
 
                 jobLauncher.run(job, jobParams)
-                started.add(crawlConfig.displayLabel ?: crawlConfig.name ?: "Config #$id")
+                started.add(crawlConfig.label ?: crawlConfig.name ?: "Config #$id")
             } catch (e: Exception) {
                 errors.add("Config #$id: ${e.message}")
             }
@@ -1036,7 +1042,7 @@ class CrawlConfigController(
                 val crawlConfig = crawlConfigService.get(id)
                 if (crawlConfig.enabled != enable) {
                     crawlConfigService.toggleEnabled(id)
-                    updated.add(crawlConfig.displayLabel ?: crawlConfig.name ?: "Config #$id")
+                    updated.add(crawlConfig.label ?: crawlConfig.name ?: "Config #$id")
                 }
             } catch (e: Exception) {
                 // Skip configs that don't exist
@@ -1095,7 +1101,7 @@ class CrawlConfigController(
         return listOf(
             WizardPresetConfig(
                 name = "${prefix}_USER_DOCS",
-                displayLabel = "User Docs",
+                label = "User Docs",
                 description = "Primary user documents: index + NLP for text-heavy content.",
                 startPaths = listOf(docsPath),
                 maxDepth = 12,
@@ -1108,7 +1114,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_USER_PICTURES",
-                displayLabel = "User Pictures",
+                label = "User Pictures",
                 description = "Image library for fast locate/search by metadata.",
                 startPaths = listOf(picturesPath),
                 maxDepth = 10,
@@ -1119,7 +1125,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_USER_VIDEOS",
-                displayLabel = "User Videos",
+                label = "User Videos",
                 description = "Video/media library for locate metadata coverage.",
                 startPaths = listOf(videosPath),
                 maxDepth = 10,
@@ -1130,7 +1136,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_USER_DESKTOP",
-                displayLabel = "User Desktop",
+                label = "User Desktop",
                 description = "Desktop workspace with practical index + analyze defaults.",
                 startPaths = listOf(desktopPath),
                 maxDepth = 8,
@@ -1143,7 +1149,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_WORK",
-                displayLabel = "Work Projects",
+                label = "Work Projects",
                 description = "Project/work trees with source/config indexing and NLP for docs.",
                 startPaths = defaultWorkPathsForOs(os, userHome),
                 maxDepth = 20,
@@ -1156,7 +1162,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_USER_CONF",
-                displayLabel = "User Config",
+                label = "User Config",
                 description = "User-level application and shell configuration paths.",
                 startPaths = defaultUserConfigPathsForOs(os, userHome),
                 maxDepth = 10,
@@ -1167,7 +1173,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_OS_CONF",
-                displayLabel = "OS Config",
+                label = "OS Config",
                 description = "System configuration files with sensitive paths excluded.",
                 startPaths = defaultOsConfigPathsForOs(os),
                 maxDepth = 8,
@@ -1179,7 +1185,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_OS_LOGS",
-                displayLabel = "OS Logs",
+                label = "OS Logs",
                 description = "System/application logs for keyword search (index only, no NLP).",
                 startPaths = defaultOsLogPathsForOs(os),
                 maxDepth = 10,
@@ -1191,7 +1197,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_OS_BIN_INFO",
-                displayLabel = "OS Bin + Man",
+                label = "OS Bin + Man",
                 description = "Executables and manuals: locate all, index text manuals/scripts.",
                 startPaths = defaultOsBinInfoPathsForOs(os),
                 maxDepth = 8,
@@ -1202,7 +1208,7 @@ class CrawlConfigController(
             ),
             WizardPresetConfig(
                 name = "${prefix}_OS_ALL",
-                displayLabel = "OS All (Locate)",
+                label = "OS All (Locate)",
                 description = "Full-system locate coverage with aggressive skips for pseudo-fs, caches, and build trees.",
                 startPaths = listOf(rootStartPathForOs(os)),
                 maxDepth = 24,
@@ -1492,7 +1498,7 @@ class CrawlConfigController(
 
     private data class WizardPresetConfig(
         val name: String,
-        val displayLabel: String,
+        val label: String,
         val description: String,
         val startPaths: List<String>,
         val maxDepth: Int,

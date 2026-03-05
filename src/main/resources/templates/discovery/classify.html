@@ -3,7 +3,7 @@
       xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
       layout:decorate="~{layout}">
 <head>
-    <title th:text="|Classify - ${session.host}|">Classify Folders</title>
+    <title th:text="|Classify - ${discoverySession.host}|">Classify Folders</title>
     <style>
         .folder-tree {
             font-family: monospace;
@@ -63,9 +63,9 @@
                 </h2>
                 <p class="text-muted mb-0">
                     <i class="bi bi-pc-display me-1"></i>
-                    <span th:text="${session.host}">hostname</span>
+                    <span th:text="${discoverySession.host}">hostname</span>
                     <span class="mx-2">|</span>
-                    <span th:text="${session.totalFolders}">0</span> folders discovered
+                    <span th:text="${discoverySession.totalFolders}">0</span> folders discovered
                 </p>
             </div>
             <div>
@@ -75,6 +75,8 @@
                 </a>
             </div>
         </div>
+        <div th:if="${message}" class="alert alert-success py-2 small" role="alert" th:text="${message}"></div>
+        <div th:if="${error}" class="alert alert-danger py-2 small" role="alert" th:text="${error}"></div>
 
         <div class="row">
             <!-- Folder Tree -->
@@ -98,7 +100,7 @@
                     </div>
                     <div class="card-body folder-tree" style="max-height: 70vh; overflow-y: auto;">
                         <div th:each="folder : ${rootFolders}">
-                            <th:block th:replace="~{discovery/classify :: folderNode(${folder}, ${foldersByParent}, 0, ${session.id})}"/>
+                            <th:block th:replace="~{discovery/classify :: folderNode(${folder}, ${foldersByParent}, 0, ${discoverySession.id})}"/>
                         </div>
                     </div>
                 </div>
@@ -109,10 +111,10 @@
                 <div class="stats-panel">
                     <!-- Status Counts -->
                     <div class="card mb-3" id="statusPanel"
-                         hx-get th:hx-get="@{/discovery/{id}/status(id=${session.id})}"
+                         hx-get th:hx-get="@{/discovery/{id}/status(id=${discoverySession.id})}"
                          hx-trigger="classificationChanged from:body"
                          hx-swap="innerHTML">
-                        <th:block th:replace="~{discovery/fragments :: statusPanel(${session})}"/>
+                        <th:block th:replace="~{discovery/fragments :: statusPanel(${discoverySession})}"/>
                     </div>
 
                     <!-- Quick Actions -->
@@ -125,7 +127,7 @@
                         </div>
                         <div class="card-body">
                             <button type="button" class="btn btn-outline-primary w-100 mb-2"
-                                    hx-post th:hx-post="@{/discovery/{id}/apply-suggestions(id=${session.id})}"
+                                    hx-post th:hx-post="@{/discovery/{id}/apply-suggestions(id=${discoverySession.id})}"
                                     hx-swap="none"
                                     hx-on::after-request="handleSuggestionsApplied(event)">
                                 <i class="bi bi-magic me-1"></i>
@@ -149,6 +151,65 @@
                                     INDEX
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Apply to Crawl Config -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="bi bi-box-arrow-in-down-right me-2"></i>
+                                Apply to Crawl Config
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <form th:action="@{/discovery/{id}/apply-crawl-config(id=${discoverySession.id})}" method="post">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                                <label for="applyMode" class="form-label small mb-1">Mode</label>
+                                <select id="applyMode" name="applyMode" class="form-select form-select-sm mb-2" onchange="toggleApplyMode()">
+                                    <option value="CREATE" selected>Create new config</option>
+                                    <option value="UPDATE">Update existing config</option>
+                                </select>
+
+                                <div id="updateConfigGroup" class="d-none">
+                                    <label for="crawlConfigId" class="form-label small mb-1">Existing config</label>
+                                    <select id="crawlConfigId" name="crawlConfigId" class="form-select form-select-sm mb-2">
+                                        <option value="">Select config...</option>
+                                        <option th:each="cfg : ${hostCrawlConfigs}"
+                                                th:value="${cfg.id}"
+                                                th:text="|${cfg.displayLabel} (${cfg.name})|">
+                                            Config
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div id="createConfigGroup">
+                                    <label for="newConfigName" class="form-label small mb-1">New config name</label>
+                                    <input id="newConfigName"
+                                           name="newConfigName"
+                                           class="form-control form-control-sm mb-2"
+                                           th:value="${defaultNewConfigName}">
+
+                                    <label for="newDisplayLabel" class="form-label small mb-1">Display label</label>
+                                    <input id="newDisplayLabel"
+                                           name="newDisplayLabel"
+                                           class="form-control form-control-sm mb-2"
+                                           th:value="${defaultNewDisplayLabel}">
+                                </div>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="enableConfig" name="enableConfig" checked>
+                                    <label class="form-check-label small" for="enableConfig">
+                                        Enable config after apply
+                                    </label>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="bi bi-check2-circle me-1"></i>
+                                    Apply Classifications
+                                </button>
+                            </form>
                         </div>
                     </div>
 
@@ -185,7 +246,7 @@
     </div>
 
     <script th:inline="javascript">
-        const sessionId = /*[[${session.id}]]*/ 0;
+        const sessionId = /*[[${discoverySession.id}]]*/ 0;
 
         function toggleFolder(element) {
             const children = element.closest('.folder-item').querySelector('.folder-children');
@@ -258,6 +319,22 @@
             });
         }
 
+        function toggleApplyMode() {
+            const mode = document.getElementById('applyMode')?.value || 'CREATE';
+            const updateGroup = document.getElementById('updateConfigGroup');
+            const createGroup = document.getElementById('createConfigGroup');
+
+            if (!updateGroup || !createGroup) return;
+
+            if (mode === 'UPDATE') {
+                updateGroup.classList.remove('d-none');
+                createGroup.classList.add('d-none');
+            } else {
+                updateGroup.classList.add('d-none');
+                createGroup.classList.remove('d-none');
+            }
+        }
+
         function handleSuggestionsApplied(event) {
             if (event.detail.successful) {
                 htmx.trigger(document.body, 'classificationChanged');
@@ -265,6 +342,8 @@
                 location.reload();
             }
         }
+
+        document.addEventListener('DOMContentLoaded', toggleApplyMode);
     </script>
 </main>
 

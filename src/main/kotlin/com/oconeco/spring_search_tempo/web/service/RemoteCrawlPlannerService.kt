@@ -21,13 +21,17 @@ class RemoteCrawlPlannerService(
         require(trimmedHost.isNotBlank()) { "host is required" }
 
         val defaults = runtimeCrawlConfigService.getDefaults()
-        val configs = databaseCrawlConfigService.findAllEnabled().map { config ->
+        val configs = databaseCrawlConfigService.findAllEnabled()
+            .filter { cfg ->
+                cfg.sourceHost.isNullOrBlank() || cfg.sourceHost.equals(trimmedHost, ignoreCase = true)
+            }
+            .map { config ->
             val definition = crawlConfigConverter.toDefinition(config)
             val effectivePatterns = runtimeCrawlConfigService.getEffectivePatterns(definition)
             RemoteCrawlConfigAssignment(
                 crawlConfigId = config.id!!,
                 name = config.name ?: "UNNAMED",
-                displayLabel = config.displayLabel ?: config.name ?: "Unnamed Crawl",
+                displayLabel = config.label ?: config.name ?: "Unnamed Crawl",
                 description = config.description,
                 sourceHost = config.sourceHost,
                 startPaths = definition.startPaths,

@@ -48,7 +48,7 @@ class EmailQuickSyncReader(
 
     private var store: Store? = null
     private var folder: IMAPFolder? = null
-    private var messages: List<Message>? = null
+    private var messageWrappers: List<ImapMessageWrapper>? = null  // Pre-built with UIDs
     private var currentIndex = 0
     private var initialized = false
     private var highestUid: Long = 0
@@ -81,31 +81,25 @@ class EmailQuickSyncReader(
             initialize()
         }
 
-        val msgs = messages ?: return null
-        if (currentIndex >= msgs.size) {
+        val wrappers = messageWrappers ?: return null
+        if (currentIndex >= wrappers.size) {
             return null
         }
 
-        val message = msgs[currentIndex++]
-        val uid = folder!!.getUID(message)
+        val wrapper = wrappers[currentIndex++]
 
         // Track highest UID for sync state update
-        if (uid > highestUid) {
-            highestUid = uid
+        if (wrapper.uid > highestUid) {
+            highestUid = wrapper.uid
         }
 
         // Log progress every 500 messages
         if (currentIndex % 500 == 0) {
             log.info("[{}] Processing progress: {}/{} messages read from {}",
-                account.email, currentIndex, msgs.size, folderName)
+                account.email, currentIndex, wrappers.size, folderName)
         }
 
-        return ImapMessageWrapper(
-            message = message,
-            uid = uid,
-            folderName = folderName,
-            accountId = account.id!!
-        )
+        return wrapper
     }
 
     /**
@@ -161,13 +155,15 @@ class EmailQuickSyncReader(
             }
 
             // Fetch messages with UID > lastUid
+            // PERFORMANCE: Always use getMessagesByUID() - this pre-caches UIDs and returns
+            // messages in UID order, avoiding N individual getUID() calls during sort/read.
             // UIDFolder.LASTUID means "highest UID in folder"
             var rawMessages: Array<Message> = if (lastUid == 0L) {
-                // Full sync: get all messages
+                // Full sync: get all messages via UID range (1 to LASTUID)
                 val isFirst = (folderDto.lastSyncUid ?: 0L) == 0L && !forceFullSync && !uidValidityChanged
-                log.info("{} for folder {}, fetching all messages",
+                log.info("{} for folder {}, fetching all messages by UID range",
                     if (isFirst) "First sync" else "Full resync", folderName)
-                folder!!.messages
+                folder!!.getMessagesByUID(1, UIDFolder.LASTUID)
             } else {
                 // Incremental sync: only new messages
                 log.info("Incremental sync for folder {} since UID {}", folderName, lastUid)
@@ -180,7 +176,7 @@ class EmailQuickSyncReader(
 
             if (rawMessages.isEmpty()) {
                 log.info("[{}] No messages to process in {}", account.email, folderName)
-                messages = emptyList()
+                messageWrappers = emptyList()
                 return
             }
 
@@ -250,12 +246,28 @@ class EmailQuickSyncReader(
             val newMessages = messageIdMap.filterKeys { it !in existingIds }.values.toMutableList()
             newMessages.addAll(messagesWithoutId)
 
-            // Sort by UID to process in order
-            messages = newMessages.sortedBy { folder!!.getUID(it) }
+            // PERFORMANCE: Build ImapMessageWrapper list with UIDs in batch.
+            // Since getMessagesByUID returns messages in UID order, no sorting needed.
+            // Batch the getUID calls to minimize IMAP round-trips.
+            log.info("[{}] Building message wrappers for {} messages...", account.email, newMessages.size)
+            val wrapperStartTime = System.currentTimeMillis()
+
+            messageWrappers = newMessages.map { msg ->
+                ImapMessageWrapper(
+                    message = msg,
+                    uid = folder!!.getUID(msg),  // UIDs are cached from getMessagesByUID
+                    folderName = folderName,
+                    accountId = account.id!!
+                )
+            }
+
+            val wrapperElapsed = System.currentTimeMillis() - wrapperStartTime
+            log.info("[{}] Built {} message wrappers in {} ms",
+                account.email, messageWrappers?.size ?: 0, wrapperElapsed)
 
             log.info(
                 "Found {} new messages to process in {} ({} duplicates skipped, sync mode: {}, last UID: {})",
-                messages?.size ?: 0,
+                messageWrappers?.size ?: 0,
                 folderName,
                 duplicatesSkipped,
                 if (lastUid == 0L) "FULL" else "INCREMENTAL",

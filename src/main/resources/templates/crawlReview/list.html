@@ -42,7 +42,7 @@
                                 <option value="" selected disabled>Select a configuration...</option>
                                 <option th:each="config : ${configs}"
                                         th:value="${config.id}"
-                                        th:text="${config.displayLabel ?: config.name}">
+                                        th:text="${config.label ?: config.name}">
                                 </option>
                             </select>
                         </div>
@@ -99,7 +99,7 @@ find /home/user/Documents -type d -not -path '*/.*' > folders.txt</code></pre>
                                 <option value="" selected disabled>Select a configuration...</option>
                                 <option th:each="config : ${configs}"
                                         th:value="${config.id}"
-                                        th:text="${config.displayLabel ?: config.name}">
+                                        th:text="${config.label ?: config.name}">
                                 </option>
                             </select>
                         </div>

@@ -1,8 +1,7 @@
 spring:
   batch:
     job:
-      enabled: true
-      name: fsCrawlJob
+      enabled: false  # Jobs should run from UI/API or scheduler, not on app startup
 
 app:
   crawl:

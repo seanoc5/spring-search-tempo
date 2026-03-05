@@ -12,7 +12,11 @@ plugins {
 }
 
 group = "com.oconeco"
-version = "0.1.9"
+version = "0.5.3"
+
+springBoot {
+    buildInfo()
+}
 
 kotlin {
     jvmToolchain {

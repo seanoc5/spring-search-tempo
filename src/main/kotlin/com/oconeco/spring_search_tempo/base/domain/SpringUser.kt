@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.domain
 
+import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EntityListeners
@@ -61,6 +62,9 @@ class SpringUser {
 
     @OneToMany(mappedBy = "springUser")
     var springRoles = mutableSetOf<SpringRole>()
+
+    @OneToMany(mappedBy = "springUser", cascade = [CascadeType.ALL], orphanRemoval = true)
+    var ownedSourceHosts: MutableSet<UserSourceHost> = mutableSetOf()
 
     @CreatedDate
     @Column(

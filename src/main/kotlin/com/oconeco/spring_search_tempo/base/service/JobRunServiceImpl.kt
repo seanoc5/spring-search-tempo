@@ -95,7 +95,7 @@ class JobRunServiceImpl(
         val jobRun = JobRun().apply {
             this.crawlConfig = crawlConfig
             this.jobName = jobName
-            this.label = crawlConfig.displayLabel
+            this.label = crawlConfig.label ?: crawlConfig.name
             this.startTime = now
             this.lastHeartbeatAt = now  // Initialize heartbeat at start
             this.runStatus = RunStatus.RUNNING

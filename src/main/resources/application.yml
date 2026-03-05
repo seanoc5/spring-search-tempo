@@ -63,8 +63,6 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
-
-
 error:
   handling:
     http-status-in-json-response: true
@@ -78,6 +76,7 @@ error:
       AnnotationLabelUnique: ANNOTATION_LABEL_UNIQUE
       SpringUserLabelUnique: SPRING_USER_LABEL_UNIQUE
       SpringRoleLabelUnique: SPRING_ROLE_LABEL_UNIQUE
+
 management:
   endpoints:
     web:
@@ -139,6 +138,14 @@ app:
     # Crawl configurations are now managed in the database.
     # Seed data: docs/sql/012-seed-crawl-configs.sql
     # Edit via UI: /crawlConfigs/{id}/edit
+
+  scheduling:
+    crawl:
+      enabled: false
+      cron: "0 0 1 * * *" # Every day at 01:00
+      zone: "America/New_York" # EDT/EST with DST handling
+      run-missed-on-startup: true
+      startup-grace-minutes: 5
 
   # Email crawling configuration
   email:

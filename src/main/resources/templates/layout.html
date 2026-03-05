@@ -94,6 +94,11 @@
                             <i class="bi bi-clipboard2-check"></i>
                             <span>Crawl Review</span>
                         </a>
+                        <a th:href="@{/discovery}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/discovery')} ? 'active' : ''">
+                            <i class="bi bi-binoculars"></i>
+                            <span>Discovery</span>
+                        </a>
                         <a th:href="@{/emailAccounts}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailAccounts')} ? 'active' : ''">
                             <i class="bi bi-envelope"></i>
@@ -255,6 +260,15 @@
 
         <!-- Toast Container (Growler) -->
         <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+        <!-- Global loading overlay for HTMX and remote JS requests -->
+        <div id="globalLoadingOverlay" class="global-loading-overlay" aria-hidden="true">
+            <div class="global-loading-panel" role="status" aria-live="polite">
+                <div class="spinner-border text-light global-loading-spinner" aria-hidden="true"></div>
+                <div class="global-loading-title">Working...</div>
+                <div class="global-loading-subtitle">Loading data from server</div>
+            </div>
+        </div>
 
         <!-- Toast History Toggle Button -->
         <button type="button" class="toast-history-toggle" onclick="ToastManager.toggleHistoryPanel()" title="Notification history">

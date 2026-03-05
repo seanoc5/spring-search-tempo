@@ -17,6 +17,13 @@ interface EmailMessageService {
 
     fun create(emailMessageDTO: EmailMessageDTO): Long
 
+    /**
+     * Bulk create email messages for improved performance during initial sync.
+     * Uses batch inserts instead of individual saves.
+     * @return list of created entity IDs
+     */
+    fun createBulk(dtos: List<EmailMessageDTO>): List<Long>
+
     fun update(id: Long, emailMessageDTO: EmailMessageDTO)
 
     fun delete(id: Long)

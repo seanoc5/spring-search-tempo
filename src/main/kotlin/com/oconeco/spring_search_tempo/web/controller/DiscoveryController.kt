@@ -2,12 +2,15 @@ package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryMode
+import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryRequest
 import com.oconeco.spring_search_tempo.web.service.ClassifyFolderRequest
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.web.servlet.mvc.support.RedirectAttributes
 import org.springframework.web.bind.annotation.*
 
 /**
@@ -45,17 +48,20 @@ class DiscoveryController(
         model: Model
     ): String {
         try {
-            val session = discoveryService.getSessionForClassification(sessionId)
+            val discoverySession = discoveryService.getSessionForClassification(sessionId)
 
             // Build tree structure for display (limit depth for performance)
-            val rootFolders = session.folders.filter { it.depth == 0 }
-            val foldersByParent = session.folders.groupBy { it.parentPath }
+            val rootFolders = discoverySession.folders.filter { it.depth == 0 }
+            val foldersByParent = discoverySession.folders.groupBy { it.parentPath }
 
-            model.addAttribute("session", session)
+            model.addAttribute("discoverySession", discoverySession)
             model.addAttribute("rootFolders", rootFolders)
             model.addAttribute("foldersByParent", foldersByParent)
             model.addAttribute("maxDepth", maxDepth)
             model.addAttribute("analysisStatuses", AnalysisStatus.entries)
+            model.addAttribute("hostCrawlConfigs", discoveryService.getCrawlConfigCandidates(discoverySession.host))
+            model.addAttribute("defaultNewConfigName", "DISCOVERY_${discoverySession.host}_${discoverySession.id}")
+            model.addAttribute("defaultNewDisplayLabel", "Discovery ${discoverySession.host} (${discoverySession.id})")
 
             return "discovery/classify"
         } catch (e: NotFoundException) {
@@ -150,5 +156,47 @@ class DiscoveryController(
         val status = discoveryService.getStatus(sessionId)
         model.addAttribute("status", status)
         return "discovery/fragments :: statusPanel"
+    }
+
+    /**
+     * Apply classified discovery folder statuses to a crawl config.
+     */
+    @PostMapping("/{sessionId}/apply-crawl-config")
+    fun applyToCrawlConfig(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "applyMode", defaultValue = "CREATE") applyMode: String,
+        @RequestParam(name = "crawlConfigId", required = false) crawlConfigId: Long?,
+        @RequestParam(name = "newConfigName", required = false) newConfigName: String?,
+        @RequestParam(name = "newDisplayLabel", required = false) newDisplayLabel: String?,
+        @RequestParam(name = "enableConfig", required = false, defaultValue = "false") enableConfig: Boolean,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val mode = runCatching { ApplyDiscoveryMode.valueOf(applyMode.uppercase()) }
+                .getOrDefault(ApplyDiscoveryMode.CREATE)
+
+            val result = discoveryService.applyToCrawlConfig(
+                sessionId = sessionId,
+                request = ApplyDiscoveryRequest(
+                    mode = mode,
+                    crawlConfigId = crawlConfigId,
+                    newConfigName = newConfigName,
+                    newDisplayLabel = newDisplayLabel,
+                    enableConfig = enableConfig
+                )
+            )
+
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "${result.action.name.lowercase().replaceFirstChar { it.uppercase() }} crawl config ${result.crawlConfigId} " +
+                    "(patterns: skip=${result.skipPatterns}, locate=${result.locatePatterns}, " +
+                    "index=${result.indexPatterns}, analyze=${result.analyzePatterns})"
+            )
+            "redirect:/crawlConfigs/${result.crawlConfigId}/edit"
+        } catch (e: Exception) {
+            log.error("Failed to apply discovery session {} to crawl config", sessionId, e)
+            redirectAttributes.addFlashAttribute("error", "Apply failed: ${e.message}")
+            "redirect:/discovery/$sessionId/classify"
+        }
     }
 }

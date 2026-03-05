@@ -48,36 +48,55 @@ class EmailQuickSyncWriter(
     }
 
     override fun write(chunk: Chunk<out EmailMessageDTO>) {
+        // PERFORMANCE: Batch insert new items, individual update for existing
+        val newItems = mutableListOf<EmailMessageDTO>()
+        val updateItems = mutableListOf<EmailMessageDTO>()
+
         chunk.items.forEach { dto ->
+            // Set folder reference
+            dto.emailFolder = folderId
+
+            // Track highest UID for sync state update
+            dto.imapUid?.let { uid ->
+                if (uid > highestUid) highestUid = uid
+            }
+
+            if (dto.id == null) {
+                newItems.add(dto)
+            } else {
+                updateItems.add(dto)
+            }
+        }
+
+        // Bulk insert new items
+        if (newItems.isNotEmpty()) {
             try {
-                // Set folder reference
-                dto.emailFolder = folderId
-
-                // Check for duplicate URI (crash recovery / re-processing)
-                if (dto.id == null && dto.uri != null && emailMessageService.existsByUri(dto.uri!!)) {
-                    skippedCount++
-                    log.debug("Skipping duplicate URI: {}", dto.uri)
-                } else if (dto.id == null) {
-                    emailMessageService.create(dto)
-                    savedCount++
-                } else {
-                    emailMessageService.update(dto.id!!, dto)
-                    savedCount++
+                val ids = emailMessageService.createBulk(newItems)
+                savedCount += ids.size
+                log.debug("Bulk inserted {} emails", ids.size)
+            } catch (e: Exception) {
+                // Fallback to individual saves on bulk failure
+                log.warn("Bulk insert failed, falling back to individual saves: {}", e.message)
+                newItems.forEach { dto ->
+                    try {
+                        emailMessageService.create(dto)
+                        savedCount++
+                    } catch (ex: Exception) {
+                        errorCount++
+                        log.error("Error saving email {}: {}", dto.messageId ?: dto.uri, ex.message)
+                    }
                 }
+            }
+        }
 
-                // Track highest UID for sync state update
-                dto.imapUid?.let { uid ->
-                    if (uid > highestUid) highestUid = uid
-                }
-
+        // Individual updates for existing items (rare during initial sync)
+        updateItems.forEach { dto ->
+            try {
+                emailMessageService.update(dto.id!!, dto)
+                savedCount++
             } catch (e: Exception) {
                 errorCount++
-                log.error(
-                    "Error saving email message {}: {}",
-                    dto.messageId ?: dto.uri,
-                    e.message,
-                    e
-                )
+                log.error("Error updating email {}: {}", dto.messageId ?: dto.uri, e.message)
             }
         }
 
@@ -85,7 +104,7 @@ class EmailQuickSyncWriter(
         stepExecution.executionContext.putLong("emailsSaved", savedCount.toLong())
         stepExecution.executionContext.putLong("emailsError", errorCount.toLong())
 
-        if (savedCount % 50 == 0 && savedCount > 0) {
+        if (savedCount % 500 == 0 && savedCount > 0) {
             log.info("Saved {} emails for {}/{}", savedCount, accountId, folderName)
         }
     }

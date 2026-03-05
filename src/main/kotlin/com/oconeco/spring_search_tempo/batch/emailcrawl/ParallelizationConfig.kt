@@ -18,7 +18,7 @@ data class ParallelizationConfig(
     val stepThreads: Int = 1,
     val itemAsync: Boolean = false,
     val asyncThreads: Int = 4,
-    val chunkSize: Int = 20
+    val chunkSize: Int = 50  // PERFORMANCE: Increased for bulk load (was 20)
 ) {
     /**
      * True if any parallelization is enabled.

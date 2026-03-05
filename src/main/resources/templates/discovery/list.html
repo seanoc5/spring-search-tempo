@@ -45,41 +45,41 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr th:each="session : ${sessions}">
+                            <tr th:each="discoverySession : ${sessions}">
                                 <td>
                                     <i class="bi bi-pc-display me-1"></i>
-                                    <span th:text="${session.host}">hostname</span>
+                                    <span th:text="${discoverySession.host}">hostname</span>
                                 </td>
                                 <td>
-                                    <span th:if="${session.osType == 'WINDOWS'}" class="badge bg-info">
+                                    <span th:if="${discoverySession.osType == 'WINDOWS'}" class="badge bg-info">
                                         <i class="bi bi-windows me-1"></i>Windows
                                     </span>
-                                    <span th:if="${session.osType == 'LINUX'}" class="badge bg-warning text-dark">
+                                    <span th:if="${discoverySession.osType == 'LINUX'}" class="badge bg-warning text-dark">
                                         <i class="bi bi-ubuntu me-1"></i>Linux
                                     </span>
-                                    <span th:if="${session.osType == 'MACOS'}" class="badge bg-secondary">
+                                    <span th:if="${discoverySession.osType == 'MACOS'}" class="badge bg-secondary">
                                         <i class="bi bi-apple me-1"></i>macOS
                                     </span>
                                 </td>
-                                <td th:text="${session.totalFolders}">0</td>
+                                <td th:text="${discoverySession.totalFolders}">0</td>
                                 <td>
-                                    <span th:text="${session.classifiedFolders}">0</span>
-                                    <span class="text-muted">/ [[${session.totalFolders}]]</span>
+                                    <span th:text="${discoverySession.classifiedFolders}">0</span>
+                                    <span class="text-muted">/ [[${discoverySession.totalFolders}]]</span>
                                 </td>
                                 <td>
-                                    <span th:if="${session.status == 'PENDING'}" class="badge bg-warning text-dark">
+                                    <span th:if="${discoverySession.status == 'PENDING'}" class="badge bg-warning text-dark">
                                         Pending
                                     </span>
-                                    <span th:if="${session.status == 'CLASSIFYING'}" class="badge bg-info">
+                                    <span th:if="${discoverySession.status == 'CLASSIFYING'}" class="badge bg-info">
                                         Classifying
                                     </span>
-                                    <span th:if="${session.status == 'APPLIED'}" class="badge bg-success">
+                                    <span th:if="${discoverySession.status == 'APPLIED'}" class="badge bg-success">
                                         Applied
                                     </span>
                                 </td>
-                                <td th:text="${session.dateCreated}">2024-01-01</td>
+                                <td th:text="${discoverySession.dateCreated}">2024-01-01</td>
                                 <td class="text-end">
-                                    <a th:href="@{/discovery/{id}/classify(id=${session.id})}"
+                                    <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}"
                                        class="btn btn-primary btn-sm">
                                         <i class="bi bi-folder-check me-1"></i>
                                         Classify

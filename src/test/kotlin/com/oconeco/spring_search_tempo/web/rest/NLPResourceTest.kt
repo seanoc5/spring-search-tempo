@@ -46,7 +46,7 @@ class NLPResourceTest : BaseIT() {
             .`when`()
                 .post("/api/nlp/process")
             .then()
-                .statusCode(HttpStatus.OK.value())
+                .statusCode(HttpStatus.ACCEPTED.value())
                 .body("jobName", equalTo("nlpProcessingJob"))
                 .body("status", notNullValue())
                 .body("message", notNullValue())

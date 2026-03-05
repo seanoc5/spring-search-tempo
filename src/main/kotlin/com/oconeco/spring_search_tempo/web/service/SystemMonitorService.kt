@@ -9,6 +9,7 @@ import org.springframework.boot.actuate.health.CompositeHealth
 import org.springframework.boot.actuate.health.Health
 import org.springframework.boot.actuate.health.HealthEndpoint
 import org.springframework.boot.actuate.health.Status
+import org.springframework.boot.info.BuildProperties
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Service
 import java.io.File
@@ -24,6 +25,7 @@ class SystemMonitorService(
     private val dataSource: DataSource,
     private val healthEndpoint: HealthEndpoint,
     private val environment: Environment,
+    private val buildProperties: BuildProperties? = null,
     private val embeddingService: EmbeddingService? = null
 ) {
     companion object {
@@ -106,7 +108,9 @@ class SystemMonitorService(
 
         return AppInfoDTO(
             name = environment.getProperty("spring.application.name", "Spring Search Tempo"),
-            version = environment.getProperty("app.version", javaClass.`package`?.implementationVersion ?: "0.1.9"),
+            version = buildProperties?.version
+                ?: javaClass.`package`?.implementationVersion
+                ?: "unknown",
             profiles = environment.activeProfiles.toList(),
             uptime = uptime,
             startTime = startTime,

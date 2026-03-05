@@ -83,6 +83,10 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
      */
     fun findByRunStatus(runStatus: RunStatus): List<JobRun>
 
+    fun existsByJobNameAndRunStatus(jobName: String, runStatus: RunStatus): Boolean
+
+    fun existsByJobNameAndStartTimeGreaterThanEqual(jobName: String, startTime: OffsetDateTime): Boolean
+
     // Progress tracking methods
 
     /**

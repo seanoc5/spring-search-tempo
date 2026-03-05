@@ -30,6 +30,41 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Sync All Tuning</h6>
+        </div>
+        <div class="card-body">
+            <form th:action="@{/emailAccounts/syncAll}" method="post" class="row g-3 align-items-end">
+                <div class="col-sm-3">
+                    <label for="syncAllStepThreads" class="form-label">Step Threads</label>
+                    <input id="syncAllStepThreads" name="stepThreads" type="number" min="1" max="16" value="1" class="form-control">
+                </div>
+                <div class="col-sm-3">
+                    <label for="syncAllAsyncThreads" class="form-label">Async Threads</label>
+                    <input id="syncAllAsyncThreads" name="asyncThreads" type="number" min="1" max="32" value="4" class="form-control">
+                </div>
+                <div class="col-sm-3">
+                    <label for="syncAllChunkSize" class="form-label">Body Chunk Size</label>
+                    <input id="syncAllChunkSize" name="chunkSize" type="number" min="10" max="500" value="50" class="form-control">
+                </div>
+                <div class="col-sm-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="syncAllItemAsync" name="itemAsync" value="true">
+                        <label class="form-check-label" for="syncAllItemAsync">Async Items</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="syncAllForceFull" name="forceFullSync" value="true">
+                        <label class="form-check-label" for="syncAllForceFull">Force Full Sync</label>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="bi bi-lightning-charge me-1"></i>Run Tuned Sync All
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div th:if="${emailAccounts.empty}" class="alert alert-info">
         No email accounts configured. <a th:href="@{/emailAccounts/add}">Add one now</a>.
     </div>

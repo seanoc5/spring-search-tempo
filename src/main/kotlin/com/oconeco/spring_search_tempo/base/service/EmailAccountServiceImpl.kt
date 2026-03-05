@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
+import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.domain.EmailAccount
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.model.EmailAccountSummaryDTO
@@ -26,7 +27,8 @@ class EmailAccountServiceImpl(
     private val emailFolderRepository: EmailFolderRepository,
     private val emailMessageRepository: EmailMessageRepository,
     private val contentChunkRepository: ContentChunkRepository,
-    private val jobRunRepository: JobRunRepository
+    private val jobRunRepository: JobRunRepository,
+    private val userOwnershipService: UserOwnershipService
 ) : EmailAccountService {
 
     companion object {
@@ -189,6 +191,38 @@ class EmailAccountServiceImpl(
                     currentStepName = job.currentStepName
                 }
             }
+        }
+    }
+
+    override fun findAllForCurrentUser(): List<EmailAccountDTO> {
+        val userId = userOwnershipService.getCurrentUserId() ?: return emptyList()
+        val accounts = emailAccountRepository.findByOwnerId(userId)
+        return accounts.map { account ->
+            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
+        }
+    }
+
+    override fun findEnabledForCurrentUser(): List<EmailAccountDTO> {
+        val userId = userOwnershipService.getCurrentUserId() ?: return emptyList()
+        val accounts = emailAccountRepository.findByOwnerIdAndEnabledTrue(userId)
+        return accounts.map { account ->
+            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
+        }
+    }
+
+    override fun findAllWithSummaryForCurrentUser(): List<EmailAccountSummaryDTO> {
+        val userId = userOwnershipService.getCurrentUserId() ?: return emptyList()
+        val accounts = emailAccountRepository.findByOwnerId(userId)
+
+        // Batch load all active email sync jobs
+        val activeJobs = jobRunRepository.findAllActiveEmailSyncJobs()
+            .associateBy { job ->
+                // Extract account ID from job name: emailQuickSyncJob-{accountId}
+                job.jobName?.removePrefix("emailQuickSyncJob-")?.toLongOrNull()
+            }
+
+        return accounts.map { account ->
+            buildSummaryDTO(account, activeJobs[account.id])
         }
     }
 

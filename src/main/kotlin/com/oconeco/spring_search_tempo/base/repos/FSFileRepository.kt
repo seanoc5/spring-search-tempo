@@ -151,6 +151,28 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun countByAnalysisStatus(analysisStatus: AnalysisStatus): Long
 
     /**
+     * Count files grouped by processing status.
+     * Returns rows of [status, count].
+     */
+    @Query("""
+        SELECT f.status, COUNT(f)
+        FROM FSFile f
+        GROUP BY f.status
+    """)
+    fun countGroupedByStatus(): List<Array<Any?>>
+
+    /**
+     * Count files grouped by analysis status.
+     * Returns rows of [analysisStatus, count].
+     */
+    @Query("""
+        SELECT f.analysisStatus, COUNT(f)
+        FROM FSFile f
+        GROUP BY f.analysisStatus
+    """)
+    fun countGroupedByAnalysisStatus(): List<Array<Any?>>
+
+    /**
      * Get file counts grouped by crawl config.
      * Returns pairs of [crawlConfigId, count].
      */

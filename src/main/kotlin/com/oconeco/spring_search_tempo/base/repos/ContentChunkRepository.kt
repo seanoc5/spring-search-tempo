@@ -233,6 +233,34 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun countByStatus(status: String?): Long
 
     /**
+     * Count chunks grouped by processing status.
+     * Returns rows of [status, count].
+     */
+    @Query("""
+        SELECT c.status, COUNT(c)
+        FROM ContentChunk c
+        GROUP BY c.status
+    """)
+    fun countGroupedByStatus(): List<Array<Any?>>
+
+    /**
+     * Aggregate dashboard chunk counters in one round trip.
+     * Returns [totalCount, nlpProcessedCount, embeddedCount, nlpPendingCount].
+     */
+    @Query(
+        value = """
+            SELECT
+                COUNT(*) AS total_count,
+                COUNT(*) FILTER (WHERE c.nlp_processed_at IS NOT NULL) AS nlp_processed_count,
+                COUNT(*) FILTER (WHERE c.embedding IS NOT NULL) AS embedded_count,
+                COUNT(*) FILTER (WHERE c.nlp_processed_at IS NULL AND c.text IS NOT NULL) AS nlp_pending_count
+            FROM content_chunks c
+        """,
+        nativeQuery = true
+    )
+    fun countDashboardAggregates(): Array<Any?>
+
+    /**
      * Count chunks with vector embedding (embedding column is not null).
      * Used for EMBED analysis level.
      */

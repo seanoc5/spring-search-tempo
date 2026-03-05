@@ -61,7 +61,7 @@
                 <nav aria-label="breadcrumb" class="flex-grow-1">
                     <ol class="breadcrumb mb-0 small">
                         <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configs</a></li>
-                        <li class="breadcrumb-item active">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</li>
+                        <li class="breadcrumb-item active">[[${crawlConfig.label ?: crawlConfig.name}]]</li>
                     </ol>
                 </nav>
                 <form th:action="@{/crawlConfigs/{id}/run(id=${crawlConfig.id})}" method="post" class="d-inline" id="crawlForm">
@@ -120,7 +120,7 @@
                             <!-- Label -->
                             <div class="d-flex align-items-baseline mb-1">
                                 <span class="text-muted inline-label">Label:</span>
-                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: textDisplay(id=${crawlConfig.id}, field='displayLabel', value=${crawlConfig.displayLabel}, label='Label')}"/>
+                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: textDisplay(id=${crawlConfig.id}, field='label', value=${crawlConfig.label}, label='Label')}"/>
                             </div>
                             <!-- Status + Parallel -->
                             <div class="d-flex align-items-baseline mb-1">

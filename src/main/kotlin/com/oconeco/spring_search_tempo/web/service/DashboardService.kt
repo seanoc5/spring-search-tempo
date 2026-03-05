@@ -1,6 +1,5 @@
 package com.oconeco.spring_search_tempo.web.service
 
-import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
@@ -22,7 +21,6 @@ import org.springframework.util.StopWatch
 class DashboardService(
     private val fileService: FSFileService,
     private val folderService: FSFolderService,
-    private val chunkService: ContentChunkService,
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val fileRepository: FSFileRepository,
     private val folderRepository: FSFolderRepository,
@@ -46,11 +44,12 @@ class DashboardService(
         // Overall counts
         stats.totalFiles = timed("file.count") { fileService.count() }
         stats.totalFolders = timed("folder.count") { folderService.count() }
-        stats.totalChunks = timed("chunk.count") { chunkService.count() }
         stats.totalConfigs = timed("config.count") { crawlConfigService.count() }
 
         // File counts by status (processing state)
-        val fileStatusCounts = timed("file.countByStatus") { fileService.countByStatus() }
+        val fileStatusCounts = timed("file.countByStatus") {
+            toCountMap(fileRepository.countGroupedByStatus())
+        }
         stats.filesStatusNew = fileStatusCounts["NEW"] ?: 0
         stats.filesStatusInProgress = fileStatusCounts["IN_PROGRESS"] ?: 0
         stats.filesStatusDirty = fileStatusCounts["DIRTY"] ?: 0
@@ -58,7 +57,9 @@ class DashboardService(
         stats.filesStatusFailed = fileStatusCounts["FAILED"] ?: 0
 
         // File counts by analysis status (processing level)
-        val fileAnalysisCounts = timed("file.countByAnalysis") { fileService.countByAnalysisStatus() }
+        val fileAnalysisCounts = timed("file.countByAnalysis") {
+            toCountMap(fileRepository.countGroupedByAnalysisStatus())
+        }
         stats.filesSkip = fileAnalysisCounts["SKIP"] ?: 0
         stats.filesLocate = fileAnalysisCounts["LOCATE"] ?: 0
         stats.filesIndex = fileAnalysisCounts["INDEX"] ?: 0
@@ -66,7 +67,9 @@ class DashboardService(
         stats.filesSemantic = fileAnalysisCounts["SEMANTIC"] ?: 0
 
         // Folder counts by status (processing state)
-        val folderStatusCounts = timed("folder.countByStatus") { folderService.countByStatus() }
+        val folderStatusCounts = timed("folder.countByStatus") {
+            toCountMap(folderRepository.countGroupedByStatus())
+        }
         stats.foldersStatusNew = folderStatusCounts["NEW"] ?: 0
         stats.foldersStatusInProgress = folderStatusCounts["IN_PROGRESS"] ?: 0
         stats.foldersStatusDirty = folderStatusCounts["DIRTY"] ?: 0
@@ -74,7 +77,9 @@ class DashboardService(
         stats.foldersStatusFailed = folderStatusCounts["FAILED"] ?: 0
 
         // Folder counts by analysis status (processing level)
-        val folderAnalysisCounts = timed("folder.countByAnalysis") { folderService.countByAnalysisStatus() }
+        val folderAnalysisCounts = timed("folder.countByAnalysis") {
+            toCountMap(folderRepository.countGroupedByAnalysisStatus())
+        }
         stats.foldersSkip = folderAnalysisCounts["SKIP"] ?: 0
         stats.foldersLocate = folderAnalysisCounts["LOCATE"] ?: 0
         stats.foldersIndex = folderAnalysisCounts["INDEX"] ?: 0
@@ -82,22 +87,28 @@ class DashboardService(
         stats.foldersSemantic = folderAnalysisCounts["SEMANTIC"] ?: 0
 
         // Chunk counts by status (processing state)
-        val chunkStatusCounts = timed("chunk.countByStatus") { chunkService.countByStatus() }
+        val chunkStatusCounts = timed("chunk.countByStatus") {
+            toCountMap(chunkRepository.countGroupedByStatus())
+        }
         stats.chunksStatusNew = chunkStatusCounts["NEW"] ?: 0
         stats.chunksStatusInProgress = chunkStatusCounts["IN_PROGRESS"] ?: 0
         stats.chunksStatusDirty = chunkStatusCounts["DIRTY"] ?: 0
         stats.chunksStatusCurrent = chunkStatusCounts["CURRENT"] ?: 0
         stats.chunksStatusFailed = chunkStatusCounts["FAILED"] ?: 0
 
-        // Chunk counts by analysis level
-        val chunkLevelCounts = timed("chunk.countByLevel") { chunkService.countByAnalysisLevel() }
-        stats.chunksLevelIndex = chunkLevelCounts["INDEX"] ?: 0
-        stats.chunksLevelNlp = chunkLevelCounts["NLP"] ?: 0
-        stats.chunksLevelEmbed = chunkLevelCounts["EMBED"] ?: 0
+        // Chunk dashboard counts in one aggregate query.
+        val chunkCounts = timed("chunk.counts") { chunkRepository.countDashboardAggregates() }
+        val totalChunks = toLong(chunkCounts.getOrNull(0))
+        val nlpProcessedCount = toLong(chunkCounts.getOrNull(1))
+        val embeddedCount = toLong(chunkCounts.getOrNull(2))
+        val nlpPendingCount = toLong(chunkCounts.getOrNull(3))
 
-        // Chunk NLP processing counts (legacy, for NLP progress bar)
-        stats.chunksNlpComplete = timed("chunk.nlpComplete") { chunkService.countNlpProcessed() }
-        stats.chunksNlpPending = timed("chunk.nlpPending") { chunkService.countNlpPending() }
+        stats.totalChunks = totalChunks
+        stats.chunksLevelIndex = (totalChunks - nlpProcessedCount).coerceAtLeast(0)
+        stats.chunksLevelNlp = (nlpProcessedCount - embeddedCount).coerceAtLeast(0)
+        stats.chunksLevelEmbed = embeddedCount
+        stats.chunksNlpComplete = nlpProcessedCount
+        stats.chunksNlpPending = nlpPendingCount
 
         // File facets by crawl config (top 20)
         val fileFacets = timed("file.facets") { fileService.countByCrawlConfigFacets() }
@@ -208,5 +219,12 @@ class DashboardService(
             is Number -> value.toLong()
             else -> value.toString().toLongOrNull() ?: 0
         }
+    }
+
+    private fun toCountMap(rows: List<Array<Any?>>): Map<String, Long> {
+        return rows.mapNotNull { row ->
+            val key = row.getOrNull(0)?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            key to toLong(row.getOrNull(1))
+        }.toMap()
     }
 }

@@ -144,9 +144,7 @@
         <button class="btn btn-outline-secondary btn-sm"
                 hx-get="/dashboard/stats"
                 hx-target="#stats-content"
-                hx-swap="innerHTML"
-                hx-indicator="#refresh-spinner">
-            <span id="refresh-spinner" class="htmx-indicator spinner-border spinner-border-sm me-1"></span>
+                hx-swap="innerHTML">
             <i class="bi bi-arrow-clockwise me-1"></i>Refresh Stats
         </button>
     </div>
@@ -589,21 +587,21 @@
                             <div class="col-6">
                                 <dl class="mb-0 small">
                                     <dt>Application:</dt>
-                                    <dd>[[#{app.title}]]</dd>
+                                    <dd th:text="${systemInfo.applicationName}">Spring Search Tempo</dd>
                                     <dt>Version:</dt>
-                                    <dd>0.0.1-SNAPSHOT</dd>
+                                    <dd th:text="${systemInfo.applicationVersion}">unknown</dd>
                                     <dt>Spring Boot:</dt>
-                                    <dd>3.5.x</dd>
+                                    <dd th:text="${systemInfo.springBootVersion}">unknown</dd>
                                 </dl>
                             </div>
                             <div class="col-6">
                                 <dl class="mb-0 small">
                                     <dt>Database:</dt>
-                                    <dd>PostgreSQL</dd>
+                                    <dd th:text="${systemInfo.databaseName}">Unavailable</dd>
                                     <dt>Text Extraction:</dt>
-                                    <dd>Apache Tika 2.9.1</dd>
+                                    <dd th:text="${systemInfo.textExtraction}">Apache Tika unknown</dd>
                                     <dt>Status:</dt>
-                                    <dd><span class="badge bg-success">Running</span></dd>
+                                    <dd><span class="badge" th:classappend="${systemInfo.statusBadgeClass}" th:text="${systemInfo.statusLabel}">Running</span></dd>
                                 </dl>
                             </div>
                         </div>

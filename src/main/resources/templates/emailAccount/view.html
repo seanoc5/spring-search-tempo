@@ -165,6 +165,39 @@
                     </button>
                 </form>
             </div>
+
+            <hr class="my-4">
+
+            <h6 class="mb-3"><i class="bi bi-sliders me-2"></i>Sync Tuning</h6>
+            <form th:action="@{/emailAccounts/{id}/sync(id=${emailAccount.id})}" method="post" class="row g-3">
+                <div class="col-12">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="forceFullSync" name="forceFullSync" value="true">
+                        <label class="form-check-label" for="forceFullSync">Force Full Sync</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="itemAsync" name="itemAsync" value="true">
+                        <label class="form-check-label" for="itemAsync">Enable Async Item Processing</label>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <label for="stepThreads" class="form-label">Step Threads</label>
+                    <input id="stepThreads" name="stepThreads" type="number" min="1" max="16" value="1" class="form-control">
+                </div>
+                <div class="col-sm-4">
+                    <label for="asyncThreads" class="form-label">Async Threads</label>
+                    <input id="asyncThreads" name="asyncThreads" type="number" min="1" max="32" value="4" class="form-control">
+                </div>
+                <div class="col-sm-4">
+                    <label for="chunkSize" class="form-label">Body Chunk Size</label>
+                    <input id="chunkSize" name="chunkSize" type="number" min="10" max="500" value="50" class="form-control">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-outline-primary" th:disabled="${!emailAccount.enabled}">
+                        <i class="bi bi-lightning-charge me-1"></i>Run Tuned Sync
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

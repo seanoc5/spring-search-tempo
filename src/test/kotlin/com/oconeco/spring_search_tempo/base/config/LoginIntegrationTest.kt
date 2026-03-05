@@ -5,6 +5,7 @@ import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import io.restassured.response.Response
 import org.hamcrest.Matchers.containsString
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpStatus
@@ -26,6 +27,11 @@ import org.springframework.http.HttpStatus
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class LoginIntegrationTest : BaseIT() {
+
+    data class SessionCookie(
+        val name: String,
+        val value: String
+    )
 
     @Test
     fun `unauthenticated request to protected resource redirects to login`() {
@@ -58,12 +64,12 @@ class LoginIntegrationTest : BaseIT() {
     fun `form login with valid credentials succeeds`() {
         val loginPage = getLoginPage()
         val csrfToken = extractCsrfToken(loginPage)
-        val sessionId = loginPage.sessionId
+        val sessionCookie = extractSessionCookie(loginPage)
 
         RestAssured
             .given()
                 .auth().none()  // Form login doesn't use basic auth
-                .sessionId(sessionId)
+                .cookie(sessionCookie.name, sessionCookie.value)
                 .contentType(ContentType.URLENC)
                 .formParam("username", LOGIN)
                 .formParam("password", PASSWORD)
@@ -80,12 +86,12 @@ class LoginIntegrationTest : BaseIT() {
     fun `form login with invalid credentials fails`() {
         val loginPage = getLoginPage()
         val csrfToken = extractCsrfToken(loginPage)
-        val sessionId = loginPage.sessionId
+        val sessionCookie = extractSessionCookie(loginPage)
 
         RestAssured
             .given()
                 .auth().none()  // Form login doesn't use basic auth
-                .sessionId(sessionId)
+                .cookie(sessionCookie.name, sessionCookie.value)
                 .contentType(ContentType.URLENC)
                 .formParam("username", LOGIN)
                 .formParam("password", "wrongpassword")
@@ -114,12 +120,12 @@ class LoginIntegrationTest : BaseIT() {
     fun `login with remember-me sets cookie`() {
         val loginPage = getLoginPage()
         val csrfToken = extractCsrfToken(loginPage)
-        val sessionId = loginPage.sessionId
+        val sessionCookie = extractSessionCookie(loginPage)
 
-        RestAssured
+        val response = RestAssured
             .given()
                 .auth().none()  // Form login doesn't use basic auth
-                .sessionId(sessionId)
+                .cookie(sessionCookie.name, sessionCookie.value)
                 .contentType(ContentType.URLENC)
                 .formParam("username", LOGIN)
                 .formParam("password", PASSWORD)
@@ -128,20 +134,29 @@ class LoginIntegrationTest : BaseIT() {
                 .redirects().follow(false)
             .`when`()
                 .post("/login")
+
+        response
             .then()
-                .statusCode(HttpStatus.FOUND.value())
-                .cookie("remember-me")
+            .statusCode(HttpStatus.FOUND.value())
+
+        val hasRememberMeCookie = response.cookies.keys.any {
+            it == "remember-me" || it.startsWith("tempo-remember-me-")
+        }
+        assertTrue(
+            hasRememberMeCookie,
+            "Expected remember-me cookie (remember-me or tempo-remember-me-*) to be set"
+        )
     }
 
     @Test
     fun `logout invalidates session and redirects to login`() {
-        val sessionId = performLogin()
+        val sessionCookie = performLogin()
 
         // Get CSRF token from a protected page (using session-based auth)
         val homePage = RestAssured
             .given()
                 .auth().none()  // Use session-based auth, not basic auth
-                .sessionId(sessionId)
+                .cookie(sessionCookie.name, sessionCookie.value)
                 .accept(ContentType.HTML)
                 .redirects().follow(false)
             .`when`()
@@ -156,7 +171,7 @@ class LoginIntegrationTest : BaseIT() {
             RestAssured
                 .given()
                     .auth().none()
-                    .sessionId(sessionId)
+                    .cookie(sessionCookie.name, sessionCookie.value)
                     .formParam("_csrf", csrfToken)
                     .redirects().follow(false)
                 .`when`()
@@ -169,7 +184,7 @@ class LoginIntegrationTest : BaseIT() {
             RestAssured
                 .given()
                     .auth().none()
-                    .sessionId(sessionId)
+                    .cookie(sessionCookie.name, sessionCookie.value)
                     .accept(ContentType.HTML)
                     .redirects().follow(false)
                 .`when`()
@@ -236,15 +251,15 @@ class LoginIntegrationTest : BaseIT() {
     /**
      * Helper to perform login and return the session ID.
      */
-    private fun performLogin(): String {
+    private fun performLogin(): SessionCookie {
         val loginPage = getLoginPage()
         val csrfToken = extractCsrfToken(loginPage)
-        val sessionId = loginPage.sessionId
+        val sessionCookie = extractSessionCookie(loginPage)
 
         RestAssured
             .given()
                 .auth().none()
-                .sessionId(sessionId)
+                .cookie(sessionCookie.name, sessionCookie.value)
                 .contentType(ContentType.URLENC)
                 .formParam("username", LOGIN)
                 .formParam("password", PASSWORD)
@@ -252,6 +267,18 @@ class LoginIntegrationTest : BaseIT() {
             .`when`()
                 .post("/login")
 
-        return sessionId
+        return sessionCookie
+    }
+
+    private fun extractSessionCookie(response: Response): SessionCookie {
+        val sessionEntry = response.cookies.entries.firstOrNull { (name, value) ->
+            value.isNotBlank() && (
+                name == "SESSION" ||
+                    name == "JSESSIONID" ||
+                    name.startsWith("tempo-session-")
+                )
+        } ?: throw IllegalStateException("Session cookie not found in response")
+
+        return SessionCookie(sessionEntry.key, sessionEntry.value)
     }
 }

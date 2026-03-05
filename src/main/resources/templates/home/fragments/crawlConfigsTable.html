@@ -126,7 +126,7 @@
                                     </td>
                                     <td class="text-truncate" style="max-width: 160px;">
                                         <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
-                                           th:text="${config.displayLabel ?: config.name}"
+                                           th:text="${config.label ?: config.name}"
                                            th:title="${config.name}"
                                            class="text-decoration-none fw-semibold">Config</a>
                                         <div th:if="${config.startPaths != null && !config.startPaths.empty}"

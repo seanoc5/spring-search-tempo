@@ -8,7 +8,6 @@ class CrawlConfigDTO {
 
     var id: Long? = null
 
-    @NotNull
     var uri: String? = null
 
     var status: Status? = Status.NEW
@@ -25,7 +24,6 @@ class CrawlConfigDTO {
 
     var size: Long? = null
 
-    @NotNull
     var version: Long? = null
 
     var archived: Boolean? = null
@@ -36,8 +34,6 @@ class CrawlConfigDTO {
 
     @NotNull
     var name: String? = null
-
-    var displayLabel: String? = null
 
     var enabled: Boolean = true
 

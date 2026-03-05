@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 
 <!-- Status Panel Fragment -->
-<th:block th:fragment="statusPanel(session)">
+<th:block th:fragment="statusPanel(discoverySession)">
     <div class="card-header bg-light">
         <h6 class="mb-0">
             <i class="bi bi-bar-chart me-2"></i>
@@ -13,11 +13,11 @@
         <div class="mb-3">
             <div class="d-flex justify-content-between small mb-1">
                 <span>Progress</span>
-                <span th:text="|${session.classifiedFolders} / ${session.totalFolders}|">0 / 0</span>
+                <span th:text="|${discoverySession.classifiedFolders} / ${discoverySession.totalFolders}|">0 / 0</span>
             </div>
             <div class="progress" style="height: 8px;">
                 <div class="progress-bar bg-success" role="progressbar"
-                     th:style="|width: ${session.totalFolders > 0 ? (session.classifiedFolders * 100 / session.totalFolders) : 0}%|">
+                     th:style="|width: ${discoverySession.totalFolders > 0 ? (discoverySession.classifiedFolders * 100 / discoverySession.totalFolders) : 0}%|">
                 </div>
             </div>
         </div>
@@ -25,19 +25,19 @@
         <table class="table table-sm mb-0">
             <tr>
                 <td><span class="badge status-skip">SKIP</span></td>
-                <td class="text-end" th:text="${session.skipCount}">0</td>
+                <td class="text-end" th:text="${discoverySession.skipCount}">0</td>
             </tr>
             <tr>
                 <td><span class="badge status-locate">LOCATE</span></td>
-                <td class="text-end" th:text="${session.locateCount}">0</td>
+                <td class="text-end" th:text="${discoverySession.locateCount}">0</td>
             </tr>
             <tr>
                 <td><span class="badge status-index">INDEX</span></td>
-                <td class="text-end" th:text="${session.indexCount}">0</td>
+                <td class="text-end" th:text="${discoverySession.indexCount}">0</td>
             </tr>
-            <tr th:if="${session.analyzeCount != null && session.analyzeCount > 0}">
+            <tr th:if="${discoverySession.analyzeCount != null && discoverySession.analyzeCount > 0}">
                 <td><span class="badge status-analyze">ANALYZE</span></td>
-                <td class="text-end" th:text="${session.analyzeCount}">0</td>
+                <td class="text-end" th:text="${discoverySession.analyzeCount}">0</td>
             </tr>
         </table>
     </div>

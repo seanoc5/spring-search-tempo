@@ -9,7 +9,7 @@
             <nav aria-label="breadcrumb" class="mb-3">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
-                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}">[[${crawlConfig.displayLabel ?: crawlConfig.name}]]</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}">[[${crawlConfig.label ?: crawlConfig.name}]]</a></li>
                     <li class="breadcrumb-item active">Edit</li>
                 </ol>
             </nav>
@@ -46,8 +46,8 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="displayLabel" class="form-label">Display Label</label>
-                                    <input type="text" class="form-control" id="displayLabel" th:field="*{displayLabel}" />
+                                    <label for="label" class="form-label">Label</label>
+                                    <input type="text" class="form-control" id="label" th:field="*{label}" />
                                     <small class="text-muted">User-friendly name shown in UI</small>
                                 </div>
 

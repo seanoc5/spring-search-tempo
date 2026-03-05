@@ -40,11 +40,34 @@ Only use `th:attr` for attributes without dedicated processors or for grouped as
 - Avoid deep chained lookups without checks.
 - Use `th:with` for repeated computed values in a block.
 
-## 5) Common Parse-Error Triage
+## 5) Reserved Variable Names (Important)
+
+Thymeleaf web context reserves these names:
+
+- `session`
+- `param`
+- `request`
+- `response`
+- `application`
+- `servletContext`
+
+Do not use them as:
+
+- `th:each` variable names
+- `th:with` variable names
+- fragment parameter names
+- Spring MVC model attribute keys (`model.addAttribute("session", ...)`, etc.)
+
+Typical failure:
+
+- `Cannot set variable called 'session' into web variables map: such name is a reserved word`
+
+## 6) Common Parse-Error Triage
 
 If you see:
 
 - `Could not parse as assignation sequence`
+- `Cannot set variable called 'session' ... reserved word`
 
 Check first:
 
@@ -52,11 +75,13 @@ Check first:
 2. Missing commas between `th:attr` assignments?
 3. Broken quote or pipe-literal in `|...|` strings?
 4. Unbalanced parentheses in `${...}`?
+5. Any reserved variable names (`session`, `param`, etc.) used locally?
 
-## 6) Fast Validation Loop
+## 7) Fast Validation Loop
 
 1. Run targeted web tests:
    - `./gradlew test --tests com.oconeco.spring_search_tempo.web.controller.DashboardIntegrationTest`
 2. Reload affected page and watch server logs for template parse errors.
 3. Search for risky patterns:
    - `rg -n 'th:attr="[^"]*hx-on::' src/main/resources/templates`
+   - `rg -n 'th:each="session\\s*:|th:with="session\\s*=|addAttribute\\("session"' src/main`

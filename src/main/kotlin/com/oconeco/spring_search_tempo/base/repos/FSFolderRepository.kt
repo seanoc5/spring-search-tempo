@@ -259,44 +259,44 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      */
     @Query(
         value = """
+            WITH parents AS (
+                SELECT
+                    p.id AS folder_id,
+                    CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END AS prefix,
+                    LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) AS prefix_len
+                FROM fsfolder p
+                WHERE p.id IN (:folderIds)
+            )
             SELECT
-                p.id AS folder_id,
-                (
-                    SELECT COUNT(*)
-                    FROM fsfolder c
-                    WHERE c.id <> p.id
-                      AND LEFT(c.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
-                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
-                      AND POSITION('/' IN SUBSTRING(c.uri FROM LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) + 1)) = 0
-                ) AS direct_folder_count,
-                (
-                    SELECT COUNT(*)
-                    FROM fsfolder c
-                    WHERE c.id <> p.id
-                      AND LEFT(c.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
-                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
-                ) AS recursive_folder_count,
-                (
-                    SELECT COUNT(*)
-                    FROM fsfile f
-                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
-                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
-                      AND POSITION('/' IN SUBSTRING(f.uri FROM LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) + 1)) = 0
-                ) AS direct_file_count,
-                (
-                    SELECT COUNT(*)
-                    FROM fsfile f
-                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
-                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
-                ) AS recursive_file_count,
-                (
-                    SELECT COALESCE(SUM(f.size), 0)
-                    FROM fsfile f
-                    WHERE LEFT(f.uri, LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END))
-                          = CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END
-                ) AS total_file_size
-            FROM fsfolder p
-            WHERE p.id IN (:folderIds)
+                p.folder_id,
+                COALESCE(fc.direct_folder_count, 0) AS direct_folder_count,
+                COALESCE(fc.recursive_folder_count, 0) AS recursive_folder_count,
+                COALESCE(ff.direct_file_count, 0) AS direct_file_count,
+                COALESCE(ff.recursive_file_count, 0) AS recursive_file_count,
+                COALESCE(ff.total_file_size, 0) AS total_file_size
+            FROM parents p
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE c.id <> p.folder_id
+                          AND POSITION('/' IN SUBSTRING(c.uri FROM p.prefix_len + 1)) = 0
+                    ) AS direct_folder_count,
+                    COUNT(*) FILTER (WHERE c.id <> p.folder_id) AS recursive_folder_count
+                FROM fsfolder c
+                WHERE c.uri >= p.prefix
+                  AND c.uri < p.prefix || chr(1114111)
+            ) fc ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE POSITION('/' IN SUBSTRING(f.uri FROM p.prefix_len + 1)) = 0
+                    ) AS direct_file_count,
+                    COUNT(*) AS recursive_file_count,
+                    COALESCE(SUM(f.size), 0) AS total_file_size
+                FROM fsfile f
+                WHERE f.uri >= p.prefix
+                  AND f.uri < p.prefix || chr(1114111)
+            ) ff ON TRUE
         """,
         nativeQuery = true
     )
@@ -319,9 +319,31 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     fun countByStatus(status: Status): Long
 
     /**
+     * Count folders grouped by processing status.
+     * Returns rows of [status, count].
+     */
+    @Query("""
+        SELECT f.status, COUNT(f)
+        FROM FSFolder f
+        GROUP BY f.status
+    """)
+    fun countGroupedByStatus(): List<Array<Any?>>
+
+    /**
      * Count folders by analysis status.
      */
     fun countByAnalysisStatus(analysisStatus: AnalysisStatus): Long
+
+    /**
+     * Count folders grouped by analysis status.
+     * Returns rows of [analysisStatus, count].
+     */
+    @Query("""
+        SELECT f.analysisStatus, COUNT(f)
+        FROM FSFolder f
+        GROUP BY f.analysisStatus
+    """)
+    fun countGroupedByAnalysisStatus(): List<Array<Any?>>
 
     /**
      * Find folders needing analysis status assignment.

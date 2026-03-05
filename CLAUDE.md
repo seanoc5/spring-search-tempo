@@ -325,14 +325,27 @@ class MyComponent(
 
 ## Configuration
 
-### Database (PostgreSQL via Docker Compose)
+### Database (PostgreSQL)
+
+**Dev credentials** (minti9 bare-metal):
+```bash
+# CLI access
+PGPASSWORD=password psql -h minti9 -p 5432 -U tempo -d tempo
+
+# Connection details
+Host: minti9 (or localhost for docker)
+Port: 5432
+Database: tempo
+Username: tempo
+Password: password
+```
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_search_tempo 
+    url: jdbc:postgresql://minti9:5432/tempo
     username: tempo
-    password: postgres
+    password: password
   jpa:
     hibernate:
       ddl-auto: update  # Use 'validate' in production
@@ -374,6 +387,23 @@ Default credentials: `user` / `password` (basic auth)
 - Add `@Transactional` for lazy loading or use JOIN FETCH
 - Use validated migrations (Flyway/Liquibase) in production
 - Review staged changes before committing
+
+## Reserved Names (Collision Guardrails)
+
+Avoid framework-reserved names in templates, model attributes, and local vars.
+
+- Thymeleaf web context reserved names:
+  - `session`, `param`, `request`, `response`, `application`, `servletContext`
+- Do not use these as:
+  - `th:each` loop vars, `th:with` vars, fragment args, or `model.addAttribute(...)` keys.
+- Spring MVC + Thymeleaf implication:
+  - `model.addAttribute("session", ...)` can break template rendering with reserved-word errors.
+- Kotlin naming:
+  - Avoid Kotlin keywords (`class`, `object`, `when`, `is`, etc.) for DTO/entity field names unless absolutely required.
+  - If unavoidable, Kotlin requires backticks, but this increases binding/template risk.
+- HTMX + Thymeleaf naming:
+  - Prefer `th:hx-*` processors.
+  - In `th:attr`, do not use `hx-on::...`; use `hx-on--...` key form instead.
 
 ---
 

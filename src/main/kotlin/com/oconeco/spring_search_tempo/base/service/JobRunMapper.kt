@@ -24,7 +24,7 @@ interface JobRunMapper {
     @AfterMapping
     fun afterUpdateJobRunDTO(jobRun: JobRun, @MappingTarget jobRunDTO: JobRunDTO) {
         jobRunDTO.crawlConfig = jobRun.crawlConfig?.id
-        jobRunDTO.crawlConfigDisplayLabel = jobRun.crawlConfig?.displayLabel
+        jobRunDTO.crawlConfigDisplayLabel = jobRun.crawlConfig?.label ?: jobRun.crawlConfig?.name
         jobRunDTO.crawlConfigStartPaths = jobRun.crawlConfig?.startPaths?.toList()
     }
 

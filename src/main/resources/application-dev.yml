@@ -10,8 +10,7 @@ spring:
     jdbc:
       initialize-schema: always
     job:
-      enabled: true
-      name: fsCrawlJob
+      enabled: false  # Jobs should run from UI/API or scheduler, not on app startup
   datasource:
     # Default dev target is bare-metal PostgreSQL on minti9.
     # Use `--spring.profiles.active=dev,docker` to use docker-compose (localhost:15432).

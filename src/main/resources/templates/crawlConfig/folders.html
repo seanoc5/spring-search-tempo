@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
         layout:decorate="~{layout}">
     <head>
-        <title>Folders - [[${crawlConfig.displayLabel ?: crawlConfig.name}]]</title>
+        <title>Folders - [[${crawlConfig.label ?: crawlConfig.name}]]</title>
     </head>
     <body>
         <script th:inline="javascript">
@@ -36,7 +36,7 @@
                     <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
                     <li class="breadcrumb-item">
                         <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}">
-                            [[${crawlConfig.displayLabel ?: crawlConfig.name}]]
+                            [[${crawlConfig.label ?: crawlConfig.name}]]
                         </a>
                     </li>
                     <li class="breadcrumb-item active">Folders</li>

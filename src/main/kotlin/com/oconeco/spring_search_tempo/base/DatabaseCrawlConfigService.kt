@@ -14,7 +14,7 @@ interface DatabaseCrawlConfigService {
 
     fun get(id: Long): CrawlConfigDTO
 
-    fun getByName(name: String): CrawlConfigDTO?
+    fun getByName(name: String, sourceHost: String? = null): CrawlConfigDTO?
 
     fun create(crawlConfigDTO: CrawlConfigDTO): Long
 
@@ -22,10 +22,15 @@ interface DatabaseCrawlConfigService {
 
     fun delete(id: Long)
 
-    fun nameExists(name: String): Boolean
+    fun nameExists(name: String, sourceHost: String? = null, excludeId: Long? = null): Boolean
 
     fun toggleEnabled(id: Long): Boolean
 
     fun findDistinctSourceHosts(): List<String>
+
+    // Ownership-filtered methods for multi-tenancy
+    fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO>
+
+    fun findEnabledForCurrentUser(): List<CrawlConfigDTO>
 
 }

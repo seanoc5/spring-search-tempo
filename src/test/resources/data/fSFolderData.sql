@@ -13,6 +13,7 @@ INSERT INTO fsfolder (
     permissions,
     status,
     analysis_status,
+    baseline_version,
     date_created,
     last_updated
 ) VALUES (
@@ -30,6 +31,7 @@ INSERT INTO fsfolder (
     'Nam liber tempor cum soluta nobis eleifend option congue nihil imperdiet doming id quod mazim placerat facer possim assum.',
     'CURRENT',
     'INDEX',
+    1,
     '2024-09-02 14:30:00',
     '2024-09-02 14:30:00'
 );
@@ -49,6 +51,7 @@ INSERT INTO fsfolder (
     permissions,
     status,
     analysis_status,
+    baseline_version,
     date_created,
     last_updated
 ) VALUES (
@@ -66,6 +69,7 @@ INSERT INTO fsfolder (
     'Donec pretium vulputate sapien nec sagittis aliquam malesuada.',
     'CURRENT',
     'INDEX',
+    1,
     '2024-09-03 14:30:00',
     '2024-09-03 14:30:00'
 );

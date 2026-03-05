@@ -24,6 +24,8 @@ import com.oconeco.spring_search_tempo.batch.nlp.NLPChunkProcessor
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
+import org.springframework.batch.core.StepExecution
+import org.springframework.batch.core.StepExecutionListener
 import org.springframework.batch.core.job.builder.JobBuilder
 import org.springframework.batch.core.launch.support.RunIdIncrementer
 import org.springframework.batch.core.repository.JobRepository
@@ -39,6 +41,7 @@ import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Comp
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
 import org.springframework.stereotype.Component
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.transaction.PlatformTransactionManager
 import java.time.OffsetDateTime
 import java.util.concurrent.Future
@@ -75,8 +78,7 @@ class EmailQuickSyncJobBuilder(
     private val embeddingService: EmbeddingService,
     private val contentChunkMapper: ContentChunkMapper,
     private val contentChunkRepository: ContentChunkRepository,
-    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor,
-    @Qualifier("asyncItemExecutor") private val asyncItemExecutor: TaskExecutor
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(EmailQuickSyncJobBuilder::class.java)
@@ -165,7 +167,7 @@ class EmailQuickSyncJobBuilder(
         val writer = createHeaderSyncWriter(account.id!!, folderName)
 
         return StepBuilder("emailHeaderSync_${account.id}_$folderName", jobRepository)
-            .chunk<ImapMessageWrapper, EmailMessageDTO>(100, transactionManager)  // Larger chunks since no body fetch
+            .chunk<ImapMessageWrapper, EmailMessageDTO>(500, transactionManager)  // PERFORMANCE: Large chunks for bulk load
             .reader(reader)
             .processor(createHeaderSyncProcessor())
             .writer(writer)
@@ -290,12 +292,14 @@ class EmailQuickSyncJobBuilder(
         log.info("Building ASYNC body enrichment step for {} (asyncThreads={}, stepThreads={})",
             account.email, config.asyncThreads, config.stepThreads)
 
+        val asyncExecutor = createAsyncBodyExecutor(config.asyncThreads)
+        val executorShutdownListener = ExecutorShutdownListener(asyncExecutor)
         val threadSafeProcessor = createThreadSafeBodyEnrichmentProcessor()
 
         // Wrap in AsyncItemProcessor
         val asyncProcessor = AsyncItemProcessor<EmailMessageDTO, BodyEnrichmentResult>().apply {
             setDelegate(threadSafeProcessor)
-            setTaskExecutor(asyncItemExecutor)
+            setTaskExecutor(asyncExecutor)
         }
 
         // Wrap writer in AsyncItemWriter
@@ -309,6 +313,7 @@ class EmailQuickSyncJobBuilder(
             .processor(asyncProcessor)
             .writer(asyncWriter)
             .listener(threadSafeProcessor)  // Still need lifecycle callbacks
+            .listener(executorShutdownListener)
             .listener(heartbeatChunkListener)
 
         val builderWithProgressListener = builder.listener(progressTrackingItemWriteListener)
@@ -320,6 +325,35 @@ class EmailQuickSyncJobBuilder(
                 .build()
         } else {
             builderWithProgressListener.build()
+        }
+    }
+
+    private fun createAsyncBodyExecutor(requestedThreads: Int): ThreadPoolTaskExecutor {
+        val threads = requestedThreads.coerceIn(1, 32)
+        if (threads != requestedThreads) {
+            log.warn("Adjusted asyncThreads from {} to {} (allowed range: 1..32)", requestedThreads, threads)
+        }
+
+        // Create a per-step pool so request-level asyncThreads is honored exactly.
+        return ThreadPoolTaskExecutor().apply {
+            corePoolSize = threads
+            maxPoolSize = threads
+            queueCapacity = 0
+            setThreadNamePrefix("email-async-")
+            initialize()
+        }
+    }
+
+    private class ExecutorShutdownListener(
+        private val executor: ThreadPoolTaskExecutor
+    ) : StepExecutionListener {
+        override fun beforeStep(stepExecution: StepExecution) {
+            // No-op.
+        }
+
+        override fun afterStep(stepExecution: StepExecution): org.springframework.batch.core.ExitStatus {
+            executor.shutdown()
+            return stepExecution.exitStatus
         }
     }
 

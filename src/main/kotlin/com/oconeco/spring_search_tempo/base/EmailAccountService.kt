@@ -59,4 +59,21 @@ interface EmailAccountService {
      */
     fun getSummary(id: Long): EmailAccountSummaryDTO
 
+    // Ownership-filtered methods for multi-tenancy
+
+    /**
+     * Find all accounts owned by the current user.
+     */
+    fun findAllForCurrentUser(): List<EmailAccountDTO>
+
+    /**
+     * Find enabled accounts owned by the current user.
+     */
+    fun findEnabledForCurrentUser(): List<EmailAccountDTO>
+
+    /**
+     * Find all accounts with summary info, filtered by current user's ownership.
+     */
+    fun findAllWithSummaryForCurrentUser(): List<EmailAccountSummaryDTO>
+
 }

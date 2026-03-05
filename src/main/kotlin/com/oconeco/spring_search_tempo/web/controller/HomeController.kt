@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
@@ -12,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
 import com.oconeco.spring_search_tempo.web.service.DashboardService
+import com.oconeco.spring_search_tempo.web.service.DashboardSystemInfoService
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -30,27 +32,34 @@ import org.springframework.web.util.UriComponentsBuilder
 @Controller
 class HomeController(
     private val dashboardService: DashboardService,
+    private val dashboardSystemInfoService: DashboardSystemInfoService,
     private val jobRunService: JobRunService,
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val fileService: FSFileService,
-    private val folderService: FSFolderService
+    private val folderService: FSFolderService,
+    private val userOwnershipService: UserOwnershipService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @GetMapping("/")
-    fun index(model: Model): String {
+    fun index(
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
+        model: Model
+    ): String {
         val stopWatch = StopWatch("Dashboard")
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+        val effectiveShowAll = showAll && isAdmin
 
         stopWatch.start("getStats")
         model.addAttribute("stats", dashboardService.getStats())
         stopWatch.stop()
 
-        stopWatch.start("populateDashboardContent")
-        populateDashboardContent(model, stopWatch)
-        stopWatch.stop()
+        populateDashboardContent(model, stopWatch, effectiveShowAll)
 
         log.info("Dashboard render times:\n{}", stopWatch.prettyPrint())
         model.addAttribute("renderTimeMs", stopWatch.totalTimeMillis)
+        model.addAttribute("showAll", effectiveShowAll)
+        model.addAttribute("isAdmin", isAdmin)
 
         return "home/index"
     }
@@ -60,9 +69,16 @@ class HomeController(
      * Note: The stats-content fragment needs all dashboard data, not just stats.
      */
     @GetMapping("/dashboard/stats")
-    fun refreshStats(model: Model): String {
+    fun refreshStats(
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
+        model: Model
+    ): String {
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+        val effectiveShowAll = showAll && isAdmin
         model.addAttribute("stats", dashboardService.getStats())
-        populateDashboardContent(model)
+        model.addAttribute("showAll", effectiveShowAll)
+        model.addAttribute("isAdmin", isAdmin)
+        populateDashboardContent(model, showAll = effectiveShowAll)
         return "home/index :: stats-content"
     }
 
@@ -166,10 +182,15 @@ class HomeController(
         @RequestParam(name = "sourceHost", required = false) sourceHost: String?,
         @RequestParam(name = "parallel", required = false) parallel: Boolean?,
         @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
         @SortDefault(sort = ["name"]) @PageableDefault(size = 10) pageable: Pageable,
         model: Model
     ): String {
-        populateCrawlConfigsModel(model, analysisStatus, enabled, sourceHost, parallel, filter, pageable)
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+        val effectiveShowAll = showAll && isAdmin
+        model.addAttribute("showAll", effectiveShowAll)
+        model.addAttribute("isAdmin", isAdmin)
+        populateCrawlConfigsModel(model, analysisStatus, enabled, sourceHost, parallel, filter, pageable, effectiveShowAll)
         return "home/fragments/crawlConfigsTable :: crawl-configs-table"
     }
 
@@ -180,10 +201,15 @@ class HomeController(
         sourceHost: String?,
         parallel: Boolean?,
         filter: String?,
-        pageable: Pageable
+        pageable: Pageable,
+        showAll: Boolean = false
     ) {
-        // Fetch all configs to enable grouping by sourceHost
-        val allConfigs = crawlConfigService.findAll(filter, PageRequest.of(0, 1000, pageable.sort))
+        // Fetch configs - either all (for admin with showAll) or user's owned sourceHosts
+        val allConfigs = if (showAll) {
+            crawlConfigService.findAll(filter, PageRequest.of(0, 1000, pageable.sort))
+        } else {
+            crawlConfigService.findAllForCurrentUser(filter, PageRequest.of(0, 1000, pageable.sort))
+        }
 
         // Apply in-memory filters
         val filtered = allConfigs.content.filter { config ->
@@ -260,10 +286,16 @@ class HomeController(
         return "home/fragments/activityTable :: activity-table"
     }
 
-    private fun populateDashboardContent(model: Model, stopWatch: StopWatch? = null) {
+    private fun populateDashboardContent(model: Model, stopWatch: StopWatch? = null, showAll: Boolean = false) {
         fun <T> timed(name: String, block: () -> T): T {
             stopWatch?.start(name)
-            return block().also { stopWatch?.stop() }
+            return try {
+                block()
+            } finally {
+                if (stopWatch?.isRunning == true) {
+                    stopWatch.stop()
+                }
+            }
         }
 
         // Recent activity (paginated)
@@ -288,7 +320,8 @@ class HomeController(
                 sourceHost = null,
                 parallel = null,
                 filter = null,
-                pageable = PageRequest.of(0, 1000, Sort.by("name"))
+                pageable = PageRequest.of(0, 1000, Sort.by("name")),
+                showAll = showAll
             )
         }
 
@@ -313,6 +346,11 @@ class HomeController(
             dashboardService.getFileFragmentCounts(files.content.mapNotNull { it.id })
         }
         model.addAttribute("fileFragmentCounts", fileFragmentCounts)
+
+        val systemInfo = timed("system.info") {
+            dashboardSystemInfoService.getSystemInfo()
+        }
+        model.addAttribute("systemInfo", systemInfo)
     }
 
     private fun toQueryPageableForFolders(pageable: Pageable, sortOrder: Sort.Order?): Pageable {

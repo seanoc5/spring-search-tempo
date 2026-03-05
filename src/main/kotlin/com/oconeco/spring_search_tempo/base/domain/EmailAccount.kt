@@ -4,6 +4,9 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
+import jakarta.persistence.FetchType
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToMany
 import java.time.OffsetDateTime
 
@@ -57,6 +60,11 @@ class EmailAccount : SaveableObject() {
     // Account status
     @Column
     var enabled: Boolean = true
+
+    // Owner for multi-tenancy visibility
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id")
+    var owner: SpringUser? = null
 
     // Credential configuration: name of env var holding the password
     @Column(length = 100)

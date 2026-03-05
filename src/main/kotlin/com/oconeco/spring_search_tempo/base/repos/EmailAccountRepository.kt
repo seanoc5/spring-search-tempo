@@ -17,4 +17,9 @@ interface EmailAccountRepository : JpaRepository<EmailAccount, Long> {
 
     fun existsByEmail(email: String): Boolean
 
+    // Methods for ownership-based filtering
+    fun findByOwnerId(ownerId: Long): List<EmailAccount>
+
+    fun findByOwnerIdAndEnabledTrue(ownerId: Long): List<EmailAccount>
+
 }

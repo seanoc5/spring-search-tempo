@@ -1,9 +1,11 @@
 package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
+import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
+import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Controller
@@ -19,7 +21,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes
 @RequestMapping("/emailAccounts")
 class EmailAccountController(
     private val emailAccountService: EmailAccountService,
-    private val emailCrawlOrchestrator: EmailCrawlOrchestrator
+    private val emailCrawlOrchestrator: EmailCrawlOrchestrator,
+    private val userOwnershipService: UserOwnershipService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -27,12 +30,24 @@ class EmailAccountController(
     fun providers(): Array<EmailProvider> = EmailProvider.entries.toTypedArray()
 
     /**
-     * List all email accounts with summary data.
+     * List email accounts with summary data.
+     * Non-admin users see only their owned accounts; admins can toggle showAll.
      */
     @GetMapping
-    fun list(model: Model): String {
-        val accounts = emailAccountService.findAllWithSummary()
+    fun list(
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
+        model: Model
+    ): String {
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+        val accounts = if (showAll && isAdmin) {
+            emailAccountService.findAllWithSummary()
+        } else {
+            emailAccountService.findAllWithSummaryForCurrentUser()
+        }
+
         model.addAttribute("emailAccounts", accounts)
+        model.addAttribute("showAll", showAll)
+        model.addAttribute("isAdmin", isAdmin)
         return "emailAccount/list"
     }
 
@@ -163,16 +178,25 @@ class EmailAccountController(
     fun syncAccount(
         @PathVariable id: Long,
         @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
+        @RequestParam(name = "stepThreads", required = false, defaultValue = "1") stepThreads: Int,
+        @RequestParam(name = "itemAsync", required = false, defaultValue = "false") itemAsync: Boolean,
+        @RequestParam(name = "asyncThreads", required = false, defaultValue = "4") asyncThreads: Int,
+        @RequestParam(name = "chunkSize", required = false, defaultValue = "20") chunkSize: Int,
         redirectAttributes: RedirectAttributes
     ): String {
         val account = emailAccountService.get(id)
         val syncType = if (forceFullSync) "full sync" else "quick sync"
+        val parallelConfig = normalizeParallelConfig(stepThreads, itemAsync, asyncThreads, chunkSize)
 
         try {
-            log.info("Starting {} for account: {}", syncType, account.email)
-            val status = emailCrawlOrchestrator.runQuickSyncForAccount(id, forceFullSync)
+            log.info("Starting {} for account: {} ({})", syncType, account.email, parallelConfig)
+            val status = emailCrawlOrchestrator.runQuickSyncForAccount(
+                accountId = id,
+                forceFullSync = forceFullSync,
+                parallelConfig = parallelConfig
+            )
             redirectAttributes.addFlashAttribute("message",
-                "Email $syncType started for ${account.email}. Status: $status")
+                "Email $syncType started for ${account.email}. Mode: ${parallelConfig.modeName}, chunkSize=${parallelConfig.chunkSize}. Status: $status")
         } catch (e: Exception) {
             log.error("Failed to start {} for account {}: {}", syncType, account.email, e.message, e)
             redirectAttributes.addFlashAttribute("error",
@@ -190,13 +214,24 @@ class EmailAccountController(
     @PostMapping("/syncAll")
     fun syncAll(
         @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
+        @RequestParam(name = "stepThreads", required = false, defaultValue = "1") stepThreads: Int,
+        @RequestParam(name = "itemAsync", required = false, defaultValue = "false") itemAsync: Boolean,
+        @RequestParam(name = "asyncThreads", required = false, defaultValue = "4") asyncThreads: Int,
+        @RequestParam(name = "chunkSize", required = false, defaultValue = "20") chunkSize: Int,
         redirectAttributes: RedirectAttributes
     ): String {
         val syncType = if (forceFullSync) "full sync" else "quick sync"
+        val parallelConfig = normalizeParallelConfig(stepThreads, itemAsync, asyncThreads, chunkSize)
 
         try {
-            log.info("Starting {} for all enabled accounts", syncType)
-            val results = emailCrawlOrchestrator.runQuickSync(forceFullSync)
+            log.info("Starting {} for all enabled accounts ({})", syncType, parallelConfig)
+            val results = emailCrawlOrchestrator.runQuickSync(
+                forceFullSync = forceFullSync,
+                stepThreads = parallelConfig.stepThreads,
+                itemAsync = parallelConfig.itemAsync,
+                asyncThreads = parallelConfig.asyncThreads,
+                chunkSize = parallelConfig.chunkSize
+            )
 
             if (results["status"] == "disabled") {
                 redirectAttributes.addFlashAttribute("error",
@@ -204,7 +239,7 @@ class EmailAccountController(
             } else {
                 val summary = results.entries.joinToString(", ") { "${it.key}: ${it.value}" }
                 redirectAttributes.addFlashAttribute("message",
-                    "Email $syncType completed. Results: $summary")
+                    "Email $syncType started (${parallelConfig.modeName}, chunkSize=${parallelConfig.chunkSize}). Results: $summary")
             }
         } catch (e: Exception) {
             log.error("Failed to start {}: {}", syncType, e.message, e)
@@ -231,5 +266,22 @@ class EmailAccountController(
     private fun isEnvVarSet(envVarName: String?): Boolean {
         if (envVarName.isNullOrBlank()) return false
         return System.getenv(envVarName) != null
+    }
+
+    private fun normalizeParallelConfig(
+        stepThreads: Int,
+        itemAsync: Boolean,
+        asyncThreads: Int,
+        chunkSize: Int
+    ): ParallelizationConfig {
+        val normalizedStepThreads = stepThreads.coerceIn(1, 16)
+        val normalizedAsyncThreads = asyncThreads.coerceIn(1, 32)
+        val normalizedChunkSize = chunkSize.coerceIn(10, 500)
+        return ParallelizationConfig(
+            stepThreads = normalizedStepThreads,
+            itemAsync = itemAsync,
+            asyncThreads = normalizedAsyncThreads,
+            chunkSize = normalizedChunkSize
+        )
     }
 }

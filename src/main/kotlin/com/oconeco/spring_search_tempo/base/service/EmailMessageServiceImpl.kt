@@ -58,6 +58,22 @@ class EmailMessageServiceImpl(
         return emailMessageRepository.save(emailMessage).id!!
     }
 
+    override fun createBulk(dtos: List<EmailMessageDTO>): List<Long> {
+        if (dtos.isEmpty()) return emptyList()
+
+        val entities = dtos.map { dto ->
+            val entity = EmailMessage()
+            emailMessageMapper.updateEmailMessage(
+                dto,
+                entity,
+                emailAccountRepository,
+                emailFolderRepository
+            )
+            entity
+        }
+        return emailMessageRepository.saveAll(entities).mapNotNull { it.id }
+    }
+
     override fun update(id: Long, emailMessageDTO: EmailMessageDTO) {
         val emailMessage = emailMessageRepository.findById(id)
             .orElseThrow { NotFoundException() }
@@ -155,15 +171,15 @@ class EmailMessageServiceImpl(
         attachmentCount: Int,
         attachmentNames: String?
     ) {
-        val message = emailMessageRepository.findById(id)
-            .orElseThrow { NotFoundException("EmailMessage not found: $id") }
-        message.bodyText = bodyText
-        message.bodySize = bodySize
-        message.hasAttachments = hasAttachments
-        message.attachmentCount = attachmentCount
-        message.attachmentNames = attachmentNames
-        message.fetchStatus = FetchStatus.COMPLETE
-        emailMessageRepository.save(message)
+        // PERFORMANCE: Direct UPDATE query avoids SELECT+UPDATE pattern
+        emailMessageRepository.updateBodyDirect(
+            id = id,
+            bodyText = bodyText,
+            bodySize = bodySize,
+            hasAttachments = hasAttachments,
+            attachmentCount = attachmentCount,
+            attachmentNames = attachmentNames
+        )
     }
 
     override fun findUncategorizedByAccount(accountId: Long, pageable: Pageable): Page<EmailMessageDTO> {
