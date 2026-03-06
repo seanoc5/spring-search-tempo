@@ -104,6 +104,8 @@ enum class DiscoveryStatus {
     CLASSIFYING,
     /** Classifications have been applied */
     APPLIED,
+    /** Older session retained for history but no longer active */
+    ARCHIVED,
     /** Session was cancelled/abandoned */
     CANCELLED
 }

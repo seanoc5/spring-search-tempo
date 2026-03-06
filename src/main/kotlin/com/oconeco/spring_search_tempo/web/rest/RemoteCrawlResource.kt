@@ -124,6 +124,41 @@ class RemoteCrawlResource(
     }
 
     /**
+     * Discovery-session picker endpoint for dry-run clients.
+     * Returns ranked candidates (host match first, then recency).
+     */
+    @GetMapping("/discovery/sessions")
+    fun discoverySessions(
+        @RequestParam(name = "configId") configId: Long,
+        @RequestParam(name = "host", required = false) host: String?,
+        @RequestParam(name = "limit", required = false, defaultValue = "3") limit: Int
+    ): ResponseEntity<Any> {
+        return try {
+            val sessions = dryRunService.listSessionCandidates(
+                configId = configId,
+                requestedHost = host,
+                limit = limit.coerceIn(1, 50)
+            )
+            ResponseEntity.ok(
+                mapOf(
+                    "configId" to configId,
+                    "requestedHost" to host,
+                    "count" to sessions.size,
+                    "sessions" to sessions
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Discovery session options failed for config {}", configId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to list discovery sessions: ${e.message}"
+                )
+            )
+        }
+    }
+
+    /**
      * Dry run endpoint: Preview how folders would be classified during a crawl.
      *
      * Uses discovery session data (from onboarding) to show what would happen
@@ -250,7 +285,19 @@ class RemoteCrawlResource(
 
     @PostMapping("/session/ingest")
     fun ingest(@RequestBody request: RemoteIngestRequest): ResponseEntity<Any> {
-        log.info("Remote ingest request for session {}", request.sessionId)
+        if (request.folders != null) {
+            val firstFolder = request.folders?.firstOrNull()
+            val fileCount = request.files?.size ?: 0
+            log.info(
+                "Remote ingest: session {} -- Host: {} -- folder(s):{} -- fileCount:{}",
+                request.sessionId,
+                request.host,
+                firstFolder,
+                fileCount
+            )
+        } else {
+            log.warn("Remote ingest: session {} -- Host: {} -- folder(s):{} (null?!)", request.sessionId, request.host, request.folders)
+        }
         return try {
             ResponseEntity.ok(remoteCrawlSessionService.ingest(request))
         } catch (e: NotFoundException) {

@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.DiscoveredFolder
+import com.oconeco.spring_search_tempo.base.domain.DiscoverySession
 import com.oconeco.spring_search_tempo.base.repos.DiscoveredFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
@@ -61,15 +62,7 @@ class DryRunService(
         val effectivePatterns = runtimeCrawlConfigService.getEffectivePatterns(definition)
 
         // Find discovery session
-        val session = if (sessionId != null) {
-            sessionRepository.findById(sessionId)
-                .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
-        } else {
-            // Find most recent session linked to this config
-            val sessions = sessionRepository.findByCrawlConfigIdOrderByAppliedAtDesc(configId)
-            sessions.firstOrNull()
-                ?: throw NotFoundException("No discovery session found for crawl config $configId")
-        }
+        val session = resolveSessionForDryRun(configId = configId, sessionId = sessionId)
 
         // Load all folders from session
         val allFolders = folderRepository.findBySessionIdOrderByPath(session.id!!)
@@ -171,6 +164,32 @@ class DryRunService(
     }
 
     /**
+     * List discovery sessions that are candidates for dry-run selection.
+     * Ranking: host match first (if requestedHost provided), then last updated descending.
+     */
+    @Transactional(readOnly = true)
+    fun listSessionCandidates(
+        configId: Long,
+        requestedHost: String? = null,
+        limit: Int = 3
+    ): List<DryRunSessionCandidate> {
+        val ranked = rankedSessionsForConfig(configId, requestedHost)
+        val effectiveLimit = limit.coerceIn(1, 50)
+        return ranked.take(effectiveLimit).map { session ->
+            DryRunSessionCandidate(
+                sessionId = session.id!!,
+                host = session.host ?: "",
+                status = session.status.name,
+                totalFolders = session.totalFolders,
+                classifiedFolders = session.classifiedFolders,
+                dateCreated = session.dateCreated?.toString(),
+                lastUpdated = session.lastUpdated?.toString(),
+                hostMatched = hostMatches(session.host, requestedHost)
+            )
+        }
+    }
+
+    /**
      * Resolve the analysis status for a folder, tracking whether it was
      * an explicit pattern match or inherited from parent.
      */
@@ -224,6 +243,32 @@ class DryRunService(
         AnalysisStatus.ANALYZE -> patterns.analyze
         AnalysisStatus.SEMANTIC -> patterns.semantic
     }
+
+    private fun resolveSessionForDryRun(configId: Long, sessionId: Long?): DiscoverySession {
+        if (sessionId != null) {
+            return sessionRepository.findById(sessionId)
+                .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+        }
+        return rankedSessionsForConfig(configId = configId, requestedHost = null).firstOrNull()
+            ?: throw NotFoundException("No discovery session found for crawl config $configId")
+    }
+
+    private fun rankedSessionsForConfig(configId: Long, requestedHost: String?): List<DiscoverySession> {
+        return sessionRepository.findByCrawlConfigIdOrderByLastUpdatedDesc(configId)
+            .sortedWith(
+                compareByDescending<DiscoverySession> { hostMatches(it.host, requestedHost) }
+                    .thenByDescending { it.lastUpdated?.toInstant()?.toEpochMilli() ?: Long.MIN_VALUE }
+                    .thenByDescending { it.dateCreated?.toInstant()?.toEpochMilli() ?: Long.MIN_VALUE }
+            )
+    }
+
+    private fun hostMatches(sessionHost: String?, requestedHost: String?): Boolean {
+        val normalizedSession = sessionHost?.trim()?.lowercase()
+        val normalizedRequested = requestedHost?.trim()?.lowercase()
+        return !normalizedSession.isNullOrBlank() &&
+            !normalizedRequested.isNullOrBlank() &&
+            normalizedSession == normalizedRequested
+    }
 }
 
 /**
@@ -268,4 +313,15 @@ data class DryRunFolder(
     val explicit: Boolean,
     val matchedPattern: String?,
     val inheritedFrom: String?
+)
+
+data class DryRunSessionCandidate(
+    val sessionId: Long,
+    val host: String,
+    val status: String,
+    val totalFolders: Int,
+    val classifiedFolders: Int,
+    val dateCreated: String?,
+    val lastUpdated: String?,
+    val hostMatched: Boolean
 )

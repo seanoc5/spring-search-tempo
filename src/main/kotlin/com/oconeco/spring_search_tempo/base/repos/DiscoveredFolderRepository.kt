@@ -39,9 +39,22 @@ interface DiscoveredFolderRepository : JpaRepository<DiscoveredFolder, Long> {
     @Query("""
         UPDATE DiscoveredFolder f
         SET f.assignedStatus = :status, f.classified = true
-        WHERE f.session.id = :sessionId AND f.path LIKE :pathPrefix
+        WHERE f.session.id = :sessionId
+          AND (
+            f.path = :folderPath
+            OR (
+              (f.path LIKE :slashPrefix OR f.path LIKE :backslashPrefix)
+              AND f.assignedStatus IS NULL
+            )
+          )
     """)
-    fun updateAssignedStatusByPathPrefix(sessionId: Long, pathPrefix: String, status: AnalysisStatus): Int
+    fun updateAssignedStatusForSubtreeUnassigned(
+        sessionId: Long,
+        folderPath: String,
+        slashPrefix: String,
+        backslashPrefix: String,
+        status: AnalysisStatus
+    ): Int
 
     @Modifying
     @Query("""

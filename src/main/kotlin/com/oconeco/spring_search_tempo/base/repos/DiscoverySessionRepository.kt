@@ -27,4 +27,13 @@ interface DiscoverySessionRepository : JpaRepository<DiscoverySession, Long> {
 
     @Query("SELECT s FROM DiscoverySession s WHERE s.crawlConfig.id = :crawlConfigId ORDER BY s.appliedAt DESC")
     fun findByCrawlConfigIdOrderByAppliedAtDesc(crawlConfigId: Long): List<DiscoverySession>
+
+    @Query(
+        """
+        SELECT s FROM DiscoverySession s
+        WHERE s.crawlConfig.id = :crawlConfigId
+        ORDER BY s.lastUpdated DESC, s.dateCreated DESC
+        """
+    )
+    fun findByCrawlConfigIdOrderByLastUpdatedDesc(crawlConfigId: Long): List<DiscoverySession>
 }

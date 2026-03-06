@@ -33,8 +33,22 @@ class DiscoveryService(
      */
     @Transactional
     fun uploadDiscovery(request: DiscoveryUploadRequest): DiscoveryUploadResponse {
-        log.info("Processing discovery upload from host {} with {} folders",
-            request.host, request.folders.size)
+        val normalizedHost = request.host.trim()
+        require(normalizedHost.isNotBlank()) { "host is required" }
+
+        log.info(
+            "Processing discovery upload from host {} with {} folders (createNewSession={})",
+            normalizedHost,
+            request.folders.size,
+            request.createNewSession
+        )
+
+        if (request.createNewSession) {
+            val archivedCount = archiveExistingSessionsForHost(normalizedHost)
+            if (archivedCount > 0) {
+                log.info("Archived {} previous discovery session(s) for host {}", archivedCount, normalizedHost)
+            }
+        }
 
         val templatePlan = discoveryTemplateClassifier.buildPlan(
             osType = request.osType,
@@ -44,7 +58,7 @@ class DiscoveryService(
 
         // Create session
         val session = DiscoverySession().apply {
-            host = request.host
+            host = normalizedHost
             osType = request.osType
             rootPaths = request.rootPaths.joinToString(",")
             status = DiscoveryStatus.PENDING
@@ -269,16 +283,26 @@ class DiscoveryService(
      */
     @Transactional
     fun classifySubtree(sessionId: Long, folderPath: String, status: AnalysisStatus): Int {
-        val pathPrefix = if (folderPath.endsWith("/") || folderPath.endsWith("\\")) {
-            folderPath
-        } else {
-            "$folderPath%"
-        }
-        val updated = folderRepository.updateAssignedStatusByPathPrefix(sessionId, pathPrefix, status)
+        val trimmedPath = folderPath.trim()
+        val slashPrefix = if (trimmedPath.endsWith("/")) "$trimmedPath%" else "$trimmedPath/%"
+        val backslashPrefix = if (trimmedPath.endsWith("\\")) "$trimmedPath%" else "$trimmedPath\\%"
+
+        val updated = folderRepository.updateAssignedStatusForSubtreeUnassigned(
+            sessionId = sessionId,
+            folderPath = trimmedPath,
+            slashPrefix = slashPrefix,
+            backslashPrefix = backslashPrefix,
+            status = status
+        )
         if (updated > 0) {
             updateSessionCounts(sessionId)
         }
-        log.info("Classified {} folders under {} as {}", updated, folderPath, status)
+        log.info(
+            "Classified subtree for {} as {} (updated root + descendants without explicit assignment): {} rows",
+            folderPath,
+            status,
+            updated
+        )
         return updated
     }
 
@@ -526,20 +550,45 @@ class DiscoveryService(
         sessionRepository.save(session)
     }
 
+    private fun archiveExistingSessionsForHost(host: String): Int {
+        val existing = sessionRepository.findByHostOrderByDateCreatedDesc(host)
+        if (existing.isEmpty()) return 0
+        var archived = 0
+        existing.forEach { session ->
+            if (session.status != DiscoveryStatus.ARCHIVED) {
+                session.status = DiscoveryStatus.ARCHIVED
+                archived++
+            }
+        }
+        if (archived > 0) {
+            sessionRepository.saveAll(existing)
+        }
+        return archived
+    }
+
     private fun computeParentPath(path: String, osType: String): String? {
+        val p = path.trim()
+        if (p.isBlank()) return null
+
         // For cross-platform compatibility (e.g., processing Windows paths on Linux),
-        // use string-based parsing based on the source OS type
-        val separator = if (osType == "WINDOWS") "\\" else "/"
-        val lastSep = path.lastIndexOf(separator)
+        // parse parent path using source OS semantics.
+        if (osType.equals("WINDOWS", ignoreCase = true)) {
+            // Drive root has no parent (e.g., C:\ or C:/). Prevent self-parent loops.
+            if (Regex("^[A-Za-z]:[\\\\/]?$").matches(p)) return null
 
-        if (lastSep <= 0) return null
+            val lastSep = p.lastIndexOfAny(charArrayOf('\\', '/'))
+            if (lastSep <= 0) return null
 
-        // For Windows drive roots (e.g., C:\Users -> C:\), include the trailing backslash
-        if (osType == "WINDOWS" && lastSep == 2 && path.length > 2 && path[1] == ':') {
-            return path.substring(0, lastSep + 1) // Include the backslash: "C:\"
+            // For immediate children of drive root (e.g., C:\Users), keep root with trailing slash.
+            if (lastSep == 2 && p.length > 3 && p[1] == ':') {
+                return p.substring(0, 3) // "C:\"
+            }
+            return p.substring(0, lastSep)
         }
 
-        return path.substring(0, lastSep)
+        val lastSep = p.lastIndexOf('/')
+        if (lastSep <= 0) return null
+        return p.substring(0, lastSep)
     }
 
     private fun toFolderDTO(folder: DiscoveredFolder): DiscoveredFolderDTO {
@@ -646,7 +695,8 @@ data class DiscoveryUploadRequest(
     val folders: List<DiscoveredFolderUploadDTO>,
     val rootPaths: List<String>,
     val osType: String,
-    val discoveryDurationMs: Long
+    val discoveryDurationMs: Long,
+    val createNewSession: Boolean = false
 )
 
 data class DiscoveredFolderUploadDTO(
