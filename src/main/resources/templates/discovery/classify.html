@@ -647,6 +647,9 @@
                     }
                     // Trigger status panel refresh
                     htmx.trigger(document.body, 'classificationChanged');
+                    if (includeSubtree) {
+                        location.reload();
+                    }
                 }
             });
         }

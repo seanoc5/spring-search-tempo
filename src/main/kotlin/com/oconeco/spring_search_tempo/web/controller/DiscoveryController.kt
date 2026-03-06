@@ -193,7 +193,10 @@ class DiscoveryController(
 
             // Build tree structure for display (limit depth for performance)
             val rootFolders = discoverySession.folders.filter { it.depth == 0 }
-            val foldersByParent = discoverySession.folders.groupBy { it.parentPath }
+            val foldersByParent = discoverySession.folders
+                // Defensive guard for malformed rows where parentPath == path (self-cycle).
+                .filterNot { it.parentPath != null && it.parentPath == it.path }
+                .groupBy { it.parentPath }
 
             model.addAttribute("discoverySession", discoverySession)
             model.addAttribute("sessionId", discoverySession.id)
