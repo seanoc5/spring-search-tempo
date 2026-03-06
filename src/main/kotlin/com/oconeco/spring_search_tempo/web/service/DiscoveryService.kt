@@ -504,14 +504,20 @@ class DiscoveryService(
                     folderPatternsSemantic = crawlConfigConverter.toJsonArray(semanticPatterns)
                 }
 
-                if (crawlConfigService.nameExists(dto.name!!, sourceHost = dto.sourceHost)) {
-                    throw IllegalArgumentException(
-                        "Crawl config name already exists for host '${dto.sourceHost}': ${dto.name}"
-                    )
+                // If config with same name exists, update it instead of creating
+                val existingConfig = crawlConfigService.getByName(dto.name!!, dto.sourceHost)
+                if (existingConfig != null) {
+                    log.info("Config '{}' already exists for host '{}', updating instead of creating",
+                        dto.name, dto.sourceHost)
+                    dto.id = existingConfig.id
+                    dto.version = existingConfig.version
+                    crawlConfigService.update(existingConfig.id!!, dto)
+                    targetConfigId = existingConfig.id!!
+                    action = ApplyDiscoveryAction.UPDATED
+                } else {
+                    targetConfigId = crawlConfigService.create(dto)
+                    action = ApplyDiscoveryAction.CREATED
                 }
-
-                targetConfigId = crawlConfigService.create(dto)
-                action = ApplyDiscoveryAction.CREATED
             }
         }
 
