@@ -86,20 +86,97 @@ class DiscoveryTemplateClassifier(
     ): SuggestedStatus? {
         val os = canonicalOsType(osType)
 
+        // 1. SKIP: Only truly disposable/temp content (recycle bin, temp, caches)
         if (isOsSkip(folder, os, rules)) return SuggestedStatus.SKIP
         if (isProfileSkip(folder, profile, rules)) return SuggestedStatus.SKIP
 
-        if (isOfficeFolder(folder, rules)) return SuggestedStatus.ANALYZE
-        if (isManualHelpFolder(folder, rules)) return SuggestedStatus.ANALYZE
-        if (isMediaFolder(folder, rules)) return SuggestedStatus.INDEX
-        if (isConfigOrLogsFolder(folder, rules)) return SuggestedStatus.INDEX
-
+        // 2. Explicit LOCATE: System folders, 3rd party code repos (protects against parent INDEX override)
+        if (isThirdPartyCodeRepo(folder, os)) return SuggestedStatus.LOCATE
+        if (isOsSystemFolder(folder, os, rules)) return SuggestedStatus.LOCATE
         if (isOsSystemRoot(folder, os, rootPaths, rules)) return SuggestedStatus.LOCATE
 
+        // 3. INDEX: User content that should have text extracted
+        if (isOfficeFolder(folder, rules)) return SuggestedStatus.INDEX
+        if (isMediaFolder(folder, rules)) return SuggestedStatus.LOCATE  // Media = metadata only
+        if (isConfigOrLogsFolder(folder, rules)) return SuggestedStatus.INDEX
+
+        // 4. ANALYZE: Source code and documentation worth NLP processing
+        if (isManualHelpFolder(folder, rules)) return SuggestedStatus.ANALYZE
         if (isProfileAnalyze(folder, profile, rules)) return SuggestedStatus.ANALYZE
+
+        // 5. Profile-specific LOCATE overrides
         if (isProfileLocate(folder, profile, rules)) return SuggestedStatus.LOCATE
 
+        // Default: null means inherit from parent, ultimate fallback is LOCATE
         return null
+    }
+
+    /**
+     * Third-party code repositories that should stay LOCATE even if parent is INDEX/ANALYZE.
+     * These contain downloaded/installed code, not user-created content.
+     */
+    private fun isThirdPartyCodeRepo(folder: NormalizedFolder, os: CanonicalOsType): Boolean {
+        val p = folder.normalizedPath
+        val name = folder.normalizedName
+
+        // Common package managers and their lib directories
+        if (name == "node_modules") return true
+        if (name == "site-packages" || name == "dist-packages") return true
+        if (name == "vendor" && p.contains("/composer/")) return true
+        if (name == ".cargo" || name == ".rustup") return true
+        if (name == ".m2" || name == ".gradle") return true
+        if (name == ".nuget" || name == "packages" && p.contains("/nuget/")) return true
+
+        // Python installations
+        if (p.contains("/python") && (p.contains("/lib/") || p.contains("/libs/"))) return true
+        if (p.matches(Regex(".*/python\\d+/lib.*"))) return true
+
+        // Windows-specific
+        if (os == CanonicalOsType.WINDOWS) {
+            if (p.contains("/program files/nodejs/node_modules")) return true
+            if (p.contains("/program files/python")) return true
+            if (p.matches(Regex(".*/python\\d+/lib.*"))) return true
+        }
+
+        // Ruby gems, Go modules, etc.
+        if (name == "gems" && p.contains("/ruby/")) return true
+        if (name == "pkg" && p.contains("/go/")) return true
+
+        return false
+    }
+
+    /**
+     * OS system folders that should be LOCATE (not SKIP).
+     * These contain system files but might have useful metadata.
+     */
+    private fun isOsSystemFolder(folder: NormalizedFolder, os: CanonicalOsType, rules: EffectiveRules): Boolean {
+        val p = folder.normalizedPath
+        val name = folder.normalizedName
+
+        if (os == CanonicalOsType.WINDOWS) {
+            // Windows system folders - LOCATE not SKIP
+            if (name.startsWith("\$") && name != "\$recycle.bin") return true  // $SysReset, $Windows.~WS, etc.
+            if (name == "intel") return true
+            if (name == "perflogs") return true
+            if (name == "recovery") return true
+            if (p.contains("/windows/system32") && !p.contains("/temp")) return true
+            if (p.contains("/windows/syswow64")) return true
+            // Hibernation and system files location
+            if (name == "system volume information") return true
+        }
+
+        if (os == CanonicalOsType.MACOS) {
+            if (p.startsWith("/system") && !p.contains("/caches")) return true
+            if (p.startsWith("/private/var") && !p.contains("/tmp") && !p.contains("/folders")) return true
+        }
+
+        if (os == CanonicalOsType.LINUX) {
+            if (p.startsWith("/boot")) return true
+            if (p.startsWith("/lib") || p.startsWith("/lib64")) return true
+            if (p.startsWith("/sbin") || p.startsWith("/bin")) return true
+        }
+
+        return false
     }
 
     private fun guessProfile(folders: List<NormalizedFolder>, rules: EffectiveRules): ProfileGuess {
@@ -134,45 +211,52 @@ class DiscoveryTemplateClassifier(
         return ProfileGuess(profile = profile, confidencePercent = confidence, reason = reason)
     }
 
+    /**
+     * SKIP: Only truly disposable content - recycle bins, temp files, caches.
+     * System folders should be LOCATE (handled by isOsSystemFolder), not SKIP.
+     */
     private fun isOsSkip(folder: NormalizedFolder, os: CanonicalOsType, rules: EffectiveRules): Boolean {
         return when (os) {
             CanonicalOsType.WINDOWS -> {
                 val p = folder.normalizedPath
                 folder.normalizedName in rules.windowsSkip ||
                     hasSegment(folder, "\$recycle.bin") ||
-                    hasSegment(folder, "system volume information") ||
+                    // Temp and cache folders only
                     p.contains("/windows/temp") ||
-                    p.contains("/windows/softwaredistribution") ||
                     p.contains("/windows/prefetch") ||
-                    p.contains("/windows/winsxs") ||
-                    p.contains("/windows/installer") ||
-                    p.contains("/programdata/package cache") ||
                     p.contains("/appdata/local/temp") ||
-                    p.contains("/appdata/local/packages/") && p.contains("/tempstate")
+                    p.contains("/appdata/local/packages/") && p.contains("/tempstate") ||
+                    p.contains("/appdata/local/microsoft/windows/temporary") ||
+                    // Browser caches
+                    p.contains("/cache2/entries") ||
+                    p.contains("/code cache/") ||
+                    p.contains("/gpucache/") ||
+                    p.contains("/shadercache/")
             }
             CanonicalOsType.MACOS -> {
                 val p = folder.normalizedPath
                 folder.normalizedName in rules.macosSkip ||
                     hasSegment(folder, ".trashes") ||
                     hasSegment(folder, ".spotlight-v100") ||
-                    p.startsWith("/system") ||
+                    // Temp and cache only
                     p.startsWith("/private/tmp") ||
-                    p.startsWith("/private/var/folders") ||
-                    p.startsWith("/private/var/vm") ||
-                    p.contains("/library/logs/diagnostics") ||
-                    p.contains("/library/caches")
+                    p.startsWith("/private/var/folders") ||  // Per-user temp
+                    p.startsWith("/private/var/vm") ||       // Virtual memory
+                    p.contains("/library/caches") ||
+                    p.contains("/caches/")
             }
             CanonicalOsType.LINUX -> {
                 val p = folder.normalizedPath
                 folder.normalizedName in rules.linuxSkip ||
+                    // Virtual filesystems
                     p.startsWith("/proc") ||
                     p.startsWith("/sys") ||
                     p.startsWith("/dev") ||
                     p.startsWith("/run") ||
+                    // Temp and cache
                     p.startsWith("/tmp") ||
                     p.startsWith("/var/tmp") ||
                     p.startsWith("/var/cache") ||
-                    p.startsWith("/snap") ||
                     p.startsWith("/lost+found") ||
                     hasSegment(folder, ".cache")
             }
