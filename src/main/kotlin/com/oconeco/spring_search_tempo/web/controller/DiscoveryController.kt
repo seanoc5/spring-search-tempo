@@ -35,12 +35,12 @@ class DiscoveryController(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * List all discovery sessions.
+     * List discovery sessions.
      */
     @GetMapping
     fun list(model: Model): String {
-        val pendingSessions = discoveryService.getPendingSessions()
-        model.addAttribute("sessions", pendingSessions)
+        val sessions = discoveryService.getAllSessions()
+        model.addAttribute("sessions", sessions)
         return "discovery/list"
     }
 
@@ -272,7 +272,8 @@ class DiscoveryController(
                 "skipCount" to sessionStatus.skipCount,
                 "locateCount" to sessionStatus.locateCount,
                 "indexCount" to sessionStatus.indexCount,
-                "analyzeCount" to sessionStatus.analyzeCount
+                "analyzeCount" to sessionStatus.analyzeCount,
+                "semanticCount" to sessionStatus.semanticCount
             ))
         } catch (e: Exception) {
             log.error("Failed to classify folder", e)
@@ -297,7 +298,8 @@ class DiscoveryController(
                 "skipApplied" to result.skipApplied,
                 "locateApplied" to result.locateApplied,
                 "indexApplied" to result.indexApplied,
-                "analyzeApplied" to result.analyzeApplied
+                "analyzeApplied" to result.analyzeApplied,
+                "semanticApplied" to result.semanticApplied
             ))
         } catch (e: Exception) {
             log.error("Failed to apply suggestions", e)
@@ -344,7 +346,8 @@ class DiscoveryController(
                 "message",
                 "Applied ${result.profile} template suggestions: " +
                     "skip=${result.skipSuggested}, locate=${result.locateSuggested}, " +
-                    "index=${result.indexSuggested}, analyze=${result.analyzeSuggested}."
+                    "index=${result.indexSuggested}, analyze=${result.analyzeSuggested}, " +
+                    "semantic=${result.semanticSuggested}."
             )
             "redirect:/discovery/$sessionId/classify"
         } catch (e: Exception) {
@@ -386,7 +389,7 @@ class DiscoveryController(
                 "message",
                 "${result.action.name.lowercase().replaceFirstChar { it.uppercase() }} crawl config ${result.crawlConfigId} " +
                     "(patterns: skip=${result.skipPatterns}, locate=${result.locatePatterns}, " +
-                    "index=${result.indexPatterns}, analyze=${result.analyzePatterns})"
+                    "index=${result.indexPatterns}, analyze=${result.analyzePatterns}, semantic=${result.semanticPatterns})"
             )
             "redirect:/crawlConfigs/${result.crawlConfigId}/edit"
         } catch (e: Exception) {

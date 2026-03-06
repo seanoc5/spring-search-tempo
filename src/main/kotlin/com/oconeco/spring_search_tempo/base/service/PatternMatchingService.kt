@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import org.slf4j.LoggerFactory
@@ -35,30 +36,14 @@ class PatternMatchingService {
     fun determineFolderAnalysisStatus(
         path: String,
         patterns: PatternSet,
-        parentStatus: AnalysisStatus?
+        parentStatus: AnalysisStatus?,
+        priority: PatternPriority = PatternPriority()
     ): AnalysisStatus {
-        // SKIP has highest priority - persist with SKIP status, no further processing
-        if (matchesAny(path, patterns.skip)) {
-            logger.debug("Folder {} matched SKIP pattern", path)
-            return AnalysisStatus.SKIP
-        }
-
-        // Check explicit patterns in priority order: SEMANTIC > ANALYZE > INDEX > LOCATE
-        if (matchesAny(path, patterns.semantic)) {
-            logger.debug("Folder {} matched SEMANTIC pattern", path)
-            return AnalysisStatus.SEMANTIC
-        }
-        if (matchesAny(path, patterns.analyze)) {
-            logger.debug("Folder {} matched ANALYZE pattern", path)
-            return AnalysisStatus.ANALYZE
-        }
-        if (matchesAny(path, patterns.index)) {
-            logger.debug("Folder {} matched INDEX pattern", path)
-            return AnalysisStatus.INDEX
-        }
-        if (matchesAny(path, patterns.locate)) {
-            logger.debug("Folder {} matched LOCATE pattern", path)
-            return AnalysisStatus.LOCATE
+        for (status in priority.orderedStatuses()) {
+            if (matchesAny(path, patternsForStatus(patterns, status))) {
+                logger.debug("Folder {} matched {} pattern", path, status)
+                return status
+            }
         }
 
         // No explicit pattern match - inherit from parent (hierarchical)
@@ -79,9 +64,10 @@ class PatternMatchingService {
     fun determineFileAnalysisStatus(
         path: String,
         filePatterns: PatternSet,
-        parentFolderStatus: AnalysisStatus
+        parentFolderStatus: AnalysisStatus,
+        priority: PatternPriority = PatternPriority()
     ): AnalysisStatus {
-        // Check file-specific SKIP patterns first
+        // Check file-specific SKIP patterns first.
         if (matchesAny(path, filePatterns.skip)) {
             logger.debug("File {} matched SKIP pattern", path)
             return AnalysisStatus.SKIP
@@ -93,22 +79,12 @@ class PatternMatchingService {
             return AnalysisStatus.SKIP
         }
 
-        // Check explicit file patterns: SEMANTIC > ANALYZE > INDEX > LOCATE
-        if (matchesAny(path, filePatterns.semantic)) {
-            logger.debug("File {} matched SEMANTIC pattern", path)
-            return AnalysisStatus.SEMANTIC
-        }
-        if (matchesAny(path, filePatterns.analyze)) {
-            logger.debug("File {} matched ANALYZE pattern", path)
-            return AnalysisStatus.ANALYZE
-        }
-        if (matchesAny(path, filePatterns.index)) {
-            logger.debug("File {} matched INDEX pattern", path)
-            return AnalysisStatus.INDEX
-        }
-        if (matchesAny(path, filePatterns.locate)) {
-            logger.debug("File {} matched LOCATE pattern", path)
-            return AnalysisStatus.LOCATE
+        // Check explicit file patterns by configured priority (excluding SKIP, already handled).
+        for (status in priority.orderedStatuses().filter { it != AnalysisStatus.SKIP }) {
+            if (matchesAny(path, patternsForStatus(filePatterns, status))) {
+                logger.debug("File {} matched {} pattern", path, status)
+                return status
+            }
         }
 
         // No explicit pattern match - inherit from parent folder, but cap at INDEX
@@ -178,6 +154,14 @@ class PatternMatchingService {
         return patternCache.computeIfAbsent(pattern) {
             Pattern.compile(it)
         }
+    }
+
+    private fun patternsForStatus(patterns: PatternSet, status: AnalysisStatus): List<String> = when (status) {
+        AnalysisStatus.SKIP -> patterns.skip
+        AnalysisStatus.LOCATE -> patterns.locate
+        AnalysisStatus.INDEX -> patterns.index
+        AnalysisStatus.ANALYZE -> patterns.analyze
+        AnalysisStatus.SEMANTIC -> patterns.semantic
     }
 
     /**

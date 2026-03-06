@@ -234,7 +234,8 @@ class FsCrawlJobBuilder(
                 patternMatchingService.determineFolderAnalysisStatus(
                     path.toString(),
                     effectivePatterns.folderPatterns,
-                    parentStatus = null
+                    parentStatus = null,
+                    priority = effectivePatterns.folderPatternPriority
                 )
             },
             recentCrawlChecker = recentCrawlChecker

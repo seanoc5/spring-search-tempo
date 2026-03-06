@@ -39,7 +39,9 @@ data class CrawlConfiguration(
                 index = crawl.filePatterns.index,
                 analyze = crawl.filePatterns.analyze,
                 semantic = crawl.filePatterns.semantic
-            )
+            ),
+            folderPatternPriority = crawl.folderPatternPriority ?: defaults.folderPatternPriority,
+            filePatternPriority = crawl.filePatternPriority ?: defaults.filePatternPriority
         )
     }
 }
@@ -53,6 +55,8 @@ data class CrawlDefaults(
     var parallel: Boolean = false,
     var folderPatterns: PatternSet = PatternSet(),
     var filePatterns: PatternSet = PatternSet(),
+    var folderPatternPriority: PatternPriority = PatternPriority(),
+    var filePatternPriority: PatternPriority = PatternPriority(),
     /**
      * Default hours threshold for "recent crawl" skip logic.
      * If a folder was crawled by another config within this many hours,
@@ -75,7 +79,9 @@ data class CrawlDefinition(
     var followLinks: Boolean? = null,  // null = use default
     var parallel: Boolean? = null,  // null = use default
     var folderPatterns: PatternSet = PatternSet(),
-    var filePatterns: PatternSet = PatternSet()
+    var filePatterns: PatternSet = PatternSet(),
+    var folderPatternPriority: PatternPriority? = null,
+    var filePatternPriority: PatternPriority? = null
 ) {
     /**
      * Get effective maxDepth, using default if not specified.
@@ -106,9 +112,49 @@ data class PatternSet(
 )
 
 /**
+ * Explicit priority ordering for pattern categories.
+ * Higher number means higher precedence.
+ */
+data class PatternPriority(
+    var skip: Int = 500,
+    var semantic: Int = 400,
+    var analyze: Int = 300,
+    var index: Int = 200,
+    var locate: Int = 100
+) {
+    fun orderedStatuses(): List<AnalysisStatus> {
+        val defaultOrder = listOf(
+            AnalysisStatus.SKIP,
+            AnalysisStatus.SEMANTIC,
+            AnalysisStatus.ANALYZE,
+            AnalysisStatus.INDEX,
+            AnalysisStatus.LOCATE
+        )
+        val rank = defaultOrder.withIndex().associate { it.value to it.index }
+        return defaultOrder
+            .map { status -> status to priorityOf(status) }
+            .sortedWith(
+                compareByDescending<Pair<AnalysisStatus, Int>> { it.second }
+                    .thenBy { rank[it.first] ?: Int.MAX_VALUE }
+            )
+            .map { it.first }
+    }
+
+    fun priorityOf(status: AnalysisStatus): Int = when (status) {
+        AnalysisStatus.SKIP -> skip
+        AnalysisStatus.SEMANTIC -> semantic
+        AnalysisStatus.ANALYZE -> analyze
+        AnalysisStatus.INDEX -> index
+        AnalysisStatus.LOCATE -> locate
+    }
+}
+
+/**
  * Effective patterns after merging defaults with crawl-specific patterns.
  */
 data class EffectivePatterns(
     val folderPatterns: PatternSet,
-    val filePatterns: PatternSet
+    val filePatterns: PatternSet,
+    val folderPatternPriority: PatternPriority = PatternPriority(),
+    val filePatternPriority: PatternPriority = PatternPriority()
 )

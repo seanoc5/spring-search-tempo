@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.security.Principal
 
 @RestController
 @RequestMapping("/api/remote-crawl")
@@ -39,6 +40,31 @@ class RemoteCrawlResource(
     companion object {
         private val log = LoggerFactory.getLogger(RemoteCrawlResource::class.java)
     }
+
+    /**
+     * Unauthenticated connectivity probe for remote crawler clients.
+     */
+    @GetMapping("/health")
+    fun health(): ResponseEntity<Any> =
+        ResponseEntity.ok(
+            mapOf(
+                "status" to "UP",
+                "service" to "remote-crawl"
+            )
+        )
+
+    /**
+     * Authenticated probe for remote crawler clients.
+     */
+    @GetMapping("/auth-check")
+    fun authCheck(principal: Principal): ResponseEntity<Any> =
+        ResponseEntity.ok(
+            mapOf(
+                "status" to "OK",
+                "authenticated" to true,
+                "user" to principal.name
+            )
+        )
 
     @GetMapping("/bootstrap")
     fun bootstrap(

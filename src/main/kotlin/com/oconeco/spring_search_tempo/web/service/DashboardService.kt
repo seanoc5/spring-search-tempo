@@ -156,7 +156,7 @@ class DashboardService(
             }
         }
 
-        log.info("DashboardStats timing:\n{}", stopWatch.prettyPrint())
+        log.trace("DashboardStats timing:\n{}", stopWatch.prettyPrint())
 
         return stats
     }

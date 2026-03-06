@@ -113,6 +113,7 @@ class DiscoveryService(
     fun getStatus(sessionId: Long): DiscoveryStatusResponse {
         val session = sessionRepository.findById(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+        val semanticCount = folderRepository.countBySessionIdAndAssignedStatus(sessionId, AnalysisStatus.SEMANTIC).toInt()
 
         return DiscoveryStatusResponse(
             sessionId = session.id!!,
@@ -123,7 +124,8 @@ class DiscoveryService(
             skipCount = session.skipCount,
             locateCount = session.locateCount,
             indexCount = session.indexCount,
-            analyzeCount = session.analyzeCount
+            analyzeCount = session.analyzeCount,
+            semanticCount = semanticCount
         )
     }
 
@@ -150,7 +152,7 @@ class DiscoveryService(
             }
         )
         val plannedAt = System.nanoTime()
-        log.info(
+        log.debug(
             "Classification page load session {} maxDepth={} loaded {} folders in {} ms, template plan in {} ms",
             sessionId,
             maxDepth,
@@ -158,6 +160,7 @@ class DiscoveryService(
             (loadedAt - startedAt) / 1_000_000,
             (plannedAt - loadedAt) / 1_000_000
         )
+        val semanticCount = folderRepository.countBySessionIdAndAssignedStatus(sessionId, AnalysisStatus.SEMANTIC).toInt()
 
         return DiscoverySessionDTO(
             id = session.id!!,
@@ -171,6 +174,7 @@ class DiscoveryService(
             locateCount = session.locateCount,
             indexCount = session.indexCount,
             analyzeCount = session.analyzeCount,
+            semanticCount = semanticCount,
             suggestedProfile = templatePlan.profile.name,
             profileConfidencePercent = templatePlan.confidencePercent,
             profileReason = templatePlan.reason,
@@ -287,6 +291,7 @@ class DiscoveryService(
         var locateApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.LOCATE, AnalysisStatus.LOCATE)
         var indexApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.INDEX, AnalysisStatus.INDEX)
         var analyzeApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.ANALYZE, AnalysisStatus.ANALYZE)
+        var semanticApplied = folderRepository.applySuggestedStatus(sessionId, SuggestedStatus.SEMANTIC, AnalysisStatus.SEMANTIC)
 
         updateSessionCounts(sessionId)
 
@@ -296,7 +301,8 @@ class DiscoveryService(
             locateApplied = locateApplied,
             indexApplied = indexApplied,
             analyzeApplied = analyzeApplied,
-            totalApplied = skipApplied + locateApplied + indexApplied + analyzeApplied
+            semanticApplied = semanticApplied,
+            totalApplied = skipApplied + locateApplied + indexApplied + analyzeApplied + semanticApplied
         )
     }
 
@@ -337,6 +343,7 @@ class DiscoveryService(
         val locateSuggested = templatePlan.counts[SuggestedStatus.LOCATE] ?: 0
         val indexSuggested = templatePlan.counts[SuggestedStatus.INDEX] ?: 0
         val analyzeSuggested = templatePlan.counts[SuggestedStatus.ANALYZE] ?: 0
+        val semanticSuggested = templatePlan.counts[SuggestedStatus.SEMANTIC] ?: 0
 
         return TemplateApplyResponse(
             sessionId = sessionId,
@@ -344,7 +351,8 @@ class DiscoveryService(
             skipSuggested = skipSuggested,
             locateSuggested = locateSuggested,
             indexSuggested = indexSuggested,
-            analyzeSuggested = analyzeSuggested
+            analyzeSuggested = analyzeSuggested,
+            semanticSuggested = semanticSuggested
         )
     }
 
@@ -353,6 +361,14 @@ class DiscoveryService(
      */
     fun getPendingSessions(): List<DiscoverySessionSummaryDTO> {
         return sessionRepository.findByStatusOrderByDateCreatedDesc(DiscoveryStatus.PENDING)
+            .map { toSummaryDTO(it) }
+    }
+
+    /**
+     * Get all discovery sessions.
+     */
+    fun getAllSessions(): List<DiscoverySessionSummaryDTO> {
+        return sessionRepository.findAll(Sort.by(Sort.Direction.DESC, "dateCreated"))
             .map { toSummaryDTO(it) }
     }
 
@@ -409,6 +425,7 @@ class DiscoveryService(
         val locatePatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.LOCATE].orEmpty())
         val indexPatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.INDEX].orEmpty())
         val analyzePatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.ANALYZE].orEmpty())
+        val semanticPatterns = buildFolderPatterns(statusToPaths[AnalysisStatus.SEMANTIC].orEmpty())
 
         val targetConfigId: Long
         val action: ApplyDiscoveryAction
@@ -435,6 +452,7 @@ class DiscoveryService(
                 dto.folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
                 dto.folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
                 dto.folderPatternsAnalyze = crawlConfigConverter.toJsonArray(analyzePatterns)
+                dto.folderPatternsSemantic = crawlConfigConverter.toJsonArray(semanticPatterns)
                 dto.enabled = request.enableConfig
                 dto.description = discoveryBackfilledDescription(dto.description, session)
                 crawlConfigService.update(existingId, dto)
@@ -459,6 +477,7 @@ class DiscoveryService(
                     folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
                     folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
                     folderPatternsAnalyze = crawlConfigConverter.toJsonArray(analyzePatterns)
+                    folderPatternsSemantic = crawlConfigConverter.toJsonArray(semanticPatterns)
                 }
 
                 if (crawlConfigService.nameExists(dto.name!!, sourceHost = dto.sourceHost)) {
@@ -486,7 +505,8 @@ class DiscoveryService(
             skipPatterns = skipPatterns.size,
             locatePatterns = locatePatterns.size,
             indexPatterns = indexPatterns.size,
-            analyzePatterns = analyzePatterns.size
+            analyzePatterns = analyzePatterns.size,
+            semanticPatterns = semanticPatterns.size
         )
     }
 
@@ -557,6 +577,7 @@ class DiscoveryService(
             SuggestedStatus.LOCATE -> AnalysisStatus.LOCATE
             SuggestedStatus.INDEX -> AnalysisStatus.INDEX
             SuggestedStatus.ANALYZE -> AnalysisStatus.ANALYZE
+            SuggestedStatus.SEMANTIC -> AnalysisStatus.SEMANTIC
             else -> null
         }
     }
@@ -656,7 +677,8 @@ data class DiscoveryStatusResponse(
     val skipCount: Int,
     val locateCount: Int,
     val indexCount: Int,
-    val analyzeCount: Int = 0
+    val analyzeCount: Int = 0,
+    val semanticCount: Int = 0
 )
 
 data class DiscoverySessionDTO(
@@ -671,6 +693,7 @@ data class DiscoverySessionDTO(
     val locateCount: Int,
     val indexCount: Int,
     val analyzeCount: Int = 0,
+    val semanticCount: Int = 0,
     val suggestedProfile: String,
     val profileConfidencePercent: Int,
     val profileReason: String,
@@ -729,7 +752,8 @@ data class ApplyDiscoveryResult(
     val skipPatterns: Int,
     val locatePatterns: Int,
     val indexPatterns: Int,
-    val analyzePatterns: Int
+    val analyzePatterns: Int,
+    val semanticPatterns: Int = 0
 )
 
 data class CrawlConfigCandidateDTO(
@@ -745,6 +769,7 @@ data class ApplySuggestionsResponse(
     val locateApplied: Int,
     val indexApplied: Int,
     val analyzeApplied: Int = 0,
+    val semanticApplied: Int = 0,
     val totalApplied: Int
 )
 
@@ -754,7 +779,8 @@ data class TemplateApplyResponse(
     val skipSuggested: Int,
     val locateSuggested: Int,
     val indexSuggested: Int,
-    val analyzeSuggested: Int
+    val analyzeSuggested: Int,
+    val semanticSuggested: Int = 0
 )
 
 data class AssignedFolderPageResponse(

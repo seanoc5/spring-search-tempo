@@ -199,7 +199,8 @@ class CombinedCrawlProcessor(
         val analysisStatus = patternMatchingService.determineFolderAnalysisStatus(
             path = uri,
             patterns = effectivePatterns.folderPatterns,
-            parentStatus = parentStatus
+            parentStatus = parentStatus,
+            priority = effectivePatterns.folderPatternPriority
         )
 
         // Cache this folder's status for its children
@@ -321,7 +322,8 @@ class CombinedCrawlProcessor(
         val analysisStatus = patternMatchingService.determineFileAnalysisStatus(
             path = uri,
             filePatterns = effectivePatterns.filePatterns,
-            parentFolderStatus = parentFolderStatus ?: AnalysisStatus.LOCATE
+            parentFolderStatus = parentFolderStatus ?: AnalysisStatus.LOCATE,
+            priority = effectivePatterns.filePatternPriority
         )
 
         // Create or update DTO

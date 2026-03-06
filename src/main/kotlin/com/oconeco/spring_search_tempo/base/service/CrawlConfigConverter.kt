@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.base.service
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import org.slf4j.LoggerFactory
@@ -37,13 +38,29 @@ class CrawlConfigConverter(
                 skip = parseJsonArray(crawlConfigDTO.folderPatternsSkip),
                 locate = parseJsonArray(crawlConfigDTO.folderPatternsLocate),
                 index = parseJsonArray(crawlConfigDTO.folderPatternsIndex),
-                analyze = parseJsonArray(crawlConfigDTO.folderPatternsAnalyze)
+                analyze = parseJsonArray(crawlConfigDTO.folderPatternsAnalyze),
+                semantic = parseJsonArray(crawlConfigDTO.folderPatternsSemantic)
             ),
             filePatterns = PatternSet(
                 skip = parseJsonArray(crawlConfigDTO.filePatternsSkip),
                 locate = parseJsonArray(crawlConfigDTO.filePatternsLocate),
                 index = parseJsonArray(crawlConfigDTO.filePatternsIndex),
-                analyze = parseJsonArray(crawlConfigDTO.filePatternsAnalyze)
+                analyze = parseJsonArray(crawlConfigDTO.filePatternsAnalyze),
+                semantic = parseJsonArray(crawlConfigDTO.filePatternsSemantic)
+            ),
+            folderPatternPriority = PatternPriority(
+                skip = crawlConfigDTO.folderPrioritySkip,
+                semantic = crawlConfigDTO.folderPrioritySemantic,
+                analyze = crawlConfigDTO.folderPriorityAnalyze,
+                index = crawlConfigDTO.folderPriorityIndex,
+                locate = crawlConfigDTO.folderPriorityLocate
+            ),
+            filePatternPriority = PatternPriority(
+                skip = crawlConfigDTO.filePrioritySkip,
+                semantic = crawlConfigDTO.filePrioritySemantic,
+                analyze = crawlConfigDTO.filePriorityAnalyze,
+                index = crawlConfigDTO.filePriorityIndex,
+                locate = crawlConfigDTO.filePriorityLocate
             )
         )
     }

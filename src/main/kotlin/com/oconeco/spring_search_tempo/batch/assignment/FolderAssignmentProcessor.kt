@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.assignment
 
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class FolderAssignmentProcessor(
     private val folderPatterns: PatternSet,
+    private val folderPatternPriority: PatternPriority = PatternPriority(),
     private val patternMatchingService: PatternMatchingService,
     private val folderRepository: FSFolderRepository
 ) : ItemProcessor<FolderAssignmentItem, AssignmentResult> {
@@ -41,7 +43,8 @@ class FolderAssignmentProcessor(
             val newStatus = patternMatchingService.determineFolderAnalysisStatus(
                 path = item.uri,
                 patterns = folderPatterns,
-                parentStatus = parentStatus
+                parentStatus = parentStatus,
+                priority = folderPatternPriority
             )
 
             // Determine reason and setBy

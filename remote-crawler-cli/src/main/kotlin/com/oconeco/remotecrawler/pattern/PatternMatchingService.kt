@@ -1,6 +1,7 @@
 package com.oconeco.remotecrawler.pattern
 
 import com.oconeco.remotecrawler.model.AnalysisStatus
+import com.oconeco.remotecrawler.model.PatternPriority
 import com.oconeco.remotecrawler.model.PatternSet
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
@@ -31,30 +32,14 @@ class PatternMatchingService {
     fun determineFolderAnalysisStatus(
         path: String,
         patterns: PatternSet,
-        parentStatus: AnalysisStatus?
+        parentStatus: AnalysisStatus?,
+        priority: PatternPriority = PatternPriority()
     ): AnalysisStatus {
-        // SKIP has highest priority
-        if (matchesAny(path, patterns.skip)) {
-            log.debug("Folder {} matched SKIP pattern", path)
-            return AnalysisStatus.SKIP
-        }
-
-        // Check explicit patterns in priority order: SEMANTIC > ANALYZE > INDEX > LOCATE
-        if (matchesAny(path, patterns.semantic)) {
-            log.debug("Folder {} matched SEMANTIC pattern", path)
-            return AnalysisStatus.SEMANTIC
-        }
-        if (matchesAny(path, patterns.analyze)) {
-            log.debug("Folder {} matched ANALYZE pattern", path)
-            return AnalysisStatus.ANALYZE
-        }
-        if (matchesAny(path, patterns.index)) {
-            log.debug("Folder {} matched INDEX pattern", path)
-            return AnalysisStatus.INDEX
-        }
-        if (matchesAny(path, patterns.locate)) {
-            log.debug("Folder {} matched LOCATE pattern", path)
-            return AnalysisStatus.LOCATE
+        for (status in priority.orderedStatuses()) {
+            if (matchesAny(path, patternsForStatus(patterns, status))) {
+                log.debug("Folder {} matched {} pattern", path, status)
+                return status
+            }
         }
 
         // No explicit pattern match - inherit from parent (hierarchical)
@@ -74,7 +59,8 @@ class PatternMatchingService {
     fun determineFileAnalysisStatus(
         path: String,
         filePatterns: PatternSet,
-        parentFolderStatus: AnalysisStatus
+        parentFolderStatus: AnalysisStatus,
+        priority: PatternPriority = PatternPriority()
     ): AnalysisStatus {
         // Check file-specific SKIP patterns first
         if (matchesAny(path, filePatterns.skip)) {
@@ -88,22 +74,11 @@ class PatternMatchingService {
             return AnalysisStatus.SKIP
         }
 
-        // Check explicit file patterns: SEMANTIC > ANALYZE > INDEX > LOCATE
-        if (matchesAny(path, filePatterns.semantic)) {
-            log.debug("File {} matched SEMANTIC pattern", path)
-            return AnalysisStatus.SEMANTIC
-        }
-        if (matchesAny(path, filePatterns.analyze)) {
-            log.debug("File {} matched ANALYZE pattern", path)
-            return AnalysisStatus.ANALYZE
-        }
-        if (matchesAny(path, filePatterns.index)) {
-            log.debug("File {} matched INDEX pattern", path)
-            return AnalysisStatus.INDEX
-        }
-        if (matchesAny(path, filePatterns.locate)) {
-            log.debug("File {} matched LOCATE pattern", path)
-            return AnalysisStatus.LOCATE
+        for (status in priority.orderedStatuses().filter { it != AnalysisStatus.SKIP }) {
+            if (matchesAny(path, patternsForStatus(filePatterns, status))) {
+                log.debug("File {} matched {} pattern", path, status)
+                return status
+            }
         }
 
         // No explicit pattern match - inherit from parent folder, but cap at INDEX
@@ -148,6 +123,14 @@ class PatternMatchingService {
 
     private fun getCompiledPattern(pattern: String): Pattern {
         return patternCache.computeIfAbsent(pattern) { Pattern.compile(it) }
+    }
+
+    private fun patternsForStatus(patterns: PatternSet, status: AnalysisStatus): List<String> = when (status) {
+        AnalysisStatus.SKIP -> patterns.skip
+        AnalysisStatus.LOCATE -> patterns.locate
+        AnalysisStatus.INDEX -> patterns.index
+        AnalysisStatus.ANALYZE -> patterns.analyze
+        AnalysisStatus.SEMANTIC -> patterns.semantic
     }
 
     fun clearCache() {

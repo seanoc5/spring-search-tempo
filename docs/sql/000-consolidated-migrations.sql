@@ -6,7 +6,7 @@
 
 \set ON_ERROR_STOP on
 
-\echo 'Applying SQL migrations 001..035'
+\echo 'Applying SQL migrations 001..038'
 \ir 001-add-metadata-columns.sql
 \ir 002-migrate-to-generated-fts.sql
 \ir 003-add-nlp-to-fts.sql
@@ -42,4 +42,7 @@
 \ir 033-add-user-ownership.sql
 \ir 034-seed-user-ownership.sql
 \ir 035-add-discovery-classification-rules.sql
+\ir 036-fix-discovered-folder-suggested-status-check.sql
+\ir 037-add-semantic-pattern-columns-to-crawl-config.sql
+\ir 038-add-crawl-config-pattern-priority-columns.sql
 \echo 'Done'

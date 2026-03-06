@@ -135,10 +135,12 @@ class CrawlConfigController(
         model.addAttribute("folderPatternsLocateText", "")
         model.addAttribute("folderPatternsIndexText", "")
         model.addAttribute("folderPatternsAnalyzeText", "")
+        model.addAttribute("folderPatternsSemanticText", "")
         model.addAttribute("filePatternsSkipText", "")
         model.addAttribute("filePatternsLocateText", "")
         model.addAttribute("filePatternsIndexText", "")
         model.addAttribute("filePatternsAnalyzeText", "")
+        model.addAttribute("filePatternsSemanticText", "")
         return "crawlConfig/add"
     }
 
@@ -255,10 +257,12 @@ class CrawlConfigController(
         @RequestParam(name = "folderPatternsLocateText", required = false) folderPatternsLocateText: String?,
         @RequestParam(name = "folderPatternsIndexText", required = false) folderPatternsIndexText: String?,
         @RequestParam(name = "folderPatternsAnalyzeText", required = false) folderPatternsAnalyzeText: String?,
+        @RequestParam(name = "folderPatternsSemanticText", required = false) folderPatternsSemanticText: String?,
         @RequestParam(name = "filePatternsSkipText", required = false) filePatternsSkipText: String?,
         @RequestParam(name = "filePatternsLocateText", required = false) filePatternsLocateText: String?,
         @RequestParam(name = "filePatternsIndexText", required = false) filePatternsIndexText: String?,
         @RequestParam(name = "filePatternsAnalyzeText", required = false) filePatternsAnalyzeText: String?,
+        @RequestParam(name = "filePatternsSemanticText", required = false) filePatternsSemanticText: String?,
         bindingResult: BindingResult,
         model: Model,
         redirectAttributes: RedirectAttributes
@@ -275,10 +279,12 @@ class CrawlConfigController(
         crawlConfigDTO.folderPatternsLocate = textToJson(folderPatternsLocateText)
         crawlConfigDTO.folderPatternsIndex = textToJson(folderPatternsIndexText)
         crawlConfigDTO.folderPatternsAnalyze = textToJson(folderPatternsAnalyzeText)
+        crawlConfigDTO.folderPatternsSemantic = textToJson(folderPatternsSemanticText)
         crawlConfigDTO.filePatternsSkip = textToJson(filePatternsSkipText)
         crawlConfigDTO.filePatternsLocate = textToJson(filePatternsLocateText)
         crawlConfigDTO.filePatternsIndex = textToJson(filePatternsIndexText)
         crawlConfigDTO.filePatternsAnalyze = textToJson(filePatternsAnalyzeText)
+        crawlConfigDTO.filePatternsSemantic = textToJson(filePatternsSemanticText)
 
         if (bindingResult.hasErrors()) {
             model.addAttribute("startPathsText", startPathsText)
@@ -286,10 +292,12 @@ class CrawlConfigController(
             model.addAttribute("folderPatternsLocateText", folderPatternsLocateText)
             model.addAttribute("folderPatternsIndexText", folderPatternsIndexText)
             model.addAttribute("folderPatternsAnalyzeText", folderPatternsAnalyzeText)
+            model.addAttribute("folderPatternsSemanticText", folderPatternsSemanticText)
             model.addAttribute("filePatternsSkipText", filePatternsSkipText)
             model.addAttribute("filePatternsLocateText", filePatternsLocateText)
             model.addAttribute("filePatternsIndexText", filePatternsIndexText)
             model.addAttribute("filePatternsAnalyzeText", filePatternsAnalyzeText)
+            model.addAttribute("filePatternsSemanticText", filePatternsSemanticText)
             return "crawlConfig/add"
         }
 
@@ -348,10 +356,12 @@ class CrawlConfigController(
         model.addAttribute("folderPatternsLocateText", jsonToText(crawlConfig.folderPatternsLocate))
         model.addAttribute("folderPatternsIndexText", jsonToText(crawlConfig.folderPatternsIndex))
         model.addAttribute("folderPatternsAnalyzeText", jsonToText(crawlConfig.folderPatternsAnalyze))
+        model.addAttribute("folderPatternsSemanticText", jsonToText(crawlConfig.folderPatternsSemantic))
         model.addAttribute("filePatternsSkipText", jsonToText(crawlConfig.filePatternsSkip))
         model.addAttribute("filePatternsLocateText", jsonToText(crawlConfig.filePatternsLocate))
         model.addAttribute("filePatternsIndexText", jsonToText(crawlConfig.filePatternsIndex))
         model.addAttribute("filePatternsAnalyzeText", jsonToText(crawlConfig.filePatternsAnalyze))
+        model.addAttribute("filePatternsSemanticText", jsonToText(crawlConfig.filePatternsSemantic))
         model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
 
         return "crawlConfig/view"
@@ -445,10 +455,12 @@ class CrawlConfigController(
         model.addAttribute("folderPatternsLocateText", jsonToText(crawlConfig.folderPatternsLocate))
         model.addAttribute("folderPatternsIndexText", jsonToText(crawlConfig.folderPatternsIndex))
         model.addAttribute("folderPatternsAnalyzeText", jsonToText(crawlConfig.folderPatternsAnalyze))
+        model.addAttribute("folderPatternsSemanticText", jsonToText(crawlConfig.folderPatternsSemantic))
         model.addAttribute("filePatternsSkipText", jsonToText(crawlConfig.filePatternsSkip))
         model.addAttribute("filePatternsLocateText", jsonToText(crawlConfig.filePatternsLocate))
         model.addAttribute("filePatternsIndexText", jsonToText(crawlConfig.filePatternsIndex))
         model.addAttribute("filePatternsAnalyzeText", jsonToText(crawlConfig.filePatternsAnalyze))
+        model.addAttribute("filePatternsSemanticText", jsonToText(crawlConfig.filePatternsSemantic))
 
         return "crawlConfig/edit"
     }
@@ -462,10 +474,12 @@ class CrawlConfigController(
         @RequestParam(name = "folderPatternsLocateText", required = false) folderPatternsLocateText: String?,
         @RequestParam(name = "folderPatternsIndexText", required = false) folderPatternsIndexText: String?,
         @RequestParam(name = "folderPatternsAnalyzeText", required = false) folderPatternsAnalyzeText: String?,
+        @RequestParam(name = "folderPatternsSemanticText", required = false) folderPatternsSemanticText: String?,
         @RequestParam(name = "filePatternsSkipText", required = false) filePatternsSkipText: String?,
         @RequestParam(name = "filePatternsLocateText", required = false) filePatternsLocateText: String?,
         @RequestParam(name = "filePatternsIndexText", required = false) filePatternsIndexText: String?,
         @RequestParam(name = "filePatternsAnalyzeText", required = false) filePatternsAnalyzeText: String?,
+        @RequestParam(name = "filePatternsSemanticText", required = false) filePatternsSemanticText: String?,
         bindingResult: BindingResult,
         model: Model,
         redirectAttributes: RedirectAttributes
@@ -482,10 +496,12 @@ class CrawlConfigController(
         crawlConfigDTO.folderPatternsLocate = textToJson(folderPatternsLocateText)
         crawlConfigDTO.folderPatternsIndex = textToJson(folderPatternsIndexText)
         crawlConfigDTO.folderPatternsAnalyze = textToJson(folderPatternsAnalyzeText)
+        crawlConfigDTO.folderPatternsSemantic = textToJson(folderPatternsSemanticText)
         crawlConfigDTO.filePatternsSkip = textToJson(filePatternsSkipText)
         crawlConfigDTO.filePatternsLocate = textToJson(filePatternsLocateText)
         crawlConfigDTO.filePatternsIndex = textToJson(filePatternsIndexText)
         crawlConfigDTO.filePatternsAnalyze = textToJson(filePatternsAnalyzeText)
+        crawlConfigDTO.filePatternsSemantic = textToJson(filePatternsSemanticText)
 
         if (bindingResult.hasErrors()) {
             model.addAttribute("startPathsText", startPathsText)
@@ -493,10 +509,12 @@ class CrawlConfigController(
             model.addAttribute("folderPatternsLocateText", folderPatternsLocateText)
             model.addAttribute("folderPatternsIndexText", folderPatternsIndexText)
             model.addAttribute("folderPatternsAnalyzeText", folderPatternsAnalyzeText)
+            model.addAttribute("folderPatternsSemanticText", folderPatternsSemanticText)
             model.addAttribute("filePatternsSkipText", filePatternsSkipText)
             model.addAttribute("filePatternsLocateText", filePatternsLocateText)
             model.addAttribute("filePatternsIndexText", filePatternsIndexText)
             model.addAttribute("filePatternsAnalyzeText", filePatternsAnalyzeText)
+            model.addAttribute("filePatternsSemanticText", filePatternsSemanticText)
             return "crawlConfig/edit"
         }
 

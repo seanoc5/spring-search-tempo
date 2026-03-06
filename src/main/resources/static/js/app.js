@@ -275,25 +275,44 @@ const ToastManager = {
 const GlobalLoadingOverlay = {
   SHOW_DELAY_MS: 0,
   MIN_VISIBLE_MS: 250,
+  MAX_VISIBLE_MS: 15000,
   fetchInFlightCount: 0,
   htmxInFlight: new Set(),
   showTimer: null,
+  hideTimer: null,
+  maxVisibleTimer: null,
   shownAt: 0,
   fetchPatched: false,
 
   init() {
     this.bindHtmx();
     this.patchFetch();
+    this.bindDismissControls();
+    window.addEventListener('pageshow', () => this.forceHide());
   },
 
   bindHtmx() {
     if (!window.htmx || !document.body) return;
 
     document.body.addEventListener('htmx:beforeRequest', (evt) => this.htmxRequestStarted(evt));
-    document.body.addEventListener('htmx:afterRequest', (evt) => this.htmxRequestFinished(evt));
-    document.body.addEventListener('htmx:sendError', (evt) => this.htmxRequestFinished(evt));
-    document.body.addEventListener('htmx:timeout', (evt) => this.htmxRequestFinished(evt));
-    document.body.addEventListener('htmx:responseError', (evt) => this.htmxRequestFinished(evt));
+    ['htmx:afterRequest', 'htmx:sendError', 'htmx:timeout', 'htmx:responseError', 'htmx:abort']
+      .forEach((eventName) => {
+        document.body.addEventListener(eventName, (evt) => this.htmxRequestFinished(evt));
+      });
+  },
+
+  bindDismissControls() {
+    const closeButton = document.getElementById('globalLoadingOverlayClose');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => this.forceHide());
+    }
+
+    document.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape' && this.isVisible()) {
+        evt.preventDefault();
+        this.forceHide();
+      }
+    });
   },
 
   patchFetch() {
@@ -340,6 +359,10 @@ const GlobalLoadingOverlay = {
     const inFlightCount = this.totalInFlightCount();
 
     if (inFlightCount > 0) {
+      if (this.hideTimer) {
+        clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+      }
       if (!this.showTimer && !this.getOverlay()?.classList.contains('is-visible')) {
         this.showTimer = setTimeout(() => {
           this.showTimer = null;
@@ -361,7 +384,11 @@ const GlobalLoadingOverlay = {
 
     const visibleForMs = Date.now() - this.shownAt;
     const remainingMs = Math.max(0, this.MIN_VISIBLE_MS - visibleForMs);
-    window.setTimeout(() => this.hideNow(), remainingMs);
+    if (this.hideTimer) clearTimeout(this.hideTimer);
+    this.hideTimer = window.setTimeout(() => {
+      this.hideTimer = null;
+      this.hideNow();
+    }, remainingMs);
   },
 
   showNow() {
@@ -370,13 +397,48 @@ const GlobalLoadingOverlay = {
     overlay.classList.add('is-visible');
     overlay.setAttribute('aria-hidden', 'false');
     this.shownAt = Date.now();
+    if (this.maxVisibleTimer) clearTimeout(this.maxVisibleTimer);
+    this.maxVisibleTimer = window.setTimeout(() => this.forceHide(), this.MAX_VISIBLE_MS);
   },
 
   hideNow() {
     const overlay = this.getOverlay();
     if (!overlay || this.totalInFlightCount() > 0) return;
+    if (this.maxVisibleTimer) {
+      clearTimeout(this.maxVisibleTimer);
+      this.maxVisibleTimer = null;
+    }
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
     overlay.classList.remove('is-visible');
     overlay.setAttribute('aria-hidden', 'true');
+  },
+
+  forceHide() {
+    this.fetchInFlightCount = 0;
+    this.htmxInFlight.clear();
+    if (this.showTimer) {
+      clearTimeout(this.showTimer);
+      this.showTimer = null;
+    }
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
+    if (this.maxVisibleTimer) {
+      clearTimeout(this.maxVisibleTimer);
+      this.maxVisibleTimer = null;
+    }
+    const overlay = this.getOverlay();
+    if (!overlay) return;
+    overlay.classList.remove('is-visible');
+    overlay.setAttribute('aria-hidden', 'true');
+  },
+
+  isVisible() {
+    return this.getOverlay()?.classList.contains('is-visible') === true;
   },
 
   getOverlay() {

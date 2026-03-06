@@ -3,6 +3,8 @@ package com.oconeco.spring_search_tempo.web.service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
+import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
@@ -250,10 +252,20 @@ class CrawlConfigValidationServiceImpl(
             val current = currentByPath[relPath]
             val fullPath = toFullPath(folderUri, relPath)
             val baselineTrace = baseline?.let {
-                evaluateFileTrace(fullPath, definition.filePatterns, parentStatus)
+                evaluateFileTrace(
+                    fullPath,
+                    definition.filePatterns,
+                    parentStatus,
+                    definition.filePatternPriority ?: PatternPriority()
+                )
             }
             val currentTrace = current?.let {
-                evaluateFileTrace(fullPath, definition.filePatterns, parentStatus)
+                evaluateFileTrace(
+                    fullPath,
+                    definition.filePatterns,
+                    parentStatus,
+                    definition.filePatternPriority ?: PatternPriority()
+                )
             }
 
             val diffType = classifyDiff(
@@ -342,8 +354,9 @@ class CrawlConfigValidationServiceImpl(
 
     private fun evaluateFileTrace(
         path: String,
-        patterns: com.oconeco.spring_search_tempo.base.config.PatternSet,
-        parentFolderStatus: AnalysisStatus
+        patterns: PatternSet,
+        parentFolderStatus: AnalysisStatus,
+        priority: PatternPriority
     ): PatternMatchTraceDTO {
         fun firstMatch(patternList: List<String>): String? =
             patternList.firstOrNull { pattern ->
@@ -354,53 +367,47 @@ class CrawlConfigValidationServiceImpl(
                 }
             }
 
-        firstMatch(patterns.skip)?.let {
-            return PatternMatchTraceDTO(
-                effectiveStatus = AnalysisStatus.SKIP,
-                matchedPattern = it,
-                patternSource = ValidationPatternSource.CRAWL_CONFIG,
-                reason = "Matched file SKIP pattern"
-            )
-        }
-        firstMatch(patterns.semantic)?.let {
-            return PatternMatchTraceDTO(
-                effectiveStatus = AnalysisStatus.SEMANTIC,
-                matchedPattern = it,
-                patternSource = ValidationPatternSource.CRAWL_CONFIG,
-                reason = "Matched file SEMANTIC pattern"
-            )
-        }
-        firstMatch(patterns.analyze)?.let {
-            return PatternMatchTraceDTO(
-                effectiveStatus = AnalysisStatus.ANALYZE,
-                matchedPattern = it,
-                patternSource = ValidationPatternSource.CRAWL_CONFIG,
-                reason = "Matched file ANALYZE pattern"
-            )
-        }
-        firstMatch(patterns.index)?.let {
-            return PatternMatchTraceDTO(
-                effectiveStatus = AnalysisStatus.INDEX,
-                matchedPattern = it,
-                patternSource = ValidationPatternSource.CRAWL_CONFIG,
-                reason = "Matched file INDEX pattern"
-            )
-        }
-        firstMatch(patterns.locate)?.let {
-            return PatternMatchTraceDTO(
-                effectiveStatus = AnalysisStatus.LOCATE,
-                matchedPattern = it,
-                patternSource = ValidationPatternSource.CRAWL_CONFIG,
-                reason = "Matched file LOCATE pattern"
-            )
+        // Keep explicit SKIP first so it cannot be bypassed by other statuses.
+        firstMatch(patterns.skip)?.let { pattern ->
+            return trace(AnalysisStatus.SKIP, pattern)
         }
 
-        val inherited = patternMatchingService.determineFileAnalysisStatus(path, patterns, parentFolderStatus)
+        for (status in priority.orderedStatuses().filter { it != AnalysisStatus.SKIP }) {
+            firstMatch(patternsForStatus(patterns, status))?.let { pattern ->
+                return trace(status, pattern)
+            }
+        }
+
+        val inherited = patternMatchingService.determineFileAnalysisStatus(path, patterns, parentFolderStatus, priority)
         return PatternMatchTraceDTO(
             effectiveStatus = inherited,
             matchedPattern = null,
             patternSource = ValidationPatternSource.INHERITED,
             reason = "Inherited from folder status"
+        )
+    }
+
+    private fun patternsForStatus(patterns: PatternSet, status: AnalysisStatus): List<String> = when (status) {
+        AnalysisStatus.SKIP -> patterns.skip
+        AnalysisStatus.LOCATE -> patterns.locate
+        AnalysisStatus.INDEX -> patterns.index
+        AnalysisStatus.ANALYZE -> patterns.analyze
+        AnalysisStatus.SEMANTIC -> patterns.semantic
+    }
+
+    private fun trace(status: AnalysisStatus, pattern: String): PatternMatchTraceDTO {
+        val label = when (status) {
+            AnalysisStatus.SKIP -> "SKIP"
+            AnalysisStatus.LOCATE -> "LOCATE"
+            AnalysisStatus.INDEX -> "INDEX"
+            AnalysisStatus.ANALYZE -> "ANALYZE"
+            AnalysisStatus.SEMANTIC -> "SEMANTIC"
+        }
+        return PatternMatchTraceDTO(
+            effectiveStatus = status,
+            matchedPattern = pattern,
+            patternSource = ValidationPatternSource.CRAWL_CONFIG,
+            reason = "Matched file $label pattern"
         )
     }
 

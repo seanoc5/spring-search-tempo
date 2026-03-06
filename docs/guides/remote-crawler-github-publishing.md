@@ -17,6 +17,12 @@ git tag remote-crawler-v0.1.1
 git push origin remote-crawler-v0.1.1
 ```
 
+Or use the helper script:
+
+```bash
+scripts/remote/release-remote-crawler.sh 0.1.1
+```
+
 What happens automatically:
 
 1. Builds `remote-crawler-cli` fat JAR with release version from the tag (`0.1.1`)

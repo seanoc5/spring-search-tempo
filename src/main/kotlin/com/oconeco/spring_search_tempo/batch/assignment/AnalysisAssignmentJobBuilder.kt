@@ -86,7 +86,9 @@ class AnalysisAssignmentJobBuilder(
         val defaults = crawlConfigService.getDefaults()
         val defaultPatterns = com.oconeco.spring_search_tempo.base.config.EffectivePatterns(
             folderPatterns = defaults.folderPatterns,
-            filePatterns = defaults.filePatterns
+            filePatterns = defaults.filePatterns,
+            folderPatternPriority = defaults.folderPatternPriority,
+            filePatternPriority = defaults.filePatternPriority
         )
 
         return JobBuilder("globalAssignmentJob", jobRepository)
@@ -114,6 +116,7 @@ class AnalysisAssignmentJobBuilder(
 
         val processor = FolderAssignmentProcessor(
             folderPatterns = effectivePatterns.folderPatterns,
+            folderPatternPriority = effectivePatterns.folderPatternPriority,
             patternMatchingService = patternMatchingService,
             folderRepository = folderRepository
         )
@@ -152,6 +155,7 @@ class AnalysisAssignmentJobBuilder(
 
         val processor = FileAssignmentProcessor(
             filePatterns = effectivePatterns.filePatterns,
+            filePatternPriority = effectivePatterns.filePatternPriority,
             patternMatchingService = patternMatchingService,
             folderRepository = folderRepository
         )

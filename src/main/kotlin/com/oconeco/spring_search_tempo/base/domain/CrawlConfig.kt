@@ -46,6 +46,9 @@ class CrawlConfig : SaveableObject() {
     var folderPatternsAnalyze: String? = null
 
     @Column(columnDefinition = "text")
+    var folderPatternsSemantic: String? = null
+
+    @Column(columnDefinition = "text")
     var filePatternsSkip: String? = null
 
     @Column(columnDefinition = "text")
@@ -56,6 +59,39 @@ class CrawlConfig : SaveableObject() {
 
     @Column(columnDefinition = "text")
     var filePatternsAnalyze: String? = null
+
+    @Column(columnDefinition = "text")
+    var filePatternsSemantic: String? = null
+
+    @Column(nullable = false)
+    var folderPrioritySkip: Int = 500
+
+    @Column(nullable = false)
+    var folderPrioritySemantic: Int = 400
+
+    @Column(nullable = false)
+    var folderPriorityAnalyze: Int = 300
+
+    @Column(nullable = false)
+    var folderPriorityIndex: Int = 200
+
+    @Column(nullable = false)
+    var folderPriorityLocate: Int = 100
+
+    @Column(nullable = false)
+    var filePrioritySkip: Int = 500
+
+    @Column(nullable = false)
+    var filePrioritySemantic: Int = 400
+
+    @Column(nullable = false)
+    var filePriorityAnalyze: Int = 300
+
+    @Column(nullable = false)
+    var filePriorityIndex: Int = 200
+
+    @Column(nullable = false)
+    var filePriorityLocate: Int = 100
 
     @OneToMany(mappedBy = "crawlConfig")
     var jobRuns: MutableSet<JobRun> = mutableSetOf()

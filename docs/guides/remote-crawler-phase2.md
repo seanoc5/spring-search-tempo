@@ -100,6 +100,13 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 - GitHub release automation guide:
   - `docs/guides/remote-crawler-github-publishing.md`
 
+### More GH release automation
+- `docs/guides/remote-crawler-github-publishing.md`
+
+
+## Download remote client
+gh release download remote-crawler-v0.2.1
+
 
 ## Sample Usage
 Copy to winbook3 and run:
@@ -121,3 +128,65 @@ java -jar remote-crawler-0.1.0.jar -s http://minti9:8082 dry-run -c <CONFIG_ID> 
 
 You'll need the crawl config ID - if you've already applied the discovery session 3757671 to a config, use that ID. Otherwise, you can first apply the classifications in the UI at                                       
 http://localhost:8082/discovery/3757671/classify to create a config.             
+
+## Install as a service
+Step 1: Create the folder and batch file
+
+### Create folder
+New-Item -ItemType Directory -Path "C:\tools\remote-crawler" -Force
+
+### Download the JAR (or copy it manually)
+gh release download remote-crawler-v0.2.1 -R seanoc5/spring-search-tempo -D "C:\tools\remote-crawler"
+
+Then create C:\tools\remote-crawler\run-crawler.bat:                                                                                                                                                                      
+@echo off                                                                                                                                                                                                                 
+cd /d C:\tools\remote-crawler                                                                                                                                                                                             
+echo ========================================== >> crawler.log                                                                                                                                                            
+echo %date% %time% - Starting crawl >> crawler.log                                                                                                                                                                        
+java -jar remote-crawler-0.2.1.jar -s http://minti9:8082 crawl >> crawler.log 2>&1                                                                                                                                        
+echo %date% %time% - Crawl finished >> crawler.log
+
+### Step 2: Create the scheduled task
+
+Run in PowerShell as Administrator:
+
+$action = New-ScheduledTaskAction -Execute "C:\tools\remote-crawler\run-crawler.bat" -WorkingDirectory "C:\tools\remote-crawler"
+
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddHours(6) `                                                                                                                                               
+      -RepetitionInterval (New-TimeSpan -Hours 4) `                                                                                                                                                                         
+-RepetitionDuration ([TimeSpan]::MaxValue)
+
+$settings = New-ScheduledTaskSettingsSet `                                                                                                                                                                                
+      -StartWhenAvailable `                                                                                                                                                                                                 
+-DontStopOnIdleEnd `                                                                                                                                                                                                  
+      -AllowStartIfOnBatteries `                                                                                                                                                                                            
+-DontStopIfGoingOnBatteries
+
+Register-ScheduledTask `                                                                                                                                                                                                  
+      -TaskName "SpringSearchTempo-Crawler" `                                                                                                                                                                               
+-Action $action `                                                                                                                                                                                                     
+      -Trigger $trigger `                                                                                                                                                                                                   
+-Settings $settings `                                                                                                                                                                                                 
+-Description "Run remote crawler every 4 hours"
+
+### Step 3: Test it
+
+# Run immediately to test
+Start-ScheduledTask -TaskName "SpringSearchTempo-Crawler"
+
+# Check status
+Get-ScheduledTask -TaskName "SpringSearchTempo-Crawler" | Get-ScheduledTaskInfo
+
+# View the log
+Get-Content "C:\tools\remote-crawler\crawler.log" -Tail 20
+
+Useful commands
+
+# Disable temporarily
+Disable-ScheduledTask -TaskName "SpringSearchTempo-Crawler"
+
+# Enable again
+Enable-ScheduledTask -TaskName "SpringSearchTempo-Crawler"
+
+# Remove completely
+Unregister-ScheduledTask -TaskName "SpringSearchTempo-Crawler" -Confirm:$false                   

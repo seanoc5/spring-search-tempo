@@ -134,8 +134,67 @@
                                 <li><strong>LOCATE</strong> - Store metadata only (path, size, timestamps)</li>
                                 <li><strong>INDEX</strong> - Extract full text and metadata</li>
                                 <li><strong>ANALYZE</strong> - INDEX + sentence-level chunking + NLP</li>
+                                <li><strong>EMBED</strong> (<strong>SEMANTIC</strong>) - ANALYZE + vector embeddings</li>
                             </ol>
                             <p class="mb-0"><small>Use Java regex syntax. One pattern per line. Global defaults (from application.yml) are applied if no patterns are specified.</small></p>
+                        </div>
+
+                        <div class="card border-0 bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="mb-3"><i class="bi bi-sort-numeric-down me-1"></i>Pattern Priority (Higher Wins)</h6>
+                                <div class="row g-3">
+                                    <div class="col-lg-6">
+                                        <label class="form-label text-muted">Folder Priority</label>
+                                        <div class="row g-2">
+                                            <div class="col-4">
+                                                <label class="form-label small">SKIP</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{folderPrioritySkip}" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">LOCATE</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{folderPriorityLocate}" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">INDEX</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{folderPriorityIndex}" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small">ANALYZE</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{folderPriorityAnalyze}" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small">EMBED</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{folderPrioritySemantic}" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <label class="form-label text-muted">File Priority</label>
+                                        <div class="row g-2">
+                                            <div class="col-4">
+                                                <label class="form-label small">SKIP</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{filePrioritySkip}" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">LOCATE</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{filePriorityLocate}" />
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">INDEX</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{filePriorityIndex}" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small">ANALYZE</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{filePriorityAnalyze}" />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small">EMBED</label>
+                                                <input type="number" class="form-control form-control-sm" th:field="*{filePrioritySemantic}" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="row">
@@ -178,6 +237,15 @@
                                               th:text="${folderPatternsAnalyzeText}" rows="3" placeholder=".*/(docs|documentation)/.*"></textarea>
                                     <small class="text-muted">Deep analysis with NLP</small>
                                 </div>
+
+                                <div class="mb-3">
+                                    <label for="folderPatternsSemanticText" class="form-label">
+                                        <span class="badge bg-warning text-dark me-1">EMBED</span> Folders
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="folderPatternsSemanticText" name="folderPatternsSemanticText"
+                                              th:text="${folderPatternsSemanticText}" rows="3" placeholder=".*/(knowledge|manuals|playbooks)/.*"></textarea>
+                                    <small class="text-muted">ANALYZE + vector embeddings</small>
+                                </div>
                             </div>
 
                             <!-- File Patterns -->
@@ -218,6 +286,15 @@
                                     <textarea class="form-control font-monospace" id="filePatternsAnalyzeText" name="filePatternsAnalyzeText"
                                               th:text="${filePatternsAnalyzeText}" rows="3" placeholder=".*\.(md|txt|rst)$&#10;.*/README.*$"></textarea>
                                     <small class="text-muted">Full text + chunking + NLP</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="filePatternsSemanticText" class="form-label">
+                                        <span class="badge bg-warning text-dark me-1">EMBED</span> Files
+                                    </label>
+                                    <textarea class="form-control font-monospace" id="filePatternsSemanticText" name="filePatternsSemanticText"
+                                              th:text="${filePatternsSemanticText}" rows="3" placeholder=".*\.(md|txt|rst)$&#10;.*/README.*$"></textarea>
+                                    <small class="text-muted">NLP + embeddings for semantic retrieval</small>
                                 </div>
                             </div>
                         </div>

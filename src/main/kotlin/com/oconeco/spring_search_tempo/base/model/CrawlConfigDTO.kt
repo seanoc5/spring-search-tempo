@@ -53,6 +53,8 @@ class CrawlConfigDTO {
 
     var folderPatternsAnalyze: String? = null
 
+    var folderPatternsSemantic: String? = null
+
     var filePatternsSkip: String? = null
 
     var filePatternsLocate: String? = null
@@ -60,6 +62,28 @@ class CrawlConfigDTO {
     var filePatternsIndex: String? = null
 
     var filePatternsAnalyze: String? = null
+
+    var filePatternsSemantic: String? = null
+
+    var folderPrioritySkip: Int = 500
+
+    var folderPrioritySemantic: Int = 400
+
+    var folderPriorityAnalyze: Int = 300
+
+    var folderPriorityIndex: Int = 200
+
+    var folderPriorityLocate: Int = 100
+
+    var filePrioritySkip: Int = 500
+
+    var filePrioritySemantic: Int = 400
+
+    var filePriorityAnalyze: Int = 300
+
+    var filePriorityIndex: Int = 200
+
+    var filePriorityLocate: Int = 100
 
     /**
      * Hours threshold for considering folders "recently crawled" by this config.

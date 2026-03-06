@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.CrawlReviewService
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.model.*
@@ -201,6 +202,8 @@ class CrawlReviewServiceImpl(
         // (Future: could look up crawl config from job run if needed)
         val folderPatterns = crawlConfiguration.defaults.folderPatterns
         val filePatterns = crawlConfiguration.defaults.filePatterns
+        val folderPriority = crawlConfiguration.defaults.folderPatternPriority
+        val filePriority = crawlConfiguration.defaults.filePatternPriority
 
         // Get immediate children from filesystem
         val fsFiles = mutableListOf<FileReviewItem>()
@@ -212,9 +215,12 @@ class CrawlReviewServiceImpl(
                     val pathStr = childPath.toString()
                     if (childPath.isRegularFile()) {
                         val expectedStatus = patternMatchingService.determineFileAnalysisStatus(
-                            pathStr, filePatterns, folderDTO.analysisStatus ?: AnalysisStatus.LOCATE
+                            pathStr,
+                            filePatterns,
+                            folderDTO.analysisStatus ?: AnalysisStatus.LOCATE,
+                            filePriority
                         )
-                        val matchedPattern = findMatchingPatternForFile(pathStr, filePatterns)
+                        val matchedPattern = findMatchingPatternForFile(pathStr, filePatterns, filePriority)
                         val dbFile = fsFileRepository.findByUri(pathStr)
                         val dbFileDTO = dbFile?.let { FSFileDTO().also { dto -> fsFileMapper.updateFSFileDTO(it, dto) } }
 
@@ -232,9 +238,12 @@ class CrawlReviewServiceImpl(
                         )
                     } else if (childPath.isDirectory()) {
                         val expectedStatus = patternMatchingService.determineFolderAnalysisStatus(
-                            pathStr, folderPatterns, folderDTO.analysisStatus
+                            pathStr,
+                            folderPatterns,
+                            folderDTO.analysisStatus,
+                            folderPriority
                         )
-                        val matchedPattern = findMatchingPatternForFolder(pathStr, folderPatterns)
+                        val matchedPattern = findMatchingPatternForFolder(pathStr, folderPatterns, folderPriority)
                         val dbSubfolder = fsFolderRepository.findByUri(pathStr)
                         val dbSubfolderDTO = dbSubfolder?.let { FSFolderDTO().also { dto -> fsFolderMapper.updateFSFolderDTO(it, dto) } }
 
@@ -345,7 +354,7 @@ class CrawlReviewServiceImpl(
             locate = parsePatterns(config.folderPatternsLocate),
             index = parsePatterns(config.folderPatternsIndex),
             analyze = parsePatterns(config.folderPatternsAnalyze),
-            semantic = crawlConfiguration.defaults.folderPatterns.semantic
+            semantic = parsePatterns(config.folderPatternsSemantic)
         )
     }
 
@@ -358,7 +367,7 @@ class CrawlReviewServiceImpl(
             locate = parsePatterns(config.filePatternsLocate),
             index = parsePatterns(config.filePatternsIndex),
             analyze = parsePatterns(config.filePatternsAnalyze),
-            semantic = crawlConfiguration.defaults.filePatterns.semantic
+            semantic = parsePatterns(config.filePatternsSemantic)
         )
     }
 
@@ -375,26 +384,28 @@ class CrawlReviewServiceImpl(
     /**
      * Find the first matching pattern for a file path.
      */
-    private fun findMatchingPatternForFile(path: String, patterns: PatternSet): String? {
-        // Check in priority order: skip, semantic, analyze, index, locate
-        findMatchingPattern(path, patterns.skip)?.let { return it }
-        findMatchingPattern(path, patterns.semantic)?.let { return it }
-        findMatchingPattern(path, patterns.analyze)?.let { return it }
-        findMatchingPattern(path, patterns.index)?.let { return it }
-        findMatchingPattern(path, patterns.locate)?.let { return it }
+    private fun findMatchingPatternForFile(path: String, patterns: PatternSet, priority: PatternPriority): String? {
+        for (status in priority.orderedStatuses()) {
+            findMatchingPattern(path, patternsForStatus(patterns, status))?.let { return it }
+        }
         return null
     }
 
     /**
      * Find the first matching pattern for a folder path.
      */
-    private fun findMatchingPatternForFolder(path: String, patterns: PatternSet): String? {
-        // Check in priority order: skip, semantic, analyze, index, locate
-        findMatchingPattern(path, patterns.skip)?.let { return it }
-        findMatchingPattern(path, patterns.semantic)?.let { return it }
-        findMatchingPattern(path, patterns.analyze)?.let { return it }
-        findMatchingPattern(path, patterns.index)?.let { return it }
-        findMatchingPattern(path, patterns.locate)?.let { return it }
+    private fun findMatchingPatternForFolder(path: String, patterns: PatternSet, priority: PatternPriority): String? {
+        for (status in priority.orderedStatuses()) {
+            findMatchingPattern(path, patternsForStatus(patterns, status))?.let { return it }
+        }
         return null
+    }
+
+    private fun patternsForStatus(patterns: PatternSet, status: AnalysisStatus): List<String> = when (status) {
+        AnalysisStatus.SKIP -> patterns.skip
+        AnalysisStatus.LOCATE -> patterns.locate
+        AnalysisStatus.INDEX -> patterns.index
+        AnalysisStatus.ANALYZE -> patterns.analyze
+        AnalysisStatus.SEMANTIC -> patterns.semantic
     }
 }

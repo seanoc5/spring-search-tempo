@@ -75,6 +75,7 @@ class BasicSecurityConfig(
                 .requestMatchers("/login", "/logout", "/error").permitAll()
                 .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/api/remote-crawl/health").permitAll()
                 // Admin-only endpoints
                 .requestMatchers("/springUsers/**").hasAuthority("ROLE_ADMIN")
                 .requestMatchers("/springRoles/**").hasAuthority("ROLE_ADMIN")

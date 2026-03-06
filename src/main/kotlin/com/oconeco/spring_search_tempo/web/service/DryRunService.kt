@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.web.service
 
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
+import com.oconeco.spring_search_tempo.base.config.PatternPriority
 import com.oconeco.spring_search_tempo.base.config.PatternSet
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.DiscoveredFolder
@@ -95,7 +96,8 @@ class DryRunService(
             val resolved = resolveStatus(
                 path = path,
                 folderPatterns = effectivePatterns.folderPatterns,
-                parentStatus = parentStatus
+                parentStatus = parentStatus,
+                priority = effectivePatterns.folderPatternPriority
             )
 
             pathToStatus[path] = resolved
@@ -175,55 +177,16 @@ class DryRunService(
     private fun resolveStatus(
         path: String,
         folderPatterns: PatternSet,
-        parentStatus: AnalysisStatus?
+        parentStatus: AnalysisStatus?,
+        priority: PatternPriority
     ): ResolvedFolderStatus {
-        // Check explicit patterns in priority order
-        val skipMatch = findMatchingPattern(path, folderPatterns.skip)
-        if (skipMatch != null) {
+        for (status in priority.orderedStatuses()) {
+            val matchedPattern = findMatchingPattern(path, patternsForStatus(folderPatterns, status))
+            if (matchedPattern == null) continue
             return ResolvedFolderStatus(
-                status = AnalysisStatus.SKIP,
+                status = status,
                 explicit = true,
-                matchedPattern = skipMatch,
-                inheritedFrom = null
-            )
-        }
-
-        val semanticMatch = findMatchingPattern(path, folderPatterns.semantic)
-        if (semanticMatch != null) {
-            return ResolvedFolderStatus(
-                status = AnalysisStatus.SEMANTIC,
-                explicit = true,
-                matchedPattern = semanticMatch,
-                inheritedFrom = null
-            )
-        }
-
-        val analyzeMatch = findMatchingPattern(path, folderPatterns.analyze)
-        if (analyzeMatch != null) {
-            return ResolvedFolderStatus(
-                status = AnalysisStatus.ANALYZE,
-                explicit = true,
-                matchedPattern = analyzeMatch,
-                inheritedFrom = null
-            )
-        }
-
-        val indexMatch = findMatchingPattern(path, folderPatterns.index)
-        if (indexMatch != null) {
-            return ResolvedFolderStatus(
-                status = AnalysisStatus.INDEX,
-                explicit = true,
-                matchedPattern = indexMatch,
-                inheritedFrom = null
-            )
-        }
-
-        val locateMatch = findMatchingPattern(path, folderPatterns.locate)
-        if (locateMatch != null) {
-            return ResolvedFolderStatus(
-                status = AnalysisStatus.LOCATE,
-                explicit = true,
-                matchedPattern = locateMatch,
+                matchedPattern = matchedPattern,
                 inheritedFrom = null
             )
         }
@@ -252,6 +215,14 @@ class DryRunService(
             }
         }
         return null
+    }
+
+    private fun patternsForStatus(patterns: PatternSet, status: AnalysisStatus): List<String> = when (status) {
+        AnalysisStatus.SKIP -> patterns.skip
+        AnalysisStatus.LOCATE -> patterns.locate
+        AnalysisStatus.INDEX -> patterns.index
+        AnalysisStatus.ANALYZE -> patterns.analyze
+        AnalysisStatus.SEMANTIC -> patterns.semantic
     }
 }
 

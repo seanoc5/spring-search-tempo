@@ -264,9 +264,14 @@
         <!-- Global loading overlay for HTMX and remote JS requests -->
         <div id="globalLoadingOverlay" class="global-loading-overlay" aria-hidden="true">
             <div class="global-loading-panel" role="status" aria-live="polite">
+                <button type="button"
+                        id="globalLoadingOverlayClose"
+                        class="btn-close btn-close-white global-loading-close"
+                        aria-label="Close loading overlay"></button>
                 <div class="spinner-border text-light global-loading-spinner" aria-hidden="true"></div>
                 <div class="global-loading-title">Working...</div>
                 <div class="global-loading-subtitle">Loading data from server</div>
+                <div class="global-loading-hint">Press Esc to dismiss</div>
             </div>
         </div>
 

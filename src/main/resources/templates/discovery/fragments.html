@@ -47,12 +47,20 @@
                        th:text="${discoverySession.indexCount}">0</a>
                 </td>
             </tr>
-            <tr th:if="${discoverySession.analyzeCount != null && discoverySession.analyzeCount > 0}">
+            <tr>
                 <td><span class="badge status-analyze">ANALYZE</span></td>
                 <td class="text-end">
                     <a class="text-decoration-none"
                        th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=ANALYZE&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
                        th:text="${discoverySession.analyzeCount}">0</a>
+                </td>
+            </tr>
+            <tr>
+                <td><span class="badge status-semantic">EMBED</span></td>
+                <td class="text-end">
+                    <a class="text-decoration-none"
+                       th:href="|/discovery/${sessionId}/classify?maxDepth=${maxDepth}&assignedStatus=SEMANTIC&listPage=0&listSize=${listSize}&listSort=path&listDir=asc#foldersList|"
+                       th:text="${discoverySession.semanticCount}">0</a>
                 </td>
             </tr>
         </table>
@@ -89,7 +97,9 @@
                 <button type="button" class="btn btn-outline-success action-btn"
                         th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|">I</button>
                 <button type="button" class="btn btn-outline-primary action-btn"
-                        th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|">E</button>
+                        th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|">A</button>
+                <button type="button" class="btn btn-outline-secondary action-btn"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|">E</button>
             </div>
         </div>
     </div>

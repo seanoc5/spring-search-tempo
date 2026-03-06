@@ -38,15 +38,15 @@ fun main(args: Array<String>) {
         ArgType.String,
         shortName = "u",
         fullName = "username",
-        description = "Server username"
-    ).default("admin")
+        description = "Server username (optional; needed for authenticated operations)"
+    )
 
     val password by parser.option(
         ArgType.String,
         shortName = "p",
         fullName = "password",
-        description = "Server password"
-    ).default("admin")
+        description = "Server password (optional; needed for authenticated operations)"
+    )
 
     val hostName by parser.option(
         ArgType.String,
@@ -71,15 +71,27 @@ fun main(args: Array<String>) {
             description = "Batch size for ingestion"
         ).default(100)
 
+        val adaptiveBatching by option(
+            ArgType.Boolean,
+            fullName = "adaptive-batching",
+            description = "Enable adaptive batch sizing (default: false)"
+        ).default(false)
+
         override fun execute() {
             val host = hostName ?: getHostName()
             log.info("Running crawl for host: {}", host)
 
-            val client = RemoteCrawlClient(serverUrl, username, password)
+            val client = createClientOrExit(serverUrl, username, password)
+            val checks = checkServer(client)
 
-            // Test connection first
-            if (!client.testConnection()) {
-                log.error("Failed to connect to server at {}", serverUrl)
+            if (!checks.connectivity.ok) {
+                log.error("Failed connectivity check to server at {}", serverUrl)
+                printCheckSummary(serverUrl, checks)
+                System.exit(1)
+            }
+            if (!checks.authentication.authenticated) {
+                log.error("Connected to server, but authentication failed")
+                printCheckSummary(serverUrl, checks)
                 System.exit(1)
             }
 
@@ -106,7 +118,8 @@ fun main(args: Array<String>) {
 
             val crawler = FilesystemCrawler(
                 client = client,
-                batchSize = batchSize
+                batchSize = batchSize,
+                adaptiveBatching = adaptiveBatching
             )
 
             // Run each config
@@ -141,19 +154,24 @@ fun main(args: Array<String>) {
             val host = hostName ?: getHostName()
             log.info("Checking status for host: {}", host)
 
-            val client = RemoteCrawlClient(serverUrl, username, password)
+            val client = createClientOrExit(serverUrl, username, password)
+            val checks = checkServer(client)
+            printCheckSummary(serverUrl, checks)
+            println("Host: $host")
+            println()
 
-            // Test connection
-            if (!client.testConnection()) {
+            if (!checks.connectivity.ok) {
                 log.error("Failed to connect to server at {}", serverUrl)
                 println("Status: OFFLINE")
-                println("Server: $serverUrl")
                 System.exit(1)
             }
 
-            println("Status: ONLINE")
-            println("Server: $serverUrl")
-            println("Host: $host")
+            if (!checks.authentication.authenticated) {
+                println("Status: ONLINE (connected, authentication failed)")
+                System.exit(1)
+            }
+
+            println("Status: ONLINE (connected + authenticated)")
             println()
 
             // Get assigned configs
@@ -213,15 +231,21 @@ fun main(args: Array<String>) {
             println("Server: $serverUrl")
             println()
 
-            val client = RemoteCrawlClient(serverUrl, username, password)
+            val client = createClientOrExit(serverUrl, username, password)
+            val checks = checkServer(client)
 
-            // Test connection first
-            if (!client.testConnection()) {
-                println("ERROR: Failed to connect to server at $serverUrl")
-                println("Make sure the server is running and credentials are correct.")
+            if (!checks.connectivity.ok) {
+                println("ERROR: Failed connectivity check to server at $serverUrl")
+                printCheckSummary(serverUrl, checks)
+                System.exit(1)
+            }
+            if (!checks.authentication.authenticated) {
+                println("ERROR: Connected to server, but authentication failed.")
+                printCheckSummary(serverUrl, checks)
                 System.exit(1)
             }
             println("Server connection: OK")
+            println("Authentication: OK")
             println()
 
             // Determine which paths to discover
@@ -399,19 +423,19 @@ fun main(args: Array<String>) {
         }
     }
 
-    class TestCommand : Subcommand("test", "Test server connectivity") {
+    class TestCommand : Subcommand("test", "Test server connectivity and authentication") {
         override fun execute() {
             log.info("Testing connection to {}", serverUrl)
 
-            val client = RemoteCrawlClient(serverUrl, username, password)
+            val client = createClientOrExit(serverUrl, username, password)
+            val checks = checkServer(client)
 
-            if (client.testConnection()) {
-                println("Connection: OK")
-                println("Server: $serverUrl")
-                println("Authentication: OK")
-            } else {
-                println("Connection: FAILED")
-                println("Server: $serverUrl")
+            printCheckSummary(serverUrl, checks)
+
+            if (!checks.connectivity.ok) {
+                System.exit(1)
+            }
+            if (!checks.authentication.authenticated) {
                 System.exit(1)
             }
         }
@@ -473,11 +497,17 @@ fun main(args: Array<String>) {
         override fun execute() {
             log.info("Running dry-run for config {}", configId)
 
-            val client = RemoteCrawlClient(serverUrl, username, password)
+            val client = createClientOrExit(serverUrl, username, password)
+            val checks = checkServer(client)
 
-            // Test connection first
-            if (!client.testConnection()) {
-                println("ERROR: Failed to connect to server at $serverUrl")
+            if (!checks.connectivity.ok) {
+                println("ERROR: Failed connectivity check to server at $serverUrl")
+                printCheckSummary(serverUrl, checks)
+                System.exit(1)
+            }
+            if (!checks.authentication.authenticated) {
+                println("ERROR: Connected to server, but authentication failed.")
+                printCheckSummary(serverUrl, checks)
                 System.exit(1)
             }
 
@@ -573,6 +603,49 @@ fun main(args: Array<String>) {
 
     parser.subcommands(crawlCommand, statusCommand, onboardCommand, testCommand, dryRunCommand)
     parser.parse(filteredArgs)
+}
+
+private data class ServerCheckSummary(
+    val connectivity: ConnectivityCheckResult,
+    val authentication: AuthCheckResult
+)
+
+private fun createClientOrExit(serverUrl: String, username: String?, password: String?): RemoteCrawlClient {
+    val normalizedUser = username?.trim()?.takeIf { it.isNotBlank() }
+    val normalizedPass = password?.trim()?.takeIf { it.isNotBlank() }
+    if ((normalizedUser == null) != (normalizedPass == null)) {
+        println("ERROR: Provide both --username and --password, or provide neither.")
+        System.exit(1)
+    }
+    return RemoteCrawlClient(
+        baseUrl = serverUrl,
+        username = normalizedUser,
+        password = normalizedPass
+    )
+}
+
+private fun checkServer(client: RemoteCrawlClient): ServerCheckSummary =
+    ServerCheckSummary(
+        connectivity = client.testConnectivity(),
+        authentication = client.testAuthentication()
+    )
+
+private fun printCheckSummary(serverUrl: String, checks: ServerCheckSummary) {
+    println("Server: $serverUrl")
+    println(
+        "Connectivity: " +
+            if (checks.connectivity.ok) {
+                "OK (${checks.connectivity.statusCode ?: "n/a"})"
+            } else {
+                "FAILED (${checks.connectivity.message})"
+            }
+    )
+    val authStatus = if (checks.authentication.authenticated) {
+        "OK (${checks.authentication.statusCode ?: "n/a"})"
+    } else {
+        "FAILED (${checks.authentication.message})"
+    }
+    println("Authentication: $authStatus")
 }
 
 /**

@@ -88,5 +88,6 @@ enum class SuggestedStatus {
     LOCATE,
     INDEX,
     ANALYZE,
+    SEMANTIC,
     UNKNOWN
 }

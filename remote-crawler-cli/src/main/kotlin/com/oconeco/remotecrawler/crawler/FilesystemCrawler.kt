@@ -33,6 +33,7 @@ class FilesystemCrawler(
     private val textExtractor: TextExtractionService = TextExtractionService(),
     private val patternMatcher: PatternMatchingService = PatternMatchingService(),
     private val batchSize: Int = 100,
+    private val adaptiveBatching: Boolean = false,
     private val heartbeatIntervalMs: Long = 30_000
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -57,9 +58,28 @@ class FilesystemCrawler(
         val sessionId = sessionResponse.sessionId
         log.info("Started session {} for config {}", sessionId, config.crawlConfigId)
 
+        val batchController = AdaptiveBatchController(
+            initialItems = batchSize,
+            minItems = (batchSize / 2).coerceAtLeast(25),
+            maxItems = (batchSize * 40).coerceIn(200, 10_000),
+            targetPayloadBytes = if (adaptiveBatching) 8L * 1024 * 1024 else Long.MAX_VALUE,
+            adaptiveEnabled = adaptiveBatching
+        )
+        log.info(
+            "Batching mode: {} (initial={}, min={}, max={}, payloadTarget={}MB)",
+            if (adaptiveBatching) "adaptive" else "fixed",
+            batchController.currentItems(),
+            batchController.minItems,
+            batchController.maxItems,
+            if (batchController.targetPayloadBytes == Long.MAX_VALUE) "unbounded"
+            else (batchController.targetPayloadBytes / (1024 * 1024)).toString()
+        )
+
         val effectivePatterns = EffectivePatterns(
             folderPatterns = config.folderPatterns,
-            filePatterns = config.filePatterns
+            filePatterns = config.filePatterns,
+            folderPatternPriority = config.folderPatternPriority,
+            filePatternPriority = config.filePatternPriority
         )
 
         try {
@@ -83,7 +103,8 @@ class FilesystemCrawler(
                     host = host,
                     maxDepth = config.maxDepth,
                     followLinks = config.followLinks,
-                    stats = stats
+                    stats = stats,
+                    batchController = batchController
                 )
             }
 
@@ -157,7 +178,8 @@ class FilesystemCrawler(
         host: String,
         maxDepth: Int,
         followLinks: Boolean,
-        stats: CrawlStats
+        stats: CrawlStats,
+        batchController: AdaptiveBatchController
     ) {
         // Pending items to ingest
         val pendingFolders = ConcurrentLinkedQueue<FolderIngestItem>()
@@ -207,7 +229,8 @@ class FilesystemCrawler(
                 val status = patternMatcher.determineFolderAnalysisStatus(
                     pathStr,
                     effectivePatterns.folderPatterns,
-                    parentStatus
+                    parentStatus,
+                    effectivePatterns.folderPatternPriority
                 )
 
                 folderStatusCache[pathStr] = status
@@ -219,7 +242,7 @@ class FilesystemCrawler(
                 }
 
                 // Flush if batch is full
-                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats)
+                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats, batchController)
 
                 // Heartbeat
                 if (System.currentTimeMillis() - lastHeartbeat > heartbeatIntervalMs) {
@@ -245,7 +268,8 @@ class FilesystemCrawler(
                 val status = patternMatcher.determineFileAnalysisStatus(
                     pathStr,
                     effectivePatterns.filePatterns,
-                    parentStatus
+                    parentStatus,
+                    effectivePatterns.filePatternPriority
                 )
 
                 val metadata = FileSystemMetadata.fromPath(file)
@@ -257,7 +281,7 @@ class FilesystemCrawler(
                 }
 
                 // Flush if batch is full
-                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats)
+                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats, batchController)
 
                 return FileVisitResult.CONTINUE
             }
@@ -278,7 +302,16 @@ class FilesystemCrawler(
         })
 
         // Final flush
-        flush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats)
+        flush(
+            folders = pendingFolders,
+            files = pendingFiles,
+            host = host,
+            crawlConfigId = config.crawlConfigId,
+            sessionId = sessionId,
+            stats = stats,
+            batchController = batchController,
+            drainCompletely = true
+        )
     }
 
     private fun createFolderItem(
@@ -387,10 +420,11 @@ class FilesystemCrawler(
         host: String,
         crawlConfigId: Long,
         sessionId: Long,
-        stats: CrawlStats
+        stats: CrawlStats,
+        batchController: AdaptiveBatchController
     ) {
-        if (folders.size + files.size >= batchSize) {
-            flush(folders, files, host, crawlConfigId, sessionId, stats)
+        if (folders.size + files.size >= batchController.currentItems()) {
+            flush(folders, files, host, crawlConfigId, sessionId, stats, batchController, drainCompletely = false)
         }
     }
 
@@ -400,46 +434,97 @@ class FilesystemCrawler(
         host: String,
         crawlConfigId: Long,
         sessionId: Long,
-        stats: CrawlStats
+        stats: CrawlStats,
+        batchController: AdaptiveBatchController,
+        drainCompletely: Boolean
     ) {
-        if (folders.isEmpty() && files.isEmpty()) {
-            return
-        }
+        while (folders.isNotEmpty() || files.isNotEmpty()) {
+            val itemLimit = batchController.currentItems()
+            val byteLimit = batchController.targetPayloadBytes
 
-        val folderBatch = mutableListOf<FolderIngestItem>()
-        val fileBatch = mutableListOf<FileIngestItem>()
+            val folderBatch = mutableListOf<FolderIngestItem>()
+            val fileBatch = mutableListOf<FileIngestItem>()
+            var estimatedBytes = 0L
 
-        // Drain queues
-        while (folderBatch.size < batchSize) {
-            val folder = folders.poll() ?: break
-            folderBatch.add(folder)
-        }
+            while ((folderBatch.size + fileBatch.size) < itemLimit) {
+                val takeFolder = when {
+                    folders.isEmpty() -> false
+                    files.isEmpty() -> true
+                    else -> folders.size >= files.size
+                }
+                if (takeFolder) {
+                    val next = folders.peek() ?: continue
+                    val bytes = estimateFolderPayloadBytes(next)
+                    if ((folderBatch.size + fileBatch.size) > 0 && estimatedBytes + bytes > byteLimit) break
+                    folders.poll()?.let {
+                        folderBatch.add(it)
+                        estimatedBytes += bytes
+                    }
+                } else {
+                    val next = files.peek() ?: continue
+                    val bytes = estimateFilePayloadBytes(next)
+                    if ((folderBatch.size + fileBatch.size) > 0 && estimatedBytes + bytes > byteLimit) break
+                    files.poll()?.let {
+                        fileBatch.add(it)
+                        estimatedBytes += bytes
+                    }
+                }
+            }
 
-        while (fileBatch.size < batchSize) {
-            val file = files.poll() ?: break
-            fileBatch.add(file)
-        }
+            // Ensure forward progress when first item alone is larger than target payload.
+            if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
+                folders.poll()?.let { folderBatch.add(it); estimatedBytes += estimateFolderPayloadBytes(it) }
+                if (folderBatch.isEmpty()) {
+                    files.poll()?.let { fileBatch.add(it); estimatedBytes += estimateFilePayloadBytes(it) }
+                }
+            }
 
-        if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
-            return
-        }
+            if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
+                return
+            }
 
-        log.debug("Flushing batch: {} folders, {} files", folderBatch.size, fileBatch.size)
-
-        try {
-            val response = client.ingest(
-                IngestRequest(
-                    host = host,
-                    crawlConfigId = crawlConfigId,
-                    sessionId = sessionId,
-                    folders = if (folderBatch.isNotEmpty()) folderBatch else null,
-                    files = if (fileBatch.isNotEmpty()) fileBatch else null
-                )
+            val itemCount = folderBatch.size + fileBatch.size
+            log.debug(
+                "Flushing batch: {} folders, {} files, itemsTarget={}, bytes~{}",
+                folderBatch.size,
+                fileBatch.size,
+                itemLimit,
+                estimatedBytes
             )
-            log.debug("Ingested: {} folders, {} files", response.foldersPersisted, response.filesPersisted)
-        } catch (e: Exception) {
-            log.error("Failed to ingest batch: {}", e.message)
-            stats.errors.incrementAndGet()
+
+            val started = System.currentTimeMillis()
+            try {
+                val response = client.ingest(
+                    IngestRequest(
+                        host = host,
+                        crawlConfigId = crawlConfigId,
+                        sessionId = sessionId,
+                        folders = if (folderBatch.isNotEmpty()) folderBatch else null,
+                        files = if (fileBatch.isNotEmpty()) fileBatch else null
+                    )
+                )
+                val durationMs = System.currentTimeMillis() - started
+                batchController.recordSuccess(itemCount, estimatedBytes, durationMs)
+                log.debug(
+                    "Ingested: {} folders, {} files in {}ms (next target={})",
+                    response.foldersPersisted,
+                    response.filesPersisted,
+                    durationMs,
+                    batchController.currentItems()
+                )
+            } catch (e: Exception) {
+                log.error("Failed to ingest batch: {}", e.message)
+                stats.errors.incrementAndGet()
+                // Re-queue on failure to avoid silent data loss.
+                folderBatch.forEach { folders.add(it) }
+                fileBatch.forEach { files.add(it) }
+                batchController.recordFailure()
+                break
+            }
+
+            if (!drainCompletely) {
+                return
+            }
         }
     }
 
@@ -464,6 +549,76 @@ class FilesystemCrawler(
             log.warn("Heartbeat failed: {}", e.message)
         }
     }
+}
+
+private class AdaptiveBatchController(
+    initialItems: Int,
+    val minItems: Int,
+    val maxItems: Int,
+    val targetPayloadBytes: Long,
+    private val adaptiveEnabled: Boolean
+) {
+    private var targetItems = initialItems.coerceIn(minItems, maxItems)
+    private var latencyEmaMs: Double? = null
+    private var failureStreak = 0
+
+    fun currentItems(): Int = targetItems
+
+    fun recordSuccess(sentItems: Int, payloadBytes: Long, durationMs: Long) {
+        if (!adaptiveEnabled) return
+        failureStreak = 0
+        val current = latencyEmaMs
+        latencyEmaMs = if (current == null) durationMs.toDouble() else (0.8 * current) + (0.2 * durationMs)
+
+        val slow = durationMs >= 3_000 || payloadBytes >= targetPayloadBytes
+        val fast = durationMs <= 800 &&
+            payloadBytes < (targetPayloadBytes * 3 / 4) &&
+            sentItems >= (targetItems * 9 / 10)
+
+        if (slow) {
+            targetItems = (targetItems * 7 / 10).coerceAtLeast(minItems)
+        } else if (fast) {
+            val growth = (targetItems / 5).coerceAtLeast(50)
+            targetItems = (targetItems + growth).coerceAtMost(maxItems)
+        }
+    }
+
+    fun recordFailure() {
+        if (!adaptiveEnabled) return
+        failureStreak++
+        val shrinkFactor = if (failureStreak >= 3) 3 else 2
+        targetItems = (targetItems / shrinkFactor).coerceAtLeast(minItems)
+    }
+}
+
+private fun estimateFolderPayloadBytes(item: FolderIngestItem): Long {
+    return 192L +
+        (item.path.length * 2L) +
+        ((item.label?.length ?: 0) * 2L) +
+        ((item.description?.length ?: 0) * 2L) +
+        ((item.owner?.length ?: 0) * 2L) +
+        ((item.group?.length ?: 0) * 2L) +
+        ((item.permissions?.length ?: 0) * 2L)
+}
+
+private fun estimateFilePayloadBytes(item: FileIngestItem): Long {
+    return 256L +
+        (item.path.length * 2L) +
+        ((item.label?.length ?: 0) * 2L) +
+        ((item.description?.length ?: 0) * 2L) +
+        ((item.owner?.length ?: 0) * 2L) +
+        ((item.group?.length ?: 0) * 2L) +
+        ((item.permissions?.length ?: 0) * 2L) +
+        ((item.bodyText?.length ?: 0) * 2L) +
+        ((item.author?.length ?: 0) * 2L) +
+        ((item.title?.length ?: 0) * 2L) +
+        ((item.subject?.length ?: 0) * 2L) +
+        ((item.keywords?.length ?: 0) * 2L) +
+        ((item.comments?.length ?: 0) * 2L) +
+        ((item.creationDate?.length ?: 0) * 2L) +
+        ((item.modifiedDate?.length ?: 0) * 2L) +
+        ((item.language?.length ?: 0) * 2L) +
+        ((item.contentType?.length ?: 0) * 2L)
 }
 
 private class CrawlStats {

@@ -56,7 +56,7 @@ class HomeController(
 
         populateDashboardContent(model, stopWatch, effectiveShowAll)
 
-        log.info("Dashboard render times:\n{}", stopWatch.prettyPrint())
+        log.trace("Dashboard render times:\n{}", stopWatch.prettyPrint())
         model.addAttribute("renderTimeMs", stopWatch.totalTimeMillis)
         model.addAttribute("showAll", effectiveShowAll)
         model.addAttribute("isAdmin", isAdmin)

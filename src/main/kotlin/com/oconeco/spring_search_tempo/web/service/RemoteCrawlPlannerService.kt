@@ -51,6 +51,20 @@ class RemoteCrawlPlannerService(
                     index = effectivePatterns.filePatterns.index,
                     analyze = effectivePatterns.filePatterns.analyze,
                     semantic = effectivePatterns.filePatterns.semantic
+                ),
+                folderPatternPriority = PatternPriorityPayload(
+                    skip = effectivePatterns.folderPatternPriority.skip,
+                    semantic = effectivePatterns.folderPatternPriority.semantic,
+                    analyze = effectivePatterns.folderPatternPriority.analyze,
+                    index = effectivePatterns.folderPatternPriority.index,
+                    locate = effectivePatterns.folderPatternPriority.locate
+                ),
+                filePatternPriority = PatternPriorityPayload(
+                    skip = effectivePatterns.filePatternPriority.skip,
+                    semantic = effectivePatterns.filePatternPriority.semantic,
+                    analyze = effectivePatterns.filePatternPriority.analyze,
+                    index = effectivePatterns.filePatternPriority.index,
+                    locate = effectivePatterns.filePatternPriority.locate
                 )
             )
         }
@@ -78,7 +92,8 @@ class RemoteCrawlPlannerService(
                 val status = patternMatchingService.determineFolderAnalysisStatus(
                     path = item.path,
                     patterns = effectivePatterns.folderPatterns,
-                    parentStatus = item.parentStatus
+                    parentStatus = item.parentStatus,
+                    priority = effectivePatterns.folderPatternPriority
                 )
                 RemoteClassifiedPath(
                     path = item.path,
@@ -93,7 +108,8 @@ class RemoteCrawlPlannerService(
                 val status = patternMatchingService.determineFileAnalysisStatus(
                     path = item.path,
                     filePatterns = effectivePatterns.filePatterns,
-                    parentFolderStatus = item.parentFolderStatus ?: AnalysisStatus.LOCATE
+                    parentFolderStatus = item.parentFolderStatus ?: AnalysisStatus.LOCATE,
+                    priority = effectivePatterns.filePatternPriority
                 )
                 RemoteClassifiedPath(
                     path = item.path,
@@ -164,7 +180,9 @@ data class RemoteCrawlConfigAssignment(
     val followLinks: Boolean,
     val parallel: Boolean,
     val folderPatterns: PatternPayload,
-    val filePatterns: PatternPayload
+    val filePatterns: PatternPayload,
+    val folderPatternPriority: PatternPriorityPayload = PatternPriorityPayload(),
+    val filePatternPriority: PatternPriorityPayload = PatternPriorityPayload()
 )
 
 data class PatternPayload(
@@ -173,6 +191,14 @@ data class PatternPayload(
     val index: List<String>,
     val analyze: List<String>,
     val semantic: List<String>
+)
+
+data class PatternPriorityPayload(
+    val skip: Int = 500,
+    val semantic: Int = 400,
+    val analyze: Int = 300,
+    val index: Int = 200,
+    val locate: Int = 100
 )
 
 data class RemoteClassifyRequest(

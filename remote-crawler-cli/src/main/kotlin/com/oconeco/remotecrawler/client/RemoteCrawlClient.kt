@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.oconeco.remotecrawler.model.AnalysisStatus
+import com.oconeco.remotecrawler.model.PatternPriority
 import com.oconeco.remotecrawler.model.PatternSet
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -26,8 +27,8 @@ import java.util.Base64
  */
 class RemoteCrawlClient(
     private val baseUrl: String,
-    private val username: String,
-    private val password: String,
+    private val username: String? = null,
+    private val password: String? = null,
     private val timeoutSeconds: Long = 30
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -40,8 +41,11 @@ class RemoteCrawlClient(
         .registerModule(JavaTimeModule())
         .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-    private val authHeader: String = "Basic " + Base64.getEncoder()
-        .encodeToString("$username:$password".toByteArray())
+    private val authHeader: String? = if (!username.isNullOrBlank() && !password.isNullOrBlank()) {
+        "Basic " + Base64.getEncoder().encodeToString("$username:$password".toByteArray())
+    } else {
+        null
+    }
 
     private val apiBase: String = "$baseUrl/api/remote-crawl"
 
@@ -157,76 +161,88 @@ class RemoteCrawlClient(
         return objectMapper.readValue(response)
     }
 
+    fun hasCredentials(): Boolean = authHeader != null
+
     /**
-     * Test server connectivity.
-     * Use -v flag for DEBUG logging to see detailed connection diagnostics.
+     * Test unauthenticated connectivity to the remote-crawl API.
+     */
+    fun testConnectivity(): ConnectivityCheckResult {
+        val remoteHealthUrl = "$apiBase/health"
+        log.debug("Testing unauthenticated connectivity to: {}", remoteHealthUrl)
+        val primary = requestCheck(url = remoteHealthUrl, includeAuth = false)
+        if (primary.ok) return primary
+
+        // Backward-compatible fallback for older servers.
+        val actuatorHealthUrl = "$baseUrl/actuator/health"
+        log.debug(
+            "Remote health check failed ({}). Trying fallback {}",
+            primary.message,
+            actuatorHealthUrl
+        )
+        val fallback = requestCheck(url = actuatorHealthUrl, includeAuth = false)
+        return if (fallback.ok) {
+            fallback.copy(message = "OK (fallback)")
+        } else {
+            primary
+        }
+    }
+
+    /**
+     * Test authenticated access to the remote-crawl API.
+     */
+    fun testAuthentication(): AuthCheckResult {
+        val authCheckUrl = "$apiBase/auth-check"
+        if (!hasCredentials()) {
+            return AuthCheckResult(
+                authenticated = false,
+                statusCode = null,
+                message = "Missing credentials",
+                endpoint = authCheckUrl
+            )
+        }
+
+        val result = requestCheck(url = authCheckUrl, includeAuth = true)
+        val effective = if (!result.ok && result.statusCode == 404) {
+            // Backward-compatible fallback for older servers.
+            val fallbackUrl = "$apiBase/bootstrap?host=auth-check-probe"
+            val fallback = requestCheck(url = fallbackUrl, includeAuth = true)
+            if (fallback.ok) {
+                fallback.copy(message = "OK (fallback)", endpoint = fallbackUrl)
+            } else {
+                fallback
+            }
+        } else {
+            result
+        }
+        return AuthCheckResult(
+            authenticated = effective.ok,
+            statusCode = effective.statusCode,
+            message = effective.message,
+            endpoint = effective.endpoint
+        )
+    }
+
+    /**
+     * Backward-compatible wrapper used by existing command flows.
+     * true means connectivity is OK and auth is either valid or not required.
      */
     fun testConnection(): Boolean {
-        val healthUrl = "$baseUrl/actuator/health"
-        log.debug("Testing connection to: {}", healthUrl)
-        log.trace("Using Basic auth for user: {}", username)
-
-        return try {
-            val request = HttpRequest.newBuilder()
-                .uri(URI.create(healthUrl))
-                .header("Authorization", authHeader)
-                .timeout(Duration.ofSeconds(5))
-                .GET()
-                .build()
-
-            log.trace("Sending HTTP GET request...")
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-            val statusCode = response.statusCode()
-
-            log.debug("Response status: {}", statusCode)
-            log.trace("Response body: {}", response.body())
-
-            if (statusCode == 200) {
-                log.debug("Connection test successful")
-                true
-            } else {
-                log.warn("Connection test failed with HTTP status: {}", statusCode)
-                log.debug("Response body: {}", response.body())
-                false
-            }
-        } catch (e: java.net.ConnectException) {
-            log.warn("Connection refused: {}", e.message)
-            log.debug("Could not connect to {} - is the server running?", healthUrl)
-            log.trace("Full exception:", e)
-            false
-        } catch (e: java.net.UnknownHostException) {
-            log.warn("Unknown host: {}", e.message)
-            log.debug("DNS lookup failed for server URL: {}", baseUrl)
-            log.trace("Full exception:", e)
-            false
-        } catch (e: java.net.http.HttpTimeoutException) {
-            log.warn("Connection timed out: {}", e.message)
-            log.debug("Request to {} timed out after 5 seconds", healthUrl)
-            log.trace("Full exception:", e)
-            false
-        } catch (e: javax.net.ssl.SSLException) {
-            log.warn("SSL/TLS error: {}", e.message)
-            log.debug("SSL handshake failed - check if server uses HTTPS and has valid certificate")
-            log.trace("Full exception:", e)
-            false
-        } catch (e: Exception) {
-            log.warn("Connection test failed: {} - {}", e.javaClass.simpleName, e.message)
-            log.debug("Exception type: {}", e.javaClass.name)
-            log.trace("Full exception:", e)
-            false
-        }
+        val connectivity = testConnectivity()
+        if (!connectivity.ok) return false
+        val auth = testAuthentication()
+        return auth.authenticated
     }
 
     private fun get(url: String): String {
         log.debug("GET {}", url)
 
-        val request = HttpRequest.newBuilder()
+        val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create(url))
-            .header("Authorization", authHeader)
             .header("Accept", "application/json")
             .timeout(Duration.ofSeconds(timeoutSeconds))
             .GET()
-            .build()
+        withOptionalAuth(requestBuilder)
+        val request = requestBuilder.build()
 
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
@@ -242,14 +258,14 @@ class RemoteCrawlClient(
 
         val jsonBody = objectMapper.writeValueAsString(body)
 
-        val request = HttpRequest.newBuilder()
+        val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create(url))
-            .header("Authorization", authHeader)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .timeout(Duration.ofSeconds(timeoutSeconds))
             .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-            .build()
+        withOptionalAuth(requestBuilder)
+        val request = requestBuilder.build()
 
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
 
@@ -259,9 +275,64 @@ class RemoteCrawlClient(
 
         return response.body()
     }
+
+    private fun withOptionalAuth(builder: HttpRequest.Builder, includeAuth: Boolean = true) {
+        if (includeAuth && authHeader != null) {
+            builder.header("Authorization", authHeader)
+        }
+    }
+
+    private fun requestCheck(url: String, includeAuth: Boolean): ConnectivityCheckResult {
+        return try {
+            val requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+            withOptionalAuth(requestBuilder, includeAuth = includeAuth)
+            val response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            val statusCode = response.statusCode()
+            val ok = statusCode in 200..299
+            val message = if (ok) "OK" else "HTTP $statusCode"
+            ConnectivityCheckResult(
+                ok = ok,
+                statusCode = statusCode,
+                message = message,
+                endpoint = url
+            )
+        } catch (e: java.net.ConnectException) {
+            ConnectivityCheckResult(ok = false, statusCode = null, message = "Connection refused", endpoint = url)
+        } catch (e: java.net.UnknownHostException) {
+            ConnectivityCheckResult(ok = false, statusCode = null, message = "Unknown host", endpoint = url)
+        } catch (e: java.net.http.HttpTimeoutException) {
+            ConnectivityCheckResult(ok = false, statusCode = null, message = "Timeout", endpoint = url)
+        } catch (e: javax.net.ssl.SSLException) {
+            ConnectivityCheckResult(ok = false, statusCode = null, message = "SSL error", endpoint = url)
+        } catch (e: Exception) {
+            ConnectivityCheckResult(
+                ok = false,
+                statusCode = null,
+                message = "${e.javaClass.simpleName}: ${e.message ?: "request failed"}",
+                endpoint = url
+            )
+        }
+    }
 }
 
 class RemoteCrawlException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+data class ConnectivityCheckResult(
+    val ok: Boolean,
+    val statusCode: Int?,
+    val message: String,
+    val endpoint: String
+)
+
+data class AuthCheckResult(
+    val authenticated: Boolean,
+    val statusCode: Int?,
+    val message: String,
+    val endpoint: String
+)
 
 // ============ Request/Response DTOs ============
 
@@ -283,7 +354,9 @@ data class CrawlConfigAssignment(
     val followLinks: Boolean,
     val parallel: Boolean,
     val folderPatterns: PatternSet,
-    val filePatterns: PatternSet
+    val filePatterns: PatternSet,
+    val folderPatternPriority: PatternPriority = PatternPriority(),
+    val filePatternPriority: PatternPriority = PatternPriority()
 )
 
 data class SessionStartRequest(
