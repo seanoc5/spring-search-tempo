@@ -95,6 +95,34 @@
         .hidden-folder {
             opacity: 0.6;
         }
+        /* Status-based folder name styling */
+        .folder-name-skip { color: #dc3545; }
+        .folder-name-locate { color: #856404; }
+        .folder-name-index { color: #198754; }
+        .folder-name-analyze { color: #0d6efd; }
+        .folder-name-semantic { color: #6610f2; }
+        .folder-name-unknown { color: #6c757d; font-style: italic; }
+        /* Inactive action buttons (grayed out) */
+        .action-btn.inactive {
+            opacity: 0.35;
+            pointer-events: auto;
+        }
+        .action-btn.active-status {
+            opacity: 1;
+            font-weight: 700;
+            box-shadow: 0 0 0 2px currentColor;
+        }
+        /* Suggested status indicator */
+        .suggested-indicator {
+            font-size: 0.65rem;
+            color: #6c757d;
+            margin-left: 4px;
+        }
+        .suggested-indicator .badge {
+            font-size: 0.6rem;
+            padding: 1px 4px;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -133,7 +161,7 @@
                 <strong th:text="${discoverySession.suggestedProfile}">PROGRAMMER</strong>
                 (<span th:text="|${discoverySession.profileConfidencePercent}%|">75%</span>)
                 <span class="text-muted" th:text="${discoverySession.profileReason}">signals summary</span>
-                <span class="ms-2 badge status-analyze">EMBED = ANALYZE</span>
+                <span class="ms-2 badge status-semantic">EMBED = SEMANTIC</span>
             </div>
             <form th:action="@{/discovery/{id}/apply-template(id=${discoverySession.id})}" method="post" class="d-flex align-items-center gap-2">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
@@ -249,6 +277,10 @@
                                 </button>
                                 <button type="button" class="btn btn-outline-primary btn-sm"
                                         onclick="classifySelected('ANALYZE')">
+                                    ANALYZE
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        onclick="classifySelected('SEMANTIC')">
                                     EMBED
                                 </button>
                             </div>
@@ -335,9 +367,13 @@
                                 <span class="badge status-index">INDEX</span>
                                 Full text extraction (docs, code)
                             </div>
+                            <div class="mb-2">
+                                <span class="badge status-analyze">ANALYZE</span>
+                                Index + NLP pipeline
+                            </div>
                             <div>
-                                <span class="badge status-analyze">ANALYZE (EMBED)</span>
-                                Index + NLP + embedding-ready pipeline
+                                <span class="badge status-semantic">EMBED (SEMANTIC)</span>
+                                Analyze + vector embeddings
                             </div>
                             <hr>
                             <div class="small text-muted">
@@ -576,15 +612,37 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Update the folder's badge
-                    const badge = document.querySelector(`[data-folder-id="${folderId}"] .status-badge`);
-                    if (badge) {
-                        badge.className = `badge status-badge status-${status.toLowerCase()}`;
-                        badge.textContent = status === 'ANALYZE' ? 'NLP' : (status === 'SEMANTIC' ? 'EMBED' : status);
-                    }
-                    const source = document.querySelector(`[data-folder-id="${folderId}"] .status-source`);
-                    if (source) {
-                        source.textContent = 'ASSIGNED';
+                    const row = document.querySelector(`[data-folder-id="${folderId}"]`);
+                    if (row) {
+                        // Update the folder's badge
+                        const badge = row.querySelector('.status-badge');
+                        if (badge) {
+                            badge.className = `badge status-badge status-${status.toLowerCase()}`;
+                            badge.textContent = status === 'SEMANTIC' ? 'EMBED' : status;
+                        }
+                        const source = row.querySelector('.status-source');
+                        if (source) {
+                            source.textContent = 'ASSIGNED';
+                        }
+                        // Update folder name styling
+                        const folderName = row.querySelector('.folder-name.fw-semibold');
+                        if (folderName) {
+                            folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
+                            folderName.classList.add('folder-name', 'fw-semibold', `folder-name-${status.toLowerCase()}`);
+                        }
+                        // Update action button active/inactive states
+                        row.querySelectorAll('.action-btn').forEach(btn => {
+                            const btnStatus = btn.textContent.replace('*', '').trim();
+                            const statusMap = {'S': 'SKIP', 'L': 'LOCATE', 'I': 'INDEX', 'A': 'ANALYZE', 'E': 'SEMANTIC'};
+                            const isActive = statusMap[btnStatus] === status;
+                            btn.classList.remove('active-status', 'inactive');
+                            btn.classList.add(isActive ? 'active-status' : 'inactive');
+                        });
+                        // Hide suggested indicator since we just assigned
+                        const suggestedIndicator = row.querySelector('.suggested-indicator');
+                        if (suggestedIndicator) {
+                            suggestedIndicator.style.display = 'none';
+                        }
                     }
                     // Trigger status panel refresh
                     htmx.trigger(document.body, 'classificationChanged');
@@ -655,7 +713,9 @@
         th:with="
             effectiveStatus=${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : null))},
             statusSource=${folder.assignedStatus != null ? 'ASSIGNED' : (inheritedStatus != null ? 'INHERITED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH'))},
-            statusLabel=${effectiveStatus == 'ANALYZE' ? 'NLP' : (effectiveStatus == 'SEMANTIC' ? 'EMBED' : effectiveStatus)}
+            statusLabel=${effectiveStatus == 'SEMANTIC' ? 'EMBED' : effectiveStatus},
+            effectiveStatusLower=${effectiveStatus != null ? effectiveStatus.toLowerCase() : 'unknown'},
+            suggestedDiffers=${folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' and folder.assignedStatus != null and folder.assignedStatus.toString() != folder.suggestedStatus.toString()}
         ">
         <td class="folder-col" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''">
             <div class="tree-cell" th:style="|--depth:${depth};|">
@@ -672,7 +732,9 @@
                 <span th:unless="${foldersByParent.containsKey(folder.path) and depth < maxDepth}" style="width: 12px;"></span>
 
                 <i class="bi bi-folder text-warning"></i>
-                <span class="folder-name fw-semibold" th:text="${folder.name}">folder</span>
+                <span class="folder-name fw-semibold"
+                      th:classappend="|folder-name-${effectiveStatusLower}|"
+                      th:text="${folder.name}">folder</span>
             </div>
         </td>
 
@@ -681,25 +743,41 @@
 
         <td>
             <span class="badge status-badge"
-                  th:classappend="${effectiveStatus != null} ? |status-${effectiveStatus.toLowerCase()}| : 'status-unknown'"
+                  th:classappend="${effectiveStatus != null} ? |status-${effectiveStatusLower}| : 'status-unknown'"
                   th:text="${statusLabel != null ? statusLabel : 'UNKNOWN'}">UNKNOWN</span>
             <span class="status-source ms-1" th:text="${statusSource}">ASSIGNED</span>
+            <!-- Show suggested status if different from assigned -->
+            <span th:if="${suggestedDiffers}" class="suggested-indicator"
+                  th:title="|Suggested: ${folder.suggestedStatus}|">
+                <i class="bi bi-lightbulb"></i>
+                <span class="badge"
+                      th:classappend="|status-${folder.suggestedStatus.toLowerCase()}|"
+                      th:text="${folder.suggestedStatus == 'SEMANTIC' ? 'EMBED' : folder.suggestedStatus}">SUG</span>
+            </span>
         </td>
 
         <td class="text-end action-col-folder">
             <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
                 <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
+                        th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
                         th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
                         title="Folder: SKIP">S</button>
                 <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
+                        th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
                         th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
                         title="Folder: LOCATE">L</button>
                 <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
+                        th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
                         th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
                         title="Folder: INDEX">I</button>
                 <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
+                        th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
                         th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
-                        title="Folder: NLP/EMBED">N</button>
+                        title="Folder: ANALYZE">A</button>
+                <button type="button" class="btn btn-outline-secondary action-btn action-btn-folder"
+                        th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                        th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|"
+                        title="Folder: EMBED">E</button>
             </div>
         </td>
 
@@ -708,13 +786,20 @@
                  th:if="${foldersByParent.containsKey(folder.path)}"
                  title="Entire-branch actions">
                 <button type="button" class="btn btn-outline-danger action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
                         th:data-folder-path="${folder.path}" data-status="SKIP" title="Branch: SKIP">S*</button>
                 <button type="button" class="btn btn-outline-warning action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
                         th:data-folder-path="${folder.path}" data-status="LOCATE" title="Branch: LOCATE">L*</button>
                 <button type="button" class="btn btn-outline-success action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
                         th:data-folder-path="${folder.path}" data-status="INDEX" title="Branch: INDEX">I*</button>
                 <button type="button" class="btn btn-outline-primary action-btn subtree-action"
-                        th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: NLP/EMBED">N*</button>
+                        th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: ANALYZE">A*</button>
+                <button type="button" class="btn btn-outline-secondary action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E*</button>
             </div>
             <span th:unless="${foldersByParent.containsKey(folder.path)}" class="text-muted small">-</span>
         </td>
