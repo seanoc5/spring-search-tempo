@@ -227,6 +227,7 @@ class DiscoveryController(
             return "discovery/classify"
         } catch (e: NotFoundException) {
             model.addAttribute("error", "Discovery session not found")
+            model.addAttribute("sessions", discoveryService.getAllSessions())
             return "discovery/list"
         }
     }
