@@ -95,13 +95,13 @@
         .hidden-folder {
             opacity: 0.6;
         }
-        /* Status-based folder name styling */
-        .folder-name-skip { color: #dc3545; }
-        .folder-name-locate { color: #856404; }
-        .folder-name-index { color: #198754; }
-        .folder-name-analyze { color: #0d6efd; }
-        .folder-name-semantic { color: #6610f2; }
-        .folder-name-unknown { color: #6c757d; font-style: italic; }
+        /* Status-based folder/path name styling */
+        .folder-name-skip { color: #dc3545 !important; font-weight: 600; }
+        .folder-name-locate { color: #b8860b !important; font-weight: 600; }
+        .folder-name-index { color: #198754 !important; font-weight: 600; }
+        .folder-name-analyze { color: #0d6efd !important; font-weight: 600; }
+        .folder-name-semantic { color: #6610f2 !important; font-weight: 600; }
+        .folder-name-unknown { color: #6c757d !important; font-style: italic; }
         /* Inactive action buttons (grayed out) */
         .action-btn.inactive {
             opacity: 0.35;
@@ -227,6 +227,139 @@
                             </th:block>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <div class="mt-3" id="foldersList">
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-filter-square me-2"></i>
+                                Folders List
+                                <span th:if="${selectedAssignedStatus != null}">
+                                    - <span th:text="${selectedAssignedStatus}">SKIP</span>
+                                    (<span th:text="${assignedFoldersTotal}">0</span>)
+                                </span>
+                            </h6>
+                            <a class="btn btn-sm btn-outline-secondary"
+                               th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth})}">
+                                Clear Filter
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted mb-3">
+                                Click a count in <strong>Classification Status</strong> to load folders with that assigned status.
+                            </p>
+
+                            <div th:if="${selectedAssignedStatus == null}" class="text-muted small">
+                                No status selected yet.
+                            </div>
+
+                            <th:block th:if="${selectedAssignedStatus != null}">
+                                <form method="get" class="row g-2 align-items-end mb-3">
+                                    <input type="hidden" name="maxDepth" th:value="${maxDepth}">
+                                    <input type="hidden" name="assignedStatus" th:value="${selectedAssignedStatus}">
+                                    <input type="hidden" name="listPage" value="0">
+                                    <input type="hidden" name="listSort" th:value="${assignedFoldersSort}">
+                                    <input type="hidden" name="listDir" th:value="${assignedFoldersDir}">
+                                    <div class="col-md-6">
+                                        <label class="form-label small mb-1" for="listQuery">Path filter</label>
+                                        <input id="listQuery"
+                                               name="listQuery"
+                                               class="form-control form-control-sm"
+                                               th:value="${assignedFoldersQuery}"
+                                               placeholder="contains text...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small mb-1" for="listSize">Page size</label>
+                                        <select id="listSize" name="listSize" class="form-select form-select-sm">
+                                            <option value="50" th:selected="${assignedFoldersPageSize == 50}">50</option>
+                                            <option value="100" th:selected="${assignedFoldersPageSize == 100}">100</option>
+                                            <option value="200" th:selected="${assignedFoldersPageSize == 200}">200</option>
+                                            <option value="500" th:selected="${assignedFoldersPageSize == 500}">500</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                                    </div>
+                                </form>
+
+                                <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
+                                    <span>
+                                        Matches explicit assignments (same metric as status counts).
+                                    </span>
+                                    <span th:text="|Page ${assignedFoldersPage + 1} / ${assignedFoldersTotalPages == 0 ? 1 : assignedFoldersTotalPages}|">Page 1 / 1</span>
+                                </div>
+
+                                <div class="table-responsive" style="max-height: 34vh; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th th:with="nextDir=${assignedFoldersSort == 'path' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                            <a class="text-decoration-none"
+                                               th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='path', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                                Path
+                                            </a>
+                                        </th>
+                                        <th style="width: 100px;"
+                                            th:with="nextDir=${assignedFoldersSort == 'depth' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                            <a class="text-decoration-none"
+                                               th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='depth', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                                Depth
+                                            </a>
+                                        </th>
+                                        <th style="width: 120px;"
+                                            th:with="nextDir=${assignedFoldersSort == 'folderCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                            <a class="text-decoration-none"
+                                               th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='folderCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                                Subfolders
+                                            </a>
+                                        </th>
+                                        <th style="width: 100px;"
+                                            th:with="nextDir=${assignedFoldersSort == 'fileCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
+                                            <a class="text-decoration-none"
+                                               th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='fileCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
+                                                Files
+                                            </a>
+                                        </th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:if="${#lists.isEmpty(assignedFolders)}">
+                                        <td colspan="4" class="text-muted">No folders match this status + filter.</td>
+                                    </tr>
+                                    <tr th:each="folder : ${assignedFolders}">
+                                        <td class="font-monospace"
+                                            th:classappend="|folder-name-${selectedAssignedStatus.toLowerCase()}|"
+                                            th:text="${folder.path}">C:\path</td>
+                                        <td th:text="${folder.depth}">0</td>
+                                        <td th:text="${folder.folderCount}">0</td>
+                                        <td th:text="${folder.fileCount}">0</td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="small text-muted"
+                                         th:text="|Showing ${assignedFoldersFrom}-${assignedFoldersTo} of ${assignedFoldersTotal}|">
+                                        Showing 0-0 of 0
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <a class="btn btn-outline-secondary"
+                                           th:classappend="${!assignedFoldersHasPrevious} ? ' disabled'"
+                                           th:href="${assignedFoldersHasPrevious} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage - 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
+                                            Prev
+                                        </a>
+                                        <a class="btn btn-outline-secondary"
+                                           th:classappend="${!assignedFoldersHasNext} ? ' disabled'"
+                                           th:href="${assignedFoldersHasNext} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage + 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
+                                            Next
+                                        </a>
+                                    </div>
+                                </div>
+                            </th:block>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -389,138 +522,6 @@
             </div>
         </div>
 
-        <div class="row mt-3" id="foldersList">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">
-                            <i class="bi bi-filter-square me-2"></i>
-                            Folders List
-                            <span th:if="${selectedAssignedStatus != null}">
-                                - <span th:text="${selectedAssignedStatus}">SKIP</span>
-                                (<span th:text="${assignedFoldersTotal}">0</span>)
-                            </span>
-                        </h6>
-                        <a class="btn btn-sm btn-outline-secondary"
-                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth})}">
-                            Clear Filter
-                        </a>
-                    </div>
-                    <div class="card-body">
-                        <p class="small text-muted mb-3">
-                            Click a count in <strong>Classification Status</strong> to load folders with that assigned status.
-                        </p>
-
-                        <div th:if="${selectedAssignedStatus == null}" class="text-muted small">
-                            No status selected yet.
-                        </div>
-
-                        <th:block th:if="${selectedAssignedStatus != null}">
-                            <form method="get" class="row g-2 align-items-end mb-3">
-                                <input type="hidden" name="maxDepth" th:value="${maxDepth}">
-                                <input type="hidden" name="assignedStatus" th:value="${selectedAssignedStatus}">
-                                <input type="hidden" name="listPage" value="0">
-                                <input type="hidden" name="listSort" th:value="${assignedFoldersSort}">
-                                <input type="hidden" name="listDir" th:value="${assignedFoldersDir}">
-                                <div class="col-md-6">
-                                    <label class="form-label small mb-1" for="listQuery">Path filter</label>
-                                    <input id="listQuery"
-                                           name="listQuery"
-                                           class="form-control form-control-sm"
-                                           th:value="${assignedFoldersQuery}"
-                                           placeholder="contains text...">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label small mb-1" for="listSize">Page size</label>
-                                    <select id="listSize" name="listSize" class="form-select form-select-sm">
-                                        <option value="50" th:selected="${assignedFoldersPageSize == 50}">50</option>
-                                        <option value="100" th:selected="${assignedFoldersPageSize == 100}">100</option>
-                                        <option value="200" th:selected="${assignedFoldersPageSize == 200}">200</option>
-                                        <option value="500" th:selected="${assignedFoldersPageSize == 500}">500</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
-                                </div>
-                            </form>
-
-                            <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
-                                <span>
-                                    Matches explicit assignments (same metric as status counts).
-                                </span>
-                                <span th:text="|Page ${assignedFoldersPage + 1} / ${assignedFoldersTotalPages == 0 ? 1 : assignedFoldersTotalPages}|">Page 1 / 1</span>
-                            </div>
-
-                            <div class="table-responsive" style="max-height: 34vh; overflow-y: auto;">
-                            <table class="table table-sm table-hover mb-0">
-                                <thead class="table-light">
-                                <tr>
-                                    <th th:with="nextDir=${assignedFoldersSort == 'path' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
-                                        <a class="text-decoration-none"
-                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='path', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
-                                            Path
-                                        </a>
-                                    </th>
-                                    <th style="width: 100px;"
-                                        th:with="nextDir=${assignedFoldersSort == 'depth' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
-                                        <a class="text-decoration-none"
-                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='depth', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
-                                            Depth
-                                        </a>
-                                    </th>
-                                    <th style="width: 120px;"
-                                        th:with="nextDir=${assignedFoldersSort == 'folderCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
-                                        <a class="text-decoration-none"
-                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='folderCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
-                                            Subfolders
-                                        </a>
-                                    </th>
-                                    <th style="width: 100px;"
-                                        th:with="nextDir=${assignedFoldersSort == 'fileCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
-                                        <a class="text-decoration-none"
-                                           th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='fileCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
-                                            Files
-                                        </a>
-                                    </th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <tr th:if="${#lists.isEmpty(assignedFolders)}">
-                                    <td colspan="4" class="text-muted">No folders match this status + filter.</td>
-                                </tr>
-                                <tr th:each="folder : ${assignedFolders}">
-                                    <td class="font-monospace" th:text="${folder.path}">C:\path</td>
-                                    <td th:text="${folder.depth}">0</td>
-                                    <td th:text="${folder.folderCount}">0</td>
-                                    <td th:text="${folder.fileCount}">0</td>
-                                </tr>
-                                </tbody>
-                            </table>
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <div class="small text-muted"
-                                     th:text="|Showing ${assignedFoldersFrom}-${assignedFoldersTo} of ${assignedFoldersTotal}|">
-                                    Showing 0-0 of 0
-                                </div>
-                                <div class="btn-group btn-group-sm">
-                                    <a class="btn btn-outline-secondary"
-                                       th:classappend="${!assignedFoldersHasPrevious} ? ' disabled'"
-                                       th:href="${assignedFoldersHasPrevious} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage - 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
-                                        Prev
-                                    </a>
-                                    <a class="btn btn-outline-secondary"
-                                       th:classappend="${!assignedFoldersHasNext} ? ' disabled'"
-                                       th:href="${assignedFoldersHasNext} ? @{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=${assignedFoldersPage + 1}, listSize=${assignedFoldersPageSize}, listSort=${assignedFoldersSort}, listDir=${assignedFoldersDir}, listQuery=${assignedFoldersQuery})} : '#'">
-                                        Next
-                                    </a>
-                                </div>
-                            </div>
-                        </th:block>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script th:inline="javascript">
