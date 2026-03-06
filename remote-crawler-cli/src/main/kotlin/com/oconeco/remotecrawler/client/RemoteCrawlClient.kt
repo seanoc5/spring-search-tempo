@@ -161,6 +161,23 @@ class RemoteCrawlClient(
         return objectMapper.readValue(response)
     }
 
+    /**
+     * List discovery session candidates for a crawl config.
+     * Ranked on the server by host match and recency.
+     */
+    fun listDiscoverySessions(
+        configId: Long,
+        requestedHost: String? = null,
+        limit: Int = 3
+    ): List<DiscoverySessionOption> {
+        val params = mutableListOf("configId=$configId", "limit=$limit")
+        requestedHost?.trim()?.takeIf { it.isNotBlank() }?.let {
+            params.add("host=${java.net.URLEncoder.encode(it, "UTF-8")}")
+        }
+        val response = get("$apiBase/discovery/sessions?${params.joinToString("&")}")
+        return objectMapper.readValue<DiscoverySessionOptionsResponse>(response).sessions
+    }
+
     fun hasCredentials(): Boolean = authHeader != null
 
     /**
@@ -571,7 +588,8 @@ data class DiscoveryUploadRequest(
     val folders: List<DiscoveredFolderDTO>,
     val rootPaths: List<String>,
     val osType: String,  // WINDOWS, LINUX, MACOS
-    val discoveryDurationMs: Long
+    val discoveryDurationMs: Long,
+    val createNewSession: Boolean = false
 )
 
 data class DiscoveredFolderDTO(
@@ -602,6 +620,24 @@ data class DiscoveryStatusResponse(
     val skipCount: Int,
     val locateCount: Int,
     val indexCount: Int
+)
+
+data class DiscoverySessionOptionsResponse(
+    val configId: Long,
+    val requestedHost: String? = null,
+    val count: Int,
+    val sessions: List<DiscoverySessionOption>
+)
+
+data class DiscoverySessionOption(
+    val sessionId: Long,
+    val host: String,
+    val status: String,
+    val totalFolders: Int,
+    val classifiedFolders: Int,
+    val dateCreated: String? = null,
+    val lastUpdated: String? = null,
+    val hostMatched: Boolean = false
 )
 
 // ============ Dry Run DTOs ============

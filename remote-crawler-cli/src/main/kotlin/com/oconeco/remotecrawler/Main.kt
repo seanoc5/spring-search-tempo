@@ -77,6 +77,12 @@ fun main(args: Array<String>) {
             description = "Enable adaptive batch sizing (default: false)"
         ).default(false)
 
+        val beginPath by option(
+            ArgType.String,
+            fullName = "begin",
+            description = "Focused crawl start path override (runs from this folder only)"
+        )
+
         override fun execute() {
             val host = hostName ?: getHostName()
             log.info("Running crawl for host: {}", host)
@@ -127,9 +133,21 @@ fun main(args: Array<String>) {
             var totalFailed = 0
 
             for (config in configsToRun) {
-                log.info("=== Running config: {} (ID: {}) ===", config.name, config.crawlConfigId)
+                val effectiveConfig = if (!beginPath.isNullOrBlank()) {
+                    val normalizedBegin = Paths.get(beginPath!!.trim()).toAbsolutePath().toString()
+                    log.info(
+                        "Applying focused crawl override for config {}: start path -> {}",
+                        config.crawlConfigId,
+                        normalizedBegin
+                    )
+                    config.copy(startPaths = listOf(normalizedBegin))
+                } else {
+                    config
+                }
 
-                val result = crawler.crawl(config, host)
+                log.info("=== Running config: {} (ID: {}) ===", effectiveConfig.name, effectiveConfig.crawlConfigId)
+
+                val result = crawler.crawl(effectiveConfig, host)
 
                 if (result.success) {
                     log.info("Crawl completed: {} folders, {} files in {}ms",
@@ -198,6 +216,13 @@ fun main(args: Array<String>) {
             description = "Paths to discover (comma-separated, e.g., 'C:,D:' or '/'). If not specified, detects automatically."
         )
 
+        val beginPath by option(
+            ArgType.String,
+            shortName = "b",
+            fullName = "begin",
+            description = "Focused discovery start folder (overrides --paths/interactive selection)"
+        )
+
         val maxDepth by option(
             ArgType.Int,
             fullName = "max-depth",
@@ -217,6 +242,13 @@ fun main(args: Array<String>) {
             description = "Skip confirmation prompts (use defaults)"
         ).default(false)
 
+        val forceNewSession by option(
+            ArgType.Boolean,
+            shortName = "n",
+            fullName = "new",
+            description = "Create a new discovery session and archive older sessions for this host"
+        ).default(false)
+
         override fun execute() {
             val host = hostName ?: getHostName()
             val osType = detectOsType()
@@ -229,6 +261,12 @@ fun main(args: Array<String>) {
             println("Host: $host")
             println("OS: $osType")
             println("Server: $serverUrl")
+            if (!beginPath.isNullOrBlank()) {
+                println("Begin path: ${beginPath!!.trim()}")
+            }
+            if (forceNewSession) {
+                println("Session mode: NEW (archive old sessions)")
+            }
             println()
 
             val client = createClientOrExit(serverUrl, username, password)
@@ -249,7 +287,14 @@ fun main(args: Array<String>) {
             println()
 
             // Determine which paths to discover
-            val rootPaths = if (paths != null) {
+            if (!beginPath.isNullOrBlank() && !paths.isNullOrBlank()) {
+                println("ERROR: Use either --begin or --paths, not both.")
+                System.exit(1)
+            }
+
+            val rootPaths = if (!beginPath.isNullOrBlank()) {
+                listOf(Paths.get(beginPath!!.trim()))
+            } else if (paths != null) {
                 // User specified paths explicitly
                 paths!!.split(",").map { Paths.get(it.trim()) }
             } else if (interactive && !skipPrompt) {
@@ -323,7 +368,8 @@ fun main(args: Array<String>) {
                     folders = result.folders.map { toDTO(it) },
                     rootPaths = rootPaths.map { it.toString() },
                     osType = osType,
-                    discoveryDurationMs = result.durationMs
+                    discoveryDurationMs = result.durationMs,
+                    createNewSession = forceNewSession
                 )
 
                 val uploadResponse = client.uploadDiscovery(uploadRequest)
@@ -459,7 +505,7 @@ fun main(args: Array<String>) {
         val sessionIdOpt by option(
             ArgType.Int,
             fullName = "session",
-            description = "Discovery session ID (default: most recent for config)"
+            description = "Discovery session ID (default: select from top ranked options, then most recent)"
         )
 
         val statusFilter by option(
@@ -512,10 +558,18 @@ fun main(args: Array<String>) {
             }
 
             try {
+                val preferredHost = (hostName ?: getHostName()).trim()
+                val resolvedSessionId = resolveDryRunSessionId(
+                    client = client,
+                    configId = configId.toLong(),
+                    explicitSessionId = sessionIdOpt?.toLong(),
+                    preferredHost = preferredHost
+                )
+
                 val result = client.getDryRun(
                     configId = configId.toLong(),
                     detailed = detailed,
-                    sessionId = sessionIdOpt?.toLong(),
+                    sessionId = resolvedSessionId,
                     status = statusFilter,
                     pathPrefix = pathPrefix,
                     limit = limit
@@ -646,6 +700,62 @@ private fun printCheckSummary(serverUrl: String, checks: ServerCheckSummary) {
         "FAILED (${checks.authentication.message})"
     }
     println("Authentication: $authStatus")
+}
+
+private fun resolveDryRunSessionId(
+    client: RemoteCrawlClient,
+    configId: Long,
+    explicitSessionId: Long?,
+    preferredHost: String
+): Long? {
+    if (explicitSessionId != null) return explicitSessionId
+
+    val candidates = try {
+        client.listDiscoverySessions(
+            configId = configId,
+            requestedHost = preferredHost,
+            limit = 3
+        )
+    } catch (e: Exception) {
+        log.debug("Could not load discovery session candidates for config {}: {}", configId, e.message)
+        return null
+    }
+
+    if (candidates.isEmpty()) return null
+    if (candidates.size == 1) {
+        val only = candidates.first()
+        println("Using discovery session ${only.sessionId} (${only.host}, ${only.status})")
+        return only.sessionId
+    }
+
+    println()
+    println("Multiple discovery sessions found for config $configId:")
+    candidates.forEachIndexed { index, candidate ->
+        val updated = candidate.lastUpdated ?: candidate.dateCreated ?: "unknown"
+        val hostMarker = if (candidate.hostMatched) " host-match" else ""
+        println(
+            "  [${index + 1}] session=${candidate.sessionId} host=${candidate.host}$hostMarker " +
+                "status=${candidate.status} updated=$updated " +
+                "classified=${candidate.classifiedFolders}/${candidate.totalFolders}"
+        )
+    }
+
+    if (System.console() == null) {
+        val selected = candidates.first()
+        println("Non-interactive mode detected; selecting [1] session ${selected.sessionId}.")
+        return selected.sessionId
+    }
+
+    while (true) {
+        print("Select discovery session [1-${candidates.size}] (Enter for 1): ")
+        val input = readLine()?.trim().orEmpty()
+        if (input.isBlank()) return candidates.first().sessionId
+        val idx = input.toIntOrNull()
+        if (idx != null && idx in 1..candidates.size) {
+            return candidates[idx - 1].sessionId
+        }
+        println("Invalid selection '$input'.")
+    }
 }
 
 /**

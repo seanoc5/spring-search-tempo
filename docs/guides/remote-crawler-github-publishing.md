@@ -13,8 +13,9 @@ This repo includes a GitHub Actions workflow that publishes the remote crawler C
 
 ```bash
 # from repo root
-git tag remote-crawler-v0.1.1
-git push origin remote-crawler-v0.1.1
+export rcv=0.2.2
+git tag remote-crawler-v$rcv
+git push origin remote-crawler-v$rcv
 ```
 
 Or use the helper script:
