@@ -1,8 +1,9 @@
 param(
     [string]$TaskName = "RemoteCrawlerCrawl",
     [string]$RunnerScriptPath = "C:\Tempo\remote-crawler\run-remote-crawler.ps1",
-    [ValidateSet("DAILY", "ONLOGON")]
-    [string]$Trigger = "DAILY",
+    [ValidateSet("DAILY", "HOURLY", "ONLOGON")]
+    [string]$Trigger = "HOURLY",
+    [int]$IntervalHours = 4,
     [string]$StartTime = "02:00",
     [string]$RunAsUser = ""
 )
@@ -28,10 +29,16 @@ if (-not [string]::IsNullOrWhiteSpace($RunAsUser)) {
     $args += @("/RU", $RunAsUser)
 }
 
-if ($Trigger -eq "DAILY") {
-    $args += @("/SC", "DAILY", "/ST", $StartTime)
-} else {
-    $args += @("/SC", "ONLOGON")
+switch ($Trigger) {
+    "HOURLY" {
+        $args += @("/SC", "HOURLY", "/MO", $IntervalHours, "/ST", $StartTime)
+    }
+    "DAILY" {
+        $args += @("/SC", "DAILY", "/ST", $StartTime)
+    }
+    "ONLOGON" {
+        $args += @("/SC", "ONLOGON")
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($RunAsUser)) {
