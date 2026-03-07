@@ -79,6 +79,11 @@
                     <!-- Crawl Management -->
                     <div class="nav-section">
                         <div class="nav-section-title">[[#{nav.section.crawl}]]</div>
+                        <a th:href="@{/hosts}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/hosts')} ? 'active' : ''">
+                            <i class="bi bi-pc-display-horizontal"></i>
+                            <span>Hosts</span>
+                        </a>
                         <a th:href="@{/crawlConfigs}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/crawlConfigs')} ? 'active' : ''">
                             <i class="bi bi-gear-wide-connected"></i>

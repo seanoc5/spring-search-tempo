@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Hosts</title>
+</head>
+<body>
+<main layout:fragment="content">
+    <div class="container-fluid py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-pc-display-horizontal me-2"></i>
+                Hosts
+            </h2>
+        </div>
+
+        <!-- Host Selector -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <label for="hostSelect" class="col-form-label fw-semibold">
+                            <i class="bi bi-hdd-network me-1"></i>
+                            Select Host:
+                        </label>
+                    </div>
+                    <div class="col-md-4">
+                        <select id="hostSelect" class="form-select"
+                                hx-get="/hosts"
+                                hx-target="body"
+                                hx-push-url="true"
+                                hx-include="this"
+                                name="host">
+                            <option th:each="hostOption : ${knownHosts}"
+                                    th:value="${hostOption}"
+                                    th:text="${hostOption}"
+                                    th:selected="${hostOption == selectedHost}">hostname</option>
+                        </select>
+                    </div>
+                    <div class="col-auto" th:if="${selectedHost == currentHost}">
+                        <span class="badge bg-success">
+                            <i class="bi bi-check-circle me-1"></i>Current Server
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- No hosts message -->
+        <div th:if="${knownHosts == null || knownHosts.isEmpty()}" class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            No hosts found. Create a crawl configuration or run a discovery session to add hosts.
+        </div>
+
+        <!-- Tabs -->
+        <div th:if="${selectedHost != null && !selectedHost.isEmpty()}" class="card">
+            <div class="card-header bg-light p-0">
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button type="button"
+                                class="nav-link"
+                                th:classappend="${activeTab == 'configs'} ? 'active' : ''"
+                                th:hx-get="@{/hosts/{host}/configs(host=${selectedHost})}"
+                                hx-target="#tab-content"
+                                hx-swap="innerHTML"
+                                th:attr="aria-selected=${activeTab == 'configs'}">
+                            <i class="bi bi-gear-wide-connected me-1"></i>
+                            Crawl Configs
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button type="button"
+                                class="nav-link"
+                                th:classappend="${activeTab == 'discovery'} ? 'active' : ''"
+                                th:hx-get="@{/hosts/{host}/discovery(host=${selectedHost})}"
+                                hx-target="#tab-content"
+                                hx-swap="innerHTML"
+                                th:attr="aria-selected=${activeTab == 'discovery'}">
+                            <i class="bi bi-binoculars me-1"></i>
+                            Discovery
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button type="button"
+                                class="nav-link"
+                                th:classappend="${activeTab == 'content'} ? 'active' : ''"
+                                th:hx-get="@{/hosts/{host}/content(host=${selectedHost})}"
+                                hx-target="#tab-content"
+                                hx-swap="innerHTML"
+                                th:attr="aria-selected=${activeTab == 'content'}">
+                            <i class="bi bi-folder2-open me-1"></i>
+                            Content
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body" id="tab-content">
+                <!-- Initial tab content -->
+                <div th:if="${activeTab == 'configs'}" th:replace="~{host/fragments :: configsTab}"></div>
+                <div th:if="${activeTab == 'discovery'}" th:replace="~{host/fragments :: discoveryTab}"></div>
+                <div th:if="${activeTab == 'content'}" th:replace="~{host/fragments :: contentTab}"></div>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // Update active tab styling on click
+        document.addEventListener('click', function(e) {
+            const tab = e.target.closest('.nav-tabs .nav-link');
+            if (tab) {
+                const tabs = tab.closest('.nav-tabs');
+                tabs.querySelectorAll('.nav-link').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            }
+        });
+    </script>
+</main>
+</body>
+</html>
