@@ -77,6 +77,12 @@ fun main(args: Array<String>) {
             description = "Enable adaptive batch sizing (default: false)"
         ).default(false)
 
+        val startPathTimeoutMs by option(
+            ArgType.Int,
+            fullName = "start-path-timeout-ms",
+            description = "Max time to probe each start path before skipping it"
+        ).default(5000)
+
         val beginPath by option(
             ArgType.String,
             fullName = "begin",
@@ -125,7 +131,8 @@ fun main(args: Array<String>) {
             val crawler = FilesystemCrawler(
                 client = client,
                 batchSize = batchSize,
-                adaptiveBatching = adaptiveBatching
+                adaptiveBatching = adaptiveBatching,
+                startPathProbeTimeoutMs = startPathTimeoutMs.toLong().coerceAtLeast(250L)
             )
 
             // Run each config

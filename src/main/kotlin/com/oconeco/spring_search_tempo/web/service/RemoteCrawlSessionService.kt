@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
 import com.oconeco.spring_search_tempo.base.domain.Status
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
@@ -295,9 +296,17 @@ class RemoteCrawlSessionService(
         )
     }
 
-    @Suppress("UNUSED_PARAMETER")
-    private fun validateConfigForHost(host: String, crawlConfigId: Long) =
-        databaseCrawlConfigService.get(crawlConfigId)
+    private fun validateConfigForHost(host: String, crawlConfigId: Long): CrawlConfigDTO {
+        val config = databaseCrawlConfigService.get(crawlConfigId)
+        val sourceHost = config.sourceHost?.trim()?.takeIf { it.isNotBlank() }
+        if (sourceHost != null) {
+            val normalizedSourceHost = normalizeHost(sourceHost)
+            require(normalizedSourceHost == host) {
+                "crawl config $crawlConfigId is not assigned to host '$host' (sourceHost='$sourceHost')"
+            }
+        }
+        return config
+    }
 
     private fun validateSession(sessionId: Long, crawlConfigId: Long, requireRunning: Boolean): JobRunDTO {
         val run = try {

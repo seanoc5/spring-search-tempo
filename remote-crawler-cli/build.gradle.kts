@@ -38,6 +38,7 @@ dependencies {
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.16")
     implementation("ch.qos.logback:logback-classic:1.5.18")
+    implementation("org.apache.logging.log4j:log4j-to-slf4j:2.23.1")
 
     // Kotlin stdlib
     implementation("org.jetbrains.kotlin:kotlin-stdlib")

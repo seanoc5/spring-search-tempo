@@ -13,10 +13,14 @@ import java.io.IOException
 import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.TimeoutException
 
 /**
  * Filesystem crawler that walks directories and sends results to the server.
@@ -34,7 +38,8 @@ class FilesystemCrawler(
     private val patternMatcher: PatternMatchingService = PatternMatchingService(),
     private val batchSize: Int = 100,
     private val adaptiveBatching: Boolean = false,
-    private val heartbeatIntervalMs: Long = 30_000
+    private val heartbeatIntervalMs: Long = 30_000,
+    private val startPathProbeTimeoutMs: Long = 5_000
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -82,13 +87,18 @@ class FilesystemCrawler(
             filePatternPriority = config.filePatternPriority
         )
 
+        val startPathProbeExecutor = Executors.newCachedThreadPool { runnable ->
+            Thread(runnable, "start-path-probe").apply { isDaemon = true }
+        }
+
         try {
             // Process each start path
             val startPaths = config.startPaths.map { Paths.get(it) }
 
             for (startPath in startPaths) {
-                if (!Files.exists(startPath)) {
-                    log.warn("Start path does not exist: {}", startPath)
+                val probe = probeStartPath(startPath, startPathProbeExecutor)
+                if (probe.status != StartPathProbeStatus.READY) {
+                    log.warn("Skipping start path {}: {}", startPath, probe.message ?: probe.status.name)
                     stats.errors.incrementAndGet()
                     continue
                 }
@@ -165,6 +175,58 @@ class FilesystemCrawler(
                 durationMs = System.currentTimeMillis() - startTime,
                 success = false,
                 errorMessage = e.message
+            )
+        } finally {
+            startPathProbeExecutor.shutdownNow()
+        }
+    }
+
+    private fun probeStartPath(startPath: Path, probeExecutor: ExecutorService): StartPathProbeResult {
+        val probeTask = probeExecutor.submit<StartPathProbeResult> {
+            try {
+                if (!Files.exists(startPath)) {
+                    return@submit StartPathProbeResult(
+                        status = StartPathProbeStatus.MISSING,
+                        message = "path does not exist"
+                    )
+                }
+                if (!Files.isDirectory(startPath)) {
+                    return@submit StartPathProbeResult(
+                        status = StartPathProbeStatus.NOT_DIRECTORY,
+                        message = "path is not a directory"
+                    )
+                }
+                // Touch directory listing to detect inaccessible/hanging roots early.
+                Files.newDirectoryStream(startPath).use { }
+                StartPathProbeResult(
+                    status = StartPathProbeStatus.READY,
+                    message = null
+                )
+            } catch (e: AccessDeniedException) {
+                StartPathProbeResult(
+                    status = StartPathProbeStatus.ACCESS_DENIED,
+                    message = "access denied"
+                )
+            } catch (e: Exception) {
+                StartPathProbeResult(
+                    status = StartPathProbeStatus.ERROR,
+                    message = e.message ?: e.javaClass.simpleName
+                )
+            }
+        }
+
+        return try {
+            probeTask.get(startPathProbeTimeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            probeTask.cancel(true)
+            StartPathProbeResult(
+                status = StartPathProbeStatus.TIMEOUT,
+                message = "path probe timed out after ${startPathProbeTimeoutMs}ms"
+            )
+        } catch (e: Exception) {
+            StartPathProbeResult(
+                status = StartPathProbeStatus.ERROR,
+                message = e.message ?: e.javaClass.simpleName
             )
         }
     }
@@ -638,3 +700,17 @@ data class CrawlResult(
     val success: Boolean,
     val errorMessage: String? = null
 )
+
+private data class StartPathProbeResult(
+    val status: StartPathProbeStatus,
+    val message: String?
+)
+
+private enum class StartPathProbeStatus {
+    READY,
+    MISSING,
+    NOT_DIRECTORY,
+    ACCESS_DENIED,
+    TIMEOUT,
+    ERROR
+}
