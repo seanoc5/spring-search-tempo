@@ -29,7 +29,6 @@ class CrawlConfigConverter(
         return CrawlDefinition(
             name = crawlConfigDTO.name ?: "unknown",
             label = crawlConfigDTO.label ?: crawlConfigDTO.name ?: "Unknown Crawl",
-            enabled = crawlConfigDTO.enabled,
             startPaths = crawlConfigDTO.startPaths ?: emptyList(),
             maxDepth = crawlConfigDTO.maxDepth,
             followLinks = crawlConfigDTO.followLinks,

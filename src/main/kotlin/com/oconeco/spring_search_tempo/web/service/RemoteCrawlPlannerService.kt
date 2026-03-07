@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService as RuntimeCrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 
 @Service
@@ -21,7 +22,8 @@ class RemoteCrawlPlannerService(
         require(trimmedHost.isNotBlank()) { "host is required" }
 
         val defaults = runtimeCrawlConfigService.getDefaults()
-        val configs = databaseCrawlConfigService.findAllEnabled()
+        val allConfigs = databaseCrawlConfigService.findAll(null, Pageable.unpaged())
+        val configs = allConfigs.content
             .filter { cfg ->
                 cfg.sourceHost.isNullOrBlank() || cfg.sourceHost.equals(trimmedHost, ignoreCase = true)
             }
@@ -81,7 +83,6 @@ class RemoteCrawlPlannerService(
         require(host.isNotBlank()) { "host is required" }
 
         val config = databaseCrawlConfigService.get(request.crawlConfigId)
-        require(config.enabled) { "crawl config ${request.crawlConfigId} is disabled" }
 
         val definition = crawlConfigConverter.toDefinition(config)
         val effectivePatterns = runtimeCrawlConfigService.getEffectivePatterns(definition)

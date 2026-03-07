@@ -371,7 +371,6 @@ class DiscoveryController(
         @RequestParam(name = "crawlConfigId", required = false) crawlConfigId: Long?,
         @RequestParam(name = "newConfigName", required = false) newConfigName: String?,
         @RequestParam(name = "newDisplayLabel", required = false) newDisplayLabel: String?,
-        @RequestParam(name = "enableConfig", required = false, defaultValue = "false") enableConfig: Boolean,
         redirectAttributes: RedirectAttributes
     ): String {
         return try {
@@ -384,8 +383,7 @@ class DiscoveryController(
                     mode = mode,
                     crawlConfigId = crawlConfigId,
                     newConfigName = newConfigName,
-                    newDisplayLabel = newDisplayLabel,
-                    enableConfig = enableConfig
+                    newDisplayLabel = newDisplayLabel
                 )
             )
 

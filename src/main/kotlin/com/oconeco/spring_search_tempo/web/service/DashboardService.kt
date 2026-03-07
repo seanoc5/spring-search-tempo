@@ -148,7 +148,6 @@ class DashboardService(
             CrawlConfigSummary().apply {
                 configId = config.id!!
                 configName = config.name ?: "Unknown"
-                enabled = config.enabled
                 filesCrawled = fileCrawledMap[config.id] ?: 0
                 filesSkipped = fileSkipCounts[config.id] ?: 0
                 foldersCrawled = folderCrawledMap[config.id] ?: 0

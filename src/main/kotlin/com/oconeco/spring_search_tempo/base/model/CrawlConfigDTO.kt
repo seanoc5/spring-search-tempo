@@ -35,8 +35,6 @@ class CrawlConfigDTO {
     @NotNull
     var name: String? = null
 
-    var enabled: Boolean = true
-
     var startPaths: List<String>? = null
 
     var maxDepth: Int? = null

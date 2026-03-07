@@ -78,7 +78,7 @@
                             <input class="form-check-input border-danger" type="checkbox" name="deleteExistingData" id="deleteExistingData" value="true">
                             <label class="form-check-label small text-danger" for="deleteExistingData">Delete</label>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-sm" th:disabled="${!crawlConfig.enabled}">
+                        <button type="submit" class="btn btn-primary btn-sm">
                             <i class="bi bi-play-fill"></i> Run
                         </button>
                         <a th:href="@{/crawlConfigs/{id}/edit(id=${crawlConfig.id})}" class="btn btn-outline-secondary btn-sm" title="Full edit form">
@@ -122,11 +122,9 @@
                                 <span class="text-muted inline-label">Label:</span>
                                 <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: textDisplay(id=${crawlConfig.id}, field='label', value=${crawlConfig.label}, label='Label')}"/>
                             </div>
-                            <!-- Status + Parallel -->
+                            <!-- Parallel -->
                             <div class="d-flex align-items-baseline mb-1">
-                                <span class="text-muted inline-label">Status:</span>
-                                <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='enabled', value=${crawlConfig.enabled}, trueLabel='Enabled', falseLabel='Disabled')}"/>
-                                <span class="text-muted ms-3 inline-label">Parallel:</span>
+                                <span class="text-muted inline-label">Parallel:</span>
                                 <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='parallel', value=${crawlConfig.parallel ?: false}, trueLabel='true', falseLabel='false')}"/>
                             </div>
                             <!-- Max Depth + Follow Links -->

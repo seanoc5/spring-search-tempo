@@ -38,13 +38,6 @@ class DatabaseCrawlConfigServiceImpl(
         )
     }
 
-    override fun findAllEnabled(): List<CrawlConfigDTO> {
-        return crawlConfigRepository.findByEnabled(true)
-            .map { crawlConfig ->
-                crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
-            }
-    }
-
     override fun get(id: Long): CrawlConfigDTO = crawlConfigRepository.findById(id)
         .map { crawlConfig ->
             crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
@@ -126,14 +119,6 @@ class DatabaseCrawlConfigServiceImpl(
         }
     }
 
-    override fun toggleEnabled(id: Long): Boolean {
-        val crawlConfig = crawlConfigRepository.findById(id)
-            .orElseThrow { NotFoundException() }
-        crawlConfig.enabled = !crawlConfig.enabled
-        crawlConfigRepository.save(crawlConfig)
-        return crawlConfig.enabled
-    }
-
     override fun findDistinctSourceHosts(): List<String> {
         return crawlConfigRepository.findDistinctSourceHosts()
     }
@@ -157,7 +142,7 @@ class DatabaseCrawlConfigServiceImpl(
         )
     }
 
-    override fun findEnabledForCurrentUser(): List<CrawlConfigDTO> {
+    override fun findForCurrentUser(): List<CrawlConfigDTO> {
         var ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
 
         // If user has no owned sourceHosts, fall back to current server's host
@@ -165,7 +150,7 @@ class DatabaseCrawlConfigServiceImpl(
             ownedSourceHosts = listOf(HostNameHolder.currentHostName)
         }
 
-        return crawlConfigRepository.findByEnabledAndSourceHostIn(true, ownedSourceHosts)
+        return crawlConfigRepository.findBySourceHostIn(ownedSourceHosts)
             .map { crawlConfig ->
                 crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
             }

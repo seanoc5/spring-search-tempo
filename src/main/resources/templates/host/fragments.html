@@ -17,7 +17,6 @@
             <thead class="table-light">
                 <tr>
                     <th>Name</th>
-                    <th>Status</th>
                     <th class="text-end">Files</th>
                     <th class="text-end">Folders</th>
                     <th class="text-end">Actions</th>
@@ -30,10 +29,6 @@
                             <span th:text="${config.label} ?: ${config.name}">Config Name</span>
                         </a>
                         <div class="small text-muted" th:if="${config.description}" th:text="${#strings.abbreviate(config.description, 60)}">Description</div>
-                    </td>
-                    <td>
-                        <span th:if="${config.enabled}" class="badge bg-success">Enabled</span>
-                        <span th:unless="${config.enabled}" class="badge bg-secondary">Disabled</span>
                     </td>
                     <td class="text-end">
                         <span th:text="${configStats[config.id]?.fileCount} ?: 0">0</span>
@@ -50,7 +45,7 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form th:action="@{/crawlConfigs/{id}/run(id=${config.id})}" method="post" class="d-inline">
-                                <button type="submit" class="btn btn-outline-success" title="Run Crawl" th:disabled="${!config.enabled}">
+                                <button type="submit" class="btn btn-outline-success" title="Run Crawl">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </form>

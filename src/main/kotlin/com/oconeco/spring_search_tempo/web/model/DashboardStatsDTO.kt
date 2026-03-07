@@ -77,7 +77,6 @@ class CrawlConfigFacet {
 class CrawlConfigSummary {
     var configId: Long = 0
     var configName: String = ""
-    var enabled: Boolean = true
     var filesCrawled: Long = 0
     var filesSkipped: Long = 0
     var foldersCrawled: Long = 0

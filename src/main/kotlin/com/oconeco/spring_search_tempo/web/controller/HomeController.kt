@@ -178,7 +178,6 @@ class HomeController(
     @GetMapping("/dashboard/crawl-configs")
     fun dashboardCrawlConfigs(
         @RequestParam(name = "analysisStatus", required = false) analysisStatus: String?,
-        @RequestParam(name = "enabled", required = false) enabled: Boolean?,
         @RequestParam(name = "sourceHost", required = false) sourceHost: String?,
         @RequestParam(name = "parallel", required = false) parallel: Boolean?,
         @RequestParam(name = "filter", required = false) filter: String?,
@@ -190,14 +189,13 @@ class HomeController(
         val effectiveShowAll = showAll && isAdmin
         model.addAttribute("showAll", effectiveShowAll)
         model.addAttribute("isAdmin", isAdmin)
-        populateCrawlConfigsModel(model, analysisStatus, enabled, sourceHost, parallel, filter, pageable, effectiveShowAll)
+        populateCrawlConfigsModel(model, analysisStatus, sourceHost, parallel, filter, pageable, effectiveShowAll)
         return "home/fragments/crawlConfigsTable :: crawl-configs-table"
     }
 
     private fun populateCrawlConfigsModel(
         model: Model,
         analysisStatus: String?,
-        enabled: Boolean?,
         sourceHost: String?,
         parallel: Boolean?,
         filter: String?,
@@ -215,12 +213,11 @@ class HomeController(
         val filtered = allConfigs.content.filter { config ->
             val matchesAnalysis = analysisStatus.isNullOrBlank() ||
                 config.analysisStatus?.name == analysisStatus
-            val matchesEnabled = enabled == null || config.enabled == enabled
             val matchesHost = sourceHost.isNullOrBlank() ||
                 config.sourceHost?.contains(sourceHost, ignoreCase = true) == true
             val matchesParallel = parallel == null || config.parallel == parallel
 
-            matchesAnalysis && matchesEnabled && matchesHost && matchesParallel
+            matchesAnalysis && matchesHost && matchesParallel
         }
 
         // Group by sourceHost (null -> "Unknown")
@@ -231,7 +228,6 @@ class HomeController(
 
         // Pass current filter values back
         model.addAttribute("filterAnalysisStatus", analysisStatus)
-        model.addAttribute("filterEnabled", enabled)
         model.addAttribute("filterSourceHost", sourceHost)
         model.addAttribute("filterParallel", parallel)
         model.addAttribute("filterText", filter)
@@ -313,7 +309,6 @@ class HomeController(
             populateCrawlConfigsModel(
                 model,
                 analysisStatus = null,
-                enabled = null,
                 sourceHost = null,
                 parallel = null,
                 filter = null,

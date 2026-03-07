@@ -17,9 +17,6 @@ class CrawlConfig : SaveableObject() {
     )
     var name: String? = null
 
-    @Column(nullable = false)
-    var enabled: Boolean = true
-
     @Column(columnDefinition = "text[]")
     var startPaths: Array<String>? = null
 

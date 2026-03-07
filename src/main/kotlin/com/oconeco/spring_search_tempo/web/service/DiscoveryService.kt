@@ -477,7 +477,6 @@ class DiscoveryService(
                 dto.folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
                 dto.folderPatternsAnalyze = crawlConfigConverter.toJsonArray(analyzePatterns)
                 dto.folderPatternsSemantic = crawlConfigConverter.toJsonArray(semanticPatterns)
-                dto.enabled = request.enableConfig
                 dto.description = discoveryBackfilledDescription(dto.description, session)
                 crawlConfigService.update(existingId, dto)
                 targetConfigId = existingId
@@ -491,7 +490,6 @@ class DiscoveryService(
                     status = Status.NEW
                     analysisStatus = AnalysisStatus.LOCATE
                     version = 0L
-                    enabled = request.enableConfig
                     sourceHost = session.host
                     startPaths = roots
                     maxDepth = 20
@@ -795,8 +793,7 @@ data class ApplyDiscoveryRequest(
     val mode: ApplyDiscoveryMode,
     val crawlConfigId: Long? = null,
     val newConfigName: String? = null,
-    val newDisplayLabel: String? = null,
-    val enableConfig: Boolean = true
+    val newDisplayLabel: String? = null
 )
 
 data class ApplyDiscoveryResult(

@@ -124,7 +124,6 @@ class CrawlConfigController(
     @GetMapping("/add")
     fun add(model: Model): String {
         model.addAttribute("crawlConfig", CrawlConfigDTO().apply {
-            enabled = true
             maxDepth = 50
             followLinks = false
             parallel = false
@@ -165,7 +164,6 @@ class CrawlConfigController(
     fun wizardCreate(
         @RequestParam(name = "os") os: String,
         @RequestParam(name = "sourceHost", required = false) sourceHost: String?,
-        @RequestParam(name = "enabled", defaultValue = "true") enableCreated: Boolean,
         @RequestParam(name = "followLinks", defaultValue = "false") followLinks: Boolean,
         @RequestParam(name = "parallel", defaultValue = "true") parallel: Boolean,
         redirectAttributes: RedirectAttributes
@@ -197,7 +195,6 @@ class CrawlConfigController(
                     this.name = normalizedName
                     this.label = preset.label
                     this.description = preset.description
-                    this.enabled = enableCreated && preset.enabledByDefault
                     this.startPaths = preset.startPaths
                     this.maxDepth = preset.maxDepth
                     this.followLinks = followLinks || preset.forceFollowLinks
@@ -623,19 +620,6 @@ class CrawlConfigController(
         }
     }
 
-    @PostMapping("/{id}/toggle-enabled")
-    fun toggleEnabled(
-        @PathVariable(name = "id") id: Long,
-        @RequestParam(name = "dashboard", required = false, defaultValue = "false") dashboard: Boolean,
-        model: Model
-    ): String {
-        val enabled = crawlConfigService.toggleEnabled(id)
-        model.addAttribute("id", id)
-        model.addAttribute("enabled", enabled)
-        model.addAttribute("dashboard", dashboard)
-        return "crawlConfig/fragments/enabledToggle"
-    }
-
     // ========== Inline Field Editing ==========
 
     /**
@@ -783,12 +767,6 @@ class CrawlConfigController(
                 model.addAttribute("paths", config.startPaths)
                 "crawlConfig/fragments/inlineEdit :: pathsDisplay"
             }
-            "enabled" -> {
-                model.addAttribute("value", config.enabled)
-                model.addAttribute("trueLabel", "Enabled")
-                model.addAttribute("falseLabel", "Disabled")
-                "crawlConfig/fragments/inlineEdit :: booleanDisplay"
-            }
             "followLinks" -> {
                 model.addAttribute("value", config.followLinks ?: false)
                 model.addAttribute("trueLabel", "true")
@@ -887,7 +865,6 @@ class CrawlConfigController(
             "maxDepth" -> config.maxDepth = maxDepth
             "freshnessHours" -> config.freshnessHours = freshnessHours
             "sourceHost" -> config.sourceHost = sourceHost?.trim()?.takeIf { it.isNotBlank() }
-            "enabled" -> config.enabled = value?.toBoolean() ?: !config.enabled
             "followLinks" -> config.followLinks = value?.toBoolean() ?: !(config.followLinks ?: false)
             "parallel" -> config.parallel = value?.toBoolean() ?: !(config.parallel ?: false)
             "startPaths" -> {
@@ -993,11 +970,6 @@ class CrawlConfigController(
         for (id in selectedIds) {
             try {
                 val crawlConfig = crawlConfigService.get(id)
-                if (!crawlConfig.enabled) {
-                    errors.add("${crawlConfig.label ?: crawlConfig.name} (disabled)")
-                    continue
-                }
-
                 val crawlDefinition = configConverter.toDefinition(crawlConfig)
                 val job = jobBuilder.buildJob(
                     crawl = crawlDefinition,
@@ -1026,51 +998,6 @@ class CrawlConfigController(
         if (errors.isNotEmpty()) {
             redirectAttributes.addFlashAttribute("error",
                 "Failed to start: ${errors.joinToString(", ")}")
-        }
-
-        return "redirect:/crawlConfigs"
-    }
-
-    /**
-     * Handle GET requests to /toggle-selected (redirect to list).
-     */
-    @GetMapping("/toggle-selected")
-    fun toggleSelectedGet(redirectAttributes: RedirectAttributes): String {
-        redirectAttributes.addFlashAttribute("error", "Please use the form to toggle selected configurations")
-        return "redirect:/crawlConfigs"
-    }
-
-    /**
-     * Toggle enabled status for multiple crawl configurations.
-     */
-    @PostMapping("/toggle-selected")
-    fun toggleSelectedCrawls(
-        @RequestParam(name = "selectedIds") selectedIds: List<Long>,
-        @RequestParam(name = "enable") enable: Boolean,
-        redirectAttributes: RedirectAttributes
-    ): String {
-        if (selectedIds.isEmpty()) {
-            redirectAttributes.addFlashAttribute("error", "No configurations selected")
-            return "redirect:/crawlConfigs"
-        }
-
-        val updated = mutableListOf<String>()
-        for (id in selectedIds) {
-            try {
-                val crawlConfig = crawlConfigService.get(id)
-                if (crawlConfig.enabled != enable) {
-                    crawlConfigService.toggleEnabled(id)
-                    updated.add(crawlConfig.label ?: crawlConfig.name ?: "Config #$id")
-                }
-            } catch (e: Exception) {
-                // Skip configs that don't exist
-            }
-        }
-
-        if (updated.isNotEmpty()) {
-            val action = if (enable) "Enabled" else "Disabled"
-            redirectAttributes.addFlashAttribute("message",
-                "$action: ${updated.joinToString(", ")}")
         }
 
         return "redirect:/crawlConfigs"

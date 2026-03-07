@@ -56,7 +56,7 @@
 
             <div th:if="${!crawlConfigs.empty || filter != null}" class="row">
                 <div th:replace="~{fragments/utils::searchFilter(object='crawlConfig')}" />
-                <div th:replace="~{fragments/utils::sorting(object='crawlConfig', sortOptions=${ {'id,ASC', 'name,ASC', 'enabled,DESC'} }, columnClass='offset-lg-4')}" />
+                <div th:replace="~{fragments/utils::sorting(object='crawlConfig', sortOptions=${ {'id,ASC', 'name,ASC'} }, columnClass='offset-lg-4')}" />
             </div>
 
             <div th:if="${crawlConfigs.empty}">No crawl configurations found.</div>
@@ -70,7 +70,6 @@
                             </th>
                             <th scope="col">Label</th>
                             <th scope="col">Start Paths</th>
-                            <th scope="col">Status</th>
                             <th scope="col">Files</th>
                             <th scope="col">Folders</th>
                             <th scope="col" title="Files with extracted text (INDEX/ANALYZE/SEMANTIC)">Search</th>
@@ -85,7 +84,7 @@
                             <tr class="table-light host-group-header"
                                 th:data-host-group="${hostStat.index}"
                                 th:onclick="|toggleHostGroup(${hostStat.index})|">
-                                <td colspan="11">
+                                <td colspan="10">
                                     <i class="bi bi-chevron-down collapse-icon me-2" th:id="'host-icon-' + ${hostStat.index}"></i>
                                     <strong>Source Host:</strong>
                                     <span class="badge bg-dark ms-2" th:text="${hostGroup.key}"></span>
@@ -98,7 +97,6 @@
                                 <td>
                                     <input type="checkbox" class="form-check-input config-checkbox"
                                            th:value="${crawlConfig.id}"
-                                           th:data-enabled="${crawlConfig.enabled}"
                                            onchange="updateActionToolbar()">
                                 </td>
                                 <td>
@@ -117,16 +115,6 @@
                                             <br th:if="${!stat.last}" />
                                         </th:block>
                                     </span>
-                                </td>
-                                <td>
-                                    <button type="button"
-                                            th:class="${crawlConfig.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
-                                            th:text="${crawlConfig.enabled} ? 'Enabled' : 'Disabled'"
-                                            th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${crawlConfig.id})}"
-                                            hx-swap="outerHTML"
-                                            th:title="${crawlConfig.enabled} ? 'Click to disable' : 'Click to enable'"
-                                            style="cursor: pointer;">
-                                    </button>
                                 </td>
                                 <td>
                                     <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}"
@@ -273,18 +261,6 @@
                     const checkedCount = document.querySelectorAll('.config-checkbox:checked').length;
                     selectAllCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
                     selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
-
-                    // Update run button state (only enabled configs can be run)
-                    const enabledSelected = Array.from(document.querySelectorAll('.config-checkbox:checked'))
-                        .filter(cb => cb.dataset.enabled === 'true').length;
-                    const runBtn = document.getElementById('runSelectedBtn');
-                    if (enabledSelected === 0 && selectedIds.length > 0) {
-                        runBtn.disabled = true;
-                        runBtn.title = 'No enabled configurations selected';
-                    } else {
-                        runBtn.disabled = false;
-                        runBtn.title = '';
-                    }
                 }
 
                 function clearSelection() {

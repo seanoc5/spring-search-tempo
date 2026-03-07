@@ -188,7 +188,6 @@ class RemoteCrawlResourceTest : BaseIT() {
             name = "REMOTE_IT_$suffix"
             label = "Remote IT $suffix"
             description = "Integration test crawl config"
-            enabled = true
             startPaths = listOf("/data")
             maxDepth = 20
             followLinks = false

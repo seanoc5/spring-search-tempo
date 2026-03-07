@@ -722,13 +722,11 @@
         params.set('sort', ccSort + ',' + ccSortDir);
 
         const analysis = document.getElementById('ccFilterAnalysis')?.value;
-        const enabled = document.getElementById('ccFilterEnabled')?.value;
         const host = document.getElementById('ccFilterHost')?.value;
         const parallel = document.getElementById('ccFilterParallel')?.value;
         const filter = document.getElementById('ccFilterText')?.value;
 
         if (analysis) params.set('analysisStatus', analysis);
-        if (enabled) params.set('enabled', enabled);
         if (host) params.set('sourceHost', host);
         if (parallel) params.set('parallel', parallel);
         if (filter) params.set('filter', filter);
@@ -749,12 +747,10 @@
 
     function clearCrawlConfigFilters() {
         const analysis = document.getElementById('ccFilterAnalysis');
-        const enabled = document.getElementById('ccFilterEnabled');
         const host = document.getElementById('ccFilterHost');
         const parallel = document.getElementById('ccFilterParallel');
         const filter = document.getElementById('ccFilterText');
         if (analysis) analysis.value = '';
-        if (enabled) enabled.value = '';
         if (host) host.value = '';
         if (parallel) parallel.value = '';
         if (filter) filter.value = '';

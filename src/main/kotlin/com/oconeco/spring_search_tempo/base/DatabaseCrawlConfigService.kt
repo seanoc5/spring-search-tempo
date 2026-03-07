@@ -10,8 +10,6 @@ interface DatabaseCrawlConfigService {
 
     fun findAll(filter: String?, pageable: Pageable): Page<CrawlConfigDTO>
 
-    fun findAllEnabled(): List<CrawlConfigDTO>
-
     fun get(id: Long): CrawlConfigDTO
 
     fun getByName(name: String, sourceHost: String? = null): CrawlConfigDTO?
@@ -24,13 +22,11 @@ interface DatabaseCrawlConfigService {
 
     fun nameExists(name: String, sourceHost: String? = null, excludeId: Long? = null): Boolean
 
-    fun toggleEnabled(id: Long): Boolean
-
     fun findDistinctSourceHosts(): List<String>
 
     // Ownership-filtered methods for multi-tenancy
     fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO>
 
-    fun findEnabledForCurrentUser(): List<CrawlConfigDTO>
+    fun findForCurrentUser(): List<CrawlConfigDTO>
 
 }

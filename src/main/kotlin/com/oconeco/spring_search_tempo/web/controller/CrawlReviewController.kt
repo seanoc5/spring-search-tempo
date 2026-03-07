@@ -32,8 +32,8 @@ class CrawlReviewController(
      */
     @GetMapping
     fun list(model: Model): String {
-        val configs = crawlConfigService.findAllEnabled()
-        model.addAttribute("configs", configs)
+        val configs = crawlConfigService.findAll(null, Pageable.unpaged())
+        model.addAttribute("configs", configs.content)
         return "crawlReview/list"
     }
 

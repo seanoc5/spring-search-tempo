@@ -12,10 +12,6 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
 
     fun findByNameIgnoreCaseAndSourceHostIgnoreCase(name: String, sourceHost: String): CrawlConfig?
 
-    fun findByEnabled(enabled: Boolean, pageable: Pageable): Page<CrawlConfig>
-
-    fun findByEnabled(enabled: Boolean): List<CrawlConfig>
-
     fun existsByNameIgnoreCaseAndSourceHostIgnoreCase(name: String, sourceHost: String): Boolean
 
     fun existsByNameIgnoreCaseAndSourceHostIgnoreCaseAndIdNot(name: String, sourceHost: String, id: Long): Boolean
@@ -27,7 +23,5 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
     fun findBySourceHostIn(sourceHosts: Collection<String>): List<CrawlConfig>
 
     fun findBySourceHostIn(sourceHosts: Collection<String>, pageable: Pageable): Page<CrawlConfig>
-
-    fun findByEnabledAndSourceHostIn(enabled: Boolean, sourceHosts: Collection<String>): List<CrawlConfig>
 
 }

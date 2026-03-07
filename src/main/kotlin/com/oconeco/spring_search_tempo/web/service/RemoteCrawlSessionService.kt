@@ -27,8 +27,7 @@ class RemoteCrawlSessionService(
     @Transactional
     fun start(request: RemoteSessionStartRequest): RemoteSessionStartResponse {
         val host = normalizeHost(request.host)
-        val config = validateConfigForHost(host, request.crawlConfigId)
-        require(config.enabled) { "crawl config ${request.crawlConfigId} is disabled" }
+        validateConfigForHost(host, request.crawlConfigId)
 
         val jobName = "remoteFsIngest-$host-${request.crawlConfigId}"
         val jobRun = jobRunService.startJobRun(request.crawlConfigId, jobName)
