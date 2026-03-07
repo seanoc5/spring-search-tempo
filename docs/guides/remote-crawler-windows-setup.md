@@ -222,3 +222,56 @@ gh release download remote-crawler-v0.3.0 -R seanoc5/spring-search-tempo -D "C:\
 # Update script default (or edit run-remote-crawler.ps1)
 # The task will use the new JAR on next run
 ```
+
+## Appendix: Installing GitHub CLI (gh)
+
+The GitHub CLI makes downloading releases easy. Here are several ways to install it on Windows 11:
+
+### Option 1: WinGet (Recommended)
+
+WinGet is built into Windows 11. Open PowerShell or Command Prompt:
+
+```powershell
+winget install GitHub.cli
+```
+
+Restart your terminal after installation.
+
+### Option 2: Scoop
+
+If you use [Scoop](https://scoop.sh/):
+
+```powershell
+scoop install gh
+```
+
+### Option 3: Chocolatey
+
+If you use [Chocolatey](https://chocolatey.org/):
+
+```powershell
+choco install gh
+```
+
+### Option 4: MSI Installer
+
+1. Go to [GitHub CLI Releases](https://github.com/cli/cli/releases/latest)
+2. Download `gh_X.X.X_windows_amd64.msi`
+3. Run the installer
+
+### Authenticate with GitHub
+
+After installation, authenticate to access releases:
+
+```powershell
+gh auth login
+```
+
+Follow the prompts to authenticate via browser or token.
+
+### Verify Installation
+
+```powershell
+gh --version
+gh release list -R seanoc5/spring-search-tempo
+```
