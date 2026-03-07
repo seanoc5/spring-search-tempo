@@ -35,19 +35,30 @@ Copy these files from `scripts/windows/` in the repository to `C:\Tempo\remote-c
 - `run-remote-crawler.ps1`
 - `install-remote-crawler-task.ps1`
 
-### 4. Configure credentials (optional)
+### 4. Configure credentials
 
-Set the password as an environment variable to avoid storing it in scripts:
+**Option A: Config file (recommended)**
+
+Create `C:\Tempo\remote-crawler\config.json`:
+
+```json
+{
+    "serverUrl": "http://your-server:8082",
+    "username": "admin",
+    "password": "your-password"
+}
+```
+
+**Option B: Environment variables**
 
 ```powershell
-# Set for current session
-$env:TEMPO_CRAWLER_PASSWORD = "your-password"
-
-# Or set permanently for your user
+# Set permanently for your user
+[Environment]::SetEnvironmentVariable("TEMPO_SERVER_URL", "http://your-server:8082", "User")
+[Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_USERNAME", "admin", "User")
 [Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_PASSWORD", "your-password", "User")
 ```
 
-If not set, the script defaults to `password`.
+**Priority order**: Command-line parameters > Environment variables > Config file > Defaults
 
 ### 5. Test connectivity
 
@@ -104,11 +115,12 @@ This creates a task that runs every 4 hours by default.
 |-----------|---------|-------------|
 | `-Mode` | `crawl` | Operation: `crawl`, `status`, or `onboard` |
 | `-JarPath` | `C:\Tempo\remote-crawler\remote-crawler-0.2.1.jar` | Path to JAR file |
-| `-ServerUrl` | `http://minti9:8082` | Spring Search Tempo server URL |
-| `-Username` | `admin` | Authentication username |
-| `-Password` | (from env or `password`) | Uses `TEMPO_CRAWLER_PASSWORD` env var if set |
+| `-ServerUrl` | (from config) | Spring Search Tempo server URL |
+| `-Username` | (from config) | Authentication username |
+| `-Password` | (from config) | Authentication password |
 | `-HostName` | (auto-detected) | Override hostname sent to server |
 | `-LogDir` | `C:\Tempo\remote-crawler\logs` | Directory for log files |
+| `-ConfigFile` | `config.json` (same folder as JAR) | Path to JSON config file |
 
 **Examples:**
 
@@ -199,10 +211,11 @@ After setup, your installation should look like:
 
 ```
 C:\Tempo\remote-crawler\
-├── remote-crawler-0.2.1.jar      # The crawler application
-├── run-remote-crawler.ps1        # Runner script (called by task)
+├── remote-crawler-0.2.1.jar         # The crawler application
+├── run-remote-crawler.ps1           # Runner script (called by task)
 ├── install-remote-crawler-task.ps1  # Installer (run once)
-└── logs\                         # Created automatically
+├── config.json                      # Credentials and server URL
+└── logs\                            # Created automatically
     ├── remote-crawler-crawl-20240115-140000.log
     └── ...
 ```

@@ -3,17 +3,68 @@ param(
     [string]$Mode = "crawl",
 
     [string]$JarPath = "C:\Tempo\remote-crawler\remote-crawler-0.2.1.jar",
-    [string]$ServerUrl = "http://minti9:8082",
-    [string]$Username = "admin",
+    [string]$ServerUrl = "",
+    [string]$Username = "",
     [string]$Password = "",
     [string]$HostName = "",
     [string]$OnboardPaths = "",
     [int]$OnboardMaxDepth = 15,
-    [string]$LogDir = "C:\Tempo\remote-crawler\logs"
+    [string]$LogDir = "C:\Tempo\remote-crawler\logs",
+    [string]$ConfigFile = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Determine config file path (default: config.json in same folder as JAR)
+if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
+    $ConfigFile = Join-Path (Split-Path $JarPath -Parent) "config.json"
+}
+
+# Load config file if it exists
+$config = @{}
+if (Test-Path $ConfigFile) {
+    try {
+        $config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
+        Write-Host ("Loaded config from {0}" -f $ConfigFile)
+    } catch {
+        Write-Warning ("Failed to parse config file {0}: {1}" -f $ConfigFile, $_.Exception.Message)
+    }
+}
+
+# Priority: CLI param > env var > config file > default
+# ServerUrl
+if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_SERVER_URL)) {
+        $ServerUrl = $env:TEMPO_SERVER_URL
+    } elseif ($config.serverUrl) {
+        $ServerUrl = $config.serverUrl
+    } else {
+        $ServerUrl = "http://minti9:8082"
+    }
+}
+
+# Username
+if ([string]::IsNullOrWhiteSpace($Username)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_CRAWLER_USERNAME)) {
+        $Username = $env:TEMPO_CRAWLER_USERNAME
+    } elseif ($config.username) {
+        $Username = $config.username
+    } else {
+        $Username = "admin"
+    }
+}
+
+# Password
+if ([string]::IsNullOrWhiteSpace($Password)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_CRAWLER_PASSWORD)) {
+        $Password = $env:TEMPO_CRAWLER_PASSWORD
+    } elseif ($config.password) {
+        $Password = $config.password
+    } else {
+        $Password = "password"
+    }
+}
 
 if (-not (Test-Path $JarPath)) {
     throw "JAR not found: $JarPath"
@@ -25,14 +76,6 @@ if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
 
 if ([string]::IsNullOrWhiteSpace($HostName)) {
     $HostName = $env:COMPUTERNAME.ToLowerInvariant()
-}
-
-if ([string]::IsNullOrWhiteSpace($Password)) {
-    if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_CRAWLER_PASSWORD)) {
-        $Password = $env:TEMPO_CRAWLER_PASSWORD
-    } else {
-        $Password = "password"
-    }
 }
 
 New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
