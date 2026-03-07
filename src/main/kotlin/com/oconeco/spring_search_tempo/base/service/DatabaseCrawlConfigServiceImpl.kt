@@ -139,11 +139,12 @@ class DatabaseCrawlConfigServiceImpl(
     }
 
     override fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO> {
-        val ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
+        var ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
 
-        // If user has no owned sourceHosts, return empty page
+        // If user has no owned sourceHosts, fall back to current server's host
+        // This ensures users see something even before explicit host assignments
         if (ownedSourceHosts.isEmpty()) {
-            return PageImpl(emptyList(), pageable, 0)
+            ownedSourceHosts = listOf(HostNameHolder.currentHostName)
         }
 
         val page = crawlConfigRepository.findBySourceHostIn(ownedSourceHosts, pageable)
@@ -157,11 +158,11 @@ class DatabaseCrawlConfigServiceImpl(
     }
 
     override fun findEnabledForCurrentUser(): List<CrawlConfigDTO> {
-        val ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
+        var ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
 
-        // If user has no owned sourceHosts, return empty list
+        // If user has no owned sourceHosts, fall back to current server's host
         if (ownedSourceHosts.isEmpty()) {
-            return emptyList()
+            ownedSourceHosts = listOf(HostNameHolder.currentHostName)
         }
 
         return crawlConfigRepository.findByEnabledAndSourceHostIn(true, ownedSourceHosts)
