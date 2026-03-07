@@ -32,8 +32,9 @@ gh release download remote-crawler-v0.2.1 -R seanoc5/spring-search-tempo -D "C:\
 ### 3. Copy the PowerShell scripts
 
 Copy these files from `scripts/windows/` in the repository to `C:\Tempo\remote-crawler\`:
-- `run-remote-crawler.ps1`
-- `install-remote-crawler-task.ps1`
+- `run-remote-crawler.ps1` - runs the crawler
+- `install-remote-crawler-task.ps1` - installs the scheduled task
+- `update-remote-crawler.ps1` - checks for and installs updates
 
 ### 4. Configure credentials
 
@@ -214,6 +215,7 @@ C:\Tempo\remote-crawler\
 ├── remote-crawler-0.2.1.jar         # The crawler application
 ├── run-remote-crawler.ps1           # Runner script (called by task)
 ├── install-remote-crawler-task.ps1  # Installer (run once)
+├── update-remote-crawler.ps1        # Auto-update script
 ├── config.json                      # Credentials and server URL
 └── logs\                            # Created automatically
     ├── remote-crawler-crawl-20240115-140000.log
@@ -222,18 +224,67 @@ C:\Tempo\remote-crawler\
 
 ## Updating
 
-To update to a new version:
+### Automatic Update (Recommended)
 
-1. Download the new JAR file
-2. Update the `-JarPath` default in `run-remote-crawler.ps1` or pass it explicitly
-3. No need to reinstall the scheduled task unless script paths change
+Use the `update-remote-crawler.ps1` script to check for and install updates:
+
+```powershell
+cd C:\Tempo\remote-crawler
+.\update-remote-crawler.ps1
+```
+
+The script will:
+1. Check the latest release on GitHub
+2. Compare with your installed version
+3. Download and install if newer version available
+4. Update `run-remote-crawler.ps1` with the new JAR path
+5. Verify SHA256 checksum
+6. Clean up old JAR files
+
+**Options:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `-DryRun` | Check for updates without installing |
+| `-Force` | Reinstall even if already up to date |
+| `-InstallDir` | Custom installation directory |
+
+```powershell
+# Check what would be updated
+.\update-remote-crawler.ps1 -DryRun
+
+# Force reinstall current version
+.\update-remote-crawler.ps1 -Force
+```
+
+### Scheduled Auto-Updates (Optional)
+
+Create a weekly update check task:
+
+```powershell
+$action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"C:\Tempo\remote-crawler\update-remote-crawler.ps1`"" `
+    -WorkingDirectory "C:\Tempo\remote-crawler"
+
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "03:00"
+
+Register-ScheduledTask `
+    -TaskName "RemoteCrawlerUpdate" `
+    -Action $action `
+    -Trigger $trigger `
+    -Description "Check for remote crawler updates weekly"
+```
+
+### Manual Update
+
+If you prefer manual updates:
 
 ```powershell
 # Download new version
 gh release download remote-crawler-v0.3.0 -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
 
-# Update script default (or edit run-remote-crawler.ps1)
-# The task will use the new JAR on next run
+# Edit run-remote-crawler.ps1 to update JarPath default
 ```
 
 ## Appendix: Installing GitHub CLI (gh)
