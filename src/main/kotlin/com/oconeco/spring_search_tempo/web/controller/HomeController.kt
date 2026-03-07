@@ -227,10 +227,7 @@ class HomeController(
         val groupedConfigs = filtered.groupBy { it.sourceHost ?: "Unknown" }
             .toSortedMap()
 
-        val crawlConfigMetrics = dashboardService.getCrawlConfigRowMetrics(filtered.mapNotNull { it.id })
-
         model.addAttribute("configsBySourceHost", groupedConfigs)
-        model.addAttribute("crawlConfigMetrics", crawlConfigMetrics)
 
         // Pass current filter values back
         model.addAttribute("filterAnalysisStatus", analysisStatus)

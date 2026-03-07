@@ -85,7 +85,7 @@
                     </td>
                     <td class="text-truncate" style="max-width: 120px;">
                         <a th:if="${job.crawlConfig != null}" th:href="@{/crawlConfigs/{id}(id=${job.crawlConfig})}"
-                           th:text="${job.crawlConfigDisplayLabel ?: job.crawlConfig}"
+                           th:text="${job.crawlConfigDisplayLabel != null ? #strings.replace(job.crawlConfigDisplayLabel, 'Crawl Config: ', '') : job.crawlConfig}"
                            class="text-decoration-none small">Config</a>
                         <span th:unless="${job.crawlConfig != null}" class="text-muted small">-</span>
                     </td>
@@ -101,7 +101,7 @@
                     </td>
                     <td class="text-nowrap small">
                         <span th:if="${job.startTime != null}"
-                              th:text="${#temporals.format(job.startTime, 'MM-dd HH:mm')}"></span>
+                              th:text="${#temporals.format(job.startTime, 'yyyy-MM-dd')}"></span>
                         <span th:unless="${job.startTime != null}" class="text-muted">-</span>
                     </td>
                     <td class="text-nowrap small">

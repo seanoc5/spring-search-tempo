@@ -71,6 +71,7 @@
                         <input type="checkbox" class="form-check-input" id="ccSelectAll"
                                onchange="toggleAllCrawlConfigs(this.checked)">
                     </th>
+                    <th style="width: 180px;">Start Folders</th>
                     <th>
                         <a href="#" onclick="sortCrawlConfigs('name'); return false;" class="sort-link">Name</a>
                     </th>
@@ -85,8 +86,6 @@
                         <a href="#" onclick="sortCrawlConfigs('freshnessHours'); return false;" class="sort-link"
                            title="Freshness threshold (hours)">Frsh</a>
                     </th>
-                    <th class="text-center" style="width: 80px;" title="Folders / Files / Size">Metrics</th>
-                    <th class="text-center" style="width: 40px;">On</th>
                 </tr>
             </thead>
         </table>
@@ -116,7 +115,6 @@
                         <table class="table table-sm table-striped table-hover mb-0" style="font-size: 0.8rem;">
                             <tbody>
                                 <tr th:each="config : ${entry.value}"
-                                    th:with="metrics=${crawlConfigMetrics[config.id]}"
                                     th:classappend="${!config.enabled} ? 'table-secondary' : ''">
                                     <td style="width: 30px;">
                                         <input type="checkbox" class="form-check-input cc-select-cb"
@@ -124,15 +122,19 @@
                                                th:data-enabled="${config.enabled}"
                                                onchange="onCrawlConfigSelection()">
                                     </td>
+                                    <td class="text-truncate" style="max-width: 180px;">
+                                        <span th:if="${config.startPaths != null && !config.startPaths.empty}">
+                                            <code th:text="${config.startPaths[0]}"
+                                                  th:title="${#strings.listJoin(config.startPaths, ', ')}"></code>
+                                        </span>
+                                        <span th:unless="${config.startPaths != null && !config.startPaths.empty}"
+                                              class="text-muted small">-</span>
+                                    </td>
                                     <td class="text-truncate" style="max-width: 160px;">
                                         <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
                                            th:text="${config.label ?: config.name}"
                                            th:title="${config.name}"
                                            class="text-decoration-none fw-semibold">Config</a>
-                                        <div th:if="${config.startPaths != null && !config.startPaths.empty}"
-                                             class="text-muted small text-truncate" style="font-size: 0.68rem;">
-                                            <code th:text="${config.startPaths[0]}" th:title="${#strings.listJoin(config.startPaths, ', ')}"></code>
-                                        </div>
                                     </td>
                                     <td style="width: 40px;">
                                         <span th:if="${config.analysisStatus}"
@@ -178,23 +180,6 @@
                                               hx-trigger="click"
                                               title="Click to edit"
                                               style="cursor: pointer;">-</span>
-                                    </td>
-                                    <td class="text-center small text-nowrap" style="width: 80px;">
-                                        <span th:text="${metrics != null ? metrics.folderCount : 0}">0</span>/<span
-                                            th:text="${metrics != null ? metrics.fileCount : 0}">0</span>/<span
-                                            th:text="${(metrics != null && metrics.totalFileSize >= 1073741824) ? #numbers.formatDecimal(metrics.totalFileSize / 1073741824.0, 0, 1) + 'G' :
-                                                       ((metrics != null && metrics.totalFileSize >= 1048576) ? #numbers.formatDecimal(metrics.totalFileSize / 1048576.0, 0, 1) + 'M' :
-                                                       ((metrics != null && metrics.totalFileSize >= 1024) ? #numbers.formatDecimal(metrics.totalFileSize / 1024.0, 0, 1) + 'K' : ((metrics != null ? metrics.totalFileSize : 0) + 'B')))}">0B</span>
-                                    </td>
-                                    <td class="text-center" style="width: 40px;">
-                                        <button type="button"
-                                                th:class="${config.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
-                                                th:text="${config.enabled} ? 'On' : 'Off'"
-                                                th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${config.id}, dashboard=true)}"
-                                                hx-swap="outerHTML"
-                                                th:title="${config.enabled} ? 'Click to disable' : 'Click to enable'"
-                                                style="cursor: pointer; font-size: 0.6rem;">
-                                        </button>
                                     </td>
                                 </tr>
                             </tbody>
