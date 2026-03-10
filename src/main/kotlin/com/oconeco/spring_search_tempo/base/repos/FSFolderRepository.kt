@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.repos
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.CrawlTemperature
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.domain.Status
 import org.springframework.data.domain.Page
@@ -373,4 +374,44 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     )
     fun findParentByChildUri(@Param("childUri") childUri: String): FSFolder?
 
+    // ============ Smart Crawl Scheduling Queries ============
+
+    /**
+     * Find folders due for crawling based on temperature and last crawl time.
+     * Returns folders of the specified temperature that haven't been crawled since the threshold.
+     * Excludes SKIP folders. Ordered by change score (most active first), then least recently crawled.
+     *
+     * @param sourceHost Host to filter by
+     * @param temperature Temperature tier to query
+     * @param notCrawledSince Only return folders not crawled since this time
+     */
+    @Query("""
+        SELECT f FROM FSFolder f
+        WHERE f.sourceHost = :sourceHost
+        AND f.crawlTemperature = :temperature
+        AND (f.lastCrawledAt IS NULL OR f.lastCrawledAt < :notCrawledSince)
+        AND f.analysisStatus <> 'SKIP'
+        ORDER BY f.changeScore DESC, f.lastCrawledAt ASC NULLS FIRST
+    """)
+    fun findFoldersDueByTemperature(
+        @Param("sourceHost") sourceHost: String,
+        @Param("temperature") temperature: CrawlTemperature,
+        @Param("notCrawledSince") notCrawledSince: OffsetDateTime
+    ): List<FSFolder>
+
+    /**
+     * Find all folders by source host that are not skipped.
+     * Used by smart crawl scheduling when no temperature filtering is needed.
+     */
+    @Query("""
+        SELECT f FROM FSFolder f
+        WHERE f.sourceHost = :sourceHost
+        AND f.analysisStatus <> 'SKIP'
+        ORDER BY f.crawlTemperature, f.changeScore DESC
+    """)
+    fun findCrawlableFoldersBySourceHost(
+        @Param("sourceHost") sourceHost: String
+    ): List<FSFolder>
+
 }
+

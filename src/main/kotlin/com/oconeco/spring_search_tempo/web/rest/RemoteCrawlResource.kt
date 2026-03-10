@@ -92,6 +92,51 @@ class RemoteCrawlResource(
         }
     }
 
+    /**
+     * Smart bootstrap endpoint with temperature-based folder prioritization.
+     *
+     * Returns standard bootstrap config plus a prioritized list of folders
+     * based on their crawl temperature (HOT, WARM, COLD).
+     *
+     * If the config has smartCrawlEnabled=false, returns standard bootstrap only.
+     *
+     * @param host Remote host name
+     * @param crawlConfigId ID of the crawl config to use for prioritization
+     */
+    @GetMapping("/smart-bootstrap")
+    fun smartBootstrap(
+        @RequestParam(name = "host") host: String,
+        @RequestParam(name = "crawlConfigId") crawlConfigId: Long
+    ): ResponseEntity<Any> {
+        log.info("Smart bootstrap request for host {}, config {}", host, crawlConfigId)
+        return try {
+            val response = remoteCrawlPlannerService.buildSmartBootstrap(host, crawlConfigId)
+            ResponseEntity.ok(response)
+        } catch (e: NotFoundException) {
+            ResponseEntity.status(404).body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Crawl config not found")
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Smart bootstrap failed for host {}, config {}", host, crawlConfigId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to generate smart bootstrap: ${e.message}"
+                )
+            )
+        }
+    }
+
     @PostMapping("/classify")
     fun classify(@RequestBody request: RemoteClassifyRequest): ResponseEntity<Any> {
         log.info("Remote classify request for config {}", request.crawlConfigId)

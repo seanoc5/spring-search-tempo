@@ -11,7 +11,9 @@ import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -21,8 +23,12 @@ class RemoteCrawlSessionService(
     private val databaseCrawlConfigService: DatabaseCrawlConfigService,
     private val jobRunService: JobRunService,
     private val folderRepository: FSFolderRepository,
-    private val fileRepository: FSFileRepository
+    private val fileRepository: FSFileRepository,
+    private val crawlSchedulingService: CrawlSchedulingService
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(RemoteCrawlSessionService::class.java)
+    }
 
     @Transactional
     fun start(request: RemoteSessionStartRequest): RemoteSessionStartResponse {
@@ -224,6 +230,15 @@ class RemoteCrawlSessionService(
             fileRepository.saveAll(filesToSave)
         }
 
+        // Track folder modification times for temperature calculation (smart crawl)
+        updateFolderTemperatures(
+            host = host,
+            crawlConfigId = request.crawlConfigId,
+            filesToSave = filesToSave,
+            existingFiles = existingFiles,
+            persistedFolderByUri = persistedFolderByUri
+        )
+
         val current = jobRunService.get(jobRun.id!!)
         val foldersDiscoveredIncrement = dedupFolders.size.toLong()
         val filesDiscoveredIncrement = dedupFiles.size.toLong()
@@ -360,6 +375,99 @@ class RemoteCrawlSessionService(
         val idx = path.lastIndexOf('/')
         if (idx <= 0) return null
         return path.substring(0, idx)
+    }
+
+    /**
+     * Track folder modifications for smart crawl temperature updates.
+     *
+     * Compares incoming files with existing files to detect changes,
+     * then updates folder temperatures based on detected activity.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    private fun updateFolderTemperatures(
+        host: String, // Reserved for future per-host temperature thresholds
+        crawlConfigId: Long,
+        filesToSave: List<FSFile>,
+        existingFiles: Map<String, FSFile>,
+        persistedFolderByUri: Map<String, FSFolder>
+    ) {
+        // Check if smart crawl is enabled for this config
+        val config = try {
+            databaseCrawlConfigService.get(crawlConfigId)
+        } catch (e: Exception) {
+            log.warn("Could not check smart crawl config {}: {}", crawlConfigId, e.message)
+            return
+        }
+
+        if (config.smartCrawlEnabled != true) {
+            return // Skip temperature tracking if not enabled
+        }
+
+        val hotThresholdDays = config.hotThresholdDays
+            ?: CrawlSchedulingService.DEFAULT_HOT_THRESHOLD_DAYS
+        val warmThresholdDays = config.warmThresholdDays
+            ?: CrawlSchedulingService.DEFAULT_WARM_THRESHOLD_DAYS
+
+        // Track which folders had changes detected
+        val folderChanges = mutableMapOf<Long, Boolean>()
+        val folderMaxMtime = mutableMapOf<Long, OffsetDateTime>()
+
+        for (file in filesToSave) {
+            val folderId = file.fsFolder?.id ?: continue
+            val existingFile = existingFiles[file.uri]
+
+            // Detect change: new file or modified timestamp changed
+            val isChanged = existingFile == null ||
+                existingFile.fsLastModified != file.fsLastModified ||
+                existingFile.size != file.size
+
+            if (isChanged) {
+                folderChanges[folderId] = true
+            } else if (!folderChanges.containsKey(folderId)) {
+                folderChanges[folderId] = false
+            }
+
+            // Track max mtime per folder for childModifiedAt update
+            file.fsLastModified?.let { mtime ->
+                val currentMax = folderMaxMtime[folderId]
+                if (currentMax == null || mtime.isAfter(currentMax)) {
+                    folderMaxMtime[folderId] = mtime
+                }
+            }
+        }
+
+        // Also track folders that were ingested (even if no files changed)
+        for (folder in persistedFolderByUri.values) {
+            val folderId = folder.id ?: continue
+            if (!folderChanges.containsKey(folderId)) {
+                folderChanges[folderId] = false
+            }
+        }
+
+        if (folderChanges.isEmpty()) {
+            return
+        }
+
+        // Update temperatures for each affected folder
+        for ((folderId, hasChanges) in folderChanges) {
+            try {
+                crawlSchedulingService.updateTemperatureAfterCrawl(
+                    folderId = folderId,
+                    changesDetected = hasChanges,
+                    mostRecentChildMtime = folderMaxMtime[folderId],
+                    hotThresholdDays = hotThresholdDays,
+                    warmThresholdDays = warmThresholdDays
+                )
+            } catch (e: Exception) {
+                log.warn("Failed to update temperature for folder {}: {}", folderId, e.message)
+            }
+        }
+
+        val changedCount = folderChanges.values.count { it }
+        log.debug(
+            "Updated temperatures for {} folders ({} with changes)",
+            folderChanges.size, changedCount
+        )
     }
 }
 

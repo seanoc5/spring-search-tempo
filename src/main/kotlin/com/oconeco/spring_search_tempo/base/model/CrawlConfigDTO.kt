@@ -89,4 +89,22 @@ class CrawlConfigDTO {
      */
     var freshnessHours: Int? = null
 
+    // ============ Smart Crawl Scheduling ============
+
+    /**
+     * Enable temperature-based crawl scheduling for this config.
+     */
+    var smartCrawlEnabled: Boolean = false
+
+    /**
+     * Days threshold for HOT temperature (default 7).
+     */
+    var hotThresholdDays: Int? = null
+
+    /**
+     * Days threshold for WARM temperature (default 30).
+     */
+    var warmThresholdDays: Int? = null
+
 }
+
