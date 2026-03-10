@@ -3,6 +3,8 @@ package com.oconeco.spring_search_tempo.base.domain
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.OneToMany
+import jakarta.persistence.PrePersist
+import jakarta.persistence.PreUpdate
 
 /**
  * Persisted crawl configuration entity.
@@ -101,5 +103,40 @@ class CrawlConfig : SaveableObject() {
      */
     @Column
     var freshnessHours: Int? = null
+
+    // ============ Smart Crawl Scheduling ============
+
+    /**
+     * Enable temperature-based crawl scheduling for this config.
+     * When false, all folders are crawled every session (legacy behavior).
+     * When true, folders are prioritized based on their temperature tier.
+     */
+    @Column
+    var smartCrawlEnabled: Boolean? = false
+
+    /**
+     * Days threshold for HOT temperature.
+     * Folders modified within this many days are considered HOT.
+     * Default: 7 days.
+     */
+    @Column
+    var hotThresholdDays: Int? = null
+
+    /**
+     * Days threshold for WARM temperature.
+     * Folders modified within this many days (but not HOT) are WARM.
+     * Folders older than this threshold become COLD.
+     * Default: 30 days.
+     */
+    @Column
+    var warmThresholdDays: Int? = null
+
+    @PrePersist
+    @PreUpdate
+    fun normalizeSmartCrawlFields() {
+        if (smartCrawlEnabled == null) {
+            smartCrawlEnabled = false
+        }
+    }
 
 }
