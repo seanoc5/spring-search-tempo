@@ -18,6 +18,8 @@ import org.springframework.data.domain.Sort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
 
@@ -140,7 +142,7 @@ class CrawlDiscoveryObservationService(
             // Analyze file samples to detect folder type
             val analysisResult = fileSampleAnalyzer.analyzeFolder(savedSamples, path)
             observation.detectedFolderType = analysisResult.detectedType
-            observation.detectionConfidence = analysisResult.confidence
+            observation.detectionConfidence = analysisResult.confidence.toDetectionConfidence()
             observationsWithNewSamples.add(observation)
         }
 
@@ -425,7 +427,7 @@ class CrawlDiscoveryObservationService(
         val suggestedStatus = observation.detectedFolderType?.let { folderType ->
             fileSampleAnalyzer.suggestAnalysisStatus(
                 folderType,
-                observation.detectionConfidence ?: 0.0
+                observation.detectionConfidence?.toDouble() ?: 0.0
             )
         }
 
@@ -439,7 +441,7 @@ class CrawlDiscoveryObservationService(
             lastSeenAt = observation.lastSeenAt,
             lastSeenJobRunId = observation.lastSeenJobRunId,
             detectedFolderType = observation.detectedFolderType,
-            detectionConfidence = observation.detectionConfidence,
+            detectionConfidence = observation.detectionConfidence?.toDouble(),
             suggestedAnalysisStatus = suggestedStatus,
             fileSamples = samples
         )
@@ -478,6 +480,9 @@ class CrawlDiscoveryObservationService(
         if (normalized.length > 1 && normalized.endsWith("/")) normalized = normalized.removeSuffix("/")
         return normalized
     }
+
+    private fun Double.toDetectionConfidence(): BigDecimal =
+        BigDecimal.valueOf(this).setScale(3, RoundingMode.HALF_UP)
 }
 
 data class ReapplySkipResult(

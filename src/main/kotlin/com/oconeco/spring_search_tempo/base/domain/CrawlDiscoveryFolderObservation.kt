@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.domain
 
 import jakarta.persistence.*
+import java.math.BigDecimal
 import java.time.OffsetDateTime
 
 @Entity
@@ -73,7 +74,7 @@ class CrawlDiscoveryFolderObservation {
      * Higher confidence means the folder has a dominant file type.
      */
     @Column(name = "detection_confidence", precision = 4, scale = 3)
-    var detectionConfidence: Double? = null
+    var detectionConfidence: BigDecimal? = null
 
     @OneToMany(mappedBy = "folderObservation", cascade = [CascadeType.ALL], orphanRemoval = true)
     var fileSamples: MutableList<CrawlDiscoveryFileSample> = mutableListOf()
