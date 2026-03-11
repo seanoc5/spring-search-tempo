@@ -412,6 +412,8 @@ DELETE FROM batch_job_execution;
 - [Thymeleaf Documentation](https://www.thymeleaf.org/documentation.html)
 - [HTMX in a Nutshell](https://htmx.org/docs/)
 - [Local: Thymeleaf + HTMX + SpEL Notes](docs/guides/thymeleaf-htmx-spel-notes.md)
+- [Local: Thymeleaf + HTMX + SpEL UI Development Guide](docs/guides/thymeleaf-htmx-spel-ui-development-guide.md)
+- [Local: Portable Thymeleaf/HTMX Style Pack](docs/guides/portable-thymeleaf-htmx-style-pack.md)
 
 ## License
 
