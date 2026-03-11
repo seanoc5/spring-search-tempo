@@ -1,11 +1,17 @@
 package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
+import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.BaseIT
+import com.oconeco.spring_search_tempo.base.domain.CrawlMode
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
+import com.oconeco.spring_search_tempo.web.service.RemoteDiscoveryFolderObsIngestItem
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpStatus
 
@@ -22,6 +28,12 @@ import org.springframework.http.HttpStatus
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class CrawlConfigIntegrationTest : BaseIT() {
+
+    @Autowired
+    private lateinit var crawlConfigService: DatabaseCrawlConfigService
+
+    @Autowired
+    private lateinit var crawlDiscoveryObservationService: CrawlDiscoveryObservationService
 
     @Test
     fun `crawl configs list page loads successfully`() {
@@ -70,5 +82,58 @@ class CrawlConfigIntegrationTest : BaseIT() {
             .then()
                 .statusCode(HttpStatus.OK.value())
                 .body(containsString("Job Run"))
+    }
+
+    @Test
+    fun `discovery review page supports pagination`() {
+        val host = "mvc-discovery-host"
+        val crawlConfigId = createDiscoveryMvcTestCrawlConfig(host)
+
+        crawlDiscoveryObservationService.ingest(
+            crawlConfigId = crawlConfigId,
+            host = host,
+            jobRunId = 1L,
+            folders = listOf(
+                RemoteDiscoveryFolderObsIngestItem(path = "/data/a", depth = 1, inSkipBranch = true),
+                RemoteDiscoveryFolderObsIngestItem(path = "/data/b", depth = 1, inSkipBranch = true),
+                RemoteDiscoveryFolderObsIngestItem(path = "/data/c", depth = 1, inSkipBranch = true)
+            ),
+            fileSamples = emptyList(),
+            sampleCap = 50
+        )
+
+        RestAssured
+            .given()
+                .accept(ContentType.HTML)
+                .queryParam("host", host)
+                .queryParam("limit", 1)
+                .queryParam("page", 1)
+            .`when`()
+                .get("/crawlConfigs/$crawlConfigId/discovery-review")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body(containsString("Discovery Review"))
+                .body(containsString("Page 2 of 3"))
+                .body(containsString("""name="page" value="1""""))
+                .body(containsString("/data/b"))
+    }
+
+    private fun createDiscoveryMvcTestCrawlConfig(sourceHost: String): Long {
+        val suffix = System.currentTimeMillis()
+        return crawlConfigService.create(CrawlConfigDTO().apply {
+            name = "DISCOVERY_MVC_IT_$suffix"
+            label = "Discovery MVC IT $suffix"
+            description = "Integration test crawl config for discovery review page"
+            this.sourceHost = sourceHost
+            startPaths = listOf("/data")
+            maxDepth = 20
+            followLinks = false
+            parallel = false
+            version = 0L
+            crawlMode = CrawlMode.DISCOVERY
+            folderPatternsSkip = "[\".*/skip-me(/.*)?$\"]"
+            folderPatternsLocate = "[\".*\"]"
+            filePatternsLocate = "[\".*\"]"
+        })
     }
 }

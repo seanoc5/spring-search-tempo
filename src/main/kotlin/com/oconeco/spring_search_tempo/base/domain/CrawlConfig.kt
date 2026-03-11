@@ -2,6 +2,8 @@ package com.oconeco.spring_search_tempo.base.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.OneToMany
 import jakarta.persistence.PrePersist
 import jakarta.persistence.PreUpdate
@@ -131,11 +133,36 @@ class CrawlConfig : SaveableObject() {
     @Column
     var warmThresholdDays: Int? = null
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var crawlMode: CrawlMode = CrawlMode.ENFORCE
+
+    @Column(nullable = false)
+    var discoveryKeeperMaxDepth: Int = 20
+
+    @Column(nullable = false)
+    var discoverySkipMaxDepth: Int = 10
+
+    @Column(nullable = false)
+    var discoveryFileSampleCap: Int = 50
+
+    @Column(nullable = false)
+    var discoveryAutoSuggestEnabled: Boolean = true
+
     @PrePersist
     @PreUpdate
     fun normalizeSmartCrawlFields() {
         if (smartCrawlEnabled == null) {
             smartCrawlEnabled = false
+        }
+        if (discoveryKeeperMaxDepth <= 0) {
+            discoveryKeeperMaxDepth = 20
+        }
+        if (discoverySkipMaxDepth <= 0) {
+            discoverySkipMaxDepth = 10
+        }
+        if (discoveryFileSampleCap <= 0) {
+            discoveryFileSampleCap = 50
         }
     }
 

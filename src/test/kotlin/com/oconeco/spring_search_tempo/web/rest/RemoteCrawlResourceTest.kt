@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.rest
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.BaseIT
+import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
@@ -182,18 +183,181 @@ class RemoteCrawlResourceTest : BaseIT() {
                 .body("runStatus", equalTo("COMPLETED"))
     }
 
+    @Test
+    fun `discovery observation api should ingest reapply and support manual override`() {
+        val requestHost = "DISCOVERY-HOST"
+        val normalizedHost = "discovery-host"
+        val crawlConfigId = createRemoteDiscoveryTestCrawlConfig(normalizedHost)
+
+        val startResponse = RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/session/start")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+
+        val sessionId = startResponse.jsonPath().getLong("sessionId")
+
+        RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId,
+                        "sessionId" to sessionId,
+                        "folders" to emptyList<Map<String, Any>>(),
+                        "files" to emptyList<Map<String, Any>>(),
+                        "discoveryFolders" to listOf(
+                            mapOf("path" to "/data/skip-me", "depth" to 1, "inSkipBranch" to true),
+                            mapOf("path" to "/data/skip-me/n1", "depth" to 2, "inSkipBranch" to true),
+                            mapOf("path" to "/data/keep-me", "depth" to 1, "inSkipBranch" to true)
+                        ),
+                        "discoveryFileSamples" to listOf(
+                            mapOf("folderPath" to "/data/skip-me", "sampleSlot" to 1, "fileName" to "a.txt", "fileSize" to 10),
+                            mapOf("folderPath" to "/data/skip-me", "sampleSlot" to 2, "fileName" to "b.txt", "fileSize" to 20),
+                            mapOf("folderPath" to "/data/keep-me", "sampleSlot" to 1, "fileName" to "k.txt", "fileSize" to 30)
+                        )
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/session/ingest")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+
+        RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId,
+                        "jobRunId" to sessionId
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/discovery/reapply-skip")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("status", equalTo("OK"))
+                .body("total", equalTo(3))
+                .body("changed", equalTo(2))
+
+        RestAssured
+            .given()
+                .queryParam("crawlConfigId", crawlConfigId)
+                .queryParam("host", requestHost)
+                .queryParam("includeSamples", true)
+                .queryParam("page", 0)
+                .queryParam("limit", 50)
+            .`when`()
+                .get("/api/remote-crawl/discovery/observations")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("count", equalTo(3))
+                .body("totalCount", equalTo(3))
+                .body("page", equalTo(0))
+                .body("totalPages", equalTo(1))
+                .body("observations.find { it.path == '/data/skip-me' }.skipByCurrentRules", equalTo(true))
+                .body("observations.find { it.path == '/data/skip-me/n1' }.skipByCurrentRules", equalTo(true))
+                .body("observations.find { it.path == '/data/keep-me' }.skipByCurrentRules", equalTo(false))
+                .body("observations.find { it.path == '/data/keep-me' }.fileSamples.size()", equalTo(1))
+
+        RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId,
+                        "path" to "/data/keep-me",
+                        "manualOverride" to "FORCE_SKIP"
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/discovery/override")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("status", equalTo("OK"))
+                .body("observation.path", equalTo("/data/keep-me"))
+                .body("observation.manualOverride", equalTo("FORCE_SKIP"))
+                .body("observation.skipByCurrentRules", equalTo(true))
+
+        RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId,
+                        "path" to "/data/keep-me"
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/discovery/override")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("status", equalTo("OK"))
+                .body("observation.skipByCurrentRules", equalTo(false))
+
+        RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to requestHost,
+                        "crawlConfigId" to crawlConfigId,
+                        "sessionId" to sessionId,
+                        "runStatus" to "COMPLETED"
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/session/complete")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("runStatus", equalTo("COMPLETED"))
+    }
+
     private fun createRemoteTestCrawlConfig(): Long {
         val suffix = System.currentTimeMillis()
         return crawlConfigService.create(CrawlConfigDTO().apply {
             name = "REMOTE_IT_$suffix"
             label = "Remote IT $suffix"
             description = "Integration test crawl config"
+            sourceHost = "win11-devbox"
             startPaths = listOf("/data")
             maxDepth = 20
             followLinks = false
             parallel = false
             version = 0L
             folderPatternsSkip = "[\".*/skip-me$\"]"
+            folderPatternsLocate = "[\".*\"]"
+            filePatternsLocate = "[\".*\"]"
+        })
+    }
+
+    private fun createRemoteDiscoveryTestCrawlConfig(sourceHost: String): Long {
+        val suffix = System.currentTimeMillis()
+        return crawlConfigService.create(CrawlConfigDTO().apply {
+            name = "REMOTE_DISCOVERY_IT_$suffix"
+            label = "Remote Discovery IT $suffix"
+            description = "Integration test crawl config for discovery observation APIs"
+            this.sourceHost = sourceHost
+            startPaths = listOf("/data")
+            maxDepth = 20
+            followLinks = false
+            parallel = false
+            version = 0L
+            crawlMode = CrawlMode.DISCOVERY
+            folderPatternsSkip = "[\".*/skip-me(/.*)?$\"]"
             folderPatternsLocate = "[\".*\"]"
             filePatternsLocate = "[\".*\"]"
         })

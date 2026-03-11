@@ -89,6 +89,46 @@
                                         <label class="form-check-label" for="parallel">Parallel Processing</label>
                                     </div>
                                 </div>
+
+                                <div class="mb-3">
+                                    <label for="crawlMode" class="form-label">Crawl Mode</label>
+                                    <select class="form-select" id="crawlMode" th:field="*{crawlMode}">
+                                        <option value="ENFORCE">ENFORCE (normal skip behavior)</option>
+                                        <option value="DISCOVERY">DISCOVERY (include SKIP branches for review)</option>
+                                    </select>
+                                </div>
+
+                                <div class="border-top pt-3 mt-3">
+                                    <h6 class="mb-2">Discovery Settings</h6>
+
+                                    <div class="mb-3">
+                                        <label for="discoveryKeeperMaxDepth" class="form-label">Keeper Branch Max Depth</label>
+                                        <input type="number" class="form-control" id="discoveryKeeperMaxDepth"
+                                               th:field="*{discoveryKeeperMaxDepth}" min="1" max="100" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="discoverySkipMaxDepth" class="form-label">SKIP Branch Max Depth</label>
+                                        <input type="number" class="form-control" id="discoverySkipMaxDepth"
+                                               th:field="*{discoverySkipMaxDepth}" min="1" max="50" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="discoveryFileSampleCap" class="form-label">SKIP Folder File Sample Cap</label>
+                                        <input type="number" class="form-control" id="discoveryFileSampleCap"
+                                               th:field="*{discoveryFileSampleCap}" min="1" max="50" />
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="discoveryAutoSuggestEnabled"
+                                                   th:field="*{discoveryAutoSuggestEnabled}" />
+                                            <label class="form-check-label" for="discoveryAutoSuggestEnabled">
+                                                Auto-suggest switch to ENFORCE
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

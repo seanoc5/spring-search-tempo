@@ -370,11 +370,20 @@ data class CrawlConfigAssignment(
     val maxDepth: Int,
     val followLinks: Boolean,
     val parallel: Boolean,
+    val crawlMode: CrawlMode = CrawlMode.ENFORCE,
+    val discoveryKeeperMaxDepth: Int = 20,
+    val discoverySkipMaxDepth: Int = 10,
+    val discoveryFileSampleCap: Int = 50,
     val folderPatterns: PatternSet,
     val filePatterns: PatternSet,
     val folderPatternPriority: PatternPriority = PatternPriority(),
     val filePatternPriority: PatternPriority = PatternPriority()
 )
+
+enum class CrawlMode {
+    ENFORCE,
+    DISCOVERY
+}
 
 data class SessionStartRequest(
     val host: String,
@@ -409,7 +418,22 @@ data class IngestRequest(
     val sessionId: Long,
     val folders: List<FolderIngestItem>? = null,
     val files: List<FileIngestItem>? = null,
+    val discoveryFolders: List<DiscoveryFolderObsIngestItem>? = null,
+    val discoveryFileSamples: List<DiscoveryFileSampleIngestItem>? = null,
     val processedIncrement: Int? = null
+)
+
+data class DiscoveryFolderObsIngestItem(
+    val path: String,
+    val depth: Int,
+    val inSkipBranch: Boolean
+)
+
+data class DiscoveryFileSampleIngestItem(
+    val folderPath: String,
+    val sampleSlot: Int,
+    val fileName: String,
+    val fileSize: Long? = null
 )
 
 data class FolderIngestItem(

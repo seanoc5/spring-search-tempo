@@ -9,12 +9,14 @@ import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
+import com.oconeco.spring_search_tempo.base.domain.DiscoveryManualOverride
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import com.oconeco.spring_search_tempo.web.model.BaselineSamplingPolicy
 import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
+import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
 import com.oconeco.spring_search_tempo.web.service.CrawlConfigValidationService
 import jakarta.servlet.http.HttpServletRequest
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlCleanupListener
@@ -55,6 +57,7 @@ class CrawlConfigController(
     private val cleanupService: CrawlDataCleanupService,
     private val objectMapper: ObjectMapper,
     private val crawlConfigValidationService: CrawlConfigValidationService,
+    private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService,
     private val userOwnershipService: UserOwnershipService
 ) {
 
@@ -362,6 +365,120 @@ class CrawlConfigController(
         model.addAttribute("validationSummaries", crawlConfigValidationService.getFolderSummaries(id))
 
         return "crawlConfig/view"
+    }
+
+    @GetMapping("/{id}/discovery-review")
+    fun discoveryReview(
+        @PathVariable(name = "id") id: Long,
+        @RequestParam(name = "host", required = false) host: String?,
+        @RequestParam(name = "pathPrefix", required = false) pathPrefix: String?,
+        @RequestParam(name = "includeSamples", required = false, defaultValue = "true") includeSamples: Boolean,
+        @RequestParam(name = "page", required = false, defaultValue = "0") page: Int,
+        @RequestParam(name = "limit", required = false, defaultValue = "500") limit: Int,
+        model: Model,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val crawlConfig = crawlConfigService.get(id)
+        val effectiveHost = host?.trim()?.ifBlank { null }
+            ?: crawlConfig.sourceHost?.trim()?.ifBlank { null }
+            ?: HostNameHolder.currentHostName
+
+        return try {
+            ensureHostAccess(effectiveHost)
+            val observations = crawlDiscoveryObservationService.listObservations(
+                crawlConfigId = id,
+                host = effectiveHost,
+                pathPrefix = pathPrefix,
+                includeSamples = includeSamples,
+                page = page,
+                limit = limit
+            )
+
+            model.addAttribute("crawlConfig", crawlConfig)
+            model.addAttribute("observations", observations)
+            model.addAttribute("host", effectiveHost)
+            model.addAttribute("pathPrefix", pathPrefix ?: "")
+            model.addAttribute("includeSamples", includeSamples)
+            model.addAttribute("page", page.coerceAtLeast(0))
+            model.addAttribute("limit", limit.coerceIn(1, 5000))
+            model.addAttribute("overrideValues", DiscoveryManualOverride.entries)
+            "crawlConfig/discoveryReview"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Failed to load discovery review: ${e.message}")
+            "redirect:/crawlConfigs/$id"
+        }
+    }
+
+    @PostMapping("/{id}/discovery-review/reapply")
+    fun reapplyDiscoverySkipRules(
+        @PathVariable(name = "id") id: Long,
+        @RequestParam(name = "host") host: String,
+        @RequestParam(name = "pathPrefix", required = false) pathPrefix: String?,
+        @RequestParam(name = "includeSamples", required = false, defaultValue = "true") includeSamples: Boolean,
+        @RequestParam(name = "page", required = false, defaultValue = "0") page: Int,
+        @RequestParam(name = "limit", required = false, defaultValue = "500") limit: Int,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            ensureHostAccess(host)
+            val result = crawlDiscoveryObservationService.reapplySkipRules(
+                crawlConfigId = id,
+                host = host
+            )
+            val suggestEnforce = crawlDiscoveryObservationService.shouldSuggestEnforce(
+                crawlConfigId = id,
+                host = host
+            )
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Reapplied skip rules: ${result.changed}/${result.total} observations changed" +
+                    if (suggestEnforce) " (suggest ENFORCE)" else ""
+            )
+            "redirect:/crawlConfigs/$id/discovery-review?host=${urlEncode(host)}&pathPrefix=${urlEncode(pathPrefix)}" +
+                "&includeSamples=$includeSamples&limit=$limit&page=${page.coerceAtLeast(0)}"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Reapply failed: ${e.message}")
+            "redirect:/crawlConfigs/$id/discovery-review?host=${urlEncode(host)}&pathPrefix=${urlEncode(pathPrefix)}" +
+                "&includeSamples=$includeSamples&limit=$limit&page=${page.coerceAtLeast(0)}"
+        }
+    }
+
+    @PostMapping("/{id}/discovery-review/override")
+    fun updateDiscoveryManualOverride(
+        @PathVariable(name = "id") id: Long,
+        @RequestParam(name = "host") host: String,
+        @RequestParam(name = "path") path: String,
+        @RequestParam(name = "manualOverride", required = false) manualOverride: String?,
+        @RequestParam(name = "pathPrefix", required = false) pathPrefix: String?,
+        @RequestParam(name = "includeSamples", required = false, defaultValue = "true") includeSamples: Boolean,
+        @RequestParam(name = "page", required = false, defaultValue = "0") page: Int,
+        @RequestParam(name = "limit", required = false, defaultValue = "500") limit: Int,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            ensureHostAccess(host)
+            val parsedOverride = manualOverride
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { DiscoveryManualOverride.valueOf(it.uppercase()) }
+
+            val updated = crawlDiscoveryObservationService.updateManualOverride(
+                crawlConfigId = id,
+                host = host,
+                path = path,
+                manualOverride = parsedOverride
+            )
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Updated override for ${updated.path}: ${updated.manualOverride ?: "DEFAULT"}"
+            )
+            "redirect:/crawlConfigs/$id/discovery-review?host=${urlEncode(host)}&pathPrefix=${urlEncode(pathPrefix)}" +
+                "&includeSamples=$includeSamples&limit=$limit&page=${page.coerceAtLeast(0)}"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Override update failed: ${e.message}")
+            "redirect:/crawlConfigs/$id/discovery-review?host=${urlEncode(host)}&pathPrefix=${urlEncode(pathPrefix)}" +
+                "&includeSamples=$includeSamples&limit=$limit&page=${page.coerceAtLeast(0)}"
+        }
     }
 
     @GetMapping("/{id}/validate/folders")
@@ -1002,6 +1119,19 @@ class CrawlConfigController(
 
         return "redirect:/crawlConfigs"
     }
+
+    private fun ensureHostAccess(host: String) {
+        if (userOwnershipService.isCurrentUserAdmin()) {
+            return
+        }
+        val owned = userOwnershipService.getCurrentUserSourceHosts()
+        if (owned.isNotEmpty() && owned.none { it.equals(host, ignoreCase = true) }) {
+            throw IllegalArgumentException("Access denied for source host '$host'")
+        }
+    }
+
+    private fun urlEncode(value: String?): String =
+        java.net.URLEncoder.encode(value?.trim().orEmpty(), Charsets.UTF_8)
 
     /**
      * Convert a JSON array string to newline-separated text for textarea display.

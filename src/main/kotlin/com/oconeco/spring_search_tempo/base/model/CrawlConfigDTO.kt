@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.model
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.domain.Status
 import jakarta.validation.constraints.NotNull
 
@@ -106,5 +107,14 @@ class CrawlConfigDTO {
      */
     var warmThresholdDays: Int? = null
 
-}
+    var crawlMode: CrawlMode = CrawlMode.ENFORCE
 
+    var discoveryKeeperMaxDepth: Int = 20
+
+    var discoverySkipMaxDepth: Int = 10
+
+    var discoveryFileSampleCap: Int = 50
+
+    var discoveryAutoSuggestEnabled: Boolean = true
+
+}

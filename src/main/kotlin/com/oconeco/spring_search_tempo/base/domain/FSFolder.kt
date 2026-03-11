@@ -27,7 +27,7 @@ class FSFolder : FSObject() {
      * Determines how frequently the folder should be crawled.
      * New folders default to WARM (crawl daily).
      */
-    @Column
+    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var crawlTemperature: CrawlTemperature = CrawlTemperature.WARM
 
@@ -43,7 +43,7 @@ class FSFolder : FSObject() {
      * Helps identify consistently active folders vs. one-time bursts.
      * Range: 0 to 100.
      */
-    @Column
+    @Column(nullable = false)
     var changeScore: Int = 0
 
     /**

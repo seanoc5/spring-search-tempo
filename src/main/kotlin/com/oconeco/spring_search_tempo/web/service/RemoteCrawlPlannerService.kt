@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.service
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.domain.CrawlTemperature
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
@@ -48,6 +49,10 @@ class RemoteCrawlPlannerService(
                 maxDepth = definition.getMaxDepth(defaults),
                 followLinks = definition.getFollowLinks(defaults),
                 parallel = definition.getParallel(defaults),
+                crawlMode = config.crawlMode,
+                discoveryKeeperMaxDepth = config.discoveryKeeperMaxDepth,
+                discoverySkipMaxDepth = config.discoverySkipMaxDepth,
+                discoveryFileSampleCap = config.discoveryFileSampleCap,
                 folderPatterns = PatternPayload(
                     skip = effectivePatterns.folderPatterns.skip,
                     locate = effectivePatterns.folderPatterns.locate,
@@ -272,6 +277,10 @@ data class RemoteCrawlConfigAssignment(
     val maxDepth: Int,
     val followLinks: Boolean,
     val parallel: Boolean,
+    val crawlMode: CrawlMode = CrawlMode.ENFORCE,
+    val discoveryKeeperMaxDepth: Int = 20,
+    val discoverySkipMaxDepth: Int = 10,
+    val discoveryFileSampleCap: Int = 50,
     val folderPatterns: PatternPayload,
     val filePatterns: PatternPayload,
     val folderPatternPriority: PatternPriorityPayload = PatternPriorityPayload(),

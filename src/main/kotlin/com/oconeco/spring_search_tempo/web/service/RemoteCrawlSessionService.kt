@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.service
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
@@ -24,7 +25,8 @@ class RemoteCrawlSessionService(
     private val jobRunService: JobRunService,
     private val folderRepository: FSFolderRepository,
     private val fileRepository: FSFileRepository,
-    private val crawlSchedulingService: CrawlSchedulingService
+    private val crawlSchedulingService: CrawlSchedulingService,
+    private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(RemoteCrawlSessionService::class.java)
@@ -33,12 +35,20 @@ class RemoteCrawlSessionService(
     @Transactional
     fun start(request: RemoteSessionStartRequest): RemoteSessionStartResponse {
         val host = normalizeHost(request.host)
-        validateConfigForHost(host, request.crawlConfigId)
+        val config = validateConfigForHost(host, request.crawlConfigId)
 
         val jobName = "remoteFsIngest-$host-${request.crawlConfigId}"
         val jobRun = jobRunService.startJobRun(request.crawlConfigId, jobName)
         request.expectedTotal?.let { if (it >= 0) jobRunService.setExpectedTotal(jobRun.id!!, it) }
         jobRunService.setCurrentStep(jobRun.id!!, "Remote crawl session started")
+
+        if (config.crawlMode == CrawlMode.DISCOVERY) {
+            crawlDiscoveryObservationService.startRun(
+                crawlConfigId = request.crawlConfigId,
+                host = host,
+                jobRunId = jobRun.id!!
+            )
+        }
 
         return RemoteSessionStartResponse(
             sessionId = jobRun.id!!,
@@ -73,7 +83,7 @@ class RemoteCrawlSessionService(
     @Transactional
     fun ingest(request: RemoteIngestRequest): RemoteIngestResponse {
         val host = normalizeHost(request.host)
-        validateConfigForHost(host, request.crawlConfigId)
+        val config = validateConfigForHost(host, request.crawlConfigId)
         val jobRun = validateSession(request.sessionId, request.crawlConfigId, requireRunning = true)
         // Keep session alive before heavy writes; avoids self-deadlock later in this transaction.
         jobRunService.updateHeartbeat(jobRun.id!!)
@@ -230,6 +240,17 @@ class RemoteCrawlSessionService(
             fileRepository.saveAll(filesToSave)
         }
 
+        if (config.crawlMode == CrawlMode.DISCOVERY) {
+            crawlDiscoveryObservationService.ingest(
+                crawlConfigId = request.crawlConfigId,
+                host = host,
+                jobRunId = jobRun.id!!,
+                folders = request.discoveryFolders.orEmpty(),
+                fileSamples = request.discoveryFileSamples.orEmpty(),
+                sampleCap = config.discoveryFileSampleCap
+            )
+        }
+
         // Track folder modification times for temperature calculation (smart crawl)
         updateFolderTemperatures(
             host = host,
@@ -282,7 +303,7 @@ class RemoteCrawlSessionService(
     @Transactional
     fun complete(request: RemoteSessionCompleteRequest): RemoteSessionCompleteResponse {
         val host = normalizeHost(request.host)
-        validateConfigForHost(host, request.crawlConfigId)
+        val config = validateConfigForHost(host, request.crawlConfigId)
         val jobRun = validateSession(request.sessionId, request.crawlConfigId, requireRunning = false)
 
         request.expectedTotal?.let { if (it >= 0) jobRunService.setExpectedTotal(jobRun.id!!, it) }
@@ -303,6 +324,23 @@ class RemoteCrawlSessionService(
             )
         }
         jobRunService.completeJobRun(jobRun.id!!, request.runStatus, request.errorMessage)
+
+        if (config.crawlMode == CrawlMode.DISCOVERY) {
+            crawlDiscoveryObservationService.completeRun(jobRun.id!!, request.runStatus)
+            val reapply = crawlDiscoveryObservationService.reapplySkipRules(
+                crawlConfigId = request.crawlConfigId,
+                host = host,
+                jobRunId = jobRun.id
+            )
+            val suggestEnforce = crawlDiscoveryObservationService.shouldSuggestEnforce(
+                crawlConfigId = request.crawlConfigId,
+                host = host
+            )
+            log.info(
+                "Discovery reapply complete for config {} host {}: changed {} of {} observations (suggestEnforce={})",
+                request.crawlConfigId, host, reapply.changed, reapply.total, suggestEnforce
+            )
+        }
 
         return RemoteSessionCompleteResponse(
             sessionId = jobRun.id!!,
@@ -504,7 +542,22 @@ data class RemoteIngestRequest(
     val sessionId: Long,
     val folders: List<RemoteFolderIngestItem>? = null,
     val files: List<RemoteFileIngestItem>? = null,
+    val discoveryFolders: List<RemoteDiscoveryFolderObsIngestItem>? = null,
+    val discoveryFileSamples: List<RemoteDiscoveryFileSampleIngestItem>? = null,
     val processedIncrement: Int? = null
+)
+
+data class RemoteDiscoveryFolderObsIngestItem(
+    val path: String,
+    val depth: Int,
+    val inSkipBranch: Boolean
+)
+
+data class RemoteDiscoveryFileSampleIngestItem(
+    val folderPath: String,
+    val sampleSlot: Int,
+    val fileName: String,
+    val fileSize: Long? = null
 )
 
 data class RemoteFolderIngestItem(

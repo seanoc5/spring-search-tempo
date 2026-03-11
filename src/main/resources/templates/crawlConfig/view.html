@@ -81,6 +81,11 @@
                         <button type="submit" class="btn btn-primary btn-sm">
                             <i class="bi bi-play-fill"></i> Run
                         </button>
+                        <a th:href="@{/crawlConfigs/{id}/discovery-review(id=${crawlConfig.id},host=${crawlConfig.sourceHost})}"
+                           class="btn btn-outline-warning btn-sm"
+                           title="Review discovery observations">
+                            <i class="bi bi-binoculars"></i>
+                        </a>
                         <a th:href="@{/crawlConfigs/{id}/edit(id=${crawlConfig.id})}" class="btn btn-outline-secondary btn-sm" title="Full edit form">
                             <i class="bi bi-pencil"></i>
                         </a>
@@ -127,12 +132,26 @@
                                 <span class="text-muted inline-label">Parallel:</span>
                                 <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='parallel', value=${crawlConfig.parallel ?: false}, trueLabel='true', falseLabel='false')}"/>
                             </div>
+                            <div class="d-flex align-items-baseline mb-1">
+                                <span class="text-muted inline-label">Mode:</span>
+                                <span class="badge"
+                                      th:classappend="${crawlConfig.crawlMode?.name() == 'DISCOVERY'} ? ' bg-warning text-dark' : ' bg-secondary'"
+                                      th:text="${crawlConfig.crawlMode ?: 'ENFORCE'}">ENFORCE</span>
+                            </div>
                             <!-- Max Depth + Follow Links -->
                             <div class="d-flex align-items-baseline mb-1">
                                 <span class="text-muted inline-label">Depth:</span>
                                 <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: numberDisplay(id=${crawlConfig.id}, field='maxDepth', value=${crawlConfig.maxDepth}, label='Max Depth', defaultText='-')}"/>
                                 <span class="text-muted ms-3 inline-label">Links:</span>
                                 <th:block th:replace="~{crawlConfig/fragments/inlineEdit :: booleanDisplay(id=${crawlConfig.id}, field='followLinks', value=${crawlConfig.followLinks ?: false}, trueLabel='follow', falseLabel='skip')}"/>
+                            </div>
+                            <div class="d-flex align-items-baseline mb-1" th:if="${crawlConfig.crawlMode?.name() == 'DISCOVERY'}">
+                                <span class="text-muted inline-label">Disc:</span>
+                                <span class="small text-muted">
+                                    keep [[${crawlConfig.discoveryKeeperMaxDepth}]],
+                                    skip [[${crawlConfig.discoverySkipMaxDepth}]],
+                                    cap [[${crawlConfig.discoveryFileSampleCap}]]
+                                </span>
                             </div>
                             <!-- Freshness + Host -->
                             <div class="d-flex align-items-baseline mb-1">

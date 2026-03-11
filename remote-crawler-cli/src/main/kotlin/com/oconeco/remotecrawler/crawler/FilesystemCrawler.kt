@@ -104,6 +104,11 @@ class FilesystemCrawler(
                 }
 
                 log.info("Crawling start path: {}", startPath)
+                val effectiveMaxDepth = if (config.crawlMode == CrawlMode.DISCOVERY) {
+                    maxOf(config.maxDepth, config.discoveryKeeperMaxDepth)
+                } else {
+                    config.maxDepth
+                }
                 crawlPath(
                     startPath = startPath,
                     allStartPaths = startPaths,
@@ -111,7 +116,7 @@ class FilesystemCrawler(
                     effectivePatterns = effectivePatterns,
                     sessionId = sessionId,
                     host = host,
-                    maxDepth = config.maxDepth,
+                    maxDepth = effectiveMaxDepth,
                     followLinks = config.followLinks,
                     stats = stats,
                     batchController = batchController
@@ -246,9 +251,13 @@ class FilesystemCrawler(
         // Pending items to ingest
         val pendingFolders = ConcurrentLinkedQueue<FolderIngestItem>()
         val pendingFiles = ConcurrentLinkedQueue<FileIngestItem>()
+        val pendingDiscoveryFolders = ConcurrentLinkedQueue<DiscoveryFolderObsIngestItem>()
+        val pendingDiscoveryFileSamples = ConcurrentLinkedQueue<DiscoveryFileSampleIngestItem>()
 
         // Track folder statuses for inheritance
         val folderStatusCache = ConcurrentHashMap<String, AnalysisStatus>()
+        val skipBranchCache = ConcurrentHashMap<String, Boolean>()
+        val skipSampleCountByFolder = ConcurrentHashMap<String, Int>()
 
         // Build file visit options
         val visitOptions = if (followLinks) {
@@ -263,12 +272,60 @@ class FilesystemCrawler(
 
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                 val pathStr = dir.toAbsolutePath().toString()
+                val crawlDepth = PathUtils.calculateCrawlDepth(dir, allStartPaths)
+                val parentPath = dir.parent?.toAbsolutePath()?.toString()
+                val parentInSkipBranch = if (parentPath != null) skipBranchCache[parentPath] == true else false
 
                 // Quick SKIP check during walk
                 val skipCheck = patternMatcher.matchesSkipPatternOnly(
                     pathStr,
                     effectivePatterns.folderPatterns.skip
                 )
+                val inSkipBranch = parentInSkipBranch || skipCheck.isSkip
+                skipBranchCache[pathStr] = inSkipBranch
+
+                if (config.crawlMode == CrawlMode.DISCOVERY) {
+                    if (inSkipBranch) {
+                        val skipDepthLimit = config.discoverySkipMaxDepth
+                        if (crawlDepth > skipDepthLimit) {
+                            return FileVisitResult.SKIP_SUBTREE
+                        }
+
+                        pendingDiscoveryFolders.add(
+                            DiscoveryFolderObsIngestItem(
+                                path = pathStr,
+                                depth = crawlDepth,
+                                inSkipBranch = true
+                            )
+                        )
+                        folderStatusCache[pathStr] = AnalysisStatus.SKIP
+                        stats.foldersProcessed.incrementAndGet()
+
+                        maybeFlush(
+                            pendingFolders,
+                            pendingFiles,
+                            pendingDiscoveryFolders,
+                            pendingDiscoveryFileSamples,
+                            host,
+                            config.crawlConfigId,
+                            sessionId,
+                            stats,
+                            batchController
+                        )
+
+                        if (System.currentTimeMillis() - lastHeartbeat > heartbeatIntervalMs) {
+                            sendHeartbeat(host, config.crawlConfigId, sessionId, stats, "Walking: $pathStr")
+                            lastHeartbeat = System.currentTimeMillis()
+                        }
+
+                        return FileVisitResult.CONTINUE
+                    }
+
+                    val keeperDepthLimit = config.discoveryKeeperMaxDepth
+                    if (crawlDepth > keeperDepthLimit) {
+                        return FileVisitResult.SKIP_SUBTREE
+                    }
+                }
 
                 if (skipCheck.isSkip) {
                     log.debug("Skipping folder (SKIP pattern): {}", pathStr)
@@ -285,7 +342,6 @@ class FilesystemCrawler(
                 }
 
                 // Determine full analysis status
-                val parentPath = dir.parent?.toAbsolutePath()?.toString()
                 val parentStatus = if (parentPath != null) folderStatusCache[parentPath] else null
 
                 val status = patternMatcher.determineFolderAnalysisStatus(
@@ -304,7 +360,17 @@ class FilesystemCrawler(
                 }
 
                 // Flush if batch is full
-                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats, batchController)
+                maybeFlush(
+                    pendingFolders,
+                    pendingFiles,
+                    pendingDiscoveryFolders,
+                    pendingDiscoveryFileSamples,
+                    host,
+                    config.crawlConfigId,
+                    sessionId,
+                    stats,
+                    batchController
+                )
 
                 // Heartbeat
                 if (System.currentTimeMillis() - lastHeartbeat > heartbeatIntervalMs) {
@@ -320,6 +386,36 @@ class FilesystemCrawler(
 
                 // Get parent folder status
                 val parentPath = file.parent?.toAbsolutePath()?.toString()
+                val parentInSkipBranch = if (parentPath != null) skipBranchCache[parentPath] == true else false
+
+                if (config.crawlMode == CrawlMode.DISCOVERY && parentInSkipBranch && parentPath != null) {
+                    val currentCount = skipSampleCountByFolder[parentPath] ?: 0
+                    if (currentCount < config.discoveryFileSampleCap) {
+                        pendingDiscoveryFileSamples.add(
+                            DiscoveryFileSampleIngestItem(
+                                folderPath = parentPath,
+                                sampleSlot = currentCount + 1,
+                                fileName = file.fileName?.toString() ?: pathStr,
+                                fileSize = attrs.size()
+                            )
+                        )
+                        skipSampleCountByFolder[parentPath] = currentCount + 1
+                    }
+                    stats.filesProcessed.incrementAndGet()
+                    maybeFlush(
+                        pendingFolders,
+                        pendingFiles,
+                        pendingDiscoveryFolders,
+                        pendingDiscoveryFileSamples,
+                        host,
+                        config.crawlConfigId,
+                        sessionId,
+                        stats,
+                        batchController
+                    )
+                    return FileVisitResult.CONTINUE
+                }
+
                 val parentStatus = if (parentPath != null) {
                     folderStatusCache[parentPath] ?: AnalysisStatus.LOCATE
                 } else {
@@ -343,7 +439,17 @@ class FilesystemCrawler(
                 }
 
                 // Flush if batch is full
-                maybeFlush(pendingFolders, pendingFiles, host, config.crawlConfigId, sessionId, stats, batchController)
+                maybeFlush(
+                    pendingFolders,
+                    pendingFiles,
+                    pendingDiscoveryFolders,
+                    pendingDiscoveryFileSamples,
+                    host,
+                    config.crawlConfigId,
+                    sessionId,
+                    stats,
+                    batchController
+                )
 
                 return FileVisitResult.CONTINUE
             }
@@ -367,6 +473,8 @@ class FilesystemCrawler(
         flush(
             folders = pendingFolders,
             files = pendingFiles,
+            discoveryFolders = pendingDiscoveryFolders,
+            discoveryFileSamples = pendingDiscoveryFileSamples,
             host = host,
             crawlConfigId = config.crawlConfigId,
             sessionId = sessionId,
@@ -479,20 +587,35 @@ class FilesystemCrawler(
     private fun maybeFlush(
         folders: ConcurrentLinkedQueue<FolderIngestItem>,
         files: ConcurrentLinkedQueue<FileIngestItem>,
+        discoveryFolders: ConcurrentLinkedQueue<DiscoveryFolderObsIngestItem>,
+        discoveryFileSamples: ConcurrentLinkedQueue<DiscoveryFileSampleIngestItem>,
         host: String,
         crawlConfigId: Long,
         sessionId: Long,
         stats: CrawlStats,
         batchController: AdaptiveBatchController
     ) {
-        if (folders.size + files.size >= batchController.currentItems()) {
-            flush(folders, files, host, crawlConfigId, sessionId, stats, batchController, drainCompletely = false)
+        if (folders.size + files.size + discoveryFolders.size + discoveryFileSamples.size >= batchController.currentItems()) {
+            flush(
+                folders,
+                files,
+                discoveryFolders,
+                discoveryFileSamples,
+                host,
+                crawlConfigId,
+                sessionId,
+                stats,
+                batchController,
+                drainCompletely = false
+            )
         }
     }
 
     private fun flush(
         folders: ConcurrentLinkedQueue<FolderIngestItem>,
         files: ConcurrentLinkedQueue<FileIngestItem>,
+        discoveryFolders: ConcurrentLinkedQueue<DiscoveryFolderObsIngestItem>,
+        discoveryFileSamples: ConcurrentLinkedQueue<DiscoveryFileSampleIngestItem>,
         host: String,
         crawlConfigId: Long,
         sessionId: Long,
@@ -500,56 +623,107 @@ class FilesystemCrawler(
         batchController: AdaptiveBatchController,
         drainCompletely: Boolean
     ) {
-        while (folders.isNotEmpty() || files.isNotEmpty()) {
+        while (folders.isNotEmpty() || files.isNotEmpty() || discoveryFolders.isNotEmpty() || discoveryFileSamples.isNotEmpty()) {
             val itemLimit = batchController.currentItems()
             val byteLimit = batchController.targetPayloadBytes
 
             val folderBatch = mutableListOf<FolderIngestItem>()
             val fileBatch = mutableListOf<FileIngestItem>()
+            val discoveryFolderBatch = mutableListOf<DiscoveryFolderObsIngestItem>()
+            val discoveryFileSampleBatch = mutableListOf<DiscoveryFileSampleIngestItem>()
             var estimatedBytes = 0L
 
-            while ((folderBatch.size + fileBatch.size) < itemLimit) {
-                val takeFolder = when {
-                    folders.isEmpty() -> false
-                    files.isEmpty() -> true
-                    else -> folders.size >= files.size
-                }
-                if (takeFolder) {
-                    val next = folders.peek() ?: continue
-                    val bytes = estimateFolderPayloadBytes(next)
-                    if ((folderBatch.size + fileBatch.size) > 0 && estimatedBytes + bytes > byteLimit) break
-                    folders.poll()?.let {
-                        folderBatch.add(it)
-                        estimatedBytes += bytes
+            while ((folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size) < itemLimit) {
+                val pick = pickNextQueue(
+                    folders = folders,
+                    files = files,
+                    discoveryFolders = discoveryFolders,
+                    discoveryFileSamples = discoveryFileSamples
+                )
+                if (pick == NextQueue.NONE) break
+
+                when (pick) {
+                    NextQueue.FOLDERS -> {
+                        val next = folders.peek() ?: continue
+                        val bytes = estimateFolderPayloadBytes(next)
+                        if ((folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size) > 0 &&
+                            estimatedBytes + bytes > byteLimit
+                        ) break
+                        folders.poll()?.let {
+                            folderBatch.add(it)
+                            estimatedBytes += bytes
+                        }
                     }
-                } else {
-                    val next = files.peek() ?: continue
-                    val bytes = estimateFilePayloadBytes(next)
-                    if ((folderBatch.size + fileBatch.size) > 0 && estimatedBytes + bytes > byteLimit) break
-                    files.poll()?.let {
-                        fileBatch.add(it)
-                        estimatedBytes += bytes
+                    NextQueue.FILES -> {
+                        val next = files.peek() ?: continue
+                        val bytes = estimateFilePayloadBytes(next)
+                        if ((folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size) > 0 &&
+                            estimatedBytes + bytes > byteLimit
+                        ) break
+                        files.poll()?.let {
+                            fileBatch.add(it)
+                            estimatedBytes += bytes
+                        }
+                    }
+                    NextQueue.DISCOVERY_FOLDERS -> {
+                        val next = discoveryFolders.peek() ?: continue
+                        val bytes = estimateDiscoveryFolderPayloadBytes(next)
+                        if ((folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size) > 0 &&
+                            estimatedBytes + bytes > byteLimit
+                        ) break
+                        discoveryFolders.poll()?.let {
+                            discoveryFolderBatch.add(it)
+                            estimatedBytes += bytes
+                        }
+                    }
+                    NextQueue.DISCOVERY_FILE_SAMPLES -> {
+                        val next = discoveryFileSamples.peek() ?: continue
+                        val bytes = estimateDiscoveryFileSamplePayloadBytes(next)
+                        if ((folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size) > 0 &&
+                            estimatedBytes + bytes > byteLimit
+                        ) break
+                        discoveryFileSamples.poll()?.let {
+                            discoveryFileSampleBatch.add(it)
+                            estimatedBytes += bytes
+                        }
+                    }
+                    NextQueue.NONE -> {
+                        break
                     }
                 }
             }
 
             // Ensure forward progress when first item alone is larger than target payload.
-            if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
+            if (folderBatch.isEmpty() && fileBatch.isEmpty() && discoveryFolderBatch.isEmpty() && discoveryFileSampleBatch.isEmpty()) {
                 folders.poll()?.let { folderBatch.add(it); estimatedBytes += estimateFolderPayloadBytes(it) }
                 if (folderBatch.isEmpty()) {
                     files.poll()?.let { fileBatch.add(it); estimatedBytes += estimateFilePayloadBytes(it) }
                 }
+                if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
+                    discoveryFolders.poll()?.let {
+                        discoveryFolderBatch.add(it)
+                        estimatedBytes += estimateDiscoveryFolderPayloadBytes(it)
+                    }
+                }
+                if (folderBatch.isEmpty() && fileBatch.isEmpty() && discoveryFolderBatch.isEmpty()) {
+                    discoveryFileSamples.poll()?.let {
+                        discoveryFileSampleBatch.add(it)
+                        estimatedBytes += estimateDiscoveryFileSamplePayloadBytes(it)
+                    }
+                }
             }
 
-            if (folderBatch.isEmpty() && fileBatch.isEmpty()) {
+            if (folderBatch.isEmpty() && fileBatch.isEmpty() && discoveryFolderBatch.isEmpty() && discoveryFileSampleBatch.isEmpty()) {
                 return
             }
 
-            val itemCount = folderBatch.size + fileBatch.size
+            val itemCount = folderBatch.size + fileBatch.size + discoveryFolderBatch.size + discoveryFileSampleBatch.size
             log.debug(
-                "Flushing batch: {} folders, {} files, itemsTarget={}, bytes~{}",
+                "Flushing batch: {} folders, {} files, {} discoveryFolders, {} discoveryFileSamples, itemsTarget={}, bytes~{}",
                 folderBatch.size,
                 fileBatch.size,
+                discoveryFolderBatch.size,
+                discoveryFileSampleBatch.size,
                 itemLimit,
                 estimatedBytes
             )
@@ -562,7 +736,9 @@ class FilesystemCrawler(
                         crawlConfigId = crawlConfigId,
                         sessionId = sessionId,
                         folders = if (folderBatch.isNotEmpty()) folderBatch else null,
-                        files = if (fileBatch.isNotEmpty()) fileBatch else null
+                        files = if (fileBatch.isNotEmpty()) fileBatch else null,
+                        discoveryFolders = if (discoveryFolderBatch.isNotEmpty()) discoveryFolderBatch else null,
+                        discoveryFileSamples = if (discoveryFileSampleBatch.isNotEmpty()) discoveryFileSampleBatch else null
                     )
                 )
                 val durationMs = System.currentTimeMillis() - started
@@ -580,6 +756,8 @@ class FilesystemCrawler(
                 // Re-queue on failure to avoid silent data loss.
                 folderBatch.forEach { folders.add(it) }
                 fileBatch.forEach { files.add(it) }
+                discoveryFolderBatch.forEach { discoveryFolders.add(it) }
+                discoveryFileSampleBatch.forEach { discoveryFileSamples.add(it) }
                 batchController.recordFailure()
                 break
             }
@@ -653,6 +831,30 @@ private class AdaptiveBatchController(
     }
 }
 
+private enum class NextQueue {
+    FOLDERS,
+    FILES,
+    DISCOVERY_FOLDERS,
+    DISCOVERY_FILE_SAMPLES,
+    NONE
+}
+
+private fun pickNextQueue(
+    folders: ConcurrentLinkedQueue<FolderIngestItem>,
+    files: ConcurrentLinkedQueue<FileIngestItem>,
+    discoveryFolders: ConcurrentLinkedQueue<DiscoveryFolderObsIngestItem>,
+    discoveryFileSamples: ConcurrentLinkedQueue<DiscoveryFileSampleIngestItem>
+): NextQueue {
+    val candidates = listOf(
+        NextQueue.FOLDERS to folders.size,
+        NextQueue.FILES to files.size,
+        NextQueue.DISCOVERY_FOLDERS to discoveryFolders.size,
+        NextQueue.DISCOVERY_FILE_SAMPLES to discoveryFileSamples.size
+    )
+    val selected = candidates.maxByOrNull { it.second } ?: return NextQueue.NONE
+    return if (selected.second > 0) selected.first else NextQueue.NONE
+}
+
 private fun estimateFolderPayloadBytes(item: FolderIngestItem): Long {
     return 192L +
         (item.path.length * 2L) +
@@ -681,6 +883,14 @@ private fun estimateFilePayloadBytes(item: FileIngestItem): Long {
         ((item.modifiedDate?.length ?: 0) * 2L) +
         ((item.language?.length ?: 0) * 2L) +
         ((item.contentType?.length ?: 0) * 2L)
+}
+
+private fun estimateDiscoveryFolderPayloadBytes(item: DiscoveryFolderObsIngestItem): Long {
+    return 128L + (item.path.length * 2L)
+}
+
+private fun estimateDiscoveryFileSamplePayloadBytes(item: DiscoveryFileSampleIngestItem): Long {
+    return 96L + (item.folderPath.length * 2L) + (item.fileName.length * 2L)
 }
 
 private class CrawlStats {

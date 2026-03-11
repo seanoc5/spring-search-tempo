@@ -1,0 +1,164 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+    <head>
+        <title>Discovery Review</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/crawlConfigs}">Crawl Configurations</a></li>
+                    <li class="breadcrumb-item">
+                        <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}" th:text="${crawlConfig.label ?: crawlConfig.name}">Config</a>
+                    </li>
+                    <li class="breadcrumb-item active">Discovery Review</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-start mb-3">
+                <div>
+                    <h1 class="h3 mb-1">Discovery Review</h1>
+                    <p class="text-muted mb-0">
+                        Review observed skip-branch folders and set manual overrides.
+                    </p>
+                </div>
+                <div class="d-flex gap-2 mt-2 mt-md-0">
+                    <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}" class="btn btn-outline-secondary">Back to Config</a>
+                </div>
+            </div>
+
+            <div th:if="${message}" class="alert alert-success py-2" role="alert">[[${message}]]</div>
+            <div th:if="${error}" class="alert alert-danger py-2" role="alert">[[${error}]]</div>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <form th:action="@{/crawlConfigs/{id}/discovery-review(id=${crawlConfig.id})}" method="get" class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label mb-1" for="host">Host</label>
+                            <input id="host" name="host" type="text" class="form-control" th:value="${host}" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label mb-1" for="pathPrefix">Path Prefix</label>
+                            <input id="pathPrefix" name="pathPrefix" type="text" class="form-control" th:value="${pathPrefix}" placeholder="/data/skip-me" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label mb-1" for="limit">Limit</label>
+                            <input id="limit" name="limit" type="number" class="form-control" min="1" max="5000" th:value="${limit}" />
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check mt-4">
+                                <input id="includeSamples" name="includeSamples" class="form-check-input" type="checkbox" th:checked="${includeSamples}" />
+                                <label class="form-check-label" for="includeSamples">Include samples</label>
+                            </div>
+                        </div>
+                        <div class="col-12 d-flex gap-2 mt-2">
+                            <input type="hidden" name="page" value="0" />
+                            <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+                <div>
+                    <span class="badge bg-primary me-2">[[${observations.count}]] on page</span>
+                    <span class="badge bg-light text-dark border me-2">[[${observations.totalCount}]] total</span>
+                    <span th:if="${observations.suggestEnforce}" class="badge bg-warning text-dark">Suggest ENFORCE</span>
+                </div>
+                <form th:action="@{/crawlConfigs/{id}/discovery-review/reapply(id=${crawlConfig.id})}" method="post" class="d-inline-flex gap-2">
+                    <input type="hidden" name="host" th:value="${host}" />
+                    <input type="hidden" name="pathPrefix" th:value="${pathPrefix}" />
+                    <input type="hidden" name="limit" th:value="${limit}" />
+                    <input type="hidden" name="page" th:value="${observations.page}" />
+                    <input type="hidden" name="includeSamples" th:value="${includeSamples}" />
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Reapply Skip Rules</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Path</th>
+                                <th class="text-nowrap">Depth</th>
+                                <th class="text-nowrap">Skip Now</th>
+                                <th class="text-nowrap">Override</th>
+                                <th>Samples</th>
+                                <th class="text-nowrap">Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:if="${#lists.isEmpty(observations.observations)}">
+                                <td colspan="6" class="text-center text-muted py-4">No observations found for current filters.</td>
+                            </tr>
+                            <tr th:each="obs : ${observations.observations}">
+                                <td class="font-monospace small">[[${obs.path}]]</td>
+                                <td>[[${obs.depth}]]</td>
+                                <td>
+                                    <span th:if="${obs.skipByCurrentRules}" class="badge bg-secondary">SKIP</span>
+                                    <span th:unless="${obs.skipByCurrentRules}" class="badge bg-success">KEEP</span>
+                                </td>
+                                <td>
+                                    <form th:action="@{/crawlConfigs/{id}/discovery-review/override(id=${crawlConfig.id})}" method="post" class="d-flex gap-1">
+                                        <input type="hidden" name="host" th:value="${host}" />
+                                        <input type="hidden" name="path" th:value="${obs.path}" />
+                                        <input type="hidden" name="pathPrefix" th:value="${pathPrefix}" />
+                                        <input type="hidden" name="limit" th:value="${limit}" />
+                                        <input type="hidden" name="page" th:value="${observations.page}" />
+                                        <input type="hidden" name="includeSamples" th:value="${includeSamples}" />
+                                        <select name="manualOverride" class="form-select form-select-sm">
+                                            <option value="">DEFAULT</option>
+                                            <option th:each="overrideValue : ${overrideValues}"
+                                                    th:value="${overrideValue.name()}"
+                                                    th:text="${overrideValue.name()}"
+                                                    th:selected="${obs.manualOverride != null and obs.manualOverride.name() == overrideValue.name()}">
+                                                FORCE_KEEP
+                                            </option>
+                                        </select>
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm">Save</button>
+                                    </form>
+                                </td>
+                                <td>
+                                    <span th:if="${#lists.isEmpty(obs.fileSamples)}" class="text-muted small">none</span>
+                                    <div th:unless="${#lists.isEmpty(obs.fileSamples)}">
+                                        <span th:each="s, iter : ${obs.fileSamples}"
+                                              th:if="${iter.index < 5}"
+                                              class="badge text-bg-light border me-1 mb-1"
+                                              th:text="${s.fileName + (s.fileSize != null ? ' (' + s.fileSize + ')' : '')}">
+                                            sample.txt (123)
+                                        </span>
+                                        <span th:if="${obs.fileSamples.size() > 5}" class="text-muted small">
+                                            +[[${obs.fileSamples.size() - 5}]] more
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-nowrap small text-muted">
+                                    [[${obs.lastSeenAt != null ? #temporals.format(obs.lastSeenAt, 'yyyy-MM-dd HH:mm') : '-'}]]
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <span class="small text-muted">
+                    Page [[${observations.page + 1}]] of [[${observations.totalPages}]]
+                </span>
+                <div class="btn-group btn-group-sm">
+                    <a th:if="${observations.hasPrevious}"
+                       th:href="@{/crawlConfigs/{id}/discovery-review(id=${crawlConfig.id},host=${host},pathPrefix=${pathPrefix},includeSamples=${includeSamples},limit=${limit},page=${observations.page - 1})}"
+                       class="btn btn-outline-secondary">Previous</a>
+                    <button th:unless="${observations.hasPrevious}" class="btn btn-outline-secondary" type="button" disabled>Previous</button>
+
+                    <a th:if="${observations.hasNext}"
+                       th:href="@{/crawlConfigs/{id}/discovery-review(id=${crawlConfig.id},host=${host},pathPrefix=${pathPrefix},includeSamples=${includeSamples},limit=${limit},page=${observations.page + 1})}"
+                       class="btn btn-outline-secondary">Next</a>
+                    <button th:unless="${observations.hasNext}" class="btn btn-outline-secondary" type="button" disabled>Next</button>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

@@ -5,6 +5,9 @@ import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import com.oconeco.spring_search_tempo.web.service.DiscoveryUploadRequest
 import com.oconeco.spring_search_tempo.web.service.DryRunService
+import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
+import com.oconeco.spring_search_tempo.web.service.DiscoveryManualOverrideRequest
+import com.oconeco.spring_search_tempo.web.service.ReapplySkipRequest
 import com.oconeco.spring_search_tempo.web.service.RemoteClassifyRequest
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlPlannerService
 import com.oconeco.spring_search_tempo.web.service.RemoteCrawlSessionService
@@ -33,6 +36,7 @@ class RemoteCrawlResource(
     private val remoteCrawlPlannerService: RemoteCrawlPlannerService,
     private val remoteCrawlSessionService: RemoteCrawlSessionService,
     private val remoteCrawlTaskService: RemoteCrawlTaskService,
+    private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService,
     private val discoveryService: DiscoveryService,
     private val dryRunService: DryRunService
 ) {
@@ -331,7 +335,7 @@ class RemoteCrawlResource(
     @PostMapping("/session/ingest")
     fun ingest(@RequestBody request: RemoteIngestRequest): ResponseEntity<Any> {
         if (request.folders != null) {
-            val firstFolder = request.folders?.firstOrNull()
+            val firstFolder = request.folders.firstOrNull()
             val fileCount = request.files?.size ?: 0
             log.info(
                 "Remote ingest: session {} -- Host: {} -- folder(s):{} -- fileCount:{}",
@@ -579,6 +583,108 @@ class RemoteCrawlResource(
                 mapOf(
                     "status" to "FAILED",
                     "message" to "Failed to get pending discoveries: ${e.message}"
+                )
+            )
+        }
+    }
+
+    @PostMapping("/discovery/reapply-skip")
+    fun reapplySkipRules(@RequestBody request: ReapplySkipRequest): ResponseEntity<Any> {
+        return try {
+            val result = crawlDiscoveryObservationService.reapplySkipRules(
+                crawlConfigId = request.crawlConfigId,
+                host = request.host.trim().lowercase(),
+                jobRunId = request.jobRunId
+            )
+            val suggestEnforce = crawlDiscoveryObservationService.shouldSuggestEnforce(
+                crawlConfigId = request.crawlConfigId,
+                host = request.host.trim().lowercase()
+            )
+            ResponseEntity.ok(
+                mapOf(
+                    "status" to "OK",
+                    "total" to result.total,
+                    "changed" to result.changed,
+                    "suggestEnforce" to suggestEnforce
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Discovery skip reapply failed for config {}", request.crawlConfigId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to reapply skip rules: ${e.message}"
+                )
+            )
+        }
+    }
+
+    @GetMapping("/discovery/observations")
+    fun listDiscoveryObservations(
+        @RequestParam(name = "crawlConfigId") crawlConfigId: Long,
+        @RequestParam(name = "host") host: String,
+        @RequestParam(name = "pathPrefix", required = false) pathPrefix: String?,
+        @RequestParam(name = "includeSamples", required = false, defaultValue = "true") includeSamples: Boolean,
+        @RequestParam(name = "page", required = false, defaultValue = "0") page: Int,
+        @RequestParam(name = "limit", required = false, defaultValue = "500") limit: Int
+    ): ResponseEntity<Any> {
+        return try {
+            ResponseEntity.ok(
+                crawlDiscoveryObservationService.listObservations(
+                    crawlConfigId = crawlConfigId,
+                    host = host,
+                    pathPrefix = pathPrefix,
+                    includeSamples = includeSamples,
+                    page = page,
+                    limit = limit
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Failed to list discovery observations for config {}", crawlConfigId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to list discovery observations: ${e.message}"
+                )
+            )
+        }
+    }
+
+    @PostMapping("/discovery/override")
+    fun setDiscoveryManualOverride(@RequestBody request: DiscoveryManualOverrideRequest): ResponseEntity<Any> {
+        return try {
+            val observation = crawlDiscoveryObservationService.updateManualOverride(
+                crawlConfigId = request.crawlConfigId,
+                host = request.host,
+                path = request.path,
+                manualOverride = request.manualOverride
+            )
+            ResponseEntity.ok(
+                mapOf(
+                    "status" to "OK",
+                    "observation" to observation
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Failed to set discovery manual override for config {}", request.crawlConfigId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to set discovery manual override: ${e.message}"
                 )
             )
         }
