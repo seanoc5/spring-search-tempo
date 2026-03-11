@@ -414,6 +414,7 @@ DELETE FROM batch_job_execution;
 - [Local: Thymeleaf + HTMX + SpEL Notes](docs/guides/thymeleaf-htmx-spel-notes.md)
 - [Local: Thymeleaf + HTMX + SpEL UI Development Guide](docs/guides/thymeleaf-htmx-spel-ui-development-guide.md)
 - [Local: Portable Thymeleaf/HTMX Style Pack](docs/guides/portable-thymeleaf-htmx-style-pack.md)
+- [Local: Dev HTTPS Reverse Proxy Guide](docs/guides/dev-https-reverse-proxy.md)
 
 ## License
 

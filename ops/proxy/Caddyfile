@@ -1,0 +1,30 @@
+# Spring Search Tempo dev/LAN reverse proxy.
+#
+# 1) Edit the hostnames/IPs below for your environment.
+# 2) Run: caddy run --config ops/proxy/Caddyfile
+# 3) Trust local CA (once): sudo caddy trust
+#
+# This assumes Spring Boot (Tomcat) listens on 127.0.0.1:8082.
+
+# Redirect HTTP to HTTPS for all configured names.
+http://localhost, http://tempo.local, http://192.168.1.100 {
+    redir https://{host}{uri} permanent
+}
+
+# HTTPS endpoint with Caddy's internal CA for LAN/dev.
+localhost, tempo.local, 192.168.1.100 {
+    tls internal
+
+    encode zstd gzip
+
+    reverse_proxy 127.0.0.1:8082 {
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

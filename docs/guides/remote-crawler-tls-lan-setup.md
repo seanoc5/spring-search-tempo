@@ -10,6 +10,9 @@ Use this guide to run remote crawler over HTTPS on a trusted LAN, including self
 
 ## 1) Pick a TLS Topology
 
+For ready reverse-proxy configs tailored to this repo, see:
+- **[Dev HTTPS Reverse Proxy (Tomcat + Devtools)](dev-https-reverse-proxy.md)**
+
 ### Option A (recommended): TLS at reverse proxy
 
 - Run Spring Boot on HTTP internally (for example `localhost:8082`)
