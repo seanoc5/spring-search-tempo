@@ -46,7 +46,9 @@ Create `C:\Tempo\remote-crawler\config.json`:
 {
     "serverUrl": "https://your-server",
     "username": "admin",
-    "password": "your-password"
+    "password": "your-password",
+    "trustStorePath": "C:\\Tempo\\remote-crawler\\tempo-truststore.jks",
+    "trustStorePassword": "changeit"
 }
 ```
 
@@ -57,6 +59,8 @@ Create `C:\Tempo\remote-crawler\config.json`:
 [Environment]::SetEnvironmentVariable("TEMPO_SERVER_URL", "https://your-server", "User")
 [Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_USERNAME", "admin", "User")
 [Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_PASSWORD", "your-password", "User")
+[Environment]::SetEnvironmentVariable("TEMPO_TRUSTSTORE_PATH", "C:\Tempo\remote-crawler\tempo-truststore.jks", "User")
+[Environment]::SetEnvironmentVariable("TEMPO_TRUSTSTORE_PASSWORD", "changeit", "User")
 ```
 
 **Priority order**: Command-line parameters > Environment variables > Config file > Defaults
@@ -121,6 +125,8 @@ This creates a task that runs every 4 hours by default.
 | `-ServerUrl` | (from config) | Spring Search Tempo server URL |
 | `-Username` | (from config) | Authentication username |
 | `-Password` | (from config) | Authentication password |
+| `-TrustStorePath` | (optional) | Java truststore path for self-signed/private CA certs |
+| `-TrustStorePassword` | `changeit` (if truststore set) | Java truststore password |
 | `-HostName` | (auto-detected) | Override hostname sent to server |
 | `-LogDir` | `C:\Tempo\remote-crawler\logs` | Directory for log files |
 | `-ConfigFile` | `config.json` (same folder as JAR) | Path to JSON config file |
@@ -137,6 +143,12 @@ This creates a task that runs every 4 hours by default.
 # Run onboard (initial discovery)
 .\run-remote-crawler.ps1 -Mode onboard
 ```
+
+## TLS for LAN / Self-Signed Certificates
+
+If you use a self-signed certificate (or private CA), configure a truststore so Java can validate the server cert.
+
+See: **[Remote Crawler TLS Setup (LAN + self-signed)](remote-crawler-tls-lan-setup.md)**
 
 ## Managing the Task
 

@@ -140,4 +140,7 @@ Covers:
 - PowerShell scripts for running and scheduling (`scripts/windows/`)
 - Configurable intervals (default: every 4 hours)
 - Credential management via environment variables
-- Troubleshooting common issues                   
+- Troubleshooting common issues
+
+TLS guide:
+- **[Remote Crawler TLS Setup (LAN + self-signed)](remote-crawler-tls-lan-setup.md)**
