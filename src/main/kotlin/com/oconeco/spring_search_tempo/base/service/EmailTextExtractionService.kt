@@ -3,9 +3,14 @@ package com.oconeco.spring_search_tempo.base.service
 import jakarta.mail.Message
 import jakarta.mail.Multipart
 import jakarta.mail.Part
+import jakarta.mail.internet.MimeBodyPart
+import jakarta.mail.internet.ContentType
+import jakarta.mail.internet.MimePart
+import jakarta.mail.internet.MimeMessage
 import org.jsoup.Jsoup
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.nio.charset.Charset
 
 
 /**
@@ -30,10 +35,15 @@ class EmailTextExtractionService {
      */
     fun extractText(message: Message): EmailTextResult {
         return try {
-            val content = message.content
+            val content = getPartContentSafely(message)
             val text = when {
                 content is String -> content
                 content is Multipart -> extractFromMultipart(content)
+                message.isMimeType("text/plain") -> extractTextFromRawPart(message) ?: ""
+                message.isMimeType("text/html") -> {
+                    val html = extractTextFromRawPart(message)
+                    if (html.isNullOrBlank()) "" else extractTextFromHtml(html)
+                }
                 else -> "[Unsupported content type: ${message.contentType}]"
             }
 
@@ -57,20 +67,21 @@ class EmailTextExtractionService {
 
         for (i in 0 until multipart.count) {
             val part = multipart.getBodyPart(i)
+            val partContent = getPartContentSafely(part)
 
             when {
                 part.isMimeType("text/plain") && !isAttachment(part) -> {
-                    val text = part.content as? String
+                    val text = (partContent as? String) ?: extractTextFromRawPart(part)
                     if (!text.isNullOrBlank()) {
                         textParts.add(text)
                     }
                 }
                 part.isMimeType("text/html") && !isAttachment(part) -> {
-                    htmlContent = part.content as? String
+                    htmlContent = (partContent as? String) ?: extractTextFromRawPart(part)
                 }
-                part.content is Multipart -> {
+                partContent is Multipart -> {
                     // Recursively extract from nested multipart
-                    val nested = extractFromMultipart(part.content as Multipart)
+                    val nested = extractFromMultipart(partContent)
                     if (nested.isNotBlank()) {
                         textParts.add(nested)
                     }
@@ -137,7 +148,7 @@ class EmailTextExtractionService {
         val attachments = mutableListOf<String>()
 
         try {
-            val content = message.content
+            val content = getPartContentSafely(message)
             if (content is Multipart) {
                 extractAttachmentsFromMultipart(content, attachments)
             }
@@ -151,15 +162,101 @@ class EmailTextExtractionService {
     private fun extractAttachmentsFromMultipart(multipart: Multipart, attachments: MutableList<String>) {
         for (i in 0 until multipart.count) {
             val part = multipart.getBodyPart(i)
+            val partContent = getPartContentSafely(part)
 
-            if (isAttachment(part) || part.fileName != null) {
-                part.fileName?.let { attachments.add(it) }
+            val fileName = try {
+                part.fileName
+            } catch (e: Exception) {
+                log.debug("Failed to decode attachment file name: {}", e.message)
+                null
             }
 
-            if (part.content is Multipart) {
-                extractAttachmentsFromMultipart(part.content as Multipart, attachments)
+            if (isAttachment(part) || fileName != null) {
+                fileName?.let { attachments.add(it) }
+            }
+
+            if (partContent is Multipart) {
+                extractAttachmentsFromMultipart(partContent, attachments)
             }
         }
+    }
+
+    private fun getPartContentSafely(part: Part): Any? {
+        return try {
+            part.content
+        } catch (e: Exception) {
+            if (isUnknownTransferEncodingError(e)) {
+                val encoding = runCatching { (part as? MimePart)?.encoding }.getOrNull() ?: "unknown"
+                log.warn("Skipping MIME decode for unknown transfer encoding '{}' in part {}", encoding, part.contentType)
+                null
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private fun extractTextFromRawPart(part: Part): String? {
+        val rawInputStream = when (part) {
+            is MimeBodyPart -> runCatching { part.rawInputStream }.getOrNull()
+            is MimeMessage -> runCatching { part.rawInputStream }.getOrNull()
+            else -> null
+        } ?: return null
+
+        return try {
+            rawInputStream.use { raw ->
+                val bytes = raw.readBytes()
+                if (bytes.isEmpty()) {
+                    null
+                } else {
+                    val declaredCharset = resolveCharset(part.contentType)
+                    decodeToString(bytes, declaredCharset)
+                        .trim()
+                        .takeIf { it.isNotBlank() }
+                }
+
+            }
+        } catch (e: Exception) {
+            log.debug("Failed raw text fallback for part {}: {}", part.contentType, e.message)
+            null
+        }
+    }
+
+    private fun resolveCharset(contentType: String?): Charset {
+        val candidate = runCatching { ContentType(contentType).getParameter("charset") }
+            .getOrNull()
+            ?.trim()
+            ?.trim('"')
+            ?.takeIf { it.isNotBlank() }
+
+        if (candidate != null) {
+            try {
+                if (Charset.isSupported(candidate)) {
+                    return Charset.forName(candidate)
+                }
+            } catch (_: Exception) {
+                // Ignore malformed charset names and use fallback.
+            }
+        }
+        return Charsets.UTF_8
+    }
+
+    private fun decodeToString(bytes: ByteArray, preferredCharset: Charset): String {
+        return runCatching { String(bytes, preferredCharset) }
+            .recoverCatching { String(bytes, Charsets.UTF_8) }
+            .recoverCatching { String(bytes, Charsets.ISO_8859_1) }
+            .getOrDefault(String(bytes))
+    }
+
+    private fun isUnknownTransferEncodingError(error: Throwable): Boolean {
+        var current: Throwable? = error
+        while (current != null) {
+            val message = current.message
+            if (message != null && message.contains("Unknown encoding", ignoreCase = true)) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 }
 
