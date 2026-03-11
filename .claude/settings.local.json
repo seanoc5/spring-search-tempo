@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(jar tf:*)",
+      "Bash(jar xf:*)",
+      "Bash(dir:*)",
+      "Bash(unzip:*)",
+      "Bash(\"$LOCALAPPDATA/SpringSearchTempo/runtime/bin/java.exe\":*)",
+      "Bash(\"$LOCALAPPDATA/SpringSearchTempo/SpringSearchTempo.exe\":*)",
+      "Bash(tasklist.exe:*)",
+      "Bash(\"$HOME/.gradle/jdks/eclipse_adoptium-21-amd64-windows.2/bin/java.exe\":*)",
+      "Bash(\"/c/Users/seano/.gradle/jdks/eclipse_adoptium-21-amd64-windows.2/bin/java.exe\":*)",
+      "Bash(echo System JAVA_HOME: $JAVA_HOME:*)",
+      "Bash(echo Exit code: $?:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}
