@@ -29,7 +29,7 @@ class ImapConnectionService(
 
         fun getWorkmailImap(region: String): ImapSettings {
             val foo = ImapSettings("imap.mail.$region.awsapps.com", 993, true)
-            log.info("Imap settings: {}", foo)
+            log.debug("Imap settings: {}", foo)
             return foo
         }
     }
