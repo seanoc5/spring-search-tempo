@@ -6,7 +6,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-BASE_URL="${BASE_URL:-http://localhost:8082}"
+BASE_URL="${BASE_URL:-https://localhost}"
 API_BASE="${API_BASE:-$BASE_URL/api/remote-crawl}"
 USERNAME="${USERNAME:-admin}"
 PASSWORD="${PASSWORD:-admin}"
@@ -14,6 +14,7 @@ HOST_NAME="${HOST_NAME:-$(hostname -s | tr '[:upper:]' '[:lower:]')}"
 CRAWL_CONFIG_ID="${CRAWL_CONFIG_ID:-}"
 QUEUE_BATCH_SIZE="${QUEUE_BATCH_SIZE:-10}"
 EXPECTED_TOTAL="${EXPECTED_TOTAL:-50}"
+CURL_INSECURE="${CURL_INSECURE:-false}"
 
 if [[ -z "$CRAWL_CONFIG_ID" ]]; then
   cat >&2 <<'EOF'
@@ -41,13 +42,17 @@ curl_json() {
   local method="$1"
   local url="$2"
   local payload="${3:-}"
+  local -a curl_args=(-sS)
+  if [[ "${CURL_INSECURE,,}" == "true" ]]; then
+    curl_args+=(-k)
+  fi
   if [[ -n "$payload" ]]; then
-    curl -sS -u "${USERNAME}:${PASSWORD}" \
+    curl "${curl_args[@]}" -u "${USERNAME}:${PASSWORD}" \
       -H "Content-Type: application/json" \
       -X "$method" "$url" \
       --data "$payload"
   else
-    curl -sS -u "${USERNAME}:${PASSWORD}" \
+    curl "${curl_args[@]}" -u "${USERNAME}:${PASSWORD}" \
       -H "Content-Type: application/json" \
       -X "$method" "$url"
   fi

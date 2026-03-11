@@ -11,6 +11,7 @@ import com.oconeco.remotecrawler.util.DriveDetector
 import kotlinx.cli.*
 import org.slf4j.LoggerFactory
 import java.net.InetAddress
+import java.net.URI
 import java.nio.file.Paths
 import java.util.*
 
@@ -31,8 +32,8 @@ fun main(args: Array<String>) {
         ArgType.String,
         shortName = "s",
         fullName = "server",
-        description = "Server URL (default: http://localhost:8082)"
-    ).default("http://localhost:8082")
+        description = "Server URL (default: https://localhost). Supports HTTPS and HTTP."
+    ).default("https://localhost")
 
     val username by parser.option(
         ArgType.String,
@@ -93,17 +94,18 @@ fun main(args: Array<String>) {
             val host = hostName ?: getHostName()
             log.info("Running crawl for host: {}", host)
 
-            val client = createClientOrExit(serverUrl, username, password)
+            val init = createClientOrExit(serverUrl, username, password)
+            val client = init.client
             val checks = checkServer(client)
 
             if (!checks.connectivity.ok) {
-                log.error("Failed connectivity check to server at {}", serverUrl)
-                printCheckSummary(serverUrl, checks)
+                log.error("Failed connectivity check to server at {}", init.effectiveServerUrl)
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
             if (!checks.authentication.authenticated) {
                 log.error("Connected to server, but authentication failed")
-                printCheckSummary(serverUrl, checks)
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
 
@@ -179,14 +181,15 @@ fun main(args: Array<String>) {
             val host = hostName ?: getHostName()
             log.info("Checking status for host: {}", host)
 
-            val client = createClientOrExit(serverUrl, username, password)
+            val init = createClientOrExit(serverUrl, username, password)
+            val client = init.client
             val checks = checkServer(client)
-            printCheckSummary(serverUrl, checks)
+            printCheckSummary(init.effectiveServerUrl, checks)
             println("Host: $host")
             println()
 
             if (!checks.connectivity.ok) {
-                log.error("Failed to connect to server at {}", serverUrl)
+                log.error("Failed to connect to server at {}", init.effectiveServerUrl)
                 println("Status: OFFLINE")
                 System.exit(1)
             }
@@ -276,17 +279,22 @@ fun main(args: Array<String>) {
             }
             println()
 
-            val client = createClientOrExit(serverUrl, username, password)
+            val init = createClientOrExit(serverUrl, username, password)
+            val client = init.client
+            if (init.effectiveServerUrl != serverUrl) {
+                println("Server (effective): ${init.effectiveServerUrl}")
+                println()
+            }
             val checks = checkServer(client)
 
             if (!checks.connectivity.ok) {
-                println("ERROR: Failed connectivity check to server at $serverUrl")
-                printCheckSummary(serverUrl, checks)
+                println("ERROR: Failed connectivity check to server at ${init.effectiveServerUrl}")
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
             if (!checks.authentication.authenticated) {
                 println("ERROR: Connected to server, but authentication failed.")
-                printCheckSummary(serverUrl, checks)
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
             println("Server connection: OK")
@@ -480,10 +488,11 @@ fun main(args: Array<String>) {
         override fun execute() {
             log.info("Testing connection to {}", serverUrl)
 
-            val client = createClientOrExit(serverUrl, username, password)
+            val init = createClientOrExit(serverUrl, username, password)
+            val client = init.client
             val checks = checkServer(client)
 
-            printCheckSummary(serverUrl, checks)
+            printCheckSummary(init.effectiveServerUrl, checks)
 
             if (!checks.connectivity.ok) {
                 System.exit(1)
@@ -550,17 +559,18 @@ fun main(args: Array<String>) {
         override fun execute() {
             log.info("Running dry-run for config {}", configId)
 
-            val client = createClientOrExit(serverUrl, username, password)
+            val init = createClientOrExit(serverUrl, username, password)
+            val client = init.client
             val checks = checkServer(client)
 
             if (!checks.connectivity.ok) {
-                println("ERROR: Failed connectivity check to server at $serverUrl")
-                printCheckSummary(serverUrl, checks)
+                println("ERROR: Failed connectivity check to server at ${init.effectiveServerUrl}")
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
             if (!checks.authentication.authenticated) {
                 println("ERROR: Connected to server, but authentication failed.")
-                printCheckSummary(serverUrl, checks)
+                printCheckSummary(init.effectiveServerUrl, checks)
                 System.exit(1)
             }
 
@@ -671,18 +681,147 @@ private data class ServerCheckSummary(
     val authentication: AuthCheckResult
 )
 
-private fun createClientOrExit(serverUrl: String, username: String?, password: String?): RemoteCrawlClient {
+private data class ClientInitResult(
+    val client: RemoteCrawlClient,
+    val effectiveServerUrl: String
+)
+
+private fun createClientOrExit(serverUrl: String, username: String?, password: String?): ClientInitResult {
     val normalizedUser = username?.trim()?.takeIf { it.isNotBlank() }
     val normalizedPass = password?.trim()?.takeIf { it.isNotBlank() }
     if ((normalizedUser == null) != (normalizedPass == null)) {
         println("ERROR: Provide both --username and --password, or provide neither.")
         System.exit(1)
     }
-    return RemoteCrawlClient(
-        baseUrl = serverUrl,
-        username = normalizedUser,
-        password = normalizedPass
-    )
+
+    val normalizedInput = serverUrl.trim()
+    if (normalizedInput.isBlank()) {
+        println("ERROR: --server URL cannot be blank")
+        System.exit(1)
+    }
+
+    val candidates = buildServerCandidates(normalizedInput)
+    var lastResult: ConnectivityCheckResult? = null
+
+    for ((index, candidate) in candidates.withIndex()) {
+        val candidateClient = RemoteCrawlClient(
+            baseUrl = candidate,
+            username = normalizedUser,
+            password = normalizedPass
+        )
+
+        val connectivity = candidateClient.testConnectivity()
+        lastResult = connectivity
+        if (!connectivity.ok) continue
+
+        if (candidate.startsWith("http://")) {
+            val reason = when {
+                index > 0 && candidates.first().startsWith("https://") ->
+                    "HTTPS check failed; falling back to plain HTTP."
+                normalizedInput.startsWith("http://", ignoreCase = true) ->
+                    "Plain HTTP requested explicitly."
+                else ->
+                    "Using plain HTTP."
+            }
+            printInsecureHttpWarning(candidate, reason)
+        }
+
+        if (!candidate.equals(normalizedInput, ignoreCase = true)) {
+            println("Resolved server URL: $candidate")
+        }
+
+        return ClientInitResult(
+            client = candidateClient,
+            effectiveServerUrl = candidate
+        )
+    }
+
+    val hint = when {
+        normalizedInput.startsWith("https://", ignoreCase = true) ->
+            "Hint: server may be HTTP-only on this port. Try http://..."
+        normalizedInput.startsWith("http://", ignoreCase = true) ->
+            "Hint: if TLS is enabled, try https://..."
+        else ->
+            "Hint: provide explicit scheme, e.g. https://host or http://host"
+    }
+
+    println("ERROR: Unable to connect to server '$normalizedInput' (${lastResult?.message ?: "request failed"})")
+    println(hint)
+    System.exit(1)
+    error("unreachable")
+}
+
+private fun buildServerCandidates(rawInput: String): List<String> {
+    val trimmed = rawInput.trim().removeSuffix("/")
+    if (trimmed.isBlank()) return emptyList()
+
+    return if (trimmed.contains("://")) {
+        val normalized = normalizeServerUrl(trimmed)
+        val uri = URI.create(normalized)
+        val scheme = uri.scheme.lowercase()
+        val alternate = when (scheme) {
+            "https" -> swapScheme(uri, "http")
+            "http" -> swapScheme(uri, "https")
+            else -> {
+                println("ERROR: Unsupported URL scheme '$scheme'. Use http:// or https://")
+                System.exit(1)
+                error("unreachable")
+            }
+        }
+        listOf(normalized, alternate).distinct()
+    } else {
+        listOf(
+            normalizeServerUrl("https://$trimmed"),
+            normalizeServerUrl("http://$trimmed")
+        ).distinct()
+    }
+}
+
+private fun normalizeServerUrl(url: String): String {
+    val normalized = url.trim().removeSuffix("/")
+    val uri = URI.create(normalized)
+    val scheme = uri.scheme?.lowercase()
+    if (scheme !in setOf("http", "https")) {
+        println("ERROR: Unsupported URL scheme '${uri.scheme}'. Use http:// or https://")
+        System.exit(1)
+    }
+    if (uri.host.isNullOrBlank()) {
+        println("ERROR: Invalid server URL '$url' (missing host)")
+        System.exit(1)
+    }
+    val cleaned = URI(
+        scheme,
+        uri.userInfo,
+        uri.host,
+        uri.port,
+        uri.path ?: "",
+        uri.query,
+        uri.fragment
+    ).toString().removeSuffix("/")
+    return cleaned
+}
+
+private fun swapScheme(uri: URI, newScheme: String): String =
+    URI(
+        newScheme,
+        uri.userInfo,
+        uri.host,
+        uri.port,
+        uri.path ?: "",
+        uri.query,
+        uri.fragment
+    ).toString().removeSuffix("/")
+
+private fun printInsecureHttpWarning(url: String, reason: String) {
+    println()
+    println("!".repeat(78))
+    println("!! WARNING: INSECURE TRANSPORT (HTTP) IN USE")
+    println("!! Endpoint: $url")
+    println("!! $reason")
+    println("!! Traffic (credentials + payloads) is NOT TLS-protected on the wire.")
+    println("!! Configure HTTPS as soon as possible.")
+    println("!".repeat(78))
+    println()
 }
 
 private fun checkServer(client: RemoteCrawlClient): ServerCheckSummary =

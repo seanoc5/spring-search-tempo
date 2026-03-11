@@ -47,7 +47,8 @@ class RemoteCrawlClient(
         null
     }
 
-    private val apiBase: String = "$baseUrl/api/remote-crawl"
+    private val normalizedBaseUrl: String = baseUrl.removeSuffix("/")
+    private val apiBase: String = "$normalizedBaseUrl/api/remote-crawl"
 
     /**
      * Get bootstrap configuration for this host.
@@ -190,7 +191,7 @@ class RemoteCrawlClient(
         if (primary.ok) return primary
 
         // Backward-compatible fallback for older servers.
-        val actuatorHealthUrl = "$baseUrl/actuator/health"
+        val actuatorHealthUrl = "$normalizedBaseUrl/actuator/health"
         log.debug(
             "Remote health check failed ({}). Trying fallback {}",
             primary.message,
@@ -323,7 +324,12 @@ class RemoteCrawlClient(
         } catch (e: java.net.http.HttpTimeoutException) {
             ConnectivityCheckResult(ok = false, statusCode = null, message = "Timeout", endpoint = url)
         } catch (e: javax.net.ssl.SSLException) {
-            ConnectivityCheckResult(ok = false, statusCode = null, message = "SSL error", endpoint = url)
+            ConnectivityCheckResult(
+                ok = false,
+                statusCode = null,
+                message = buildSslErrorMessage(url, e),
+                endpoint = url
+            )
         } catch (e: Exception) {
             ConnectivityCheckResult(
                 ok = false,
@@ -331,6 +337,22 @@ class RemoteCrawlClient(
                 message = "${e.javaClass.simpleName}: ${e.message ?: "request failed"}",
                 endpoint = url
             )
+        }
+    }
+
+    private fun buildSslErrorMessage(url: String, error: javax.net.ssl.SSLException): String {
+        val detail = error.message?.trim().orEmpty()
+        val lower = detail.lowercase()
+        return when {
+            url.startsWith("https://") &&
+                (lower.contains("unsupported or unrecognized ssl message") || lower.contains("plaintext")) ->
+                "SSL error (possible HTTPS-to-HTTP mismatch on this port)"
+            lower.contains("pkix") || lower.contains("certificate") ->
+                "SSL error (certificate validation failed)"
+            detail.isNotBlank() ->
+                "SSL error ($detail)"
+            else ->
+                "SSL error"
         }
     }
 }

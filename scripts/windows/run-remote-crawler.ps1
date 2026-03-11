@@ -40,7 +40,7 @@ if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
     } elseif ($config.serverUrl) {
         $ServerUrl = $config.serverUrl
     } else {
-        $ServerUrl = "http://minti9:8082"
+        $ServerUrl = "https://minti9"
     }
 }
 

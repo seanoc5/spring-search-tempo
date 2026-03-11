@@ -46,7 +46,7 @@ From the release page, download `remote-crawler-<version>.jar` to the Win11 host
 Example run:
 
 ```powershell
-java -jar .\remote-crawler-0.1.1.jar onboard -s http://minti9:8082 -u admin -p admin -H winbook3
+java -jar .\remote-crawler-0.1.1.jar onboard -s https://minti9 -u admin -p admin -H winbook3
 ```
 
 ## Version source

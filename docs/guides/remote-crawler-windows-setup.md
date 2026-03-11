@@ -44,7 +44,7 @@ Create `C:\Tempo\remote-crawler\config.json`:
 
 ```json
 {
-    "serverUrl": "http://your-server:8082",
+    "serverUrl": "https://your-server",
     "username": "admin",
     "password": "your-password"
 }
@@ -54,18 +54,20 @@ Create `C:\Tempo\remote-crawler\config.json`:
 
 ```powershell
 # Set permanently for your user
-[Environment]::SetEnvironmentVariable("TEMPO_SERVER_URL", "http://your-server:8082", "User")
+[Environment]::SetEnvironmentVariable("TEMPO_SERVER_URL", "https://your-server", "User")
 [Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_USERNAME", "admin", "User")
 [Environment]::SetEnvironmentVariable("TEMPO_CRAWLER_PASSWORD", "your-password", "User")
 ```
 
 **Priority order**: Command-line parameters > Environment variables > Config file > Defaults
 
+`http://` is still supported for migration/LAN testing, but the CLI now emits a loud warning when insecure HTTP is used.
+
 ### 5. Test connectivity
 
 ```powershell
 cd C:\Tempo\remote-crawler
-java -jar remote-crawler-0.2.1.jar -s http://your-server:8082 -u admin -p password status
+java -jar remote-crawler-0.2.1.jar -s https://your-server -u admin -p password status
 ```
 
 You should see your assigned crawl configurations.
@@ -127,7 +129,7 @@ This creates a task that runs every 4 hours by default.
 
 ```powershell
 # Run crawl with custom server
-.\run-remote-crawler.ps1 -ServerUrl "http://192.168.1.100:8082"
+.\run-remote-crawler.ps1 -ServerUrl "https://192.168.1.100"
 
 # Check status only
 .\run-remote-crawler.ps1 -Mode status
