@@ -6,15 +6,20 @@ import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.CrawlDiscoveryFileSampleRepository
 import com.oconeco.spring_search_tempo.base.repos.CrawlDiscoveryFolderObservationRepository
 import com.oconeco.spring_search_tempo.base.repos.CrawlDiscoveryRunRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
+import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
+import com.oconeco.spring_search_tempo.base.service.FileSampleAnalyzer
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
+import com.oconeco.spring_search_tempo.base.service.PatternStabilityInput
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 
 @Service
 class CrawlDiscoveryObservationService(
@@ -22,10 +27,13 @@ class CrawlDiscoveryObservationService(
     private val crawlDiscoveryRunRepository: CrawlDiscoveryRunRepository,
     private val crawlDiscoveryFolderObservationRepository: CrawlDiscoveryFolderObservationRepository,
     private val crawlDiscoveryFileSampleRepository: CrawlDiscoveryFileSampleRepository,
+    private val fsFolderRepository: FSFolderRepository,
     private val databaseCrawlConfigService: DatabaseCrawlConfigService,
     private val crawlConfigConverter: CrawlConfigConverter,
     private val runtimeCrawlConfigService: CrawlConfigService,
-    private val patternMatchingService: PatternMatchingService
+    private val patternMatchingService: PatternMatchingService,
+    private val crawlSchedulingService: CrawlSchedulingService,
+    private val fileSampleAnalyzer: FileSampleAnalyzer
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(CrawlDiscoveryObservationService::class.java)
@@ -105,6 +113,9 @@ class CrawlDiscoveryObservationService(
             .filter { it.folderPath.isNotBlank() && it.fileName.isNotBlank() }
             .groupBy { normalizePath(it.folderPath) }
 
+        // Track observations that received samples for folder type analysis
+        val observationsWithNewSamples = mutableListOf<CrawlDiscoveryFolderObservation>()
+
         for ((path, observation) in persistedByPath) {
             val obsId = observation.id ?: continue
             crawlDiscoveryFileSampleRepository.deleteByFolderObservationId(obsId)
@@ -124,7 +135,19 @@ class CrawlDiscoveryObservationService(
                     lastSeenAt = now
                 }
             }
-            crawlDiscoveryFileSampleRepository.saveAll(entities)
+            val savedSamples = crawlDiscoveryFileSampleRepository.saveAll(entities)
+
+            // Analyze file samples to detect folder type
+            val analysisResult = fileSampleAnalyzer.analyzeFolder(savedSamples, path)
+            observation.detectedFolderType = analysisResult.detectedType
+            observation.detectionConfidence = analysisResult.confidence
+            observationsWithNewSamples.add(observation)
+        }
+
+        // Save observations with updated folder type analysis
+        if (observationsWithNewSamples.isNotEmpty()) {
+            crawlDiscoveryFolderObservationRepository.saveAll(observationsWithNewSamples)
+            log.debug("Analyzed folder types for {} observations", observationsWithNewSamples.size)
         }
 
         val run = crawlDiscoveryRunRepository.findByJobRunId(jobRunId)
@@ -161,7 +184,109 @@ class CrawlDiscoveryObservationService(
             crawlDiscoveryRunRepository.save(run)
         }
 
+        // Integration 1 & 3: Update pattern stability and trigger auto-cooling when patterns stabilize
+        updatePatternStabilityAndCoolFolders(crawlConfigId, normalizedHost, changed, observations.size)
+
         return ReapplySkipResult(total = observations.size, changed = changed)
+    }
+
+    /**
+     * Update pattern stability scores and trigger auto-cooling for stable folders.
+     *
+     * This is called after reapplySkipRules to feed discovery observation data
+     * into the smart crawl temperature system.
+     *
+     * Integration 1: Calculate stability from recent runs and update FSFolder.patternStabilityScore
+     * Integration 3: When patterns are very stable, trigger cooling (HOT→WARM→COLD)
+     */
+    private fun updatePatternStabilityAndCoolFolders(
+        crawlConfigId: Long,
+        host: String,
+        changedThisRun: Int,
+        totalThisRun: Int
+    ) {
+        // Get recent runs to calculate stability
+        val recentRuns = crawlDiscoveryRunRepository
+            .findTop10ByCrawlConfigIdAndHostOrderByStartedAtDesc(crawlConfigId, host)
+            .filter { it.runStatus == RunStatus.COMPLETED }
+            .take(5)
+
+        if (recentRuns.size < 3) {
+            log.debug("Not enough discovery runs ({}) to calculate pattern stability for config {} host {}",
+                recentRuns.size, crawlConfigId, host)
+            return
+        }
+
+        // Calculate stability score from recent runs
+        val stabilityInputs = recentRuns.map {
+            PatternStabilityInput(
+                observedFolderCount = it.observedFolderCount,
+                reapplyChangedCount = it.reapplyChangedCount
+            )
+        }
+        val stabilityScore = crawlSchedulingService.calculatePatternStabilityScore(stabilityInputs)
+            ?: return
+
+        // Update stability score for all folders on this host
+        val updated = crawlSchedulingService.updatePatternStabilityForHost(host, stabilityScore)
+        log.info("Updated pattern stability to {} for {} folders on host {} (config {})",
+            stabilityScore, updated, host, crawlConfigId)
+
+        // Integration 3: If patterns are very stable, trigger auto-cooling
+        if (stabilityScore >= 80 && changedThisRun == 0) {
+            triggerAutoCoolingForStableFolders(host, stabilityScore)
+        }
+    }
+
+    /**
+     * Auto-cool folders when patterns are very stable.
+     *
+     * When discovery observations show patterns are stable (no changes for several runs),
+     * we can safely cool folders to reduce crawl frequency:
+     * - HOT folders that haven't changed in 3+ days → WARM
+     * - WARM folders that haven't changed in 7+ days → COLD
+     */
+    private fun triggerAutoCoolingForStableFolders(host: String, stabilityScore: Int) {
+        val folders = fsFolderRepository.findCrawlableFoldersBySourceHost(host)
+        if (folders.isEmpty()) return
+
+        val now = OffsetDateTime.now()
+        var cooledHotToWarm = 0
+        var cooledWarmToCold = 0
+
+        for (folder in folders) {
+            val lastCrawled = folder.lastCrawledAt ?: continue
+            val daysSinceLastCrawl = ChronoUnit.DAYS.between(lastCrawled, now)
+
+            when (folder.crawlTemperature) {
+                CrawlTemperature.HOT -> {
+                    // HOT folders can cool to WARM if stable and not crawled in 3+ days
+                    if (daysSinceLastCrawl >= 3) {
+                        folder.crawlTemperature = CrawlTemperature.WARM
+                        folder.patternStabilityScore = stabilityScore
+                        cooledHotToWarm++
+                    }
+                }
+                CrawlTemperature.WARM -> {
+                    // WARM folders can cool to COLD if very stable and not crawled in 7+ days
+                    if (stabilityScore >= 90 && daysSinceLastCrawl >= 7) {
+                        folder.crawlTemperature = CrawlTemperature.COLD
+                        folder.patternStabilityScore = stabilityScore
+                        cooledWarmToCold++
+                    }
+                }
+                CrawlTemperature.COLD -> {
+                    // Already cold, just update stability score
+                    folder.patternStabilityScore = stabilityScore
+                }
+            }
+        }
+
+        if (cooledHotToWarm > 0 || cooledWarmToCold > 0) {
+            fsFolderRepository.saveAll(folders)
+            log.info("Auto-cooling for host {}: {} HOT→WARM, {} WARM→COLD (stability={})",
+                host, cooledHotToWarm, cooledWarmToCold, stabilityScore)
+        }
     }
 
     fun shouldSuggestEnforce(
@@ -296,6 +421,14 @@ class CrawlDiscoveryObservationService(
         observation: CrawlDiscoveryFolderObservation,
         samples: List<DiscoveryFileSampleDTO>
     ): DiscoveryObservationDTO {
+        // Calculate suggested analysis status from folder type analysis
+        val suggestedStatus = observation.detectedFolderType?.let { folderType ->
+            fileSampleAnalyzer.suggestAnalysisStatus(
+                folderType,
+                observation.detectionConfidence ?: 0.0
+            )
+        }
+
         return DiscoveryObservationDTO(
             id = observation.id ?: -1L,
             path = observation.path ?: "",
@@ -305,6 +438,9 @@ class CrawlDiscoveryObservationService(
             skipByCurrentRules = observation.skipByCurrentRules,
             lastSeenAt = observation.lastSeenAt,
             lastSeenJobRunId = observation.lastSeenJobRunId,
+            detectedFolderType = observation.detectedFolderType,
+            detectionConfidence = observation.detectionConfidence,
+            suggestedAnalysisStatus = suggestedStatus,
             fileSamples = samples
         )
     }
@@ -378,6 +514,12 @@ data class DiscoveryObservationDTO(
     val skipByCurrentRules: Boolean,
     val lastSeenAt: OffsetDateTime?,
     val lastSeenJobRunId: Long?,
+    /** Detected folder type from file sample analysis (e.g., SOURCE_CODE, MEDIA) */
+    val detectedFolderType: DetectedFolderType?,
+    /** Confidence level of the detected folder type (0.0 to 1.0) */
+    val detectionConfidence: Double?,
+    /** Suggested analysis status based on folder type (SKIP, LOCATE, INDEX, ANALYZE) */
+    val suggestedAnalysisStatus: AnalysisStatus?,
     val fileSamples: List<DiscoveryFileSampleDTO>
 )
 

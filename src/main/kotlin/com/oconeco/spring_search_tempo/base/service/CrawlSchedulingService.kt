@@ -42,6 +42,11 @@ class CrawlSchedulingService(
         const val NO_CHANGE_PENALTY = 1
         const val MAX_CHANGE_SCORE = 100
         const val MIN_CHANGE_SCORE = 0
+
+        // Pattern stability defaults
+        const val DEFAULT_STABILITY_SCORE = 50
+        const val STABILITY_NEUTRAL = 50
+        const val STABILITY_ADJUSTMENT_DIVISOR = 5  // How much stability affects scoring
     }
 
     /**
@@ -128,10 +133,11 @@ class CrawlSchedulingService(
             }
         }
 
-        // Recalculate temperature
+        // Recalculate temperature (including pattern stability)
         folder.crawlTemperature = calculateTemperature(
             childModifiedAt = folder.childModifiedAt,
             changeScore = folder.changeScore,
+            patternStabilityScore = folder.patternStabilityScore,
             hotThresholdDays = hotThresholdDays,
             warmThresholdDays = warmThresholdDays
         )
@@ -179,6 +185,7 @@ class CrawlSchedulingService(
             folder.crawlTemperature = calculateTemperature(
                 childModifiedAt = folder.childModifiedAt,
                 changeScore = folder.changeScore,
+                patternStabilityScore = folder.patternStabilityScore,
                 hotThresholdDays = hotThresholdDays,
                 warmThresholdDays = warmThresholdDays
             )
@@ -191,11 +198,74 @@ class CrawlSchedulingService(
     }
 
     /**
-     * Calculate temperature based on modification recency and change score.
+     * Calculate pattern stability score from discovery run statistics.
+     *
+     * The stability score reflects how consistently the classification patterns
+     * apply to folders over multiple discovery runs. Low stability indicates
+     * patterns are still being refined and folders should be crawled more often.
+     *
+     * @param recentRuns Recent discovery runs with reapplyChangedCount data
+     * @param minRuns Minimum runs required for a meaningful calculation
+     * @return Stability score 0-100, or null if insufficient data
+     */
+    fun calculatePatternStabilityScore(
+        recentRuns: List<PatternStabilityInput>,
+        minRuns: Int = 3
+    ): Int? {
+        val validRuns = recentRuns.filter { it.observedFolderCount > 0 }
+        if (validRuns.size < minRuns) return null
+
+        // Calculate average change ratio over recent runs
+        val avgChangeRatio = validRuns
+            .map { it.reapplyChangedCount.toDouble() / it.observedFolderCount }
+            .average()
+
+        // Convert to stability score: 0% changes = 100, 10%+ changes = 0
+        // Using 10% as the threshold where patterns are considered very unstable
+        val normalizedRatio = (avgChangeRatio * 10).coerceAtMost(1.0)
+        return ((1.0 - normalizedRatio) * 100).toInt().coerceIn(0, 100)
+    }
+
+    /**
+     * Update pattern stability scores for folders based on discovery observations.
+     *
+     * @param sourceHost Host whose folders should be updated
+     * @param stabilityScore New stability score (0-100)
+     * @return Number of folders updated
+     */
+    @Transactional
+    fun updatePatternStabilityForHost(
+        sourceHost: String,
+        stabilityScore: Int
+    ): Int {
+        val effectiveScore = stabilityScore.coerceIn(0, 100)
+        val updated = fsFolderRepository.updatePatternStabilityBySourceHost(sourceHost, effectiveScore)
+        log.info("Updated pattern stability to {} for {} folders on host {}", effectiveScore, updated, sourceHost)
+        return updated
+    }
+
+    /**
+     * Calculate temperature based on modification recency, change score, and pattern stability.
+     *
+     * Pattern stability affects the effective change score:
+     * - Unstable patterns (score < 50): folder is crawled more often to refine patterns
+     * - Stable patterns (score > 50): folder can safely stay cooler
+     *
+     * The adjustment is: effectiveScore = changeScore + (stabilityScore - 50) / 5
+     * - Stability 0 (very unstable): -10 to change score (pushes toward HOT)
+     * - Stability 50 (neutral): no adjustment
+     * - Stability 100 (very stable): +10 to change score (helps stay COLD)
+     *
+     * @param childModifiedAt Most recent child file modification time
+     * @param changeScore Rolling activity score (0-100)
+     * @param patternStabilityScore Pattern stability from discovery observations (0-100)
+     * @param hotThresholdDays Days threshold for HOT temperature
+     * @param warmThresholdDays Days threshold for WARM temperature
      */
     fun calculateTemperature(
         childModifiedAt: OffsetDateTime?,
         changeScore: Int,
+        patternStabilityScore: Int = DEFAULT_STABILITY_SCORE,
         hotThresholdDays: Int = DEFAULT_HOT_THRESHOLD_DAYS,
         warmThresholdDays: Int = DEFAULT_WARM_THRESHOLD_DAYS
     ): CrawlTemperature {
@@ -204,11 +274,17 @@ class CrawlSchedulingService(
             ChronoUnit.DAYS.between(it, now)
         } ?: Long.MAX_VALUE
 
+        // Apply stability adjustment to change score
+        // Unstable patterns (low score) reduce effective change score → pushes toward HOT
+        // Stable patterns (high score) increase effective change score → allows staying COLD
+        val stabilityAdjustment = (patternStabilityScore - STABILITY_NEUTRAL) / STABILITY_ADJUSTMENT_DIVISOR
+        val effectiveChangeScore = (changeScore + stabilityAdjustment).coerceIn(MIN_CHANGE_SCORE, MAX_CHANGE_SCORE)
+
         return when {
-            // HOT: recently modified OR consistently active
-            daysSinceChange <= hotThresholdDays || changeScore >= HOT_SCORE_THRESHOLD -> CrawlTemperature.HOT
+            // HOT: recently modified OR consistently active (accounting for stability)
+            daysSinceChange <= hotThresholdDays || effectiveChangeScore >= HOT_SCORE_THRESHOLD -> CrawlTemperature.HOT
             // WARM: modified within threshold OR moderately active
-            daysSinceChange <= warmThresholdDays || changeScore >= WARM_SCORE_THRESHOLD -> CrawlTemperature.WARM
+            daysSinceChange <= warmThresholdDays || effectiveChangeScore >= WARM_SCORE_THRESHOLD -> CrawlTemperature.WARM
             // COLD: old and inactive
             else -> CrawlTemperature.COLD
         }
@@ -247,6 +323,7 @@ class CrawlSchedulingService(
             temperature = folder.crawlTemperature,
             priority = priority,
             changeScore = folder.changeScore,
+            patternStabilityScore = folder.patternStabilityScore,
             lastCrawledAt = folder.lastCrawledAt,
             childModifiedAt = folder.childModifiedAt
         )
@@ -262,6 +339,15 @@ data class FolderCrawlPriority(
     val temperature: CrawlTemperature,
     val priority: Int,
     val changeScore: Int,
+    val patternStabilityScore: Int,
     val lastCrawledAt: OffsetDateTime?,
     val childModifiedAt: OffsetDateTime?
+)
+
+/**
+ * Input data for pattern stability calculation from discovery runs.
+ */
+data class PatternStabilityInput(
+    val observedFolderCount: Int,
+    val reapplyChangedCount: Int
 )

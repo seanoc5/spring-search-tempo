@@ -58,6 +58,23 @@ class CrawlDiscoveryFolderObservation {
     @Column
     var lastSeenJobRunId: Long? = null
 
+    // ============ File Sample Analysis Fields ============
+
+    /**
+     * Detected folder type based on file sample analysis.
+     * Set by FileSampleAnalyzer when file samples are ingested.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "detected_folder_type", length = 30)
+    var detectedFolderType: DetectedFolderType? = null
+
+    /**
+     * Confidence level of the detected folder type (0.0 to 1.0).
+     * Higher confidence means the folder has a dominant file type.
+     */
+    @Column(name = "detection_confidence", precision = 4, scale = 3)
+    var detectionConfidence: Double? = null
+
     @OneToMany(mappedBy = "folderObservation", cascade = [CascadeType.ALL], orphanRemoval = true)
     var fileSamples: MutableList<CrawlDiscoveryFileSample> = mutableListOf()
 }

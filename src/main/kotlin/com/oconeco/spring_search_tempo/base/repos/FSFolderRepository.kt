@@ -413,5 +413,67 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
         @Param("sourceHost") sourceHost: String
     ): List<FSFolder>
 
+    // ============ Pattern Stability Updates ============
+
+    /**
+     * Bulk update pattern stability score for all folders belonging to a source host.
+     * Used when discovery observations indicate pattern stability has changed.
+     *
+     * @param sourceHost Host whose folders should be updated
+     * @param stabilityScore New stability score (0-100)
+     * @return Number of folders updated
+     */
+    @Modifying
+    @Query("""
+        UPDATE FSFolder f
+        SET f.patternStabilityScore = :stabilityScore
+        WHERE f.sourceHost = :sourceHost
+        AND f.analysisStatus <> 'SKIP'
+    """)
+    fun updatePatternStabilityBySourceHost(
+        @Param("sourceHost") sourceHost: String,
+        @Param("stabilityScore") stabilityScore: Int
+    ): Int
+
+    /**
+     * Bulk update pattern stability score for folders matching specific URIs.
+     * Used for targeted updates when only certain folders have stability data.
+     *
+     * @param uris URIs of folders to update
+     * @param stabilityScore New stability score (0-100)
+     * @return Number of folders updated
+     */
+    @Modifying
+    @Query("""
+        UPDATE FSFolder f
+        SET f.patternStabilityScore = :stabilityScore
+        WHERE f.uri IN :uris
+    """)
+    fun updatePatternStabilityByUris(
+        @Param("uris") uris: Collection<String>,
+        @Param("stabilityScore") stabilityScore: Int
+    ): Int
+
+    /**
+     * Find folders by source host with low stability scores that might benefit from
+     * more frequent crawling to stabilize patterns.
+     *
+     * @param sourceHost Host to filter by
+     * @param maxStabilityScore Maximum stability score to include
+     * @param pageable Pagination info
+     */
+    @Query("""
+        SELECT f FROM FSFolder f
+        WHERE f.sourceHost = :sourceHost
+        AND f.patternStabilityScore <= :maxStabilityScore
+        AND f.analysisStatus <> 'SKIP'
+        ORDER BY f.patternStabilityScore ASC, f.changeScore DESC
+    """)
+    fun findUnstableFoldersBySourceHost(
+        @Param("sourceHost") sourceHost: String,
+        @Param("maxStabilityScore") maxStabilityScore: Int,
+        pageable: Pageable
+    ): Page<FSFolder>
+
 }
 

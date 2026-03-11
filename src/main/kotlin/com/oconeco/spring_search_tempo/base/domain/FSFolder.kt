@@ -47,6 +47,16 @@ class FSFolder : FSObject() {
     var changeScore: Int = 0
 
     /**
+     * Pattern stability score: how stable are the classification patterns for this folder?
+     * Fed from discovery observation statistics (reapplyChangedCount over recent runs).
+     * 0 = unstable patterns (should crawl more often to refine)
+     * 100 = stable patterns (can safely cool to COLD temperature)
+     * Default: 50 (neutral, no stability data yet)
+     */
+    @Column(nullable = false)
+    var patternStabilityScore: Int = 50
+
+    /**
      * Baseline manifest JSON snapshot used by CrawlConfig validation UI.
      * Stores a capped sample of file metadata as starter test data.
      */
