@@ -1,6 +1,7 @@
 import org.springframework.boot.gradle.tasks.run.BootRun
 import org.springframework.boot.gradle.tasks.bundling.BootJar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -113,6 +114,10 @@ dependencies {
 
 kapt {
     includeCompileClasspath = false
+}
+
+tasks.withType<KaptWithoutKotlincTask>().configureEach {
+    kaptProcessJvmArgs.add("-Xmx768m")
 }
 
 tasks.getByName<BootRun>("bootRun") {
