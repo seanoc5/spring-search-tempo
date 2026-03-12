@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Paths
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
 @Service
 class DiscoveryService(
@@ -335,6 +338,7 @@ class DiscoveryService(
      */
     @Transactional
     fun applySuggestedTemplate(sessionId: Long, profile: DiscoveryUserProfile): TemplateApplyResponse {
+        log.debug(",,,, apply suggested template for session {}, profile {}", sessionId, profile.name)
         val session = sessionRepository.findByIdWithFolders(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
 
@@ -356,8 +360,14 @@ class DiscoveryService(
             },
             forcedProfile = profile
         )
+        log.info("Root paths:{} -- Template plan:{}", rootPaths.size, templatePlan)
 
+        var counter = 0
         session.folders.forEach { folder ->
+            counter++
+            if(counter % 1000 == 0) {
+                log.info("\t\tProcessed {} folders for session {}", counter, sessionId)
+            }
             val path = folder.path ?: return@forEach
             val suggested = templatePlan.statusByPath[path] ?: SuggestedStatus.LOCATE
             folder.suggestedStatus = suggested
@@ -368,6 +378,7 @@ class DiscoveryService(
         val indexSuggested = templatePlan.counts[SuggestedStatus.INDEX] ?: 0
         val analyzeSuggested = templatePlan.counts[SuggestedStatus.ANALYZE] ?: 0
         val semanticSuggested = templatePlan.counts[SuggestedStatus.SEMANTIC] ?: 0
+        log.info("Suggested counts: skip={}, locate={}, index={}, analyze={}, semantic={}", skipSuggested, locateSuggested, indexSuggested, analyzeSuggested, semanticSuggested)
 
         return TemplateApplyResponse(
             sessionId = sessionId,
@@ -613,6 +624,13 @@ class DiscoveryService(
     }
 
     private fun toSummaryDTO(session: DiscoverySession): DiscoverySessionSummaryDTO {
+        val dateCreated = session.dateCreated
+        val dateShort = dateCreated?.format(DateTimeFormatter.ISO_LOCAL_DATE) ?: ""
+        val dateFull = dateCreated?.let {
+            val dayOfWeek = it.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH)
+            "${it.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"))} $dayOfWeek"
+        } ?: ""
+
         return DiscoverySessionSummaryDTO(
             id = session.id!!,
             host = session.host ?: "",
@@ -620,7 +638,8 @@ class DiscoveryService(
             status = session.status.name,
             totalFolders = session.totalFolders,
             classifiedFolders = session.classifiedFolders,
-            dateCreated = session.dateCreated?.toString() ?: ""
+            dateCreatedDate = dateShort,
+            dateCreatedFull = dateFull
         )
     }
 
@@ -776,7 +795,10 @@ data class DiscoverySessionSummaryDTO(
     val status: String,
     val totalFolders: Int,
     val classifiedFolders: Int,
-    val dateCreated: String
+    /** Short date for display, e.g. "2026-03-11" */
+    val dateCreatedDate: String,
+    /** Full datetime with day of week for tooltip, e.g. "2026-03-11T20:48:45 Wednesday" */
+    val dateCreatedFull: String
 )
 
 enum class ApplyDiscoveryMode {

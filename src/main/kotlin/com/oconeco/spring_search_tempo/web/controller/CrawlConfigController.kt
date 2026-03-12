@@ -41,7 +41,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.servlet.mvc.support.RedirectAttributes
 import java.time.Instant
-import java.util.TreeMap
 
 @Controller
 @RequestMapping("/crawlConfigs")
@@ -83,13 +82,6 @@ class CrawlConfigController(
 
         model.addAttribute("showAll", showAll)
         model.addAttribute("isAdmin", isAdmin)
-        val groupedBySourceHost = TreeMap<String, List<CrawlConfigDTO>>(String.CASE_INSENSITIVE_ORDER).apply {
-            putAll(
-                crawlConfigs.content.groupBy { config ->
-                    config.sourceHost?.takeIf { it.isNotBlank() } ?: "unknown"
-                }
-            )
-        }
 
         // Build file count map for each config (excludes SKIP by default)
         val fileCountsMap = crawlConfigs.content.associate { config ->
@@ -112,7 +104,6 @@ class CrawlConfigController(
         val embeddingCountsMap = chunkService.countFilesWithEmbeddingByCrawlConfig()
 
         model.addAttribute("crawlConfigs", crawlConfigs)
-        model.addAttribute("crawlConfigsBySourceHost", groupedBySourceHost)
         model.addAttribute("fileCounts", fileCountsMap)
         model.addAttribute("folderCounts", folderCountsMap)
         model.addAttribute("lastRuns", lastRunMap)

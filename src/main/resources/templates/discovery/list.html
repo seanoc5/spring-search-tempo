@@ -87,8 +87,11 @@ java -jar remote-crawler.jar onboard -d "C:,D:" --yes</code></pre>
                         <tbody>
                             <tr th:each="discoverySession : ${sessions}">
                                 <td>
-                                    <i class="bi bi-pc-display me-1"></i>
-                                    <span th:text="${discoverySession.host}">hostname</span>
+                                    <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}"
+                                       class="text-decoration-none">
+                                        <i class="bi bi-pc-display me-1"></i>
+                                        <span th:text="${discoverySession.host}">hostname</span>
+                                    </a>
                                 </td>
                                 <td>
                                     <span th:if="${discoverySession.osType == 'WINDOWS'}" class="badge bg-info">
@@ -126,7 +129,8 @@ java -jar remote-crawler.jar onboard -d "C:,D:" --yes</code></pre>
                                         Archived
                                     </span>
                                 </td>
-                                <td th:text="${discoverySession.dateCreated}">2024-01-01</td>
+                                <td th:text="${discoverySession.dateCreatedDate}"
+                                    th:title="${discoverySession.dateCreatedFull}">2024-01-01</td>
                                 <td class="text-end">
                                     <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}"
                                        class="btn btn-primary btn-sm">
