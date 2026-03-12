@@ -15,6 +15,8 @@ Custom metrics (Prometheus names):
 
 The `/batch` dashboard now includes an **Operations Snapshot** panel (auto-refresh every 30s)
 showing running/stale counts and recent 15m outcomes, plus quick links to Prometheus/Grafana.
+It also performs an automatic lightweight **reality check** on full page load (max once per 30s)
+to reconcile stale entries that still appear as running.
 
 Notes:
 

@@ -39,6 +39,8 @@ class BatchAdminService(
     private val jobRunRepository: JobRunRepository
 ) {
     private val log = LoggerFactory.getLogger(BatchAdminService::class.java)
+    @Volatile
+    private var lastRealityCheckEpochMs: Long = 0L
 
     companion object {
         /** Default threshold for considering a running job as stale (orphaned) based on start time */
@@ -46,6 +48,9 @@ class BatchAdminService(
 
         /** Threshold for heartbeat-based stale detection (more accurate) */
         const val HEARTBEAT_STALE_MINUTES = 2L
+
+        /** Minimum interval between automatic reality checks on page load */
+        const val REALITY_CHECK_COOLDOWN_SECONDS = 30L
     }
 
     /**
@@ -671,6 +676,74 @@ class BatchAdminService(
      */
     fun getStaleJobRunIds(): List<Long> {
         return jobRunService.findStaleJobRuns(HEARTBEAT_STALE_MINUTES)
+    }
+
+    /**
+     * Lightweight reality check for jobs shown as running.
+     * Triggered on dashboard load to reconcile stale records before rendering.
+     *
+     * Uses only:
+     * 1. Heartbeat stale detection from JobRun tracking
+     * 2. Running execution age fallback for jobs without heartbeat tracking
+     */
+    @Transactional
+    fun realityCheckRunningJobs(): Int {
+        var reconciled = 0
+        val processedExecutionIds = mutableSetOf<Long>()
+
+        // 1) Heartbeat-based stale detection (most accurate)
+        val staleJobRunIds = jobRunService.findStaleJobRuns(HEARTBEAT_STALE_MINUTES)
+        for (jobRunId in staleJobRunIds) {
+            try {
+                val executionIdStr = jobRunService.markAsFailed(
+                    jobRunId,
+                    "Reality check - no heartbeat for $HEARTBEAT_STALE_MINUTES+ minutes"
+                )
+                val executionId = executionIdStr?.toLongOrNull()
+                if (executionId != null) {
+                    markJobAsFailed(executionId, "Reality check - no heartbeat for $HEARTBEAT_STALE_MINUTES+ minutes")
+                    processedExecutionIds.add(executionId)
+                }
+                reconciled++
+            } catch (e: Exception) {
+                log.warn("Reality check failed for stale JobRun {}: {}", jobRunId, e.message)
+            }
+        }
+
+        // 2) Fallback for running executions without heartbeat tracking
+        val staleThreshold = LocalDateTime.now().minusHours(DEFAULT_STALE_HOURS)
+        for (jobName in jobExplorer.jobNames) {
+            for (execution in jobExplorer.findRunningJobExecutions(jobName)) {
+                val executionId = execution.id
+                if (executionId in processedExecutionIds) continue
+                val startTime = execution.startTime
+                if (startTime != null && startTime.isBefore(staleThreshold)) {
+                    val hours = Duration.between(startTime, LocalDateTime.now()).toHours()
+                    if (markJobAsFailed(executionId, "Reality check - running for $hours hours")) {
+                        reconciled++
+                    }
+                }
+            }
+        }
+
+        if (reconciled > 0) {
+            log.warn("Reality check reconciled {} stale running job(s)", reconciled)
+        }
+        return reconciled
+    }
+
+    /**
+     * Run reality check only if the cooldown has elapsed.
+     * Prevents repeated expensive scans on frequent page refreshes.
+     */
+    @Synchronized
+    fun realityCheckRunningJobsIfDue(): Int {
+        val now = System.currentTimeMillis()
+        if (now - lastRealityCheckEpochMs < REALITY_CHECK_COOLDOWN_SECONDS * 1000) {
+            return 0
+        }
+        lastRealityCheckEpochMs = now
+        return realityCheckRunningJobs()
     }
 
     /**

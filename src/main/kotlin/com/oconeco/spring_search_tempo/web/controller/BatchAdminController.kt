@@ -84,6 +84,17 @@ class BatchAdminController(
         model: Model,
         request: HttpServletRequest
     ): String {
+        val isHtmx = request.getHeader("HX-Request") == "true"
+        val isBoosted = request.getHeader("HX-Boosted") == "true"
+        val isFullPageLoad = !isHtmx || isBoosted
+
+        // Reality-check stale "running" records on full page loads only.
+        val realityCheckReconciled = if (isFullPageLoad) {
+            batchAdminService.realityCheckRunningJobsIfDue()
+        } else {
+            0
+        }
+
         // Determine which filter to apply (priority: status > jobName > tab)
         val executions = when {
             !status.isNullOrBlank() -> batchAdminService.getJobExecutionsByStatus(status, pageable)
@@ -117,10 +128,9 @@ class BatchAdminController(
         model.addAttribute("filter", filter)
         model.addAttribute("staleCount", staleCount)
         model.addAttribute("grafanaBatchDashboardUrl", grafanaBatchDashboardUrl)
+        model.addAttribute("realityCheckReconciled", realityCheckReconciled)
 
         // For HTMX partial updates
-        val isHtmx = request.getHeader("HX-Request") == "true"
-        val isBoosted = request.getHeader("HX-Boosted") == "true"
         return if (isHtmx && !isBoosted) {
             "batch/list :: table-content"
         } else {
