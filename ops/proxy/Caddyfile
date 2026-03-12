@@ -7,12 +7,12 @@
 # This assumes Spring Boot (Tomcat) listens on 127.0.0.1:8082.
 
 # Redirect HTTP to HTTPS for all configured names.
-http://localhost, http://tempo.local, http://192.168.1.100 {
+http://localhost, http://minti9, http://192.168.1.101 {
     redir https://{host}{uri} permanent
 }
 
 # HTTPS endpoint with Caddy's internal CA for LAN/dev.
-localhost, tempo.local, 192.168.1.100 {
+localhost, minti9, 192.168.1.101 {
     tls internal
 
     encode zstd gzip

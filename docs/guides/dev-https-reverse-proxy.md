@@ -53,7 +53,8 @@ Ready config:
 - [ops/proxy/Caddyfile](../../ops/proxy/Caddyfile)
 
 Steps:
-1. Edit hostnames/IPs in `ops/proxy/Caddyfile` (`tempo.local`, `192.168.1.100`, etc.).
+1. Edit hostnames/IPs in `ops/proxy/Caddyfile` (`minti9`, `192.168.1.101`, etc.).
+   Current defaults in this repo are `localhost`, `minti9`, and `192.168.1.101`.
 2. Run Caddy:
 
 ```bash
@@ -96,7 +97,7 @@ Remote crawler is now HTTPS-first and warns loudly when it falls back to HTTP.
 Test:
 
 ```bash
-java -jar remote-crawler-<version>.jar -s https://<your-host> -u <user> -p <pass> test
+java -jar remote-crawler-<version>.jar -s https://minti9 -u <user> -p <pass> test
 ```
 
 If using self-signed/private CA certs, use truststore setup:

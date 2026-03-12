@@ -135,7 +135,7 @@ This creates a task that runs every 4 hours by default.
 
 ```powershell
 # Run crawl with custom server
-.\run-remote-crawler.ps1 -ServerUrl "https://192.168.1.100"
+.\run-remote-crawler.ps1 -ServerUrl "https://192.168.1.101"
 
 # Check status only
 .\run-remote-crawler.ps1 -Mode status
