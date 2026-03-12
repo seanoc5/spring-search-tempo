@@ -96,10 +96,10 @@
             </div>
         </div>
 
-        <!-- Live Metrics Section (auto-refresh every 10s) -->
+        <!-- Live Metrics Section (auto-refresh every 30s) -->
         <div id="liveMetricsContainer"
              hx-get="/system/live"
-             hx-trigger="every 10s"
+             hx-trigger="every 30s"
              hx-swap="innerHTML">
             <th:block th:replace="~{system/fragments/liveMetrics :: live-metrics}" />
         </div>

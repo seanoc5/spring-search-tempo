@@ -266,17 +266,11 @@
         <!-- Toast Container (Growler) -->
         <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-        <!-- Global loading overlay for HTMX and remote JS requests -->
-        <div id="globalLoadingOverlay" class="global-loading-overlay" aria-hidden="true">
-            <div class="global-loading-panel" role="status" aria-live="polite">
-                <button type="button"
-                        id="globalLoadingOverlayClose"
-                        class="btn-close btn-close-white global-loading-close"
-                        aria-label="Close loading overlay"></button>
-                <div class="spinner-border text-light global-loading-spinner" aria-hidden="true"></div>
-                <div class="global-loading-title">Working...</div>
-                <div class="global-loading-subtitle">Loading data from server</div>
-                <div class="global-loading-hint">Press Esc to dismiss</div>
+        <!-- Global loading indicator for HTMX and remote JS requests -->
+        <div id="globalLoadingOverlay" class="global-loading-overlay" role="status" aria-live="polite" aria-hidden="true">
+            <div class="global-loading-panel">
+                <div class="spinner-border spinner-border-sm text-primary global-loading-spinner" aria-hidden="true"></div>
+                <div class="global-loading-title">Syncing</div>
             </div>
         </div>
 

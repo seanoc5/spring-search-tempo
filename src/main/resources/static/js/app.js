@@ -273,8 +273,8 @@ const ToastManager = {
    ========================================================================== */
 
 const GlobalLoadingOverlay = {
-  SHOW_DELAY_MS: 0,
-  MIN_VISIBLE_MS: 250,
+  SHOW_DELAY_MS: 250,
+  MIN_VISIBLE_MS: 300,
   MAX_VISIBLE_MS: 15000,
   fetchInFlightCount: 0,
   htmxInFlight: new Set(),
@@ -287,7 +287,6 @@ const GlobalLoadingOverlay = {
   init() {
     this.bindHtmx();
     this.patchFetch();
-    this.bindDismissControls();
     window.addEventListener('pageshow', () => this.forceHide());
   },
 
@@ -299,20 +298,6 @@ const GlobalLoadingOverlay = {
       .forEach((eventName) => {
         document.body.addEventListener(eventName, (evt) => this.htmxRequestFinished(evt));
       });
-  },
-
-  bindDismissControls() {
-    const closeButton = document.getElementById('globalLoadingOverlayClose');
-    if (closeButton) {
-      closeButton.addEventListener('click', () => this.forceHide());
-    }
-
-    document.addEventListener('keydown', (evt) => {
-      if (evt.key === 'Escape' && this.isVisible()) {
-        evt.preventDefault();
-        this.forceHide();
-      }
-    });
   },
 
   patchFetch() {

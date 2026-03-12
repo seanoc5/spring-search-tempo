@@ -14,7 +14,7 @@
                     </strong>
                     <span class="badge bg-light text-primary">[[${#lists.size(runningJobs)}]]</span>
                     <span th:if="${staleCount > 0}" class="badge bg-warning text-dark">[[${staleCount}]] stale</span>
-                    <small class="text-white-50">auto-refresh: 5s</small>
+                    <small class="text-white-50">auto-refresh: 30s</small>
                 </div>
                 <div class="d-flex align-items-center gap-1">
                     <button type="button" class="btn btn-sm btn-outline-light"

@@ -27,7 +27,7 @@ class SystemMonitorController(
         }
     }
 
-    /** HTMX polling endpoint - returns live metrics fragment every 10s. */
+    /** HTMX polling endpoint - returns live metrics fragment every 30s. */
     @GetMapping("/live")
     fun liveMetrics(model: Model): String {
         val monitor = systemMonitorService.getLiveData()

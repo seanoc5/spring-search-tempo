@@ -37,7 +37,7 @@
         </div>
         <div class="card-body"
              th:hx-get="@{/oneDriveAccounts/{id}/row(id=${account.id})}"
-             hx-trigger="every 3s"
+             hx-trigger="every 10s"
              hx-swap="outerHTML">
             <div class="progress mb-2" style="height: 25px;">
                 <div class="progress-bar progress-bar-striped progress-bar-animated"

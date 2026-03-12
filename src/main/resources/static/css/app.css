@@ -682,71 +682,60 @@ body.admin-dashboard {
 
 .global-loading-overlay {
     position: fixed;
-    inset: 0;
-    display: none;
+    top: calc(var(--header-height) + 0.5rem);
+    right: 3.25rem;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 2000;
-    pointer-events: all;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-2px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+    z-index: 1074;
+    pointer-events: none;
 }
 
 .global-loading-overlay.is-visible {
-    display: flex;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .global-loading-panel {
-    position: relative;
-    width: min(4in, calc(100vw - 2rem));
-    min-height: 2in;
-    border: 5px solid #f8f9fa;
-    border-radius: 14px;
-    background: rgba(17, 24, 39, 0.92);
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35), 0 16px 42px rgba(0, 0, 0, 0.45);
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 0.65rem;
-    text-align: center;
-    padding: 1rem;
-}
-
-.global-loading-close {
-    position: absolute;
-    top: 0.55rem;
-    right: 0.55rem;
-    opacity: 0.9;
-}
-
-.global-loading-close:hover {
-    opacity: 1;
+    gap: 0.45rem;
+    padding: 0.25rem 0.55rem;
 }
 
 .global-loading-spinner {
-    width: 3.25rem;
-    height: 3.25rem;
-    border-width: 0.45rem;
+    width: 0.95rem;
+    height: 0.95rem;
+    border-width: 0.14rem;
 }
 
 .global-loading-title {
-    color: #ffffff;
-    font-size: 1.2rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    line-height: 1.1;
+    color: #495057;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
 }
 
 .global-loading-subtitle {
-    color: #e9ecef;
-    font-size: 0.88rem;
-    font-weight: 500;
+    display: none;
 }
 
 .global-loading-hint {
-    color: #adb5bd;
-    font-size: 0.75rem;
-    letter-spacing: 0.01em;
+    display: none;
+}
+
+@media (max-width: 767.98px) {
+    .global-loading-overlay {
+        right: 3rem;
+    }
 }
 
 /* ==========================================================================

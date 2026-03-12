@@ -352,7 +352,7 @@
             <div th:if="${jobRun != null and jobRun.expectedTotal != null and jobRun.expectedTotal > 0 and jobRun.runStatus.name() == 'RUNNING'}"
                  class="card mb-4"
                  hx-get=""
-                 hx-trigger="every 3s"
+                 hx-trigger="every 10s"
                  hx-select=".progress-section"
                  hx-target=".progress-section"
                  hx-swap="outerHTML">

@@ -72,7 +72,7 @@
     <div th:unless="${emailAccounts.empty}" class="table-responsive"
          id="accounts-table"
          th:hx-get="@{/emailAccounts/rows}"
-         th:hx-trigger="${emailAccounts.?[activeJobRun != null].size() > 0} ? 'every 3s' : 'none'"
+         th:hx-trigger="${emailAccounts.?[activeJobRun != null].size() > 0} ? 'every 10s' : 'none'"
          hx-swap="innerHTML"
          hx-target="#account-rows">
         <table class="table table-striped table-hover align-middle">
