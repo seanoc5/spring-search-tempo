@@ -82,6 +82,10 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
      * Find all currently running job runs.
      */
     fun findByRunStatus(runStatus: RunStatus): List<JobRun>
+    fun countByRunStatus(runStatus: RunStatus): Long
+    fun countByStartTimeGreaterThanEqual(startTime: OffsetDateTime): Long
+    fun countByRunStatusAndFinishTimeGreaterThanEqual(runStatus: RunStatus, finishTime: OffsetDateTime): Long
+    fun findByRunStatusAndFinishTimeGreaterThanEqual(runStatus: RunStatus, finishTime: OffsetDateTime): List<JobRun>
 
     fun existsByJobNameAndRunStatus(jobName: String, runStatus: RunStatus): Boolean
 
@@ -173,5 +177,18 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
           AND jr.jobName LIKE 'oneDriveSync_%'
     """)
     fun findAllActiveOneDriveSyncJobs(): List<JobRun>
+
+    /**
+     * Count currently running jobs that appear stale by heartbeat threshold.
+     */
+    @Query("""
+        SELECT COUNT(jr) FROM JobRun jr
+        WHERE jr.runStatus = 'RUNNING'
+          AND (
+              (jr.lastHeartbeatAt IS NOT NULL AND jr.lastHeartbeatAt < :threshold)
+              OR (jr.lastHeartbeatAt IS NULL AND jr.startTime < :threshold)
+          )
+    """)
+    fun countStaleRunningJobs(@Param("threshold") threshold: OffsetDateTime): Long
 
 }

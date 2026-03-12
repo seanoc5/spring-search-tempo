@@ -106,3 +106,23 @@ data class AvailableJobTypeDTO(
     /** Count of currently running instances */
     val runningCount: Int = 0
 )
+
+/**
+ * Lightweight operational snapshot for the Batch dashboard.
+ */
+data class BatchOpsSnapshotDTO(
+    /** Current running JobRuns from app-level tracking */
+    val runningNow: Long,
+    /** Running JobRuns considered stale by heartbeat threshold */
+    val staleRunningNow: Long,
+    /** JobRuns started in the last 15 minutes */
+    val startedLast15m: Long,
+    /** JobRuns completed successfully in the last 15 minutes */
+    val completedLast15m: Long,
+    /** JobRuns failed in the last 15 minutes */
+    val failedLast15m: Long,
+    /** Success percent from completed/failed in the last 15 minutes */
+    val successRateLast15m: Int?,
+    /** Mean completed duration over last 24h as preformatted text */
+    val avgCompletedDurationLast24h: String?
+)

@@ -10,6 +10,12 @@
                 <h1 class="flex-grow-1">[[#{batch.list.headline}]]</h1>
             </div>
 
+            <!-- Operational Summary (HTMX auto-refresh) -->
+            <div id="opsSummaryContainer" class="mb-4"
+                 hx-get="/batch/ops" hx-trigger="every 30s" hx-swap="innerHTML">
+                <div th:replace="~{batch/fragments/opsSummary :: ops-summary}"></div>
+            </div>
+
             <!-- Stale Jobs Warning Banner (HTMX with toast) -->
             <div th:if="${staleCount > 0}" class="alert alert-warning d-flex justify-content-between align-items-center mb-4"
                  id="staleJobsBanner">
@@ -113,7 +119,7 @@
 
             <!-- Available Job Types Section (HTMX auto-refresh) -->
             <div id="jobTypesContainer" class="mb-4"
-                 hx-get="/batch/job-types" hx-trigger="every 5s" hx-swap="innerHTML">
+                 hx-get="/batch/job-types" hx-trigger="every 30s" hx-swap="innerHTML">
                 <th:block th:replace="~{batch/fragments/jobTypes :: job-types-content}"></th:block>
             </div>
 
@@ -193,7 +199,7 @@
 
             <!-- Running Jobs Section (auto-refresh via HTMX) -->
             <div id="runningJobsContainer" class="mb-4"
-                 hx-get="/batch/running" hx-trigger="every 5s" hx-swap="innerHTML">
+                 hx-get="/batch/running" hx-trigger="every 30s" hx-swap="innerHTML">
                 <div th:replace="~{batch/fragments/runningJobs :: running-jobs}"></div>
             </div>
 

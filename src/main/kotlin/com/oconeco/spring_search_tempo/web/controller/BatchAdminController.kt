@@ -17,6 +17,7 @@ import com.oconeco.spring_search_tempo.web.service.BatchAdminService
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher
@@ -54,7 +55,9 @@ class BatchAdminController(
     private val analysisAssignmentJobBuilder: AnalysisAssignmentJobBuilder,
     private val progressiveAnalysisJobBuilder: ProgressiveAnalysisJobBuilder,
     private val bookmarkImportJobBuilder: BookmarkImportJobBuilder,
-    private val browserProfileService: BrowserProfileService
+    private val browserProfileService: BrowserProfileService,
+    @Value("\${app.monitoring.grafana-batch-dashboard-url:http://localhost:3000/d/tempo-batch-overview}")
+    private val grafanaBatchDashboardUrl: String
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(BatchAdminController::class.java)
@@ -90,6 +93,7 @@ class BatchAdminController(
         }
 
         val runningJobs = batchAdminService.getRunningJobExecutions()
+        val ops = batchAdminService.getOpsSnapshot()
         val baseSummary = batchAdminService.getJobSummary()
         val staleCount = batchAdminService.getStaleJobCount()
         val staleByHeartbeat = batchAdminService.getStaleJobRunIds().size
@@ -101,6 +105,7 @@ class BatchAdminController(
         model.addAttribute("executions", executions)
         model.addAttribute("page", executions)
         model.addAttribute("runningJobs", runningJobs)
+        model.addAttribute("ops", ops)
         model.addAttribute("summary", summary)
         model.addAttribute("jobNames", jobNames)
         model.addAttribute("configuredJobs", configuredJobs)
@@ -111,6 +116,7 @@ class BatchAdminController(
         model.addAttribute("selectedJobName", jobName)
         model.addAttribute("filter", filter)
         model.addAttribute("staleCount", staleCount)
+        model.addAttribute("grafanaBatchDashboardUrl", grafanaBatchDashboardUrl)
 
         // For HTMX partial updates
         val isHtmx = request.getHeader("HX-Request") == "true"
@@ -142,6 +148,16 @@ class BatchAdminController(
         val runningJobs = batchAdminService.getRunningJobExecutions()
         model.addAttribute("runningJobs", runningJobs)
         return "batch/fragments/runningJobs :: running-jobs"
+    }
+
+    /**
+     * HTMX fragment for operational summary cards.
+     */
+    @GetMapping("/ops")
+    fun opsSummary(model: Model): String {
+        model.addAttribute("ops", batchAdminService.getOpsSnapshot())
+        model.addAttribute("grafanaBatchDashboardUrl", grafanaBatchDashboardUrl)
+        return "batch/fragments/opsSummary :: ops-summary"
     }
 
     /**

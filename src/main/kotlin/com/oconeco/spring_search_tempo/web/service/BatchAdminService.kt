@@ -1,9 +1,12 @@
 package com.oconeco.spring_search_tempo.web.service
 
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.domain.RunStatus
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
+import com.oconeco.spring_search_tempo.base.repos.JobRunRepository
 import com.oconeco.spring_search_tempo.web.model.AvailableJobTypeDTO
 import com.oconeco.spring_search_tempo.web.model.BatchJobSummaryDTO
+import com.oconeco.spring_search_tempo.web.model.BatchOpsSnapshotDTO
 import com.oconeco.spring_search_tempo.web.model.ConfiguredJobDTO
 import com.oconeco.spring_search_tempo.web.model.JobExecutionDetailDTO
 import com.oconeco.spring_search_tempo.web.model.JobExecutionSummaryDTO
@@ -23,14 +26,17 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 @Service
 class BatchAdminService(
     private val jobExplorer: JobExplorer,
     private val jobOperator: JobOperator,
     private val jobRepository: JobRepository,
-    private val jobRunService: JobRunService
+    private val jobRunService: JobRunService,
+    private val jobRunRepository: JobRunRepository
 ) {
     private val log = LoggerFactory.getLogger(BatchAdminService::class.java)
 
@@ -447,6 +453,65 @@ class BatchAdminService(
     }
 
     /**
+     * Get a compact operational snapshot for the batch dashboard.
+     * Uses JobRun table data (same source used for stale heartbeat monitoring).
+     */
+    fun getOpsSnapshot(): BatchOpsSnapshotDTO {
+        val now = OffsetDateTime.now()
+        val fifteenMinutesAgo = now.minusMinutes(15)
+        val twentyFourHoursAgo = now.minusHours(24)
+        val staleThreshold = now.minusMinutes(HEARTBEAT_STALE_MINUTES)
+
+        val runningNow = jobRunRepository.countByRunStatus(RunStatus.RUNNING)
+        val staleRunningNow = jobRunRepository.countStaleRunningJobs(staleThreshold)
+        val startedLast15m = jobRunRepository.countByStartTimeGreaterThanEqual(fifteenMinutesAgo)
+        val completedLast15m = jobRunRepository.countByRunStatusAndFinishTimeGreaterThanEqual(
+            RunStatus.COMPLETED,
+            fifteenMinutesAgo
+        )
+        val failedLast15m = jobRunRepository.countByRunStatusAndFinishTimeGreaterThanEqual(
+            RunStatus.FAILED,
+            fifteenMinutesAgo
+        )
+
+        val terminalLast15m = completedLast15m + failedLast15m
+        val successRateLast15m = if (terminalLast15m > 0) {
+            ((completedLast15m.toDouble() / terminalLast15m.toDouble()) * 100.0).roundToInt()
+        } else {
+            null
+        }
+
+        val completedLast24h = jobRunRepository.findByRunStatusAndFinishTimeGreaterThanEqual(
+            RunStatus.COMPLETED,
+            twentyFourHoursAgo
+        )
+        val avgCompletedDurationLast24h = completedLast24h
+            .mapNotNull { run ->
+                val start = run.startTime
+                val finish = run.finishTime
+                if (start != null && finish != null && finish.isAfter(start)) {
+                    Duration.between(start, finish).seconds
+                } else {
+                    null
+                }
+            }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.toLong()
+            ?.let { formatCompactDuration(it) }
+
+        return BatchOpsSnapshotDTO(
+            runningNow = runningNow,
+            staleRunningNow = staleRunningNow,
+            startedLast15m = startedLast15m,
+            completedLast15m = completedLast15m,
+            failedLast15m = failedLast15m,
+            successRateLast15m = successRateLast15m,
+            avgCompletedDurationLast24h = avgCompletedDurationLast24h
+        )
+    }
+
+    /**
      * Stop a running job execution.
      * Returns true if stop was initiated, false if job wasn't running.
      */
@@ -818,5 +883,17 @@ class BatchAdminService(
             duration = duration,
             exitDescription = step.exitStatus?.exitDescription?.takeIf { it.isNotBlank() }
         )
+    }
+
+    private fun formatCompactDuration(totalSeconds: Long): String {
+        val safeSeconds = totalSeconds.coerceAtLeast(0)
+        val hours = safeSeconds / 3600
+        val minutes = (safeSeconds % 3600) / 60
+        val seconds = safeSeconds % 60
+        return when {
+            hours > 0 -> "${hours}h ${minutes}m"
+            minutes > 0 -> "${minutes}m ${seconds}s"
+            else -> "${seconds}s"
+        }
     }
 }

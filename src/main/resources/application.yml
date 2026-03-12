@@ -85,9 +85,24 @@ management:
   endpoint:
     health:
       show-details: always
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name:spring-search-tempo}
+      host: ${app.host-name:localhost}
+    distribution:
+      percentiles-histogram:
+        tempo.batch.jobrun.duration: true
 
 app:
   host-name: "${TEMPO_HOST_NAME:localhost}"
+  monitoring:
+    grafana-batch-dashboard-url: "${GRAFANA_BATCH_DASHBOARD_URL:http://localhost:3000/d/tempo-batch-overview}"
   security:
     remember-me-key: "${REMEMBER_ME_KEY:spring-search-tempo-remember-me-key}"
     # Separate cookie name avoids collisions with other localhost apps/ports.

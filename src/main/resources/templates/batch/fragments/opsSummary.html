@@ -1,0 +1,80 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+    <th:block th:fragment="ops-summary">
+        <div class="card mb-4 border-0 shadow-sm">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div class="small text-uppercase text-muted fw-semibold">
+                        Operations Snapshot
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="/actuator/prometheus" target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-activity me-1"></i>Prometheus
+                        </a>
+                        <a th:if="${grafanaBatchDashboardUrl != null and !#strings.isEmpty(grafanaBatchDashboardUrl)}"
+                           th:href="${grafanaBatchDashboardUrl}" target="_blank" rel="noopener"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-bar-chart-line me-1"></i>Grafana
+                        </a>
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Running</div>
+                            <div class="fs-5 fw-semibold">[[${ops.runningNow}]]</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Stale</div>
+                            <div class="fs-5 fw-semibold"
+                                 th:classappend="${ops.staleRunningNow > 0} ? 'text-danger' : 'text-success'">
+                                [[${ops.staleRunningNow}]]
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Starts (15m)</div>
+                            <div class="fs-5 fw-semibold">[[${ops.startedLast15m}]]</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Completed (15m)</div>
+                            <div class="fs-5 fw-semibold text-success">[[${ops.completedLast15m}]]</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Failed (15m)</div>
+                            <div class="fs-5 fw-semibold"
+                                 th:classappend="${ops.failedLast15m > 0} ? 'text-danger' : 'text-muted'">
+                                [[${ops.failedLast15m}]]
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="border rounded p-2 h-100">
+                            <div class="small text-muted">Success (15m)</div>
+                            <div class="fs-5 fw-semibold"
+                                 th:classappend="${ops.successRateLast15m != null and ops.successRateLast15m < 90} ? 'text-warning' : 'text-success'">
+                                <span th:if="${ops.successRateLast15m != null}">[[${ops.successRateLast15m}]]%</span>
+                                <span th:if="${ops.successRateLast15m == null}" class="text-muted">-</span>
+                            </div>
+                            <div class="small text-muted">
+                                Avg 24h:
+                                <span th:text="${ops.avgCompletedDurationLast24h ?: '-'}">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>

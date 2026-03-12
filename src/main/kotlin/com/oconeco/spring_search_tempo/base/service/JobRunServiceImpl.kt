@@ -8,19 +8,23 @@ import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.JobRunRepository
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.time.OffsetDateTime
 
 @Service
 class JobRunServiceImpl(
     private val jobRunRepository: JobRunRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
-    private val jobRunMapper: JobRunMapper
+    private val jobRunMapper: JobRunMapper,
+    private val meterRegistry: MeterRegistry
 ) : JobRunService {
 
     override fun findAll(filter: String?, pageable: Pageable): Page<JobRunDTO> {
@@ -105,6 +109,7 @@ class JobRunServiceImpl(
         }
 
         val savedJobRun = jobRunRepository.save(jobRun)
+        recordJobRunStarted(savedJobRun.jobName)
         return jobRunMapper.updateJobRunDTO(savedJobRun, JobRunDTO())
     }
 
@@ -123,6 +128,7 @@ class JobRunServiceImpl(
         }
 
         val savedJobRun = jobRunRepository.save(jobRun)
+        recordJobRunStarted(savedJobRun.jobName)
         return jobRunMapper.updateJobRunDTO(savedJobRun, JobRunDTO())
     }
 
@@ -173,6 +179,7 @@ class JobRunServiceImpl(
         jobRun.errorMessage = errorMessage
 
         jobRunRepository.save(jobRun)
+        recordJobRunFinished(jobRun.jobName, runStatus, jobRun.startTime, jobRun.finishTime)
     }
 
     override fun addWarning(jobRunId: Long, warningMessage: String) {
@@ -209,6 +216,7 @@ class JobRunServiceImpl(
         jobRun.errorMessage = errorMessage
 
         jobRunRepository.save(jobRun)
+        recordJobRunFinished(jobRun.jobName, RunStatus.FAILED, jobRun.startTime, jobRun.finishTime)
 
         // Return Spring Batch execution ID if available (for cascading cleanup)
         return jobRun.springBatchJobExecutionId
@@ -233,6 +241,51 @@ class JobRunServiceImpl(
             jobRunRepository.updateProgressWithStep(jobRunId, processedIncrement.toLong(), stepName)
         } else {
             jobRunRepository.incrementProcessedCount(jobRunId, processedIncrement.toLong())
+        }
+    }
+
+    private fun recordJobRunStarted(jobName: String?) {
+        meterRegistry.counter(
+            "tempo.batch.jobrun.started",
+            "job_name",
+            normalizeJobName(jobName)
+        ).increment()
+    }
+
+    private fun recordJobRunFinished(
+        jobName: String?,
+        status: RunStatus,
+        startTime: OffsetDateTime?,
+        finishTime: OffsetDateTime?
+    ) {
+        val normalizedJob = normalizeJobName(jobName)
+        meterRegistry.counter(
+            "tempo.batch.jobrun.completed",
+            "job_name",
+            normalizedJob,
+            "status",
+            status.name
+        ).increment()
+
+        if (startTime != null && finishTime != null) {
+            val duration = Duration.between(startTime, finishTime)
+            if (!duration.isNegative) {
+                Timer.builder("tempo.batch.jobrun.duration")
+                    .description("JobRun duration from start to finish")
+                    .tag("job_name", normalizedJob)
+                    .tag("status", status.name)
+                    .register(meterRegistry)
+                    .record(duration)
+            }
+        }
+    }
+
+    private fun normalizeJobName(jobName: String?): String {
+        if (jobName.isNullOrBlank()) return "unknown"
+        return when {
+            jobName.startsWith("emailQuickSyncJob-") -> "emailQuickSyncJob"
+            jobName.startsWith("oneDriveSync_") -> "oneDriveSync"
+            else -> jobName.replace(Regex("[-_]\\d+$"), "")
         }
     }
 
