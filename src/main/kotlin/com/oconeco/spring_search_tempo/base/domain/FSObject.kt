@@ -8,6 +8,15 @@ import java.time.OffsetDateTime
 @MappedSuperclass
 abstract class FSObject : SaveableObject() {
 
+    /**
+     * Stable ownership of this filesystem object.
+     *
+     * Unlike jobRunId, which tracks the last crawl run that touched the row,
+     * crawlConfigId identifies which crawl configuration currently owns it.
+     */
+    @Column
+    var crawlConfigId: Long? = null
+
     @Column(columnDefinition = "text")
     var owner: String? = null
 

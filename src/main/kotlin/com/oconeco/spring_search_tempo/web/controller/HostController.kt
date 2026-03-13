@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import com.oconeco.spring_search_tempo.web.service.DiscoverySessionSummaryDTO
 import org.springframework.data.domain.PageRequest
@@ -14,8 +15,10 @@ import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.servlet.mvc.support.RedirectAttributes
 
 @Controller
 @RequestMapping("/hosts")
@@ -23,7 +26,8 @@ class HostController(
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val discoveryService: DiscoveryService,
     private val fileService: FSFileService,
-    private val folderService: FSFolderService
+    private val folderService: FSFolderService,
+    private val smartDeleteService: SmartDeleteService
 ) {
 
     @GetMapping
@@ -86,6 +90,24 @@ class HostController(
         loadContentTab(host, model)
         model.addAttribute("selectedHost", host)
         return "host/fragments :: contentTab"
+    }
+
+    @PostMapping("/{host}/purge")
+    fun purgeHost(
+        @PathVariable(name = "host") host: String,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val summary = smartDeleteService.purgeSourceHost(host)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Purged source host '${summary.sourceHost}': deleted ${summary.crawlConfigsDeleted} crawl configs, ${summary.discoverySessionsDeleted} discovery sessions, ${summary.emailAccountsDeleted} email accounts, ${summary.emailMessagesDeleted} email messages, ${summary.emailFoldersDeleted} email folders, ${summary.filesDeleted} files, ${summary.foldersDeleted} folders, ${summary.chunksDeleted} chunks, and ${summary.jobRunsDeleted} job runs."
+            )
+            "redirect:/hosts?host=$host&tab=configs"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Purge failed for '$host': ${e.message}")
+            "redirect:/hosts?host=$host&tab=configs"
+        }
     }
 
     private fun loadConfigsTab(host: String, model: Model) {

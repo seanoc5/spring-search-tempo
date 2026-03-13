@@ -88,4 +88,7 @@ interface RemoteCrawlTaskRepository : JpaRepository<RemoteCrawlTask, Long> {
         """
     )
     fun countBySessionGroupedStatus(@Param("sessionId") sessionId: Long): List<Array<Any>>
+
+    @Modifying
+    fun deleteByCrawlConfigId(crawlConfigId: Long): Int
 }

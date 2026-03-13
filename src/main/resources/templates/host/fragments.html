@@ -49,6 +49,14 @@
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </form>
+                            <form th:action="@{/crawlConfigs/{id}/delete(id=${config.id})}" method="post" class="d-inline"
+                                  onsubmit="return confirm('Delete crawl config ' + '[[${config.label ?: config.name}]]' + '? This removes its folders, files, chunks, job runs, and remote task state.');">
+                                <input type="hidden" name="redirectTo"
+                                       th:value="@{/hosts(host=${selectedHost},tab='configs')}" />
+                                <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
                         </div>
                     </td>
                 </tr>
@@ -85,43 +93,53 @@
                 </tr>
             </thead>
             <tbody>
-                <tr th:each="session : ${discoverySessions}">
+                <tr th:each="discoverySession : ${discoverySessions}">
                     <td>
-                        <a th:href="@{/discovery/{id}/classify(id=${session.id})}" class="text-decoration-none">
-                            #<span th:text="${session.id}">1</span>
+                        <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}" class="text-decoration-none">
+                            #<span th:text="${discoverySession.id}">1</span>
                         </a>
                     </td>
                     <td>
-                        <span th:if="${session.osType == 'WINDOWS'}" class="badge bg-info">
+                        <span th:if="${discoverySession.osType == 'WINDOWS'}" class="badge bg-info">
                             <i class="bi bi-windows me-1"></i>Windows
                         </span>
-                        <span th:if="${session.osType == 'LINUX'}" class="badge bg-warning text-dark">
+                        <span th:if="${discoverySession.osType == 'LINUX'}" class="badge bg-warning text-dark">
                             <i class="bi bi-ubuntu me-1"></i>Linux
                         </span>
-                        <span th:if="${session.osType == 'MACOS'}" class="badge bg-secondary">
+                        <span th:if="${discoverySession.osType == 'MACOS'}" class="badge bg-secondary">
                             <i class="bi bi-apple me-1"></i>macOS
                         </span>
-                        <span th:if="${session.osType != 'WINDOWS' && session.osType != 'LINUX' && session.osType != 'MACOS'}"
+                        <span th:if="${discoverySession.osType != 'WINDOWS' && discoverySession.osType != 'LINUX' && discoverySession.osType != 'MACOS'}"
                               class="badge bg-light text-dark border"
-                              th:text="${session.osType}">Unknown</span>
+                              th:text="${discoverySession.osType}">Unknown</span>
                     </td>
-                    <td th:text="${session.totalFolders}">0</td>
+                    <td th:text="${discoverySession.totalFolders}">0</td>
                     <td>
-                        <span th:text="${session.classifiedFolders}">0</span>
-                        <span class="text-muted">/ [[${session.totalFolders}]]</span>
+                        <span th:text="${discoverySession.classifiedFolders}">0</span>
+                        <span class="text-muted">/ [[${discoverySession.totalFolders}]]</span>
                     </td>
                     <td>
-                        <span th:if="${session.status == 'PENDING'}" class="badge bg-warning text-dark">Pending</span>
-                        <span th:if="${session.status == 'CLASSIFYING'}" class="badge bg-info">Classifying</span>
-                        <span th:if="${session.status == 'APPLIED'}" class="badge bg-success">Applied</span>
-                        <span th:if="${session.status == 'CANCELLED'}" class="badge bg-secondary">Cancelled</span>
-                        <span th:if="${session.status == 'ARCHIVED'}" class="badge bg-dark">Archived</span>
+                        <span th:if="${discoverySession.status == 'PENDING'}" class="badge bg-warning text-dark">Pending</span>
+                        <span th:if="${discoverySession.status == 'CLASSIFYING'}" class="badge bg-info">Classifying</span>
+                        <span th:if="${discoverySession.status == 'APPLIED'}" class="badge bg-success">Applied</span>
+                        <span th:if="${discoverySession.status == 'CANCELLED'}" class="badge bg-secondary">Cancelled</span>
+                        <span th:if="${discoverySession.status == 'ARCHIVED'}" class="badge bg-dark">Archived</span>
                     </td>
-                    <td th:text="${session.dateCreated}">2024-01-01</td>
+                    <td th:text="${discoverySession.dateCreated}">2024-01-01</td>
                     <td class="text-end">
-                        <a th:href="@{/discovery/{id}/classify(id=${session.id})}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-folder-check me-1"></i>Classify
-                        </a>
+                        <div class="btn-group btn-group-sm">
+                            <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}" class="btn btn-outline-primary">
+                                <i class="bi bi-folder-check me-1"></i>Classify
+                            </a>
+                            <form th:action="@{/discovery/{id}/delete(id=${discoverySession.id})}" method="post"
+                                  onsubmit="return confirm('Delete discovery session #' + [[${discoverySession.id}]] + ' for this host?');">
+                                <input type="hidden" name="redirectTo"
+                                       th:value="@{/hosts(host=${selectedHost},tab='discovery')}" />
+                                <button type="submit" class="btn btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
             </tbody>

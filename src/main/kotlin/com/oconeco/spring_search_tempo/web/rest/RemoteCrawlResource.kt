@@ -96,6 +96,40 @@ class RemoteCrawlResource(
         }
     }
 
+    @GetMapping("/folder-snapshot")
+    fun folderSnapshot(
+        @RequestParam(name = "host") host: String,
+        @RequestParam(name = "crawlConfigId") crawlConfigId: Long
+    ): ResponseEntity<Any> {
+        log.info("Remote folder snapshot request for host {}, config {}", host, crawlConfigId)
+        return try {
+            val response = remoteCrawlPlannerService.buildFolderSnapshot(host, crawlConfigId)
+            ResponseEntity.ok(response)
+        } catch (e: NotFoundException) {
+            ResponseEntity.status(404).body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Crawl config not found")
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            log.error("Remote folder snapshot failed for host {}, config {}", host, crawlConfigId, e)
+            ResponseEntity.internalServerError().body(
+                mapOf(
+                    "status" to "FAILED",
+                    "message" to "Failed to generate remote folder snapshot: ${e.message}"
+                )
+            )
+        }
+    }
+
     /**
      * Smart bootstrap endpoint with temperature-based folder prioritization.
      *

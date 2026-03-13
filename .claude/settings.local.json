@@ -12,7 +12,10 @@
       "Bash(\"/c/Users/seano/.gradle/jdks/eclipse_adoptium-21-amd64-windows.2/bin/java.exe\":*)",
       "Bash(echo System JAVA_HOME: $JAVA_HOME:*)",
       "Bash(echo Exit code: $?:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(./gradlew compileKotlin:*)",
+      "Bash(chmod:*)",
+      "Bash(git add:*)"
     ]
   }
 }

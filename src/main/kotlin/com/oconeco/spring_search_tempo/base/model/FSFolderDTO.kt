@@ -41,6 +41,8 @@ class FSFolderDTO {
 
     var fsLastModified: OffsetDateTime? = null
 
+    var crawlConfigId: Long? = null
+
     var jobRunId: Long? = null
 
     var sourceHost: String? = null

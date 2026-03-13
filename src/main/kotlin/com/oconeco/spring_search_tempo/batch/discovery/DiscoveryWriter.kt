@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.batch.fscrawl.JobRunTrackingListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.StepExecution
 import org.springframework.batch.core.StepExecutionListener
@@ -44,6 +45,7 @@ class DiscoveryWriter(
     }
 
     private var jobRunId: Long? = null
+    private var crawlConfigId: Long? = null
 
     // Statistics
     private val foldersNew = AtomicLong(0)
@@ -55,7 +57,14 @@ class DiscoveryWriter(
         jobRunId = stepExecution.jobExecution.executionContext
             .getLong("jobRunId", -1L)
             .takeIf { it > 0 }
-        log.info("DiscoveryWriter initialized with jobRunId: {}", jobRunId)
+        crawlConfigId = stepExecution.jobExecution.jobParameters
+            .getString(JobRunTrackingListener.CRAWL_CONFIG_ID_KEY)
+            ?.toLongOrNull()
+        log.info(
+            "DiscoveryWriter initialized with jobRunId: {}, crawlConfigId: {}",
+            jobRunId,
+            crawlConfigId
+        )
     }
 
     override fun afterStep(stepExecution: StepExecution): org.springframework.batch.core.ExitStatus {
@@ -108,6 +117,7 @@ class DiscoveryWriter(
                 group = folder.group
                 permissions = folder.permissions
                 status = Status.CURRENT
+                crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId
                 // Set discovery fields
                 locatedAt = now
@@ -133,6 +143,7 @@ class DiscoveryWriter(
                 group = folder.group
                 permissions = folder.permissions
                 status = Status.NEW
+                crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId
                 // Set discovery fields
                 locatedAt = now
@@ -172,6 +183,7 @@ class DiscoveryWriter(
                 group = file.group
                 permissions = file.permissions
                 status = Status.CURRENT
+                crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId
                 fsFolder = parentFolder?.id
                 // Set discovery fields
@@ -198,6 +210,7 @@ class DiscoveryWriter(
                 group = file.group
                 permissions = file.permissions
                 status = Status.NEW
+                crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId
                 fsFolder = parentFolder?.id
                 // Set discovery fields

@@ -22,4 +22,6 @@ interface EmailAccountRepository : JpaRepository<EmailAccount, Long> {
 
     fun findByOwnerIdAndEnabledTrue(ownerId: Long): List<EmailAccount>
 
+    fun findBySourceHostIgnoreCase(sourceHost: String): List<EmailAccount>
+
 }

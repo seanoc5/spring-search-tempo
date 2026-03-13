@@ -5,14 +5,12 @@ import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.domain.EmailMessage
 import com.oconeco.spring_search_tempo.base.domain.FetchStatus
 import java.time.OffsetDateTime
-import com.oconeco.spring_search_tempo.base.events.BeforeDeleteEmailMessage
 import com.oconeco.spring_search_tempo.base.model.EmailMessageDTO
 import com.oconeco.spring_search_tempo.base.repos.EmailAccountRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -26,7 +24,7 @@ class EmailMessageServiceImpl(
     private val emailMessageRepository: EmailMessageRepository,
     private val emailAccountRepository: EmailAccountRepository,
     private val emailFolderRepository: EmailFolderRepository,
-    private val publisher: ApplicationEventPublisher,
+    private val smartDeleteService: SmartDeleteService,
     private val emailMessageMapper: EmailMessageMapper
 ) : EmailMessageService {
 
@@ -87,10 +85,7 @@ class EmailMessageServiceImpl(
     }
 
     override fun delete(id: Long) {
-        val emailMessage = emailMessageRepository.findById(id)
-            .orElseThrow { NotFoundException() }
-        publisher.publishEvent(BeforeDeleteEmailMessage(id))
-        emailMessageRepository.delete(emailMessage)
+        smartDeleteService.deleteEmailMessage(id)
     }
 
     override fun existsByMessageId(messageId: String): Boolean =

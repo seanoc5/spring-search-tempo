@@ -6,6 +6,7 @@ import com.oconeco.remotecrawler.extraction.TextExtractionService
 import com.oconeco.remotecrawler.model.AnalysisStatus
 import com.oconeco.remotecrawler.model.EffectivePatterns
 import com.oconeco.remotecrawler.pattern.PatternMatchingService
+import com.oconeco.remotecrawler.pattern.SkipCheckResult
 import com.oconeco.remotecrawler.util.FileSystemMetadata
 import com.oconeco.remotecrawler.util.PathUtils
 import org.slf4j.LoggerFactory
@@ -26,9 +27,9 @@ import java.util.concurrent.TimeoutException
  * Filesystem crawler that walks directories and sends results to the server.
  *
  * Flow:
- * 1. Walk filesystem starting from configured paths
- * 2. Apply SKIP patterns during walk (SKIP_SUBTREE optimization)
- * 3. Batch folders/files and send to server for full classification
+ * 1. Preload compact FSFolder state for the crawl config
+ * 2. Walk filesystem starting from configured paths
+ * 3. Apply snapshot-backed folder status with pattern fallback
  * 4. For INDEX+ files: extract text with Tika
  * 5. Ingest results to server in batches
  */
@@ -86,6 +87,7 @@ class FilesystemCrawler(
             folderPatternPriority = config.folderPatternPriority,
             filePatternPriority = config.filePatternPriority
         )
+        val preloadedFolders = loadFolderSnapshot(host, config.crawlConfigId)
 
         val startPathProbeExecutor = Executors.newCachedThreadPool { runnable ->
             Thread(runnable, "start-path-probe").apply { isDaemon = true }
@@ -119,7 +121,8 @@ class FilesystemCrawler(
                     maxDepth = effectiveMaxDepth,
                     followLinks = config.followLinks,
                     stats = stats,
-                    batchController = batchController
+                    batchController = batchController,
+                    preloadedFolders = preloadedFolders
                 )
             }
 
@@ -140,13 +143,20 @@ class FilesystemCrawler(
             )
 
             val duration = System.currentTimeMillis() - startTime
-            log.info("Crawl completed in {}ms - {} folders, {} files, {} errors",
-                duration, stats.foldersProcessed.get(), stats.filesProcessed.get(), stats.errors.get())
+            log.info(
+                "Crawl completed in {}ms - {} folders, {} files, {} folder sends suppressed, {} errors",
+                duration,
+                stats.foldersProcessed.get(),
+                stats.filesProcessed.get(),
+                stats.foldersSuppressed.get(),
+                stats.errors.get()
+            )
 
             return CrawlResult(
                 sessionId = sessionId,
                 foldersProcessed = stats.foldersProcessed.get(),
                 filesProcessed = stats.filesProcessed.get(),
+                foldersSuppressed = stats.foldersSuppressed.get(),
                 bytesProcessed = stats.bytesProcessed.get(),
                 errors = stats.errors.get(),
                 durationMs = duration,
@@ -175,6 +185,7 @@ class FilesystemCrawler(
                 sessionId = sessionId,
                 foldersProcessed = stats.foldersProcessed.get(),
                 filesProcessed = stats.filesProcessed.get(),
+                foldersSuppressed = stats.foldersSuppressed.get(),
                 bytesProcessed = stats.bytesProcessed.get(),
                 errors = stats.errors.get(),
                 durationMs = System.currentTimeMillis() - startTime,
@@ -246,7 +257,8 @@ class FilesystemCrawler(
         maxDepth: Int,
         followLinks: Boolean,
         stats: CrawlStats,
-        batchController: AdaptiveBatchController
+        batchController: AdaptiveBatchController,
+        preloadedFolders: Map<String, FolderSnapshotState>
     ) {
         // Pending items to ingest
         val pendingFolders = ConcurrentLinkedQueue<FolderIngestItem>()
@@ -256,7 +268,13 @@ class FilesystemCrawler(
 
         // Track folder statuses for inheritance
         val folderStatusCache = ConcurrentHashMap<String, AnalysisStatus>()
+        folderStatusCache.putAll(preloadedFolders.mapValues { it.value.analysisStatus })
         val skipBranchCache = ConcurrentHashMap<String, Boolean>()
+        preloadedFolders.forEach { (path, folder) ->
+            if (folder.analysisStatus == AnalysisStatus.SKIP) {
+                skipBranchCache[path] = true
+            }
+        }
         val skipSampleCountByFolder = ConcurrentHashMap<String, Int>()
 
         // Build file visit options
@@ -272,17 +290,28 @@ class FilesystemCrawler(
 
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                 val pathStr = dir.toAbsolutePath().toString()
+                val normalizedPath = PathUtils.normalizeComparablePath(pathStr)
                 val crawlDepth = PathUtils.calculateCrawlDepth(dir, allStartPaths)
                 val parentPath = dir.parent?.toAbsolutePath()?.toString()
-                val parentInSkipBranch = if (parentPath != null) skipBranchCache[parentPath] == true else false
+                val normalizedParentPath = parentPath?.let { PathUtils.normalizeComparablePath(it) }
+                val parentInSkipBranch = if (normalizedParentPath != null) skipBranchCache[normalizedParentPath] == true else false
+                val preloadedFolder = preloadedFolders[normalizedPath]
+                val preloadedStatus = preloadedFolder?.analysisStatus
 
                 // Quick SKIP check during walk
-                val skipCheck = patternMatcher.matchesSkipPatternOnly(
-                    pathStr,
-                    effectivePatterns.folderPatterns.skip
-                )
-                val inSkipBranch = parentInSkipBranch || skipCheck.isSkip
-                skipBranchCache[pathStr] = inSkipBranch
+                val skipCheck = if (preloadedStatus == null) {
+                    patternMatcher.matchesSkipPatternOnly(
+                        pathStr,
+                        effectivePatterns.folderPatterns.skip
+                    )
+                } else {
+                    SkipCheckResult(
+                        isSkip = preloadedStatus == AnalysisStatus.SKIP,
+                        matchedPattern = if (preloadedStatus == AnalysisStatus.SKIP) "SNAPSHOT" else null
+                    )
+                }
+                val inSkipBranch = parentInSkipBranch || preloadedStatus == AnalysisStatus.SKIP || skipCheck.isSkip
+                skipBranchCache[normalizedPath] = inSkipBranch
 
                 if (config.crawlMode == CrawlMode.DISCOVERY) {
                     if (inSkipBranch) {
@@ -298,7 +327,7 @@ class FilesystemCrawler(
                                 inSkipBranch = true
                             )
                         )
-                        folderStatusCache[pathStr] = AnalysisStatus.SKIP
+                        folderStatusCache[normalizedPath] = AnalysisStatus.SKIP
                         stats.foldersProcessed.incrementAndGet()
 
                         maybeFlush(
@@ -333,29 +362,37 @@ class FilesystemCrawler(
                     // Still record it with SKIP status
                     val metadata = FileSystemMetadata.fromPath(dir)
                     if (metadata != null) {
-                        pendingFolders.add(createFolderItem(dir, AnalysisStatus.SKIP, metadata, allStartPaths))
-                        stats.foldersProcessed.incrementAndGet()
+                        if (shouldIngestFolder(config.crawlMode, preloadedFolder, AnalysisStatus.SKIP, metadata)) {
+                            pendingFolders.add(createFolderItem(dir, AnalysisStatus.SKIP, metadata, allStartPaths))
+                        } else {
+                            stats.foldersSuppressed.incrementAndGet()
+                        }
                     }
+                    stats.foldersProcessed.incrementAndGet()
 
-                    folderStatusCache[pathStr] = AnalysisStatus.SKIP
+                    folderStatusCache[normalizedPath] = AnalysisStatus.SKIP
                     return FileVisitResult.SKIP_SUBTREE
                 }
 
                 // Determine full analysis status
-                val parentStatus = if (parentPath != null) folderStatusCache[parentPath] else null
+                val parentStatus = if (normalizedParentPath != null) folderStatusCache[normalizedParentPath] else null
 
-                val status = patternMatcher.determineFolderAnalysisStatus(
+                val status = preloadedStatus ?: patternMatcher.determineFolderAnalysisStatus(
                     pathStr,
                     effectivePatterns.folderPatterns,
                     parentStatus,
                     effectivePatterns.folderPatternPriority
                 )
 
-                folderStatusCache[pathStr] = status
+                folderStatusCache[normalizedPath] = status
 
                 val metadata = FileSystemMetadata.fromPath(dir)
                 if (metadata != null) {
-                    pendingFolders.add(createFolderItem(dir, status, metadata, allStartPaths))
+                    if (shouldIngestFolder(config.crawlMode, preloadedFolder, status, metadata)) {
+                        pendingFolders.add(createFolderItem(dir, status, metadata, allStartPaths))
+                    } else {
+                        stats.foldersSuppressed.incrementAndGet()
+                    }
                     stats.foldersProcessed.incrementAndGet()
                 }
 
@@ -386,7 +423,8 @@ class FilesystemCrawler(
 
                 // Get parent folder status
                 val parentPath = file.parent?.toAbsolutePath()?.toString()
-                val parentInSkipBranch = if (parentPath != null) skipBranchCache[parentPath] == true else false
+                val normalizedParentPath = parentPath?.let { PathUtils.normalizeComparablePath(it) }
+                val parentInSkipBranch = if (normalizedParentPath != null) skipBranchCache[normalizedParentPath] == true else false
 
                 if (config.crawlMode == CrawlMode.DISCOVERY && parentInSkipBranch && parentPath != null) {
                     val currentCount = skipSampleCountByFolder[parentPath] ?: 0
@@ -416,8 +454,8 @@ class FilesystemCrawler(
                     return FileVisitResult.CONTINUE
                 }
 
-                val parentStatus = if (parentPath != null) {
-                    folderStatusCache[parentPath] ?: AnalysisStatus.LOCATE
+                val parentStatus = if (normalizedParentPath != null) {
+                    folderStatusCache[normalizedParentPath] ?: AnalysisStatus.LOCATE
                 } else {
                     AnalysisStatus.LOCATE
                 }
@@ -582,6 +620,49 @@ class FilesystemCrawler(
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun loadFolderSnapshot(host: String, crawlConfigId: Long): Map<String, FolderSnapshotState> {
+        return try {
+            val response = client.folderSnapshot(host, crawlConfigId)
+            val statusByPath = response.folders.associate { folder ->
+                PathUtils.normalizeComparablePath(folder.path) to FolderSnapshotState(
+                    analysisStatus = folder.analysisStatus,
+                    fsLastModified = folder.fsLastModified
+                )
+            }
+            log.info(
+                "Loaded folder snapshot for config {}: {} folders",
+                crawlConfigId,
+                statusByPath.size
+            )
+            statusByPath
+        } catch (e: Exception) {
+            log.warn(
+                "Could not load folder snapshot for config {}: {}. Falling back to pattern-only folder classification.",
+                crawlConfigId,
+                e.message
+            )
+            emptyMap()
+        }
+    }
+
+    private fun shouldIngestFolder(
+        crawlMode: CrawlMode,
+        preloadedFolder: FolderSnapshotState?,
+        status: AnalysisStatus,
+        metadata: FileSystemMetadata
+    ): Boolean {
+        if (crawlMode == CrawlMode.DISCOVERY) {
+            return true
+        }
+        if (preloadedFolder == null) {
+            return true
+        }
+        if (preloadedFolder.analysisStatus != status) {
+            return true
+        }
+        return preloadedFolder.fsLastModified != metadata.lastModified
     }
 
     private fun maybeFlush(
@@ -896,14 +977,21 @@ private fun estimateDiscoveryFileSamplePayloadBytes(item: DiscoveryFileSampleIng
 private class CrawlStats {
     val foldersProcessed = AtomicInteger(0)
     val filesProcessed = AtomicInteger(0)
+    val foldersSuppressed = AtomicInteger(0)
     val bytesProcessed = AtomicLong(0)
     val errors = AtomicInteger(0)
 }
+
+private data class FolderSnapshotState(
+    val analysisStatus: AnalysisStatus,
+    val fsLastModified: java.time.OffsetDateTime?
+)
 
 data class CrawlResult(
     val sessionId: Long,
     val foldersProcessed: Int,
     val filesProcessed: Int,
+    val foldersSuppressed: Int,
     val bytesProcessed: Long,
     val errors: Int,
     val durationMs: Long,

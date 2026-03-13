@@ -11,6 +11,10 @@ interface CrawlDiscoveryFileSampleRepository : JpaRepository<CrawlDiscoveryFileS
     @Query("DELETE FROM CrawlDiscoveryFileSample s WHERE s.folderObservation.id = :folderObservationId")
     fun deleteByFolderObservationId(folderObservationId: Long): Int
 
+    @Modifying
+    @Query("DELETE FROM CrawlDiscoveryFileSample s WHERE s.folderObservation.id IN :folderObservationIds")
+    fun deleteByFolderObservationIdIn(folderObservationIds: Collection<Long>): Int
+
     fun findByFolderObservationIdInOrderByFolderObservationIdAscSampleSlotAsc(
         folderObservationIds: Collection<Long>
     ): List<CrawlDiscoveryFileSample>

@@ -93,6 +93,14 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     @Query("DELETE FROM ContentChunk c WHERE c.emailMessage.id = :emailMessageId")
     fun deleteByEmailMessageId(@Param("emailMessageId") emailMessageId: Long): Int
 
+    @Modifying
+    @Query("DELETE FROM ContentChunk c WHERE c.concept.id = :fileId")
+    fun deleteByConceptId(@Param("fileId") fileId: Long): Int
+
+    @Modifying
+    @Query("DELETE FROM ContentChunk c WHERE c.concept.id IN :fileIds")
+    fun deleteByConceptIdIn(@Param("fileIds") fileIds: Collection<Long>): Int
+
     /**
      * Delete all content chunks belonging to files that were crawled by a specific crawl config.
      * Must be called before deleting FSFiles due to foreign key constraints.
@@ -104,9 +112,7 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     @Query("""
         DELETE FROM ContentChunk c
         WHERE c.concept.id IN (
-            SELECT f.id FROM FSFile f WHERE f.jobRunId IN (
-                SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-            )
+            SELECT f.id FROM FSFile f WHERE f.crawlConfigId = :crawlConfigId
         )
     """)
     fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
@@ -134,6 +140,15 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
         )
     """)
     fun deleteByOneDriveAccountId(@Param("accountId") accountId: Long): Int
+
+    @Modifying
+    @Query("""
+        DELETE FROM ContentChunk c
+        WHERE c.concept.id IN (
+            SELECT f.id FROM FSFile f WHERE f.sourceHost = :sourceHost
+        )
+    """)
+    fun deleteByFSFileSourceHost(@Param("sourceHost") sourceHost: String): Int
 
     /**
      * Find chunks containing a specific named entity text.
@@ -388,12 +403,12 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * Returns pairs of [crawlConfigId, fileCount].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(DISTINCT c.concept.id)
+        SELECT f.crawlConfigId, COUNT(DISTINCT c.concept.id)
         FROM ContentChunk c
         JOIN c.concept f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE c.nlpProcessedAt IS NOT NULL
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
     """)
     fun countFilesWithNlpGroupedByCrawlConfig(): List<Array<Any>>
 
@@ -402,12 +417,12 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * Returns pairs of [crawlConfigId, fileCount].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(DISTINCT c.concept.id)
+        SELECT f.crawlConfigId, COUNT(DISTINCT c.concept.id)
         FROM ContentChunk c
         JOIN c.concept f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE c.embeddingGeneratedAt IS NOT NULL
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
     """)
     fun countFilesWithEmbeddingGroupedByCrawlConfig(): List<Array<Any>>
 

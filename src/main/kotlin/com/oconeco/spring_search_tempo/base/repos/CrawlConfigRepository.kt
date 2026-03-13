@@ -24,4 +24,6 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
 
     fun findBySourceHostIn(sourceHosts: Collection<String>, pageable: Pageable): Page<CrawlConfig>
 
+    fun findBySourceHostIgnoreCase(sourceHost: String): List<CrawlConfig>
+
 }

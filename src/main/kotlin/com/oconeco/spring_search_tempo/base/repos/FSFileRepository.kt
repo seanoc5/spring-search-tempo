@@ -23,6 +23,15 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
 
     fun findByUriIn(uris: Collection<String>): List<FSFile>
 
+    @Query("""
+        SELECT f.id FROM FSFile f
+        WHERE f.uri LIKE CONCAT(:escapedPrefix, '%') ESCAPE '\'
+        ORDER BY LENGTH(f.uri) DESC
+    """)
+    fun findIdsByUriPrefix(
+        @Param("escapedPrefix") escapedPrefix: String
+    ): List<Long>
+
     fun findByBodyTextIsNotNull(pageable: Pageable): Page<FSFile>
 
     /**
@@ -79,50 +88,23 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun countByJobRunId(jobRunId: Long): Long
 
     /**
-     * Count all files owned by job runs belonging to a crawl config.
-     * Files belong to whichever crawl config last touched them (via job_run_id).
+     * Count all files owned by a crawl config.
      */
-    @Query("""
-        SELECT COUNT(f) FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun countByCrawlConfigId(crawlConfigId: Long): Long
 
     /**
      * Count files by crawl config, excluding SKIP status.
      */
-    @Query("""
-        SELECT COUNT(f) FROM FSFile f
-        WHERE f.analysisStatus <> :excludedStatus
-        AND f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun countByCrawlConfigIdAndAnalysisStatusNot(crawlConfigId: Long, excludedStatus: AnalysisStatus): Long
 
     /**
-     * Find all files owned by job runs belonging to a crawl config.
+     * Find all files owned by a crawl config.
      */
-    @Query("""
-        SELECT f FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable): Page<FSFile>
 
     /**
      * Find files by crawl config, excluding SKIP status.
      */
-    @Query("""
-        SELECT f FROM FSFile f
-        WHERE f.analysisStatus <> :excludedStatus
-        AND f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun findByCrawlConfigIdAndAnalysisStatusNot(
         crawlConfigId: Long,
         excludedStatus: AnalysisStatus,
@@ -137,13 +119,10 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * @return The number of files deleted
      */
     @Modifying
-    @Query("""
-        DELETE FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
-    fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
+    fun deleteByCrawlConfigId(crawlConfigId: Long): Int
+
+    @Modifying
+    fun deleteBySourceHost(sourceHost: String): Int
 
     /**
      * Count files by analysis status.
@@ -177,11 +156,11 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFile f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.analysisStatus <> :excludedStatus
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
         ORDER BY COUNT(f) DESC
     """)
     fun countGroupedByCrawlConfig(@Param("excludedStatus") excludedStatus: AnalysisStatus): List<Array<Any>>
@@ -191,11 +170,10 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFile f
-        JOIN JobRun jr ON f.jobRunId = jr.id
-        WHERE jr.crawlConfig.id IN :configIds
-        GROUP BY jr.crawlConfig.id
+        WHERE f.crawlConfigId IN :configIds
+        GROUP BY f.crawlConfigId
     """)
     fun countTotalGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
 
@@ -204,11 +182,10 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * Returns pairs of [crawlConfigId, totalSize].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COALESCE(SUM(f.size), 0)
+        SELECT f.crawlConfigId, COALESCE(SUM(f.size), 0)
         FROM FSFile f
-        JOIN JobRun jr ON f.jobRunId = jr.id
-        WHERE jr.crawlConfig.id IN :configIds
-        GROUP BY jr.crawlConfig.id
+        WHERE f.crawlConfigId IN :configIds
+        GROUP BY f.crawlConfigId
     """)
     fun sumSizeGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
 
@@ -217,11 +194,11 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFile f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.analysisStatus = :status
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
     """)
     fun countSkippedGroupedByCrawlConfig(@Param("status") status: AnalysisStatus): List<Array<Any>>
 
@@ -231,9 +208,7 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      */
     @Query("""
         SELECT f.uri FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
-        )
+        WHERE f.crawlConfigId = :configId
     """)
     fun findAllUrisByCrawlConfigId(@Param("configId") configId: Long): List<String>
 
@@ -243,9 +218,7 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      */
     @Query("""
         SELECT f FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
-        )
+        WHERE f.crawlConfigId = :configId
     """)
     fun findAllByCrawlConfigId(@Param("configId") configId: Long): List<FSFile>
 
@@ -255,9 +228,7 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      */
     @Query("""
         SELECT f FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
+        WHERE f.crawlConfigId = :crawlConfigId
         AND f.uri LIKE CONCAT(:folderPrefix, '%')
         ORDER BY f.uri
     """)
@@ -271,9 +242,7 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      */
     @Query("""
         SELECT COUNT(f) FROM FSFile f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
+        WHERE f.crawlConfigId = :crawlConfigId
         AND f.uri LIKE CONCAT(:folderPrefix, '%')
     """)
     fun countByCrawlConfigIdAndUriPrefix(
@@ -329,11 +298,11 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFile f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.analysisStatus IN :searchableStatuses
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
     """)
     fun countSearchableGroupedByCrawlConfig(
         @Param("searchableStatuses") searchableStatuses: List<AnalysisStatus>

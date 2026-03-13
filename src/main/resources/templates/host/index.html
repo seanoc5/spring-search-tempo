@@ -13,6 +13,24 @@
                 <i class="bi bi-pc-display-horizontal me-2"></i>
                 Hosts
             </h2>
+            <form th:if="${selectedHost != null && !selectedHost.isEmpty()}"
+                  th:action="@{/hosts/{host}/purge(host=${selectedHost})}"
+                  method="post"
+                  onsubmit="return confirm('Purge all persisted data for source host ' + '[[${selectedHost}]]' + '? This will delete crawl configs, discovery sessions, crawl content, and host-scoped email data.');">
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Start Fresh
+                </button>
+            </form>
+        </div>
+
+        <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+            [[${message}]]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+            [[${error}]]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
 
         <!-- Host Selector -->

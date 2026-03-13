@@ -46,6 +46,17 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
 
     fun findByUriIn(uris: Collection<String>): List<FSFolder>
 
+    @Query("""
+        SELECT f.id FROM FSFolder f
+        WHERE f.uri = :rootUri
+           OR f.uri LIKE CONCAT(:escapedPrefix, '%') ESCAPE '\'
+        ORDER BY LENGTH(f.uri) DESC
+    """)
+    fun findIdsInSubtree(
+        @Param("rootUri") rootUri: String,
+        @Param("escapedPrefix") escapedPrefix: String
+    ): List<Long>
+
     /**
      * Find all folders excluding those with SKIP analysis status.
      * Used by UI to hide skipped items by default.
@@ -77,50 +88,23 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     fun countByJobRunId(jobRunId: Long): Long
 
     /**
-     * Count all folders owned by job runs belonging to a crawl config.
-     * Folders belong to whichever crawl config last touched them (via job_run_id).
+     * Count all folders owned by a crawl config.
      */
-    @Query("""
-        SELECT COUNT(f) FROM FSFolder f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun countByCrawlConfigId(crawlConfigId: Long): Long
 
     /**
      * Count folders by crawl config, excluding SKIP status.
      */
-    @Query("""
-        SELECT COUNT(f) FROM FSFolder f
-        WHERE f.analysisStatus <> :excludedStatus
-        AND f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun countByCrawlConfigIdAndAnalysisStatusNot(crawlConfigId: Long, excludedStatus: AnalysisStatus): Long
 
     /**
-     * Find all folders owned by job runs belonging to a crawl config.
+     * Find all folders owned by a crawl config.
      */
-    @Query("""
-        SELECT f FROM FSFolder f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun findByCrawlConfigId(crawlConfigId: Long, pageable: Pageable): Page<FSFolder>
 
     /**
      * Find folders by crawl config, excluding SKIP status.
      */
-    @Query("""
-        SELECT f FROM FSFolder f
-        WHERE f.analysisStatus <> :excludedStatus
-        AND f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
     fun findByCrawlConfigIdAndAnalysisStatusNot(
         crawlConfigId: Long,
         excludedStatus: AnalysisStatus,
@@ -135,13 +119,10 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      * @return The number of folders deleted
      */
     @Modifying
-    @Query("""
-        DELETE FROM FSFolder f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :crawlConfigId
-        )
-    """)
-    fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
+    fun deleteByCrawlConfigId(crawlConfigId: Long): Int
+
+    @Modifying
+    fun deleteBySourceHost(sourceHost: String): Int
 
     /**
      * Find recent crawl info for a folder by URI.
@@ -152,10 +133,10 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      * by another config within the freshness window.
      */
     @Query("""
-        SELECT jr.crawlConfig.id, f.analysisStatus, f.lastUpdated
+        SELECT f.crawlConfigId, f.analysisStatus, f.lastUpdated
         FROM FSFolder f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.uri = :uri
+        AND f.jobRunId IS NOT NULL
         AND f.lastUpdated >= :threshold
     """)
     fun findRecentCrawlInfo(
@@ -174,11 +155,11 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      */
     @Query(
         value = """
-            SELECT cc.id, f.analysis_status, f.last_updated
+            SELECT f.crawl_config_id, f.analysis_status, f.last_updated
             FROM fsfolder f
-            JOIN job_run jr ON f.job_run_id = jr.id
-            JOIN crawl_config cc ON jr.crawl_config_id = cc.id
+            JOIN crawl_config cc ON f.crawl_config_id = cc.id
             WHERE f.uri = :uri
+            AND f.job_run_id IS NOT NULL
             AND f.last_updated >= :threshold
             AND :uri = ANY(cc.start_paths)
         """,
@@ -194,11 +175,11 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFolder f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.analysisStatus <> :excludedStatus
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
         ORDER BY COUNT(f) DESC
     """)
     fun countGroupedByCrawlConfig(@Param("excludedStatus") excludedStatus: AnalysisStatus): List<Array<Any>>
@@ -208,11 +189,10 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFolder f
-        JOIN JobRun jr ON f.jobRunId = jr.id
-        WHERE jr.crawlConfig.id IN :configIds
-        GROUP BY jr.crawlConfig.id
+        WHERE f.crawlConfigId IN :configIds
+        GROUP BY f.crawlConfigId
     """)
     fun countTotalGroupedByCrawlConfigIds(@Param("configIds") configIds: Collection<Long>): List<Array<Any>>
 
@@ -221,11 +201,11 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      * Returns pairs of [crawlConfigId, count].
      */
     @Query("""
-        SELECT jr.crawlConfig.id, COUNT(f)
+        SELECT f.crawlConfigId, COUNT(f)
         FROM FSFolder f
-        JOIN JobRun jr ON f.jobRunId = jr.id
         WHERE f.analysisStatus = :status
-        GROUP BY jr.crawlConfig.id
+        AND f.crawlConfigId IS NOT NULL
+        GROUP BY f.crawlConfigId
     """)
     fun countSkippedGroupedByCrawlConfig(@Param("status") status: AnalysisStatus): List<Array<Any>>
 
@@ -235,9 +215,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      */
     @Query("""
         SELECT f.uri FROM FSFolder f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
-        )
+        WHERE f.crawlConfigId = :configId
     """)
     fun findAllUrisByCrawlConfigId(@Param("configId") configId: Long): List<String>
 
@@ -247,11 +225,21 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
      */
     @Query("""
         SELECT f FROM FSFolder f
-        WHERE f.jobRunId IN (
-            SELECT jr.id FROM JobRun jr WHERE jr.crawlConfig.id = :configId
-        )
+        WHERE f.crawlConfigId = :configId
     """)
     fun findAllByCrawlConfigId(@Param("configId") configId: Long): List<FSFolder>
+
+    /**
+     * Find compact folder snapshot rows for remote crawler bootstrap.
+     * Returns [uri, analysisStatus, crawlDepth, fsLastModified].
+     */
+    @Query("""
+        SELECT f.uri, f.analysisStatus, f.crawlDepth, f.fsLastModified
+        FROM FSFolder f
+        WHERE f.crawlConfigId = :crawlConfigId
+        ORDER BY f.uri
+    """)
+    fun findFolderSnapshotByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): List<Array<Any?>>
 
     /**
      * Compute dense dashboard metrics for a set of folders.
@@ -476,4 +464,3 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     ): Page<FSFolder>
 
 }
-

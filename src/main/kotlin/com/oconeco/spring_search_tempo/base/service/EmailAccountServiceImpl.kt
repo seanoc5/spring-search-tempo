@@ -28,7 +28,8 @@ class EmailAccountServiceImpl(
     private val emailMessageRepository: EmailMessageRepository,
     private val contentChunkRepository: ContentChunkRepository,
     private val jobRunRepository: JobRunRepository,
-    private val userOwnershipService: UserOwnershipService
+    private val userOwnershipService: UserOwnershipService,
+    private val smartDeleteService: SmartDeleteService
 ) : EmailAccountService {
 
     companion object {
@@ -70,23 +71,7 @@ class EmailAccountServiceImpl(
 
     @Transactional
     override fun delete(id: Long) {
-        val emailAccount = emailAccountRepository.findById(id)
-            .orElseThrow { NotFoundException() }
-
-        log.info("Deleting email account {} and all related data", emailAccount.email)
-
-        // Cascade delete in correct order (children first)
-        val chunksDeleted = contentChunkRepository.deleteByEmailAccountId(id)
-        log.info("Deleted {} content chunks for account {}", chunksDeleted, id)
-
-        val messagesDeleted = emailMessageRepository.deleteByEmailAccountId(id)
-        log.info("Deleted {} email messages for account {}", messagesDeleted, id)
-
-        val foldersDeleted = emailFolderRepository.deleteByEmailAccountId(id)
-        log.info("Deleted {} email folders for account {}", foldersDeleted, id)
-
-        emailAccountRepository.delete(emailAccount)
-        log.info("Deleted email account {}", emailAccount.email)
+        smartDeleteService.deleteEmailAccount(id)
     }
 
     override fun emailExists(email: String): Boolean = emailAccountRepository.existsByEmail(email)

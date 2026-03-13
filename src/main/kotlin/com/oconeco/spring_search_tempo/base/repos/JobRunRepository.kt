@@ -191,4 +191,15 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
     """)
     fun countStaleRunningJobs(@Param("threshold") threshold: OffsetDateTime): Long
 
+    @Modifying
+    fun deleteByCrawlConfigId(crawlConfigId: Long): Int
+
+    @Modifying
+    @Transactional
+    @Query("""
+        DELETE FROM JobRun jr
+        WHERE jr.jobName LIKE CONCAT('emailQuickSyncJob-', :accountId, '%')
+    """)
+    fun deleteEmailSyncJobsByAccountId(@Param("accountId") accountId: Long): Int
+
 }

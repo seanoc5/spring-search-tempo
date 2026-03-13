@@ -13,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.domain.DiscoveryManualOverride
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
+import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import com.oconeco.spring_search_tempo.web.model.BaselineSamplingPolicy
 import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
@@ -54,6 +55,7 @@ class CrawlConfigController(
     private val jobBuilder: FsCrawlJobBuilder,
     private val configConverter: CrawlConfigConverter,
     private val cleanupService: CrawlDataCleanupService,
+    private val smartDeleteService: SmartDeleteService,
     private val objectMapper: ObjectMapper,
     private val crawlConfigValidationService: CrawlConfigValidationService,
     private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService,
@@ -1020,6 +1022,25 @@ class CrawlConfigController(
         return "redirect:/crawlConfigs/$id"
     }
 
+    @PostMapping("/{id}/delete")
+    fun delete(
+        @PathVariable(name = "id") id: Long,
+        @RequestParam(name = "redirectTo", required = false) redirectTo: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val summary = smartDeleteService.deleteCrawlConfig(id)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Deleted crawl config '${summary.crawlConfigName}' with ${summary.filesDeleted} files, ${summary.foldersDeleted} folders, ${summary.chunksDeleted} chunks, ${summary.jobRunsDeleted} job runs, and ${summary.remoteTasksDeleted} remote tasks."
+            )
+            safeRedirect(redirectTo, "/crawlConfigs")
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Delete failed: ${e.message}")
+            safeRedirect(redirectTo, "/crawlConfigs")
+        }
+    }
+
     @GetMapping("/{id}/folders")
     fun browseFolders(
         @PathVariable(name = "id") id: Long,
@@ -1154,6 +1175,11 @@ class CrawlConfigController(
     private fun listToJson(patterns: List<String>): String? {
         if (patterns.isEmpty()) return null
         return objectMapper.writeValueAsString(patterns)
+    }
+
+    private fun safeRedirect(redirectTo: String?, fallback: String): String {
+        val target = redirectTo?.trim()?.takeIf { it.startsWith("/") } ?: fallback
+        return "redirect:$target"
     }
 
     private fun buildPresetBundle(os: WizardOs): List<WizardPresetConfig> {

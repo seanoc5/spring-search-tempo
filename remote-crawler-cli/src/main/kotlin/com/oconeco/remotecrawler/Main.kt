@@ -140,6 +140,7 @@ fun main(args: Array<String>) {
             // Run each config
             var totalSuccess = 0
             var totalFailed = 0
+            var totalFoldersSuppressed = 0
 
             for (config in configsToRun) {
                 val effectiveConfig = if (!beginPath.isNullOrBlank()) {
@@ -157,10 +158,16 @@ fun main(args: Array<String>) {
                 log.info("=== Running config: {} (ID: {}) ===", effectiveConfig.name, effectiveConfig.crawlConfigId)
 
                 val result = crawler.crawl(effectiveConfig, host)
+                totalFoldersSuppressed += result.foldersSuppressed
 
                 if (result.success) {
-                    log.info("Crawl completed: {} folders, {} files in {}ms",
-                        result.foldersProcessed, result.filesProcessed, result.durationMs)
+                    log.info(
+                        "Crawl completed: {} folders, {} files, {} folder sends suppressed in {}ms",
+                        result.foldersProcessed,
+                        result.filesProcessed,
+                        result.foldersSuppressed,
+                        result.durationMs
+                    )
                     totalSuccess++
                 } else {
                     log.error("Crawl failed: {}", result.errorMessage)
@@ -168,7 +175,12 @@ fun main(args: Array<String>) {
                 }
             }
 
-            log.info("=== All crawls complete: {} succeeded, {} failed ===", totalSuccess, totalFailed)
+            log.info(
+                "=== All crawls complete: {} succeeded, {} failed, {} folder sends suppressed ===",
+                totalSuccess,
+                totalFailed,
+                totalFoldersSuppressed
+            )
 
             if (totalFailed > 0) {
                 System.exit(1)

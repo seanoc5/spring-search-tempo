@@ -4,7 +4,6 @@ import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.Status
-import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
@@ -13,7 +12,6 @@ import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
@@ -30,7 +28,7 @@ class FSFileServiceImpl(
     private val fSFileRepository: FSFileRepository,
     private val fSFolderRepository: FSFolderRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
-    private val publisher: ApplicationEventPublisher,
+    private val smartDeleteService: SmartDeleteService,
     private val fSFileMapper: FSFileMapper
 ) : FSFileService {
 
@@ -78,10 +76,7 @@ class FSFileServiceImpl(
     }
 
     override fun delete(id: Long) {
-        val fSFile = fSFileRepository.findById(id)
-                .orElseThrow { NotFoundException() }
-        publisher.publishEvent(BeforeDeleteFSFile(id))
-        fSFileRepository.delete(fSFile)
+        smartDeleteService.deleteFSFile(id)
     }
 
     @Transactional(readOnly = true)

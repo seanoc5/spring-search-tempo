@@ -4,14 +4,12 @@ import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.domain.Status
-import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.util.CustomCollectors
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -25,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 class FSFolderServiceImpl(
     private val fSFolderRepository: FSFolderRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
-    private val publisher: ApplicationEventPublisher,
+    private val smartDeleteService: SmartDeleteService,
     @Qualifier("FSFolderMapperImpl") private val fSFolderMapper: FSFolderMapper
 ) : FSFolderService {
 
@@ -100,10 +98,7 @@ class FSFolderServiceImpl(
     }
 
     override fun delete(id: Long) {
-        val fSFolder = fSFolderRepository.findById(id)
-                .orElseThrow { NotFoundException() }
-        publisher.publishEvent(BeforeDeleteFSFolder(id))
-        fSFolderRepository.delete(fSFolder)
+        smartDeleteService.deleteFSFolder(id)
     }
 
     @Transactional(readOnly = true)

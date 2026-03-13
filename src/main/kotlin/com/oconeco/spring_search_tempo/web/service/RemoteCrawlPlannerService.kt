@@ -5,6 +5,8 @@ import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.domain.CrawlTemperature
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService as RuntimeCrawlConfigService
@@ -17,6 +19,7 @@ import java.time.OffsetDateTime
 @Service
 class RemoteCrawlPlannerService(
     private val databaseCrawlConfigService: DatabaseCrawlConfigService,
+    private val fsFolderRepository: FSFolderRepository,
     private val crawlConfigConverter: CrawlConfigConverter,
     private val runtimeCrawlConfigService: RuntimeCrawlConfigService,
     private val patternMatchingService: PatternMatchingService,
@@ -88,6 +91,45 @@ class RemoteCrawlPlannerService(
             serverHost = HostNameHolder.currentHostName,
             requestedHost = trimmedHost,
             assignments = configs
+        )
+    }
+
+    fun buildFolderSnapshot(host: String, crawlConfigId: Long): RemoteFolderSnapshotResponse {
+        val requestedHost = host.trim()
+        val normalizedHost = normalizeHost(host)
+        validateConfigForHost(normalizedHost, crawlConfigId)
+
+        val folders = fsFolderRepository.findFolderSnapshotByCrawlConfigId(crawlConfigId)
+            .mapNotNull { row ->
+                val uri = row.getOrNull(0) as? String ?: return@mapNotNull null
+                val analysisStatus = row.getOrNull(1) as? AnalysisStatus ?: AnalysisStatus.LOCATE
+                val crawlDepth = when (val value = row.getOrNull(2)) {
+                    is Int -> value
+                    is Number -> value.toInt()
+                    else -> null
+                }
+                val fsLastModified = row.getOrNull(3) as? OffsetDateTime
+                RemoteFolderSnapshotEntry(
+                    path = extractPathFromUri(uri),
+                    analysisStatus = analysisStatus,
+                    crawlDepth = crawlDepth,
+                    fsLastModified = fsLastModified
+                )
+            }
+
+        log.info(
+            "Built folder snapshot for host {} config {} with {} folders",
+            normalizedHost,
+            crawlConfigId,
+            folders.size
+        )
+
+        return RemoteFolderSnapshotResponse(
+            serverHost = HostNameHolder.currentHostName,
+            requestedHost = requestedHost,
+            crawlConfigId = crawlConfigId,
+            folderCount = folders.size,
+            folders = folders
         )
     }
 
@@ -259,6 +301,23 @@ class RemoteCrawlPlannerService(
             uri
         }
     }
+
+    private fun validateConfigForHost(host: String, crawlConfigId: Long): CrawlConfigDTO {
+        val config = databaseCrawlConfigService.get(crawlConfigId)
+        val sourceHost = config.sourceHost?.trim()?.takeIf { it.isNotBlank() }
+        if (sourceHost != null) {
+            require(normalizeHost(sourceHost) == host) {
+                "crawl config $crawlConfigId is not assigned to host '$host' (sourceHost='$sourceHost')"
+            }
+        }
+        return config
+    }
+
+    private fun normalizeHost(host: String): String {
+        val trimmed = host.trim().lowercase()
+        require(trimmed.isNotBlank()) { "host is required" }
+        return trimmed.replace(Regex("[^a-z0-9._-]"), "-")
+    }
 }
 
 data class RemoteBootstrapResponse(
@@ -285,6 +344,21 @@ data class RemoteCrawlConfigAssignment(
     val filePatterns: PatternPayload,
     val folderPatternPriority: PatternPriorityPayload = PatternPriorityPayload(),
     val filePatternPriority: PatternPriorityPayload = PatternPriorityPayload()
+)
+
+data class RemoteFolderSnapshotResponse(
+    val serverHost: String,
+    val requestedHost: String,
+    val crawlConfigId: Long,
+    val folderCount: Int,
+    val folders: List<RemoteFolderSnapshotEntry>
+)
+
+data class RemoteFolderSnapshotEntry(
+    val path: String,
+    val analysisStatus: AnalysisStatus,
+    val crawlDepth: Int? = null,
+    val fsLastModified: OffsetDateTime? = null
 )
 
 data class PatternPayload(

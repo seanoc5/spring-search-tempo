@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.controller
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleGroup
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleOperation
+import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryMode
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryRequest
@@ -30,7 +31,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/discovery")
 class DiscoveryController(
     private val discoveryService: DiscoveryService,
-    private val discoveryRuleAdminService: DiscoveryRuleAdminService
+    private val discoveryRuleAdminService: DiscoveryRuleAdminService,
+    private val smartDeleteService: SmartDeleteService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -40,6 +42,7 @@ class DiscoveryController(
     @GetMapping
     fun list(model: Model): String {
         val sessions = discoveryService.getAllSessions()
+        log.debug(".... Retrieved {} (remote crawl) discovery sessions", sessions.size)
         model.addAttribute("sessions", sessions)
         return "discovery/list"
     }
@@ -53,6 +56,8 @@ class DiscoveryController(
         @RequestParam(name = "previewProfile", required = false) previewProfile: String?,
         model: Model
     ): String {
+        log.debug(".... Loading discovery rules and options for UI")
+
         model.addAttribute("rules", discoveryRuleAdminService.listRules())
         model.addAttribute("ruleGroups", DiscoveryRuleGroup.entries)
         model.addAttribute("ruleOperations", DiscoveryRuleOperation.entries)
@@ -86,6 +91,7 @@ class DiscoveryController(
         @RequestParam(name = "note", required = false) note: String?,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.debug(".... Creating discovery rule")
         return try {
             discoveryRuleAdminService.createRule(
                 DiscoveryRuleUpsertRequest(
@@ -115,6 +121,7 @@ class DiscoveryController(
         @RequestParam(name = "note", required = false) note: String?,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.debug(".... Updating discovery rule {}", ruleId)
         return try {
             discoveryRuleAdminService.updateRule(
                 ruleId = ruleId,
@@ -140,6 +147,7 @@ class DiscoveryController(
         @PathVariable ruleId: Long,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.debug(".... Deleting discovery rule {}", ruleId)
         return try {
             discoveryRuleAdminService.deleteRule(ruleId)
             redirectAttributes.addFlashAttribute("message", "Rule $ruleId deleted.")
@@ -167,6 +175,7 @@ class DiscoveryController(
         model: Model
     ): String {
         try {
+            log.debug(".... Retrieving classification UI for session {} with maxDepth {}", sessionId, maxDepth)
             val effectiveMaxDepth = maxDepth.coerceIn(0, 8)
             val discoverySession = discoveryService.getSessionForClassification(sessionId, effectiveMaxDepth)
             val selectedAssignedStatus = parseAnalysisStatus(assignedStatus)
@@ -242,6 +251,7 @@ class DiscoveryController(
         model: Model
     ): String {
         val children = discoveryService.getChildFolders(sessionId, parentPath)
+        log.debug(".... Retrieved {} children for session {} and parent {}", children.size, sessionId, parentPath)
         model.addAttribute("folders", children)
         model.addAttribute("sessionId", sessionId)
         return "discovery/fragments :: folderChildren"
@@ -258,6 +268,7 @@ class DiscoveryController(
     ): ResponseEntity<Map<String, Any>> {
         return try {
             val status = AnalysisStatus.valueOf(request.status.uppercase())
+            log.debug(".... Classifying folder {} with status {}", request.folderPath, status)
 
             val updated = if (request.includeSubtree && request.folderPath != null) {
                 discoveryService.classifySubtree(sessionId, request.folderPath, status)
@@ -296,6 +307,7 @@ class DiscoveryController(
     fun applySuggestions(@PathVariable sessionId: Long): ResponseEntity<Map<String, Any>> {
         return try {
             val result = discoveryService.applySuggestedStatuses(sessionId)
+            log.debug(".... Applied {} suggestions (session: {})", result.totalApplied, sessionId)
             ResponseEntity.ok(mapOf(
                 "success" to true,
                 "totalApplied" to result.totalApplied,
@@ -326,6 +338,8 @@ class DiscoveryController(
         model: Model
     ): String {
         val status = discoveryService.getStatus(sessionId)
+        log.debug(".... Session({}) status retrieved: {}", sessionId, status)
+
         model.addAttribute("discoverySession", status)
         model.addAttribute("sessionId", sessionId)
         model.addAttribute("maxDepth", maxDepth.coerceIn(0, 8))
@@ -343,6 +357,7 @@ class DiscoveryController(
         @RequestParam(name = "profile") profile: String,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.debug(".... Applying template for session {} with profile {}", sessionId, profile)
         return try {
             val selected = DiscoveryUserProfile.valueOf(profile.uppercase())
             val result = discoveryService.applySuggestedTemplate(sessionId, selected)
@@ -373,6 +388,7 @@ class DiscoveryController(
         @RequestParam(name = "newDisplayLabel", required = false) newDisplayLabel: String?,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.debug(".... Applying discovery session {} to crawl config", sessionId)
         return try {
             val mode = runCatching { ApplyDiscoveryMode.valueOf(applyMode.uppercase()) }
                 .getOrDefault(ApplyDiscoveryMode.CREATE)
@@ -401,8 +417,34 @@ class DiscoveryController(
         }
     }
 
+    @PostMapping("/{sessionId}/delete")
+    fun deleteSession(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "redirectTo", required = false) redirectTo: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val summary = smartDeleteService.deleteDiscoverySession(sessionId)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Deleted discovery session ${summary.sessionId} for '${summary.host}' with ${summary.discoveredFoldersDeleted} discovered folders."
+            )
+            safeRedirect(redirectTo, "/discovery")
+        } catch (e: Exception) {
+            log.error("Failed to delete discovery session {}", sessionId, e)
+            redirectAttributes.addFlashAttribute("error", "Delete failed: ${e.message}")
+            safeRedirect(redirectTo, "/discovery")
+        }
+    }
+
     private fun parseAnalysisStatus(value: String?): AnalysisStatus? {
+        log.debug("Parsing analysis status: {}", value)
         val normalized = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
         return runCatching { AnalysisStatus.valueOf(normalized.uppercase()) }.getOrNull()
+    }
+
+    private fun safeRedirect(redirectTo: String?, fallback: String): String {
+        val target = redirectTo?.trim()?.takeIf { it.startsWith("/") } ?: fallback
+        return "redirect:$target"
     }
 }

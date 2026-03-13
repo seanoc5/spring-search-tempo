@@ -60,6 +60,16 @@ class RemoteCrawlClient(
     }
 
     /**
+     * Get compact FSFolder snapshot for one crawl config.
+     * Used to preload server-side folder status before walking the filesystem.
+     */
+    fun folderSnapshot(host: String, crawlConfigId: Long): FolderSnapshotResponse {
+        val encodedHost = java.net.URLEncoder.encode(host, "UTF-8")
+        val response = get("$apiBase/folder-snapshot?host=$encodedHost&crawlConfigId=$crawlConfigId")
+        return objectMapper.readValue(response)
+    }
+
+    /**
      * Start a remote crawl session.
      */
     fun startSession(request: SessionStartRequest): SessionStartResponse {
@@ -400,6 +410,21 @@ data class CrawlConfigAssignment(
     val filePatterns: PatternSet,
     val folderPatternPriority: PatternPriority = PatternPriority(),
     val filePatternPriority: PatternPriority = PatternPriority()
+)
+
+data class FolderSnapshotResponse(
+    val serverHost: String,
+    val requestedHost: String,
+    val crawlConfigId: Long,
+    val folderCount: Int,
+    val folders: List<FolderSnapshotEntry>
+)
+
+data class FolderSnapshotEntry(
+    val path: String,
+    val analysisStatus: AnalysisStatus,
+    val crawlDepth: Int? = null,
+    val fsLastModified: java.time.OffsetDateTime? = null
 )
 
 enum class CrawlMode {

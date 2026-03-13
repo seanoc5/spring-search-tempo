@@ -3,7 +3,9 @@ package com.oconeco.spring_search_tempo.base.repos
 import com.oconeco.spring_search_tempo.base.domain.DiscoverySession
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryStatus
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.util.Optional
 
 interface DiscoverySessionRepository : JpaRepository<DiscoverySession, Long> {
@@ -36,4 +38,8 @@ interface DiscoverySessionRepository : JpaRepository<DiscoverySession, Long> {
         """
     )
     fun findByCrawlConfigIdOrderByLastUpdatedDesc(crawlConfigId: Long): List<DiscoverySession>
+
+    @Modifying
+    @Query("UPDATE DiscoverySession s SET s.crawlConfig = NULL WHERE s.crawlConfig.id = :crawlConfigId")
+    fun clearCrawlConfigReference(@Param("crawlConfigId") crawlConfigId: Long): Int
 }

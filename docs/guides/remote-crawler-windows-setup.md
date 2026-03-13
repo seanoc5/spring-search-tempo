@@ -22,11 +22,11 @@ New-Item -Path "C:\Tempo\remote-crawler" -ItemType Directory -Force
 **Option A: From GitHub Release**
 ```powershell
 # Requires GitHub CLI (gh)
-gh release download remote-crawler-v0.2.1 -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
+gh release download remote-crawler-v0.2.2 -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
 ```
 
 **Option B: Manual download**
-- Download `remote-crawler-0.2.1.jar` from [GitHub Releases](https://github.com/seanoc5/spring-search-tempo/releases)
+- Download `remote-crawler-0.2.2.jar` from [GitHub Releases](https://github.com/seanoc5/spring-search-tempo/releases)
 - Copy to `C:\Tempo\remote-crawler\`
 
 ### 3. Copy the PowerShell scripts
@@ -71,7 +71,7 @@ Create `C:\Tempo\remote-crawler\config.json`:
 
 ```powershell
 cd C:\Tempo\remote-crawler
-java -jar remote-crawler-0.2.1.jar -s https://your-server -u admin -p password status
+java -jar remote-crawler-0.2.2.jar -s https://your-server -u admin -p password status
 ```
 
 You should see your assigned crawl configurations.
@@ -121,7 +121,7 @@ This creates a task that runs every 4 hours by default.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `-Mode` | `crawl` | Operation: `crawl`, `status`, or `onboard` |
-| `-JarPath` | `C:\Tempo\remote-crawler\remote-crawler-0.2.1.jar` | Path to JAR file |
+| `-JarPath` | `C:\Tempo\remote-crawler\remote-crawler-0.2.2.jar` | Path to JAR file |
 | `-ServerUrl` | (from config) | Spring Search Tempo server URL |
 | `-Username` | (from config) | Authentication username |
 | `-Password` | (from config) | Authentication password |
@@ -226,7 +226,7 @@ After setup, your installation should look like:
 
 ```
 C:\Tempo\remote-crawler\
-├── remote-crawler-0.2.1.jar         # The crawler application
+├── remote-crawler-0.2.2.jar         # The crawler application
 ├── run-remote-crawler.ps1           # Runner script (called by task)
 ├── install-remote-crawler-task.ps1  # Installer (run once)
 ├── update-remote-crawler.ps1        # Auto-update script

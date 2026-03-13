@@ -2,7 +2,7 @@ param(
     [ValidateSet("crawl", "status", "onboard")]
     [string]$Mode = "crawl",
 
-    [string]$JarPath = "C:\Tempo\remote-crawler\remote-crawler-0.2.1.jar",
+    [string]$JarPath = "C:\Tempo\remote-crawler\remote-crawler-0.2.2.jar",
     [string]$ServerUrl = "",
     [string]$Username = "",
     [string]$Password = "",

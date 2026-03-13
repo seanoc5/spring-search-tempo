@@ -4,6 +4,9 @@ import com.oconeco.spring_search_tempo.base.domain.CrawlDiscoveryFolderObservati
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 interface CrawlDiscoveryFolderObservationRepository : JpaRepository<CrawlDiscoveryFolderObservation, Long> {
     fun findByCrawlConfigIdAndHostAndPath(
@@ -34,4 +37,11 @@ interface CrawlDiscoveryFolderObservationRepository : JpaRepository<CrawlDiscove
         pathPrefix: String,
         pageable: Pageable
     ): Page<CrawlDiscoveryFolderObservation>
+
+    @Query("SELECT o.id FROM CrawlDiscoveryFolderObservation o WHERE o.crawlConfig.id = :crawlConfigId")
+    fun findIdsByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): List<Long>
+
+    @Modifying
+    @Query("DELETE FROM CrawlDiscoveryFolderObservation o WHERE o.crawlConfig.id = :crawlConfigId")
+    fun deleteByCrawlConfigId(@Param("crawlConfigId") crawlConfigId: Long): Int
 }

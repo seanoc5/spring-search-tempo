@@ -67,6 +67,8 @@ class FSFileDTO {
 
     var pageCount: Int? = null
 
+    var crawlConfigId: Long? = null
+
     var jobRunId: Long? = null
 
     var sourceHost: String? = null

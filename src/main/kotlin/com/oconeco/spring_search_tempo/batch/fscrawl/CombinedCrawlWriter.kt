@@ -47,6 +47,7 @@ class CombinedCrawlWriter(
     }
 
     private var currentJobRunId: Long? = null
+    private var currentCrawlConfigId: Long? = null
     private lateinit var currentStepExecution: StepExecution
 
     // Thread-safe counters for step statistics (accessed from multiple chunk-processing threads)
@@ -65,7 +66,14 @@ class CombinedCrawlWriter(
         currentStepExecution = stepExecution
         currentJobRunId = stepExecution.executionContext.getLong(CrawlStepListener.JOB_RUN_ID_KEY, -1L)
             .takeIf { it > 0 }
-        log.info("Writer initialized with jobRunId: {}", currentJobRunId)
+        currentCrawlConfigId = stepExecution.jobExecution.jobParameters
+            .getString(JobRunTrackingListener.CRAWL_CONFIG_ID_KEY)
+            ?.toLongOrNull()
+        log.info(
+            "Writer initialized with jobRunId: {}, crawlConfigId: {}",
+            currentJobRunId,
+            currentCrawlConfigId
+        )
     }
 
     override fun afterStep(stepExecution: StepExecution): org.springframework.batch.core.ExitStatus {
@@ -94,9 +102,15 @@ class CombinedCrawlWriter(
         val folderDTOs = chunk.mapNotNull { it.folder }
         val allFileDTOs = chunk.flatMap { it.files }
 
-        // Set jobRunId on all DTOs before persistence
-        folderDTOs.forEach { it.jobRunId = currentJobRunId }
-        allFileDTOs.forEach { it.jobRunId = currentJobRunId }
+        // Set stable ownership and last-run metadata before persistence.
+        folderDTOs.forEach {
+            it.jobRunId = currentJobRunId
+            it.crawlConfigId = currentCrawlConfigId
+        }
+        allFileDTOs.forEach {
+            it.jobRunId = currentJobRunId
+            it.crawlConfigId = currentCrawlConfigId
+        }
 
         // Persist folders first (files may reference them as parents)
         val foldersWritten = if (folderDTOs.isNotEmpty()) {

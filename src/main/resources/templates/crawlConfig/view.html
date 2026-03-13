@@ -309,25 +309,44 @@
                         <div class="card-header bg-danger bg-opacity-10 py-1 px-2">
                             <small class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Data Management</small>
                         </div>
-                        <div class="card-body py-2 px-2 d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <div class="fw-semibold small">Delete All Crawl Data</div>
-                                <small class="text-muted">
-                                    Remove [[${totalFileCount}]] files, [[${totalFolderCount}]] folders and all chunks.
-                                </small>
+                        <div class="card-body py-2 px-2">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold small">Delete All Crawl Data</div>
+                                    <small class="text-muted">
+                                        Remove [[${totalFileCount}]] files, [[${totalFolderCount}]] folders and all chunks.
+                                    </small>
+                                </div>
+                                <form th:action="@{/crawlConfigs/{id}/delete-data(id=${crawlConfig.id})}" method="post" class="d-inline"
+                                      onsubmit="return confirm('WARNING: This will permanently delete ALL data for this crawl configuration:\n\n' +
+                                          '• ' + [[${totalFileCount}]] + ' files\n' +
+                                          '• ' + [[${totalFolderCount}]] + ' folders\n' +
+                                          '• All associated content chunks\n\n' +
+                                          'This action CANNOT be undone.\n\n' +
+                                          'Are you sure you want to proceed?');">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm"
+                                            th:disabled="${totalFileCount == 0 and totalFolderCount == 0}">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
                             </div>
-                            <form th:action="@{/crawlConfigs/{id}/delete-data(id=${crawlConfig.id})}" method="post" class="d-inline"
-                                  onsubmit="return confirm('WARNING: This will permanently delete ALL data for this crawl configuration:\n\n' +
-                                      '• ' + [[${totalFileCount}]] + ' files\n' +
-                                      '• ' + [[${totalFolderCount}]] + ' folders\n' +
-                                      '• All associated content chunks\n\n' +
-                                      'This action CANNOT be undone.\n\n' +
-                                      'Are you sure you want to proceed?');">
-                                <button type="submit" class="btn btn-outline-danger btn-sm"
-                                        th:disabled="${totalFileCount == 0 and totalFolderCount == 0}">
-                                    <i class="bi bi-trash"></i> Delete
-                                </button>
-                            </form>
+
+                            <hr class="my-3">
+
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold small">Delete Configuration</div>
+                                    <small class="text-muted">
+                                        Remove this crawl config, its job runs, remote task state, and linked crawl data.
+                                    </small>
+                                </div>
+                                <form th:action="@{/crawlConfigs/{id}/delete(id=${crawlConfig.id})}" method="post" class="d-inline"
+                                      onsubmit="return confirm('WARNING: This will permanently delete crawl config ' + '[[${crawlConfig.label ?: crawlConfig.name}]]' + ' and all persisted data linked to it.\n\nThis action CANNOT be undone.\n\nProceed?');">
+                                    <button type="submit" class="btn btn-danger btn-sm">
+                                        <i class="bi bi-trash-fill"></i> Delete Config
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>

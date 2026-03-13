@@ -17,7 +17,8 @@ import org.springframework.stereotype.Service
 class DatabaseCrawlConfigServiceImpl(
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigMapper: CrawlConfigMapper,
-    private val userOwnershipService: UserOwnershipService
+    private val userOwnershipService: UserOwnershipService,
+    private val smartDeleteService: SmartDeleteService
 ) : DatabaseCrawlConfigService {
 
     override fun count(): Long = crawlConfigRepository.count()
@@ -100,9 +101,7 @@ class DatabaseCrawlConfigServiceImpl(
     }
 
     override fun delete(id: Long) {
-        val crawlConfig = crawlConfigRepository.findById(id)
-            .orElseThrow { NotFoundException() }
-        crawlConfigRepository.delete(crawlConfig)
+        smartDeleteService.deleteCrawlConfig(id)
     }
 
     override fun nameExists(name: String, sourceHost: String?, excludeId: Long?): Boolean {

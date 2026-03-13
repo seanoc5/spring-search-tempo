@@ -398,12 +398,36 @@ Avoid framework-reserved names in templates, model attributes, and local vars.
   - `th:each` loop vars, `th:with` vars, fragment args, or `model.addAttribute(...)` keys.
 - Spring MVC + Thymeleaf implication:
   - `model.addAttribute("session", ...)` can break template rendering with reserved-word errors.
+- Typical failure:
+  - `Cannot set variable called 'session' into web variables map: such name is a reserved word`
+- Template access:
+  - Do not use `#request`, `#session`, `#response`, or other web-context expression objects in templates.
+  - Pass required request state through controller/model attributes instead.
 - Kotlin naming:
   - Avoid Kotlin keywords (`class`, `object`, `when`, `is`, etc.) for DTO/entity field names unless absolutely required.
   - If unavoidable, Kotlin requires backticks, but this increases binding/template risk.
 - HTMX + Thymeleaf naming:
   - Prefer `th:hx-*` processors.
   - In `th:attr`, do not use `hx-on::...`; use `hx-on--...` key form instead.
+- Quick scan before committing template/controller changes:
+  - `rg -n 'th:each=\"(session|param|request|response|application|servletContext)\\s*:|th:with=\"(session|param|request|response|application|servletContext)\\s*=|addAttribute\\(\"(session|param|request|response|application|servletContext)\"' src/main`
+
+## Thymeleaf + HTMX + SpEL Guardrails
+
+- HTMX response shape:
+  - Return fragments for non-boosted HTMX requests.
+  - Return full templates or redirects for normal requests and `HX-Boosted` requests.
+- HTMX swap targets:
+  - If an element uses `hx-target` + `hx-swap="outerHTML"`, the returned fragment root must render the same stable target id/selector.
+  - Do not return a `th:block` root when the client expects to swap a concrete container element.
+- Event handlers:
+  - Never use `th:on*` attributes with string expressions.
+  - Use `data-*` attributes plus delegated JavaScript handlers instead.
+- SpEL request params:
+  - `param.*` values are arrays, not booleans.
+  - Use explicit null checks like `${param.expired != null || param.sessionExpired != null}`.
+- Template logic:
+  - Keep filtering, joins, grouping, and inheritance calculations in controller/service code, not in templates.
 
 ---
 

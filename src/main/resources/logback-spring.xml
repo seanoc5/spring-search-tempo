@@ -33,6 +33,7 @@
     <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
 
     <!-- App logging -->
+    <logger name="com.oconeco.spring_search_tempo.web.controller" level="DEBUG"/>
     <logger name="com.oconeco" level="INFO"/>
 
     <root level="INFO">

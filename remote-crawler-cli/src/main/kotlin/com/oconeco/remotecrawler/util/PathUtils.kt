@@ -44,4 +44,25 @@ object PathUtils {
             0
         }
     }
+
+    /**
+     * Normalize a local filesystem path into the same slash-prefixed form used by remote:// URIs.
+     * Examples:
+     * - "/opt/work" -> "/opt/work"
+     * - "C:\\Users\\sean" -> "/C:/Users/sean"
+     */
+    fun normalizeComparablePath(rawPath: String): String {
+        var normalized = rawPath.trim().replace('\\', '/')
+        if (normalized.isBlank()) {
+            return "/"
+        }
+        normalized = normalized.replace(Regex("/{2,}"), "/")
+        if (!normalized.startsWith("/")) {
+            normalized = "/$normalized"
+        }
+        if (normalized.length > 1 && normalized.endsWith("/")) {
+            normalized = normalized.removeSuffix("/")
+        }
+        return normalized
+    }
 }

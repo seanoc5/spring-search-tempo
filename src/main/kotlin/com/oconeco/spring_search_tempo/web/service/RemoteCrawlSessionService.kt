@@ -132,6 +132,7 @@ class RemoteCrawlSessionService(
             entity.owner = folder.owner
             entity.group = folder.group
             entity.permissions = folder.permissions
+            entity.crawlConfigId = request.crawlConfigId
             entity.jobRunId = jobRun.id
             entity.sourceHost = host
 
@@ -200,6 +201,7 @@ class RemoteCrawlSessionService(
             entity.owner = file.owner
             entity.group = file.group
             entity.permissions = file.permissions
+            entity.crawlConfigId = request.crawlConfigId
             entity.jobRunId = jobRun.id
             entity.sourceHost = host
 

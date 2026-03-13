@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoveredFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
@@ -24,6 +25,7 @@ import java.util.Locale
 class DiscoveryService(
     private val sessionRepository: DiscoverySessionRepository,
     private val folderRepository: DiscoveredFolderRepository,
+    private val fsFolderRepository: FSFolderRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val crawlConfigConverter: CrawlConfigConverter,
@@ -530,10 +532,19 @@ class DiscoveryService(
             }
         }
 
+        val placeholderSeed = seedFsFolderPlaceholders(session, targetConfigId)
         session.crawlConfig = crawlConfigRepository.findById(targetConfigId).orElse(null)
         session.status = DiscoveryStatus.APPLIED
         session.appliedAt = OffsetDateTime.now()
         sessionRepository.save(session)
+        log.info(
+            "Applied discovery session {} to crawl config {} ({}): seeded {} placeholder folders, reused {} existing folders",
+            sessionId,
+            targetConfigId,
+            action,
+            placeholderSeed.seeded,
+            placeholderSeed.reused
+        )
 
         return ApplyDiscoveryResult(
             sessionId = sessionId,
@@ -654,6 +665,71 @@ class DiscoveryService(
         }
     }
 
+    private fun seedFsFolderPlaceholders(session: DiscoverySession, targetConfigId: Long): FsFolderPlaceholderSeedResult {
+        val normalizedHost = normalizeRemoteHost(
+            session.host?.trim().orEmpty().ifBlank {
+                throw IllegalArgumentException("discovery session ${session.id} has no host")
+            }
+        )
+        val sessionId = session.id ?: throw IllegalArgumentException("discovery session must be persisted before apply")
+        val placeholders = linkedMapOf<String, FsFolderPlaceholderSpec>()
+
+        session.folders.forEach { folder ->
+            val rawPath = folder.path?.trim()?.takeIf { it.isNotBlank() } ?: return@forEach
+            val uri = toRemoteUri(normalizedHost, rawPath)
+            placeholders[uri] = FsFolderPlaceholderSpec(
+                uri = uri,
+                label = folder.name?.trim()?.takeIf { it.isNotBlank() } ?: leafName(rawPath),
+                depth = folder.depth,
+                analysisStatus = effectiveStatus(folder) ?: AnalysisStatus.LOCATE,
+                analysisStatusSetBy = if (folder.assignedStatus != null) "MANUAL" else "PATTERN",
+                analysisStatusReason = "DISCOVERY_SESSION:$sessionId"
+            )
+        }
+
+        if (placeholders.isEmpty()) {
+            return FsFolderPlaceholderSeedResult()
+        }
+
+        var seeded = 0
+        var reused = 0
+        placeholders.values.chunked(1000).forEach { batch ->
+            val existingByUri = fsFolderRepository.findByUriIn(batch.map { it.uri })
+                .associateBy { it.uri!! }
+            val toSave = batch.map { spec ->
+                val existing = existingByUri[spec.uri]
+                if (existing == null) {
+                    seeded++
+                    FSFolder().apply {
+                        uri = spec.uri
+                        version = 0L
+                        type = "FOLDER"
+                        status = Status.NEW
+                    }
+                } else {
+                    reused++
+                    existing
+                }.apply {
+                    uri = spec.uri
+                    type = "FOLDER"
+                    crawlConfigId = targetConfigId
+                    sourceHost = normalizedHost
+                    analysisStatus = spec.analysisStatus
+                    analysisStatusSetBy = spec.analysisStatusSetBy
+                    analysisStatusReason = spec.analysisStatusReason
+                    label = spec.label
+                    crawlDepth = spec.depth
+                }
+            }
+            fsFolderRepository.saveAll(toSave)
+        }
+
+        return FsFolderPlaceholderSeedResult(
+            seeded = seeded,
+            reused = reused
+        )
+    }
+
     private fun buildFolderPatterns(rawPaths: List<String>): List<String> {
         if (rawPaths.isEmpty()) return emptyList()
 
@@ -691,6 +767,34 @@ class DiscoveryService(
         val normalized = path.trim().replace('\\', '/')
         if (normalized == "/") return "/"
         return normalized.trimEnd('/').ifBlank { "/" }
+    }
+
+    private fun normalizeRemoteHost(host: String): String {
+        val trimmed = host.trim().lowercase()
+        require(trimmed.isNotBlank()) { "host is required" }
+        return trimmed.replace(Regex("[^a-z0-9._-]"), "-")
+    }
+
+    private fun normalizeRemotePath(rawPath: String): String {
+        var normalized = rawPath.trim().replace('\\', '/')
+        require(normalized.isNotBlank()) { "path is required" }
+        normalized = normalized.replace(Regex("/{2,}"), "/")
+        if (!normalized.startsWith("/")) {
+            normalized = "/$normalized"
+        }
+        if (normalized.length > 1 && normalized.endsWith("/")) {
+            normalized = normalized.removeSuffix("/")
+        }
+        return normalized
+    }
+
+    private fun toRemoteUri(host: String, rawPath: String): String {
+        return "remote://$host${normalizeRemotePath(rawPath)}"
+    }
+
+    private fun leafName(rawPath: String): String {
+        val path = normalizeRemotePath(rawPath)
+        return path.substringAfterLast('/').ifBlank { path }
     }
 
     private fun normalizedConfigName(input: String?, session: DiscoverySession): String {
@@ -829,6 +933,20 @@ data class ApplyDiscoveryResult(
     val indexPatterns: Int,
     val analyzePatterns: Int,
     val semanticPatterns: Int = 0
+)
+
+private data class FsFolderPlaceholderSpec(
+    val uri: String,
+    val label: String,
+    val depth: Int,
+    val analysisStatus: AnalysisStatus,
+    val analysisStatusSetBy: String,
+    val analysisStatusReason: String
+)
+
+private data class FsFolderPlaceholderSeedResult(
+    val seeded: Int = 0,
+    val reused: Int = 0
 )
 
 data class CrawlConfigCandidateDTO(
