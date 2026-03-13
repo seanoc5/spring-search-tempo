@@ -18,6 +18,31 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Get-ConfigValue {
+    param(
+        [object]$Config,
+        [string]$Name
+    )
+
+    if ($null -eq $Config) {
+        return $null
+    }
+
+    if ($Config -is [System.Collections.IDictionary]) {
+        if ($Config.Contains($Name)) {
+            return $Config[$Name]
+        }
+        return $null
+    }
+
+    $property = $Config.PSObject.Properties[$Name]
+    if ($null -ne $property) {
+        return $property.Value
+    }
+
+    return $null
+}
+
 # Determine config file path (default: config.json in same folder as JAR)
 if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
     $ConfigFile = Join-Path (Split-Path $JarPath -Parent) "config.json"
@@ -34,13 +59,19 @@ if (Test-Path $ConfigFile) {
     }
 }
 
+$configServerUrl = Get-ConfigValue -Config $config -Name "serverUrl"
+$configUsername = Get-ConfigValue -Config $config -Name "username"
+$configPassword = Get-ConfigValue -Config $config -Name "password"
+$configTrustStorePath = Get-ConfigValue -Config $config -Name "trustStorePath"
+$configTrustStorePassword = Get-ConfigValue -Config $config -Name "trustStorePassword"
+
 # Priority: CLI param > env var > config file > default
 # ServerUrl
 if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
     if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_SERVER_URL)) {
         $ServerUrl = $env:TEMPO_SERVER_URL
-    } elseif ($config.serverUrl) {
-        $ServerUrl = $config.serverUrl
+    } elseif (-not [string]::IsNullOrWhiteSpace($configServerUrl)) {
+        $ServerUrl = $configServerUrl
     } else {
         $ServerUrl = "https://minti9"
     }
@@ -50,8 +81,8 @@ if ([string]::IsNullOrWhiteSpace($ServerUrl)) {
 if ([string]::IsNullOrWhiteSpace($Username)) {
     if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_CRAWLER_USERNAME)) {
         $Username = $env:TEMPO_CRAWLER_USERNAME
-    } elseif ($config.username) {
-        $Username = $config.username
+    } elseif (-not [string]::IsNullOrWhiteSpace($configUsername)) {
+        $Username = $configUsername
     } else {
         $Username = "admin"
     }
@@ -61,8 +92,8 @@ if ([string]::IsNullOrWhiteSpace($Username)) {
 if ([string]::IsNullOrWhiteSpace($Password)) {
     if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_CRAWLER_PASSWORD)) {
         $Password = $env:TEMPO_CRAWLER_PASSWORD
-    } elseif ($config.password) {
-        $Password = $config.password
+    } elseif (-not [string]::IsNullOrWhiteSpace($configPassword)) {
+        $Password = $configPassword
     } else {
         $Password = "password"
     }
@@ -72,8 +103,8 @@ if ([string]::IsNullOrWhiteSpace($Password)) {
 if ([string]::IsNullOrWhiteSpace($TrustStorePath)) {
     if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_TRUSTSTORE_PATH)) {
         $TrustStorePath = $env:TEMPO_TRUSTSTORE_PATH
-    } elseif ($config.trustStorePath) {
-        $TrustStorePath = $config.trustStorePath
+    } elseif (-not [string]::IsNullOrWhiteSpace($configTrustStorePath)) {
+        $TrustStorePath = $configTrustStorePath
     }
 }
 
@@ -81,8 +112,8 @@ if ([string]::IsNullOrWhiteSpace($TrustStorePath)) {
 if ([string]::IsNullOrWhiteSpace($TrustStorePassword)) {
     if (-not [string]::IsNullOrWhiteSpace($env:TEMPO_TRUSTSTORE_PASSWORD)) {
         $TrustStorePassword = $env:TEMPO_TRUSTSTORE_PASSWORD
-    } elseif ($config.trustStorePassword) {
-        $TrustStorePassword = $config.trustStorePassword
+    } elseif (-not [string]::IsNullOrWhiteSpace($configTrustStorePassword)) {
+        $TrustStorePassword = $configTrustStorePassword
     } elseif (-not [string]::IsNullOrWhiteSpace($TrustStorePath)) {
         $TrustStorePassword = "changeit"
     }
