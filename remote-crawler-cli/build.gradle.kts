@@ -9,7 +9,7 @@ plugins {
 
 group = "com.oconeco"
 version = providers.gradleProperty("remoteCrawlerVersion")
-    .orElse("0.1.0")
+    .orElse(rootProject.version.toString())
     .get()
 
 kotlin {

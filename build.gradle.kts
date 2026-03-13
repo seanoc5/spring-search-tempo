@@ -156,3 +156,9 @@ tasks.register<Copy>("stageWindowsJpackage") {
     into(layout.buildDirectory.dir("jpackage/input"))
     rename { "spring-search-tempo.jar" }
 }
+
+tasks.register("printAppVersion") {
+    doLast {
+        println(project.version)
+    }
+}

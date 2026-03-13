@@ -7,13 +7,15 @@ Usage:
   scripts/remote/release-remote-crawler.sh <version> [options]
 
 Example:
-  scripts/remote/release-remote-crawler.sh 0.2.2
+  scripts/remote/release-remote-crawler.sh 0.5.3
 
 Options:
   --no-push      Create local tag only (do not push branch/tag)
   --no-wait      Do not wait for GitHub release/assets after push
   --skip-build   Skip local jar build/checksum generation
   -h, --help     Show this help
+
+The remote crawler version must match the root app version.
 EOF
 }
 
@@ -61,7 +63,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)?$ ]]; then
-  echo "ERROR: Version must look like 0.2.2 (or 0.2.2-rc1)." >&2
+  echo "ERROR: Version must look like 0.5.3 (or 0.5.3-rc1)." >&2
   exit 1
 fi
 
@@ -71,6 +73,12 @@ require_cmd sha256sum
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+
+APP_VERSION="$(./gradlew -q printAppVersion)"
+if [[ "$VERSION" != "$APP_VERSION" ]]; then
+  echo "ERROR: Remote crawler version ${VERSION} must match app version ${APP_VERSION}." >&2
+  exit 1
+fi
 
 TAG="remote-crawler-v${VERSION}"
 JAR_NAME="remote-crawler-${VERSION}.jar"

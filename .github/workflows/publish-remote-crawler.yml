@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (example: 0.1.1)"
+        description: "Version to publish; must match the app version (example: 0.5.3)"
         required: true
         type: string
       make_latest:
@@ -54,6 +54,17 @@ jobs:
           echo "jar=remote-crawler-${version}.jar" >> "$GITHUB_OUTPUT"
           echo "sha=remote-crawler-${version}.jar.sha256" >> "$GITHUB_OUTPUT"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release version matches app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_version="$(./gradlew -q printAppVersion)"
+          release_version="${{ steps.release.outputs.version }}"
+          if [[ "$app_version" != "$release_version" ]]; then
+            echo "Release version $release_version does not match app version $app_version" >&2
+            exit 1
+          fi
 
       - name: Build remote crawler fat JAR
         run: |

@@ -105,26 +105,26 @@ It now includes both control-plane APIs and ingest/session lifecycle APIs.
 
 
 ## Download remote client
-gh release download remote-crawler-v0.2.1
+gh release download remote-crawler-v0.5.3
 
 
 ## Sample Usage
 Copy to winbook3 and run:
 
 ### Test connection
-java -jar remote-crawler-0.1.0.jar -s https://minti9 test
+java -jar remote-crawler-0.5.3.jar -s https://minti9 test
 
 ### Dry run - short mode (explicit matches only)
-java -jar remote-crawler-0.1.0.jar -s https://minti9 dry-run -c <CONFIG_ID>
+java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID>
 
 ### Dry run - detailed mode (all folders)
-java -jar remote-crawler-0.1.0.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed
+java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed
 
 ### Filter to INDEX folders only
-java -jar remote-crawler-0.1.0.jar -s https://minti9 dry-run -c <CONFIG_ID> --status INDEX
+java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --status INDEX
 
 ### Export to JSON
-java -jar remote-crawler-0.1.0.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed -o plan.json
+java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed -o plan.json
 
 You'll need the crawl config ID - if you've already applied the discovery session 3757671 to a config, use that ID. Otherwise, you can first apply the classifications in the UI at                                       
 https://localhost/discovery/3757671/classify to create a config.

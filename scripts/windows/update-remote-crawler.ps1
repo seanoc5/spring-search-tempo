@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 
 function Get-SemanticVersion {
     param([string]$VersionString)
-    # Extract version like "0.2.2" from strings like "remote-crawler-0.2.2.jar" or "remote-crawler-v0.2.2"
+    # Extract version like "0.5.3" from strings like "remote-crawler-0.5.3.jar" or "remote-crawler-v0.5.3"
     if ($VersionString -match '(\d+\.\d+\.\d+)') {
         return [version]$Matches[1]
     }
