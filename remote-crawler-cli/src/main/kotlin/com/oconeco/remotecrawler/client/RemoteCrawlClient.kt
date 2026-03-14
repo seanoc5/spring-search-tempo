@@ -141,7 +141,12 @@ class RemoteCrawlClient(
      * This is the first step in the onboarding flow.
      */
     fun uploadDiscovery(request: DiscoveryUploadRequest): DiscoveryUploadResponse {
-        val response = post("$apiBase/discovery/upload", request, gzipRequestBody = true)
+        val response = post(
+            url = "$apiBase/discovery/upload",
+            body = request,
+            gzipRequestBody = true,
+            allowPlainJsonRetry = true
+        )
         return objectMapper.readValue(response)
     }
 
@@ -282,12 +287,45 @@ class RemoteCrawlClient(
         return response.body()
     }
 
-    private fun post(url: String, body: Any, gzipRequestBody: Boolean = false): String {
+    private fun post(
+        url: String,
+        body: Any,
+        gzipRequestBody: Boolean = false,
+        allowPlainJsonRetry: Boolean = false
+    ): String {
         log.debug("POST {}", url)
 
         val jsonBytes = objectMapper.writeValueAsBytes(body)
         val requestBody = if (gzipRequestBody) gzip(jsonBytes) else jsonBytes
 
+        val response = sendPost(url, requestBody, gzipRequestBody, jsonBytes.size)
+        if (response.statusCode() in 200..299) {
+            return response.body()
+        }
+
+        if (gzipRequestBody && allowPlainJsonRetry && shouldRetryWithoutCompression(response)) {
+            log.warn(
+                "POST {} rejected gzipped JSON with what looks like raw-compressed-body parsing; retrying uncompressed",
+                url
+            )
+            val retryResponse = sendPost(url, jsonBytes, gzipRequestBody = false, originalJsonSize = jsonBytes.size)
+            if (retryResponse.statusCode() in 200..299) {
+                return retryResponse.body()
+            }
+            throw RemoteCrawlException(
+                "POST $url failed after gzip fallback retry: ${retryResponse.statusCode()} - ${retryResponse.body()}"
+            )
+        }
+
+        throw RemoteCrawlException("POST $url failed: ${response.statusCode()} - ${response.body()}")
+    }
+
+    private fun sendPost(
+        url: String,
+        requestBody: ByteArray,
+        gzipRequestBody: Boolean,
+        originalJsonSize: Int
+    ): HttpResponse<String> {
         val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Content-Type", "application/json")
@@ -299,20 +337,19 @@ class RemoteCrawlClient(
             log.info(
                 "POST {} with gzipped JSON payload ({} -> {} bytes)",
                 url,
-                jsonBytes.size,
+                originalJsonSize,
                 requestBody.size
             )
         }
         withOptionalAuth(requestBuilder)
-        val request = requestBuilder.build()
+        return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+    }
 
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-
-        if (response.statusCode() !in 200..299) {
-            throw RemoteCrawlException("POST $url failed: ${response.statusCode()} - ${response.body()}")
-        }
-
-        return response.body()
+    private fun shouldRetryWithoutCompression(response: HttpResponse<String>): Boolean {
+        if (response.statusCode() != 400) return false
+        val body = response.body().lowercase()
+        return "message_not_readable" in body &&
+            ("code 31" in body || "ctrl-char" in body || "illegal character" in body)
     }
 
     private fun gzip(bytes: ByteArray): ByteArray {

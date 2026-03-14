@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpStatus
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 
 @SpringBootTest(
     classes = [SpringSearchTempoApplication::class],
@@ -326,6 +328,45 @@ class RemoteCrawlResourceTest : BaseIT() {
                 .body("runStatus", equalTo("COMPLETED"))
     }
 
+    @Test
+    fun `discovery upload should accept gzipped json`() {
+        val payload = """
+            {
+              "host": "gzip-host",
+              "folders": [
+                {
+                  "path": "/data",
+                  "name": "data",
+                  "depth": 0,
+                  "folderCount": 1,
+                  "fileCount": 0,
+                  "totalSize": 0,
+                  "isHidden": false,
+                  "suggestedStatus": "LOCATE"
+                }
+              ],
+              "rootPaths": ["/data"],
+              "osType": "LINUX",
+              "discoveryDurationMs": 1234,
+              "createNewSession": true
+            }
+        """.trimIndent().toByteArray()
+
+        RestAssured
+            .given()
+                .header("Content-Type", ContentType.JSON.toString())
+                .header("Accept", ContentType.JSON.toString())
+                .header("Content-Encoding", "gzip")
+                .body(gzip(payload))
+            .`when`()
+                .post("/api/remote-crawl/discovery/upload")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("host", equalTo("gzip-host"))
+                .body("foldersReceived", equalTo(1))
+                .body("sessionId", notNullValue())
+    }
+
     private fun createRemoteTestCrawlConfig(): Long {
         val suffix = System.currentTimeMillis()
         return crawlConfigService.create(CrawlConfigDTO().apply {
@@ -361,5 +402,11 @@ class RemoteCrawlResourceTest : BaseIT() {
             folderPatternsLocate = "[\".*\"]"
             filePatternsLocate = "[\".*\"]"
         })
+    }
+
+    private fun gzip(bytes: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream(bytes.size)
+        GZIPOutputStream(output).use { it.write(bytes) }
+        return output.toByteArray()
     }
 }
