@@ -15,6 +15,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.Base64
+import java.util.zip.GZIPOutputStream
 
 /**
  * HTTP client for communicating with the Spring Search Tempo server.
@@ -29,7 +30,7 @@ class RemoteCrawlClient(
     private val baseUrl: String,
     private val username: String? = null,
     private val password: String? = null,
-    private val timeoutSeconds: Long = 30
+    private val timeoutSeconds: Long = 120
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -140,7 +141,7 @@ class RemoteCrawlClient(
      * This is the first step in the onboarding flow.
      */
     fun uploadDiscovery(request: DiscoveryUploadRequest): DiscoveryUploadResponse {
-        val response = post("$apiBase/discovery/upload", request)
+        val response = post("$apiBase/discovery/upload", request, gzipRequestBody = true)
         return objectMapper.readValue(response)
     }
 
@@ -281,17 +282,27 @@ class RemoteCrawlClient(
         return response.body()
     }
 
-    private fun post(url: String, body: Any): String {
+    private fun post(url: String, body: Any, gzipRequestBody: Boolean = false): String {
         log.debug("POST {}", url)
 
-        val jsonBody = objectMapper.writeValueAsString(body)
+        val jsonBytes = objectMapper.writeValueAsBytes(body)
+        val requestBody = if (gzipRequestBody) gzip(jsonBytes) else jsonBytes
 
         val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .timeout(Duration.ofSeconds(timeoutSeconds))
-            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
+        if (gzipRequestBody) {
+            requestBuilder.header("Content-Encoding", "gzip")
+            log.info(
+                "POST {} with gzipped JSON payload ({} -> {} bytes)",
+                url,
+                jsonBytes.size,
+                requestBody.size
+            )
+        }
         withOptionalAuth(requestBuilder)
         val request = requestBuilder.build()
 
@@ -302,6 +313,12 @@ class RemoteCrawlClient(
         }
 
         return response.body()
+    }
+
+    private fun gzip(bytes: ByteArray): ByteArray {
+        val output = java.io.ByteArrayOutputStream(bytes.size.coerceAtLeast(1024))
+        GZIPOutputStream(output).use { it.write(bytes) }
+        return output.toByteArray()
     }
 
     private fun withOptionalAuth(builder: HttpRequest.Builder, includeAuth: Boolean = true) {

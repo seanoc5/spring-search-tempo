@@ -3,9 +3,12 @@ package com.oconeco.remotecrawler
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import com.oconeco.remotecrawler.client.*
+import com.oconeco.remotecrawler.discovery.CachedDiscoveryPayload
 import com.oconeco.remotecrawler.crawler.FilesystemCrawler
 import com.oconeco.remotecrawler.discovery.DiscoveredFolder
+import com.oconeco.remotecrawler.discovery.DiscoveryCache
 import com.oconeco.remotecrawler.discovery.DiscoveryProgress
+import com.oconeco.remotecrawler.discovery.DiscoveryResult
 import com.oconeco.remotecrawler.discovery.FolderDiscovery
 import com.oconeco.remotecrawler.util.DriveDetector
 import kotlinx.cli.*
@@ -13,6 +16,8 @@ import org.slf4j.LoggerFactory
 import java.net.InetAddress
 import java.net.URI
 import java.nio.file.Paths
+import java.time.Duration
+import java.time.Instant
 import java.util.*
 
 private val log = LoggerFactory.getLogger("RemoteCrawler")
@@ -271,6 +276,12 @@ fun main(args: Array<String>) {
             description = "Create a new discovery session and archive older sessions for this host"
         ).default(false)
 
+        val freshDiscovery by option(
+            ArgType.Boolean,
+            fullName = "fresh",
+            description = "Ignore any recent cached discovery file and perform a fresh folder walk"
+        ).default(false)
+
         override fun execute() {
             val host = hostName ?: getHostName()
             val osType = detectOsType()
@@ -342,7 +353,14 @@ fun main(args: Array<String>) {
             rootPaths.forEach { println("  - $it") }
             println()
 
-            if (!skipPrompt && interactive) {
+            val discoveryCache = DiscoveryCache(host = host, rootPaths = rootPaths, maxDepth = maxDepth)
+            val cachedDiscovery = if (freshDiscovery) null else discoveryCache.loadIfFresh(Duration.ofDays(2))
+            val useCachedDiscovery = cachedDiscovery != null && shouldUseCachedDiscovery(
+                skipPrompt = skipPrompt,
+                entry = cachedDiscovery
+            )
+
+            if (!useCachedDiscovery && !skipPrompt && interactive) {
                 print("Proceed with discovery? [Y/n]: ")
                 val response = readLine()?.trim()?.lowercase()
                 if (response == "n" || response == "no") {
@@ -351,40 +369,58 @@ fun main(args: Array<String>) {
                 }
             }
 
-            // Run discovery
-            println()
-            println("Starting folder discovery...")
-            println("(This scans folder structure only - no file content is read)")
-            println()
+            val result: DiscoveryResult
+            val cachePath: java.nio.file.Path
 
-            val discovery = FolderDiscovery(
-                maxDepth = maxDepth,
-                progressCallback = { progress: DiscoveryProgress ->
-                    print("\rDiscovered ${progress.foldersDiscovered} folders...")
+            if (useCachedDiscovery) {
+                val entry = requireNotNull(cachedDiscovery)
+                result = entry.payload.toDiscoveryResult()
+                cachePath = entry.cacheFile
+                println()
+                println("Using cached discovery from ${entry.payload.createdAt} (${formatAge(entry.age)} old)")
+                println("Cache file: $cachePath")
+                println()
+                printDiscoverySummary(result)
+            } else {
+                println()
+                println("Starting folder discovery...")
+                println("(This scans folder structure only - no file content is read)")
+                println()
+
+                val discovery = FolderDiscovery(
+                    maxDepth = maxDepth,
+                    progressCallback = { progress: DiscoveryProgress ->
+                        print("\rDiscovered ${progress.foldersDiscovered} folders...")
+                    }
+                )
+
+                result = discovery.discover(rootPaths)
+                println()
+                println()
+                printDiscoverySummary(result)
+
+                cachePath = try {
+                    val payload = CachedDiscoveryPayload(
+                        host = host,
+                        osType = osType,
+                        rootPaths = rootPaths.map { it.toAbsolutePath().normalize().toString() },
+                        maxDepth = maxDepth,
+                        createdAt = Instant.now(),
+                        discoveryDurationMs = result.durationMs,
+                        totalFolders = result.totalFolders,
+                        skippedFolders = result.skippedFolders,
+                        errorCount = result.errorCount,
+                        folders = result.folders
+                    )
+                    discoveryCache.save(payload)
+                } catch (e: Exception) {
+                    log.warn("Failed to save discovery cache", e)
+                    discoveryCache.cachePath()
                 }
-            )
 
-            val result = discovery.discover(rootPaths)
-
-            println()
-            println()
-            println("-".repeat(60))
-            println("Discovery Complete!")
-            println("-".repeat(60))
-            println("Folders discovered: ${result.totalFolders}")
-            println("Folders skipped (system): ${result.skippedFolders}")
-            println("Errors: ${result.errorCount}")
-            println("Duration: ${result.durationMs}ms")
-            println()
-
-            // Show summary by suggested status
-            val bySuggestion = result.folders.groupBy { it.suggestedStatus }
-            println("Suggested classifications:")
-            println("  SKIP (caches, build dirs): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.SKIP]?.size ?: 0}")
-            println("  LOCATE (metadata only): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.LOCATE]?.size ?: 0}")
-            println("  INDEX (full text): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.INDEX]?.size ?: 0}")
-            println("  UNKNOWN (to classify): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.UNKNOWN]?.size ?: 0}")
-            println()
+                println("Cached discovery snapshot: $cachePath")
+                println()
+            }
 
             // Upload to server
             println("Uploading discovery results to server...")
@@ -420,9 +456,62 @@ fun main(args: Array<String>) {
             } catch (e: Exception) {
                 println()
                 println("ERROR: Failed to upload discovery results: ${e.message}")
+                println("Cached discovery snapshot retained at: $cachePath")
                 log.error("Upload failed", e)
                 System.exit(1)
             }
+        }
+
+        private fun shouldUseCachedDiscovery(
+            skipPrompt: Boolean,
+            entry: com.oconeco.remotecrawler.discovery.CachedDiscoveryEntry
+        ): Boolean {
+            if (skipPrompt) {
+                println("Using recent cached discovery by default (use --fresh to bypass).")
+                return true
+            }
+
+            println("Recent cached discovery found:")
+            println("  File: ${entry.cacheFile}")
+            println("  Created: ${entry.payload.createdAt}")
+            println("  Age: ${formatAge(entry.age)}")
+            println("  Roots: ${entry.payload.rootPaths.joinToString(", ")}")
+            println("  Folders: ${entry.payload.totalFolders}")
+            println()
+            print("Load cached discovery instead of running a fresh crawl? [Y/n]: ")
+            val response = readLine()?.trim()?.lowercase()
+            return response != "n" && response != "no" && response != "fresh" && response != "f"
+        }
+
+        private fun printDiscoverySummary(result: DiscoveryResult) {
+            println("-".repeat(60))
+            println("Discovery Complete!")
+            println("-".repeat(60))
+            println("Folders discovered: ${result.totalFolders}")
+            println("Folders skipped (system): ${result.skippedFolders}")
+            println("Errors: ${result.errorCount}")
+            println("Duration: ${result.durationMs}ms")
+            println()
+
+            val bySuggestion = result.folders.groupBy { it.suggestedStatus }
+            println("Suggested classifications:")
+            println("  SKIP (caches, build dirs): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.SKIP]?.size ?: 0}")
+            println("  LOCATE (metadata only): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.LOCATE]?.size ?: 0}")
+            println("  INDEX (full text): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.INDEX]?.size ?: 0}")
+            println("  UNKNOWN (to classify): ${bySuggestion[com.oconeco.remotecrawler.discovery.SuggestedStatus.UNKNOWN]?.size ?: 0}")
+            println()
+        }
+
+        private fun formatAge(age: Duration): String {
+            val totalMinutes = age.toMinutes().coerceAtLeast(0)
+            val days = totalMinutes / (60 * 24)
+            val hours = (totalMinutes % (60 * 24)) / 60
+            val minutes = totalMinutes % 60
+            return buildString {
+                if (days > 0) append("${days}d ")
+                if (hours > 0 || days > 0) append("${hours}h ")
+                append("${minutes}m")
+            }.trim()
         }
 
         private fun selectPathsInteractively(): List<java.nio.file.Path> {
