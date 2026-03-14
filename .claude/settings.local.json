@@ -15,7 +15,8 @@
       "Bash(grep:*)",
       "Bash(./gradlew compileKotlin:*)",
       "Bash(chmod:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(ls:*)"
     ]
   }
 }

@@ -9,6 +9,9 @@ application-local.yml
 logs/
 .DS_Store
 
+!/.claude/settings.local.json
+
+
 ## IntelliJ IDEA
 .idea
 *.iws
@@ -39,4 +42,3 @@ bin/
 /dist/
 /nbdist/
 /.nb-gradle/
-!/.claude/settings.local.json
