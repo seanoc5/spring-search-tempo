@@ -159,6 +159,11 @@
                             <i class="bi bi-tag"></i>
                             <span>[[#{annotation.list.headline}]]</span>
                         </a>
+                        <a th:href="@{/conceptHierarchies/oconeco}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/conceptHierarchies')} ? 'active' : ''">
+                            <i class="bi bi-diagram-3"></i>
+                            <span>Concept Hierarchies</span>
+                        </a>
                     </div>
 
                     <!-- Administration -->

@@ -1,3 +1,7 @@
+DELETE FROM concept_node;
+
+DELETE FROM concept_hierarchy;
+
 DELETE FROM fsfile;
 
 DELETE FROM content_chunks;

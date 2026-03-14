@@ -74,6 +74,7 @@ dependencies {
     // Apache Tika for text extraction from various file formats
     implementation("org.apache.tika:tika-core:2.9.1")
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
+    implementation("org.apache.poi:poi-ooxml:5.4.1")
 
     // Stanford CoreNLP for NLP processing (Named Entity Recognition, POS tagging, parsing)
     implementation("edu.stanford.nlp:stanford-corenlp:4.5.5")

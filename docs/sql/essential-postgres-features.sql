@@ -337,6 +337,20 @@ BEGIN
     END IF;
 END $$;
 
+-- ConceptHierarchy source_system (if table exists)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'concept_hierarchy'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'concept_hierarchy_source_system_check'
+    ) THEN
+        ALTER TABLE concept_hierarchy
+            ADD CONSTRAINT concept_hierarchy_source_system_check
+            CHECK (source_system IN ('OCONECO', 'OPENALEX'));
+    END IF;
+END $$;
+
 -- =============================================================================
 -- 9. SEED DATA (Optional)
 -- =============================================================================
