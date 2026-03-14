@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -19,12 +20,47 @@ class ConceptHierarchyController(
 
     companion object {
         private val log = LoggerFactory.getLogger(ConceptHierarchyController::class.java)
+        private const val DEFAULT_HIERARCHY = "OCONECO"
     }
 
-    @GetMapping("/oconeco")
-    fun oconecoPage(model: Model): String {
-        model.addAttribute("hierarchy", conceptHierarchyService.getHierarchySummary("OCONECO"))
-        return "conceptHierarchy/oconeco"
+    @GetMapping
+    fun index(): String = "redirect:/conceptHierarchies/$DEFAULT_HIERARCHY"
+
+    @GetMapping("/{code}")
+    fun hierarchyPage(
+        @PathVariable code: String,
+        @RequestParam(name = "nodeId", required = false) nodeId: Long?,
+        @RequestParam(name = "q", required = false) query: String?,
+        @RequestParam(name = "scope", required = false, defaultValue = "current") scope: String,
+        model: Model
+    ): String {
+        val hierarchyCode = code.uppercase()
+        val globalSearch = scope.equals("all", ignoreCase = true)
+        model.addAttribute("hierarchies", conceptHierarchyService.listHierarchies())
+        model.addAttribute("hierarchy", conceptHierarchyService.getHierarchySummary(hierarchyCode))
+        model.addAttribute("selectedHierarchyCode", hierarchyCode)
+        model.addAttribute("selectedNodeId", nodeId)
+        model.addAttribute("query", query ?: "")
+        model.addAttribute("searchScope", if (globalSearch) "all" else "current")
+
+        if (nodeId != null) {
+            val nodeDetail = conceptHierarchyService.getNodeDetail(nodeId)
+            model.addAttribute("nodeDetail", nodeDetail)
+            if (nodeDetail.node.hierarchyCode != hierarchyCode) {
+                return "redirect:/conceptHierarchies/${nodeDetail.node.hierarchyCode}?nodeId=${nodeId}"
+            }
+        } else {
+            model.addAttribute("rootNodes", conceptHierarchyService.getRootNodes(hierarchyCode))
+        }
+
+        if (!query.isNullOrBlank()) {
+            model.addAttribute(
+                "searchResults",
+                conceptHierarchyService.search(query, if (globalSearch) null else hierarchyCode, limit = 100)
+            )
+        }
+
+        return "conceptHierarchy/workspace"
     }
 
     @PostMapping("/oconeco/import")

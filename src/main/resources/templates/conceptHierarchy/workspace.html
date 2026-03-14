@@ -1,0 +1,206 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Concept Hierarchies</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+            <li class="breadcrumb-item active">Concept Hierarchies</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center mb-4 gap-3">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-diagram-3 me-2"></i>Concept Hierarchies
+        </h1>
+        <form th:action="@{/conceptHierarchies/oconeco/import}" method="post" enctype="multipart/form-data"
+              class="d-flex flex-wrap align-items-center gap-2">
+            <input class="form-control" type="file" name="file" accept=".xlsx,.xlsm,.xls" required style="max-width: 280px;">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-upload me-1"></i>Import OconEco XLSX
+            </button>
+        </form>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-3">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Hierarchies</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    <a th:each="option : ${hierarchies}"
+                       th:href="@{/conceptHierarchies/{code}(code=${option.code})}"
+                       class="list-group-item list-group-item-action"
+                       th:classappend="${option.code == selectedHierarchyCode} ? 'active' : ''">
+                        <div class="fw-semibold" th:text="${option.label}">OconEco</div>
+                        <div class="small opacity-75" th:text="${option.code}">OCONECO</div>
+                    </a>
+                </div>
+                <div class="card-body border-top">
+                    <dl class="row mb-0 small">
+                        <dt class="col-6">Active Nodes</dt>
+                        <dd class="col-6" th:text="${hierarchy.activeNodeCount}">0</dd>
+                        <dt class="col-6">Root Nodes</dt>
+                        <dd class="col-6" th:text="${hierarchy.rootNodeCount}">0</dd>
+                        <dt class="col-6">Last Import</dt>
+                        <dd class="col-6" th:text="${hierarchy.lastImportedAt != null ? #temporals.format(hierarchy.lastImportedAt, 'yyyy-MM-dd HH:mm') : 'Never'}">Never</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Navigation</h5>
+                    <a class="btn btn-sm btn-outline-secondary"
+                       th:href="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode})}">
+                        <i class="bi bi-house-door me-1"></i>Roots
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div th:if="${nodeDetail != null}">
+                        <nav aria-label="Node breadcrumb" class="mb-3">
+                            <ol class="breadcrumb mb-0">
+                                <li class="breadcrumb-item" th:each="crumb, iter : ${nodeDetail.breadcrumbs}">
+                                    <a th:if="${!iter.last}"
+                                       th:href="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode}, nodeId=${crumb.id})}"
+                                       th:text="${crumb.label}">Node</a>
+                                    <span th:if="${iter.last}" th:text="${crumb.label}">Node</span>
+                                </li>
+                            </ol>
+                        </nav>
+
+                        <div class="border rounded p-3 mb-3 bg-light-subtle">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <h4 class="mb-1" th:text="${nodeDetail.node.label}">Node Label</h4>
+                                    <div class="text-muted small mb-2">
+                                        <span th:text="${nodeDetail.node.externalKey}">KEY</span>
+                                        <span th:if="${nodeDetail.node.depthLevel != null}" th:text="| • depth ${nodeDetail.node.depthLevel}|"></span>
+                                    </div>
+                                </div>
+                                <span class="badge text-bg-secondary" th:text="${nodeDetail.node.hierarchyLabel}">OconEco</span>
+                            </div>
+                            <p class="mb-2" th:if="${nodeDetail.node.description != null}" th:text="${nodeDetail.node.description}">Description</p>
+                            <dl class="row mb-0 small">
+                                <dt class="col-sm-3">Address</dt>
+                                <dd class="col-sm-9" th:text="${nodeDetail.node.address ?: '-'}">-</dd>
+                                <dt class="col-sm-3">Path</dt>
+                                <dd class="col-sm-9 text-break" th:text="${nodeDetail.node.path ?: '-'}">-</dd>
+                                <dt class="col-sm-3">Children</dt>
+                                <dd class="col-sm-9" th:text="${nodeDetail.children.size()}">0</dd>
+                            </dl>
+                        </div>
+
+                        <h6>Children</h6>
+                        <div class="list-group" th:if="${!#lists.isEmpty(nodeDetail.children)}">
+                            <a th:each="child : ${nodeDetail.children}"
+                               th:href="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode}, nodeId=${child.id})}"
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="fw-semibold" th:text="${child.label}">Child</div>
+                                        <div class="small text-muted">
+                                            <span th:text="${child.externalKey}">KEY</span>
+                                            <span th:if="${child.address != null}" th:text="| • ${child.address}|"></span>
+                                        </div>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-light" th:text="${child.childCount}">0</span>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="text-muted" th:if="${#lists.isEmpty(nodeDetail.children)}">This node has no active children.</div>
+                    </div>
+
+                    <div th:if="${nodeDetail == null}">
+                        <h6 class="mb-3">Root Nodes</h6>
+                        <div class="list-group" th:if="${!#lists.isEmpty(rootNodes)}">
+                            <a th:each="node : ${rootNodes}"
+                               th:href="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode}, nodeId=${node.id})}"
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="fw-semibold" th:text="${node.label}">Root</div>
+                                        <div class="small text-muted">
+                                            <span th:text="${node.externalKey}">KEY</span>
+                                            <span th:if="${node.address != null}" th:text="| • ${node.address}|"></span>
+                                        </div>
+                                    </div>
+                                    <span class="badge rounded-pill text-bg-light" th:text="${node.childCount}">0</span>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="text-muted" th:if="${#lists.isEmpty(rootNodes)}">
+                            No active root nodes found in this hierarchy.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Search</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" th:action="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode})}" class="mb-3">
+                        <div class="input-group mb-2">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input class="form-control" type="text" name="q" th:value="${query}"
+                                   placeholder="Search labels, addresses, descriptions, paths">
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <select class="form-select" name="scope" style="max-width: 180px;">
+                                <option value="current" th:selected="${searchScope == 'current'}">Current hierarchy</option>
+                                <option value="all" th:selected="${searchScope == 'all'}">All hierarchies</option>
+                            </select>
+                            <button type="submit" class="btn btn-outline-primary">Search</button>
+                            <a class="btn btn-outline-secondary" th:href="@{/conceptHierarchies/{code}(code=${selectedHierarchyCode})}">Clear</a>
+                        </div>
+                    </form>
+
+                    <div th:if="${searchResults != null}">
+                        <div class="small text-muted mb-2">
+                            <span th:text="${#lists.size(searchResults)}">0</span> results
+                            <span th:text="${searchScope == 'all' ? ' across all hierarchies' : ' in this hierarchy'}"></span>
+                        </div>
+                        <div class="list-group" th:if="${!#lists.isEmpty(searchResults)}">
+                            <a th:each="result : ${searchResults}"
+                               th:href="@{/conceptHierarchies/{code}(code=${result.hierarchyCode}, nodeId=${result.id}, q=${query}, scope=${searchScope})}"
+                               class="list-group-item list-group-item-action">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="fw-semibold" th:text="${result.label}">Result</div>
+                                        <div class="small text-muted">
+                                            <span th:text="${result.hierarchyLabel}">OconEco</span>
+                                            <span th:text="| • ${result.externalKey}|"></span>
+                                        </div>
+                                        <div class="small text-muted" th:if="${result.address != null}" th:text="${result.address}">Address</div>
+                                        <div class="small text-muted text-break" th:if="${result.path != null}" th:text="${result.path}">Path</div>
+                                        <div class="small mt-1" th:if="${result.description != null}" th:text="${result.description}">Description</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="text-muted" th:if="${#lists.isEmpty(searchResults)}">
+                            No concept nodes matched the current search.
+                        </div>
+                    </div>
+
+                    <div class="text-muted" th:if="${searchResults == null}">
+                        Search within the active hierarchy or across every hierarchy at once.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

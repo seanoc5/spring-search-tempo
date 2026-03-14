@@ -3,6 +3,10 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.ConceptHierarchyService
 import com.oconeco.spring_search_tempo.base.domain.ConceptHierarchy
 import com.oconeco.spring_search_tempo.base.domain.ConceptNode
+import com.oconeco.spring_search_tempo.base.model.ConceptHierarchyOption
+import com.oconeco.spring_search_tempo.base.model.ConceptNodeDetail
+import com.oconeco.spring_search_tempo.base.model.ConceptNodeSummary
+import com.oconeco.spring_search_tempo.base.model.ConceptSearchResult
 import com.oconeco.spring_search_tempo.base.model.ConceptHierarchySummary
 import com.oconeco.spring_search_tempo.base.model.OconecoImportResult
 import com.oconeco.spring_search_tempo.base.repos.ConceptHierarchyRepository
@@ -46,6 +50,15 @@ class ConceptHierarchyServiceImpl(
     }
 
     @Transactional(readOnly = true)
+    override fun listHierarchies(): List<ConceptHierarchyOption> =
+        conceptHierarchyRepository.findAllByOrderByLabelAsc().map { hierarchy ->
+            ConceptHierarchyOption(
+                code = requireNotNull(hierarchy.code),
+                label = requireNotNull(hierarchy.label)
+            )
+        }
+
+    @Transactional(readOnly = true)
     override fun getHierarchySummary(code: String): ConceptHierarchySummary {
         val hierarchy = getHierarchy(code)
         return ConceptHierarchySummary(
@@ -56,6 +69,50 @@ class ConceptHierarchyServiceImpl(
             rootNodeCount = conceptNodeRepository.countByHierarchyCodeAndParentIsNullAndActiveTrue(code),
             lastImportedAt = hierarchy.lastImportedAt
         )
+    }
+
+    @Transactional(readOnly = true)
+    override fun getRootNodes(hierarchyCode: String): List<ConceptNodeSummary> =
+        conceptNodeRepository.findAllByHierarchyCodeAndParentIsNullAndActiveTrueOrderByLabelAsc(hierarchyCode)
+            .map { node -> toSummary(node, childCount = childCount(node)) }
+
+    @Transactional(readOnly = true)
+    override fun getNodeDetail(nodeId: Long): ConceptNodeDetail {
+        val node = conceptNodeRepository.findWithHierarchyAndParentById(nodeId)
+            ?: throw NotFoundException("Concept node not found: $nodeId")
+        val breadcrumbs = buildBreadcrumbs(node)
+        val children = conceptNodeRepository.findAllByParentIdAndActiveTrueOrderByLabelAsc(requireNotNull(node.id))
+            .map { child -> toSummary(child, childCount = childCount(child)) }
+        return ConceptNodeDetail(
+            node = toSummary(node, childCount = children.size),
+            breadcrumbs = breadcrumbs,
+            children = children
+        )
+    }
+
+    @Transactional(readOnly = true)
+    override fun search(query: String, hierarchyCode: String?, limit: Int): List<ConceptSearchResult> {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isBlank()) {
+            return emptyList()
+        }
+        val nodes = if (hierarchyCode.isNullOrBlank()) {
+            conceptNodeRepository.searchActive(normalizedQuery)
+        } else {
+            conceptNodeRepository.searchActiveInHierarchy(hierarchyCode, normalizedQuery)
+        }
+        return nodes.take(limit).map { node ->
+            ConceptSearchResult(
+                id = requireNotNull(node.id),
+                hierarchyCode = requireNotNull(node.hierarchy?.code),
+                hierarchyLabel = requireNotNull(node.hierarchy?.label),
+                externalKey = requireNotNull(node.externalKey),
+                label = requireNotNull(node.label),
+                description = node.description,
+                address = node.address,
+                path = node.path
+            )
+        }
     }
 
     override fun importOconecoHierarchy(inputStream: InputStream, originalFilename: String?): OconecoImportResult {
@@ -239,6 +296,35 @@ class ConceptHierarchyServiceImpl(
 
     private fun getHierarchy(code: String): ConceptHierarchy =
         conceptHierarchyRepository.findByCode(code) ?: throw NotFoundException("Concept hierarchy not found: $code")
+
+    private fun buildBreadcrumbs(node: ConceptNode): List<ConceptNodeSummary> {
+        val breadcrumbs = mutableListOf<ConceptNodeSummary>()
+        var current: ConceptNode? = node
+        while (current != null) {
+            breadcrumbs += toSummary(current, childCount = childCount(current))
+            current = current.parent?.id?.let { conceptNodeRepository.findWithHierarchyAndParentById(it) }
+        }
+        return breadcrumbs.asReversed()
+    }
+
+    private fun toSummary(node: ConceptNode, childCount: Int): ConceptNodeSummary =
+        ConceptNodeSummary(
+            id = requireNotNull(node.id),
+            hierarchyCode = requireNotNull(node.hierarchy?.code),
+            hierarchyLabel = requireNotNull(node.hierarchy?.label),
+            externalKey = requireNotNull(node.externalKey),
+            label = requireNotNull(node.label),
+            description = node.description,
+            address = node.address,
+            path = node.path,
+            depthLevel = node.depthLevel,
+            active = node.active,
+            leaf = node.leaf,
+            childCount = childCount
+        )
+
+    private fun childCount(node: ConceptNode): Int =
+        if (node.id == null) 0 else conceptNodeRepository.findAllByParentIdAndActiveTrueOrderByLabelAsc(node.id!!).size
 
     private fun buildNodeUri(hierarchy: ConceptHierarchy, externalKey: String): String {
         val hierarchyCode = requireNotNull(hierarchy.code).lowercase()

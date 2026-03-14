@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface ConceptHierarchyRepository : JpaRepository<ConceptHierarchy, Long> {
 
+    fun findAllByOrderByLabelAsc(): List<ConceptHierarchy>
+
     fun existsByCode(code: String): Boolean
 
     fun findByCode(code: String): ConceptHierarchy?
