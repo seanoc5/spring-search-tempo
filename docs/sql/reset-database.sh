@@ -107,10 +107,10 @@ psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SCRIPT_DIR/ess
 if [ "$SEED_DATA" = true ]; then
     echo ""
     echo ">>> Step 4: Applying seed data..."
-    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SCRIPT_DIR/012-seed-crawl-configs.sql"
+    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SCRIPT_DIR/archive/012-seed-crawl-configs.sql"
 
-    if [ -f "$SCRIPT_DIR/034-seed-user-ownership.sql" ]; then
-        psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SCRIPT_DIR/034-seed-user-ownership.sql"
+    if [ -f "$SCRIPT_DIR/archive/034-seed-user-ownership.sql" ]; then
+        psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SCRIPT_DIR/archive/034-seed-user-ownership.sql"
     fi
     echo "    Seed data applied."
 fi

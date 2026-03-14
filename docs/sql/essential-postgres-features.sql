@@ -344,8 +344,8 @@ END $$;
 -- =============================================================================
 
 -- \echo '>>> Applying seed data...'
--- \ir 012-seed-crawl-configs.sql
--- \ir 034-seed-user-ownership.sql
+-- \ir archive/012-seed-crawl-configs.sql
+-- \ir archive/034-seed-user-ownership.sql
 
 -- =============================================================================
 -- DONE
@@ -354,6 +354,6 @@ END $$;
 \echo '=== PostgreSQL features applied successfully ==='
 \echo ''
 \echo 'Next steps:'
-\echo '  - Optionally run seed data: psql -f docs/sql/012-seed-crawl-configs.sql'
+\echo '  - Optionally run seed data: psql -f docs/sql/archive/012-seed-crawl-configs.sql'
 \echo '  - Refresh search stats: SELECT refresh_search_stats();'
 \echo ''
