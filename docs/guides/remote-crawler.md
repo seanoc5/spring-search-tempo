@@ -20,22 +20,24 @@ The Remote Crawler CLI enables distributed crawling from remote hosts (Windows, 
 
 ```bash
 # Using GitHub CLI
-gh release download remote-crawler-v0.5.3 -R seanoc5/spring-search-tempo
+gh release download remote-crawler-v<version> -R seanoc5/spring-search-tempo
 
 # Or curl
-curl -LO https://github.com/seanoc5/spring-search-tempo/releases/download/remote-crawler-v0.5.3/remote-crawler-0.5.3.jar
+curl -LO https://github.com/seanoc5/spring-search-tempo/releases/download/remote-crawler-v<version>/remote-crawler-<version>.jar
 ```
+
+`<version>` may be the app version itself (for example `0.5.3`) or a remote-crawler hotfix release on the same compatibility line (for example `0.5.3.1`).
 
 ### 2. Test connectivity
 
 ```bash
-java -jar remote-crawler-0.5.3.jar -s https://your-server -u admin -p password test
+java -jar remote-crawler-<version>.jar -s https://your-server -u admin -p password test
 ```
 
 ### 3. Run a crawl
 
 ```bash
-java -jar remote-crawler-0.5.3.jar -s https://your-server -u admin -p password crawl
+java -jar remote-crawler-<version>.jar -s https://your-server -u admin -p password crawl
 ```
 
 ## CLI Commands
@@ -52,16 +54,16 @@ java -jar remote-crawler-0.5.3.jar -s https://your-server -u admin -p password c
 
 ```bash
 # Short mode - explicit pattern matches only
-java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID>
+java -jar remote-crawler-<version>.jar -s https://minti9 dry-run -c <CONFIG_ID>
 
 # Detailed mode - all folders
-java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed
+java -jar remote-crawler-<version>.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed
 
 # Filter to specific status
-java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --status INDEX
+java -jar remote-crawler-<version>.jar -s https://minti9 dry-run -c <CONFIG_ID> --status INDEX
 
 # Export to JSON
-java -jar remote-crawler-0.5.3.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed -o plan.json
+java -jar remote-crawler-<version>.jar -s https://minti9 dry-run -c <CONFIG_ID> --detailed -o plan.json
 ```
 
 ## Server API Endpoints
@@ -109,6 +111,7 @@ This avoids URI collisions across hosts and allows local and remote records to c
 ```bash
 cd remote-crawler-cli
 ./release.sh 0.5.4           # Build, tag, and create GitHub release
+./release.sh 0.5.4.1         # Remote-crawler hotfix on the 0.5.4 compatibility line
 ./release.sh 0.5.4 --build-only  # Just build, no git/GitHub
 ./release.sh 0.5.4 --no-push     # Build and tag locally
 ```
@@ -128,7 +131,10 @@ The workflow (`.github/workflows/publish-remote-crawler.yml`):
 3. Creates/updates GitHub release
 4. Uploads both files as assets
 
-**Note**: Release version must match the app version in `gradle.properties`.
+**Compatibility rule**:
+- The remote crawler release must share the same `major.minor.patch` as the app version.
+- Example: if the app is `0.5.3`, valid remote crawler releases include `0.5.3` and `0.5.3.1`.
+- Prefer a new hotfix tag such as `remote-crawler-v0.5.3.1` over rewriting an existing tag.
 
 ## Windows Scheduled Task Setup
 

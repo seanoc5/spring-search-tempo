@@ -8,6 +8,7 @@ Usage:
 
 Example:
   scripts/remote/release-remote-crawler.sh 0.5.3
+  scripts/remote/release-remote-crawler.sh 0.5.3.1
 
 Options:
   --no-push      Create local tag only (do not push branch/tag)
@@ -15,7 +16,7 @@ Options:
   --skip-build   Skip local jar build/checksum generation
   -h, --help     Show this help
 
-The remote crawler version must match the root app version.
+The remote crawler version must share the same major.minor.patch as the root app version.
 EOF
 }
 
@@ -25,6 +26,15 @@ require_cmd() {
     echo "ERROR: Required command not found: $cmd" >&2
     exit 1
   fi
+}
+
+base_triplet() {
+  local version="$1"
+  if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?(-[0-9A-Za-z]+)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
 }
 
 VERSION="${1:-}"
@@ -62,8 +72,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z]+)?$ ]]; then
-  echo "ERROR: Version must look like 0.5.3 (or 0.5.3-rc1)." >&2
+if ! RELEASE_BASE="$(base_triplet "$VERSION")"; then
+  echo "ERROR: Version must look like 0.5.3, 0.5.3.1, or 0.5.3-rc1." >&2
   exit 1
 fi
 
@@ -75,8 +85,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 APP_VERSION="$(./gradlew -q printAppVersion)"
-if [[ "$VERSION" != "$APP_VERSION" ]]; then
-  echo "ERROR: Remote crawler version ${VERSION} must match app version ${APP_VERSION}." >&2
+if ! APP_BASE="$(base_triplet "$APP_VERSION")"; then
+  echo "ERROR: App version ${APP_VERSION} is not in a supported format." >&2
+  exit 1
+fi
+if [[ "$RELEASE_BASE" != "$APP_BASE" ]]; then
+  echo "ERROR: Remote crawler version ${VERSION} must share major.minor.patch with app version ${APP_VERSION}." >&2
   exit 1
 fi
 
@@ -101,6 +115,7 @@ if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}$"; then
 fi
 
 echo "Release version: ${VERSION}"
+echo "Compatibility:  ${RELEASE_BASE}.x (app ${APP_VERSION})"
 echo "Release tag:     ${TAG}"
 echo "Branch:          $(git rev-parse --abbrev-ref HEAD)"
 

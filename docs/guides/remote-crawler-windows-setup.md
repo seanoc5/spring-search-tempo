@@ -22,12 +22,14 @@ New-Item -Path "C:\Tempo\remote-crawler" -ItemType Directory -Force
 **Option A: From GitHub Release**
 ```powershell
 # Requires GitHub CLI (gh)
-gh release download remote-crawler-v0.5.3 -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
+gh release download remote-crawler-v<version> -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
 ```
 
 **Option B: Manual download**
-- Download `remote-crawler-0.5.3.jar` from [GitHub Releases](https://github.com/seanoc5/spring-search-tempo/releases)
+- Download `remote-crawler-<version>.jar` from [GitHub Releases](https://github.com/seanoc5/spring-search-tempo/releases)
 - Copy to `C:\Tempo\remote-crawler\`
+
+`<version>` may be the app version itself or a remote-crawler hotfix release on the same compatibility line, such as `0.5.3.1` when the app version is `0.5.3`.
 
 ### 3. Copy the PowerShell scripts
 
@@ -71,7 +73,7 @@ Create `C:\Tempo\remote-crawler\config.json`:
 
 ```powershell
 cd C:\Tempo\remote-crawler
-java -jar remote-crawler-0.5.3.jar -s https://your-server -u admin -p password status
+java -jar remote-crawler-<version>.jar -s https://your-server -u admin -p password status
 ```
 
 You should see your assigned crawl configurations.
@@ -121,7 +123,7 @@ This creates a task that runs every 4 hours by default.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `-Mode` | `crawl` | Operation: `crawl`, `status`, or `onboard` |
-| `-JarPath` | `C:\Tempo\remote-crawler\remote-crawler-0.5.3.jar` | Path to JAR file |
+| `-JarPath` | `C:\Tempo\remote-crawler\remote-crawler-<version>.jar` | Path to JAR file |
 | `-ServerUrl` | (from config) | Spring Search Tempo server URL |
 | `-Username` | (from config) | Authentication username |
 | `-Password` | (from config) | Authentication password |
@@ -226,7 +228,7 @@ After setup, your installation should look like:
 
 ```
 C:\Tempo\remote-crawler\
-├── remote-crawler-0.5.3.jar         # The crawler application
+├── remote-crawler-<version>.jar     # The crawler application
 ├── run-remote-crawler.ps1           # Runner script (called by task)
 ├── install-remote-crawler-task.ps1  # Installer (run once)
 ├── update-remote-crawler.ps1        # Auto-update script
@@ -296,10 +298,15 @@ If you prefer manual updates:
 
 ```powershell
 # Download new version
-gh release download remote-crawler-v0.5.3 -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
+gh release download remote-crawler-v<version> -R seanoc5/spring-search-tempo -D "C:\Tempo\remote-crawler"
 
 # Edit run-remote-crawler.ps1 to update JarPath default
 ```
+
+**Compatibility rule**:
+- The remote crawler release must share the same `major.minor.patch` as the app version.
+- Example: if the app is `0.5.3`, valid remote crawler releases include `0.5.3` and `0.5.3.1`.
+- The update script now understands both 3-part and 4-part remote crawler versions.
 
 ## Appendix: Installing GitHub CLI (gh)
 

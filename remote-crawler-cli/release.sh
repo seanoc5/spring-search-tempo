@@ -10,6 +10,7 @@
 #
 # Examples:
 #   ./release.sh 0.5.4
+#   ./release.sh 0.5.4.1
 #   ./release.sh 0.5.4 --build-only
 #
 # =============================================================================
@@ -18,6 +19,15 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+base_triplet() {
+    local version="$1"
+    if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?(-[a-zA-Z0-9]+)?$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    return 1
+}
 
 # Colors for output
 RED='\033[0;31m'
@@ -60,10 +70,20 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-# Validate version format (semver-ish)
-if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+# Validate version format (semver-ish with optional fourth numeric segment)
+if ! RELEASE_BASE="$(base_triplet "$VERSION")"; then
     echo -e "${RED}Invalid version format: $VERSION${NC}"
-    echo "Expected format: X.Y.Z or X.Y.Z-suffix (e.g., 0.5.4, 1.0.0-beta)"
+    echo "Expected format: X.Y.Z, X.Y.Z.N, or X.Y.Z-suffix (e.g., 0.5.4, 0.5.4.1, 1.0.0-beta)"
+    exit 1
+fi
+
+APP_VERSION="$(cd "$PROJECT_ROOT" && ./gradlew -q printAppVersion)"
+if ! APP_BASE="$(base_triplet "$APP_VERSION")"; then
+    echo -e "${RED}App version format is unsupported: $APP_VERSION${NC}"
+    exit 1
+fi
+if [[ "$RELEASE_BASE" != "$APP_BASE" ]]; then
+    echo -e "${RED}Remote crawler version $VERSION must share major.minor.patch with app version $APP_VERSION${NC}"
     exit 1
 fi
 
@@ -74,6 +94,7 @@ echo "========================================"
 echo "Remote Crawler CLI Release"
 echo "========================================"
 echo "Version:    $VERSION"
+echo "Compatible: ${RELEASE_BASE}.x (app $APP_VERSION)"
 echo "JAR:        $JAR_NAME"
 echo "Tag:        $TAG_NAME"
 echo "Build only: $BUILD_ONLY"

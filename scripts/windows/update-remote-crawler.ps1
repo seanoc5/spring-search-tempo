@@ -10,8 +10,9 @@ $ErrorActionPreference = "Stop"
 
 function Get-SemanticVersion {
     param([string]$VersionString)
-    # Extract version like "0.5.3" from strings like "remote-crawler-0.5.3.jar" or "remote-crawler-v0.5.3"
-    if ($VersionString -match '(\d+\.\d+\.\d+)') {
+    # Extract version like "0.5.3" or "0.5.3.1" from strings like
+    # "remote-crawler-0.5.3.jar" or "remote-crawler-v0.5.3.1"
+    if ($VersionString -match '(\d+\.\d+\.\d+(?:\.\d+)?)') {
         return [version]$Matches[1]
     }
     return $null
@@ -54,7 +55,7 @@ function Get-LatestRelease {
 
     # Find latest remote-crawler release
     foreach ($line in $releases -split "`n") {
-        if ($line -match 'remote-crawler-v(\d+\.\d+\.\d+)') {
+        if ($line -match 'remote-crawler-v(\d+\.\d+\.\d+(?:\.\d+)?)') {
             $tag = "remote-crawler-v$($Matches[1])"
             $version = [version]$Matches[1]
             return @{
@@ -81,7 +82,7 @@ function Update-RunnerScript {
     $content = Get-Content $ScriptPath -Raw
 
     # Update the default JarPath
-    $updated = $content -replace 'remote-crawler-\d+\.\d+\.\d+\.jar', $NewJarName
+    $updated = $content -replace 'remote-crawler-\d+\.\d+\.\d+(?:\.\d+)?\.jar', $NewJarName
 
     if ($updated -ne $content) {
         Set-Content -Path $ScriptPath -Value $updated -NoNewline

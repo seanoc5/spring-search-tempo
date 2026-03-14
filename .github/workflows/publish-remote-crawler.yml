@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish; must match the app version (example: 0.5.3)"
+        description: "Version to publish; must share app major.minor.patch (example: 0.5.3 or 0.5.3.1)"
         required: true
         type: string
       make_latest:
@@ -55,14 +55,30 @@ jobs:
           echo "sha=remote-crawler-${version}.jar.sha256" >> "$GITHUB_OUTPUT"
           echo "latest=${latest}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify release version matches app version
+      - name: Verify release version matches app compatibility line
         shell: bash
         run: |
           set -euo pipefail
+          base_triplet() {
+            local version="$1"
+            if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?(-[0-9A-Za-z]+)?$ ]]; then
+              printf '%s\n' "${BASH_REMATCH[1]}"
+              return 0
+            fi
+            return 1
+          }
           app_version="$(./gradlew -q printAppVersion)"
           release_version="${{ steps.release.outputs.version }}"
-          if [[ "$app_version" != "$release_version" ]]; then
-            echo "Release version $release_version does not match app version $app_version" >&2
+          app_base="$(base_triplet "$app_version")" || {
+            echo "Unsupported app version format: $app_version" >&2
+            exit 1
+          }
+          release_base="$(base_triplet "$release_version")" || {
+            echo "Unsupported release version format: $release_version" >&2
+            exit 1
+          }
+          if [[ "$app_base" != "$release_base" ]]; then
+            echo "Release version $release_version must share major.minor.patch with app version $app_version" >&2
             exit 1
           fi
 
