@@ -125,7 +125,7 @@
                         <span th:if="${discoverySession.status == 'CANCELLED'}" class="badge bg-secondary">Cancelled</span>
                         <span th:if="${discoverySession.status == 'ARCHIVED'}" class="badge bg-dark">Archived</span>
                     </td>
-                    <td th:text="${discoverySession.dateCreated}">2024-01-01</td>
+                    <td th:text="${discoverySession?.dateCreatedDate}">2024-01-01</td>
                     <td class="text-end">
                         <div class="btn-group btn-group-sm">
                             <a th:href="@{/discovery/{id}/classify(id=${discoverySession.id})}" class="btn btn-outline-primary">

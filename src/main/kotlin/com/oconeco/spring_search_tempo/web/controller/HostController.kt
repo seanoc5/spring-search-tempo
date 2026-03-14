@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import com.oconeco.spring_search_tempo.web.service.DiscoverySessionSummaryDTO
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -29,6 +30,7 @@ class HostController(
     private val folderService: FSFolderService,
     private val smartDeleteService: SmartDeleteService
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @GetMapping
     fun index(
@@ -36,6 +38,7 @@ class HostController(
         @RequestParam(name = "tab", required = false, defaultValue = "configs") tab: String,
         model: Model
     ): String {
+        log.debug(".... Retrieving host UI for host: $selectedHost, tab: $tab")
         val knownHosts = crawlConfigService.findDistinctSourceHosts()
         val currentHost = HostNameHolder.currentHostName
 
@@ -67,6 +70,7 @@ class HostController(
         @PathVariable(name = "host") host: String,
         model: Model
     ): String {
+        log.debug(".... Retrieving host configs for host: $host")
         loadConfigsTab(host, model)
         model.addAttribute("selectedHost", host)
         return "host/fragments :: configsTab"
@@ -77,6 +81,7 @@ class HostController(
         @PathVariable(name = "host") host: String,
         model: Model
     ): String {
+        log.debug(".... Retrieving host discovery sessions for host: $host")
         loadDiscoveryTab(host, model)
         model.addAttribute("selectedHost", host)
         return "host/fragments :: discoveryTab"
@@ -87,6 +92,7 @@ class HostController(
         @PathVariable(name = "host") host: String,
         model: Model
     ): String {
+        log.debug(".... Retrieving host content stats for host: $host")
         loadContentTab(host, model)
         model.addAttribute("selectedHost", host)
         return "host/fragments :: contentTab"
@@ -97,6 +103,7 @@ class HostController(
         @PathVariable(name = "host") host: String,
         redirectAttributes: RedirectAttributes
     ): String {
+        log.warn("Purging host: $host")
         return try {
             val summary = smartDeleteService.purgeSourceHost(host)
             redirectAttributes.addFlashAttribute(
@@ -111,6 +118,7 @@ class HostController(
     }
 
     private fun loadConfigsTab(host: String, model: Model) {
+        log.debug(".... Retrieving host configs for host: $host")
         // Get all configs for this host
         val allConfigs = crawlConfigService.findAll(null, Pageable.unpaged())
         val hostConfigs = allConfigs.content.filter {
@@ -129,11 +137,13 @@ class HostController(
     }
 
     private fun loadDiscoveryTab(host: String, model: Model) {
+        log.debug(".... Retrieving host discovery sessions for host: $host")
         val sessions = discoveryService.getSessionsForHost(host)
         model.addAttribute("discoverySessions", sessions)
     }
 
     private fun loadContentTab(host: String, model: Model) {
+        log.debug(".... Retrieving host content stats for host: $host")
         // Get aggregate stats for all configs on this host
         val allConfigs = crawlConfigService.findAll(null, Pageable.unpaged())
         val hostConfigIds = allConfigs.content

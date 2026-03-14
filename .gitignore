@@ -39,3 +39,4 @@ bin/
 /dist/
 /nbdist/
 /.nb-gradle/
+!/.claude/settings.local.json
