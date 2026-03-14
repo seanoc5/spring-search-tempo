@@ -20,7 +20,7 @@ Complete reference for building, running, and testing Spring Search Tempo.
 ./gradlew bootRun --args='--debug'
 ```
 
-**Access application**: http://localhost:8089
+**Access application**: http://localhost:8082
 
 **Custom local config**: Create `src/main/resources/application-local.yml`
 
@@ -29,7 +29,7 @@ Complete reference for building, running, and testing Spring Search Tempo.
 ```bash
 # Ctrl+C in terminal
 # Or find and kill process:
-lsof -i :8089
+lsof -i :8082
 kill -9 <PID>
 ```
 
@@ -123,7 +123,7 @@ kill -9 <PID>
   --imageName=com.oconeco/spring-search-tempo:1.0.0
 
 # Run built image
-docker run -p 8089:8089 com.oconeco/spring-search-tempo
+docker run -p 8082:8082 com.oconeco/spring-search-tempo
 ```
 
 ## Running Built JAR
@@ -195,7 +195,7 @@ PGPASSWORD=postgres psql -h localhost -p 5432 -U tempo -d tempo
 
 ```bash
 # Backup database
-pg_dump -h localhost -p 5433 -U postgres -d spring_search_tempo \
+pg_dump -h localhost -p 5432 -U tempo -d tempo \
         > backup_$(date +%Y%m%d).sql
 
 # Restore database
@@ -203,7 +203,7 @@ psql -h localhost -p 5432 -U tempo -d tempo \
      < backup_20251107.sql
 
 # Backup with compression
-pg_dump -h localhost -p 5433 -U postgres -d spring_search_tempo \
+pg_dump -h localhost -p 5432 -U tempo -d tempo \
         | gzip > backup_$(date +%Y%m%d).sql.gz
 ```
 
@@ -226,10 +226,10 @@ pg_dump -h localhost -p 5433 -U postgres -d spring_search_tempo \
 
 ```bash
 # Trigger NLP processing via REST API
-curl -X POST http://localhost:8089/api/nlp/process
+curl -X POST http://localhost:8082/api/nlp/process
 
 # Check NLP status
-curl http://localhost:8089/api/nlp/status
+curl http://localhost:8082/api/nlp/status
 
 # Disable NLP auto-trigger (in application.yml or command line)
 ./gradlew bootRun --args='--app.nlp.auto-trigger=false'
@@ -421,16 +421,16 @@ kill -3 <PID>
 
 ```bash
 # Health check
-curl http://localhost:8089/actuator/health
+curl http://localhost:8082/actuator/health
 
 # Application info
-curl http://localhost:8089/actuator/info
+curl http://localhost:8082/actuator/info
 
 # Metrics
-curl http://localhost:8089/actuator/metrics
+curl http://localhost:8082/actuator/metrics
 
 # Batch jobs
-curl http://localhost:8089/actuator/batch
+curl http://localhost:8082/actuator/batch
 ```
 
 ## CI/CD Commands
@@ -484,8 +484,8 @@ rm -rf build/generated/source/kapt
 ### Fix Port Conflicts
 
 ```bash
-# Find process using port 8089
-lsof -i :8089
+# Find process using port 8082
+lsof -i :8082
 
 # Kill process
 kill -9 <PID>
@@ -561,13 +561,13 @@ git diff --staged
 | Run tests | `./gradlew test`                                            |
 | Build JAR | `./gradlew build`                                           |
 | Start DB | `docker compose up -d`                                      |
-| Connect DB | `psql -h localhost -p 5432 -U tempo -d spring_search_tempo` |
+| Connect DB | `psql -h localhost -p 5432 -U tempo -d tempo` |
 | View logs | `docker compose logs -f postgres`                           |
 | Clean build | `./gradlew clean build`                                     |
 | Run specific test | `./gradlew test --tests TestName`                           |
 | Module verification | `./gradlew test --tests ModularityTest`                     |
 | Coverage report | `./gradlew test jacocoTestReport`                           |
-| Trigger NLP | `curl -X POST http://localhost:8089/api/nlp/process`        |
+| Trigger NLP | `curl -X POST http://localhost:8082/api/nlp/process`        |
 
 ## See Also
 

@@ -232,16 +232,17 @@ The chunk search endpoint returns NLP data:
 
 ### Database Migration
 
-For existing databases, run the migration script to update the FTS vector:
+NLP-related PostgreSQL features (FTS vectors, indexes, search functions) are included in the consolidated setup script:
 
 ```bash
-psql -h localhost -p 5432 -U tempo -d tempo -f docs/sql/003-add-nlp-to-fts.sql
+psql -h minti9 -p 5432 -U tempo -d tempo -f docs/sql/essential-postgres-features.sql
 ```
 
-This migration:
-1. Drops and recreates the `fts_vector` column with NLP field weights
-2. Adds indexes on `sentiment` and `nlp_processed_at` columns
-3. Creates a `search_chunks_with_sentiment()` PostgreSQL function
+This includes:
+1. FTS `GENERATED` columns with NLP field weights (nouns=A, verbs=B, text=C)
+2. GIN indexes on `fts_vector` columns
+3. Indexes on `sentiment` and `nlp_processed_at` columns
+4. `search_chunks_with_sentiment()` PostgreSQL function for sentiment-filtered search
 
 ## Processing Flow
 

@@ -10,8 +10,8 @@ Common issues and solutions for Spring Search Tempo.
 
 **Solution**:
 ```bash
-# Find process using port 8089
-lsof -i :8089
+# Find process using port 8082
+lsof -i :8082
 
 # Kill the process
 kill -9 <PID>
@@ -62,7 +62,7 @@ docker compose ps
 
 **Option 1**: Clear batch metadata
 ```bash
-psql -h localhost -p 5433 -U postgres -d spring_search_tempo <<EOF
+psql -h localhost -p 5432 -U tempo -d tempo <<EOF
 DELETE FROM batch_step_execution_context;
 DELETE FROM batch_step_execution;
 DELETE FROM batch_job_execution_context;
@@ -523,9 +523,9 @@ jstack <PID> > threaddump.txt
 ### Check Actuator Health
 
 ```bash
-curl http://localhost:8089/actuator/health
-curl http://localhost:8089/actuator/metrics
-curl http://localhost:8089/actuator/env
+curl http://localhost:8082/actuator/health
+curl http://localhost:8082/actuator/metrics
+curl http://localhost:8082/actuator/env
 ```
 
 ### Common Log Locations

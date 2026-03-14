@@ -1,7 +1,7 @@
 # SKIP Status Implementation Guide
 
-**Last Updated**: 2025-11-14
-**Implemented In**: v0.1.0
+**Last Updated**: 2026-03-14
+**Implemented In**: v0.1.0 (stable since)
 
 ---
 

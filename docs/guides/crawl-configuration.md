@@ -582,5 +582,5 @@ val fileStatus = patternMatchingService.determineFileAnalysisStatus(
 
 ---
 
-**Last Updated**: 2025-11-07
-**Applies To**: Spring Search Tempo v0.1.9+
+**Last Updated**: 2026-03-14
+**Applies To**: Spring Search Tempo v0.2.x+

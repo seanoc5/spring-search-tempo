@@ -150,13 +150,6 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
-tasks.register<Copy>("stageWindowsJpackage") {
-    dependsOn(tasks.named<BootJar>("bootJar"))
-    from(tasks.named<BootJar>("bootJar").flatMap { it.archiveFile })
-    into(layout.buildDirectory.dir("jpackage/input"))
-    rename { "spring-search-tempo.jar" }
-}
-
 tasks.register("printAppVersion") {
     doLast {
         println(project.version)

@@ -23,11 +23,11 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 ---
 
-## Current Status (v0.1.5)
+## Current Status (v0.2.1)
 
-**Version**: 0.1.5 - "Foundation + NLP Infrastructure"
-**Last Updated**: 2025-12-11
-**Active Phase**: Phase 2 - NLP Integration (90% complete)
+**Version**: 0.2.1 - "Remote Crawling + Batch Observability"
+**Last Updated**: 2026-03-14
+**Active Phase**: Phase 2 - NLP Integration (95% complete)
 
 ### Phase 1 - Core Foundation ✅ COMPLETE (100%)
 

@@ -398,6 +398,6 @@ Planned improvements:
 
 ---
 
-**Last Updated**: 2025-11-16
-**Version**: 0.1.9
+**Last Updated**: 2026-03-14
+**Version**: 0.2.1
 **Contributors**: Claude Code, Sean
