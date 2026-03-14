@@ -340,6 +340,8 @@ Username: tempo
 Password: password
 ```
 
+**Schema Management**: Uses JPA `ddl-auto: update` for rapid development. Entity changes automatically update the database schema on startup.
+
 ```yaml
 spring:
   datasource:
@@ -348,9 +350,36 @@ spring:
     password: password
   jpa:
     hibernate:
-      ddl-auto: update  # Use 'validate' in production
+      ddl-auto: update  # Handles schema changes automatically
 ```
 
+### Database Reset (Fresh Start)
+
+For a clean slate, use the reset script:
+
+```bash
+# Full reset with seed data (recommended for fresh installs)
+./docs/sql/reset-database.sh --seed
+
+# Reset without seed data
+./docs/sql/reset-database.sh
+
+# Manual steps (if script doesn't work):
+PGPASSWORD=password psql -h minti9 -U postgres -c "DROP DATABASE tempo; CREATE DATABASE tempo OWNER tempo;"
+./gradlew bootRun                    # JPA creates schema
+PGPASSWORD=password psql -h minti9 -U tempo -d tempo -f docs/sql/essential-postgres-features.sql
+```
+
+**What JPA handles**: All tables, columns, relationships, indexes on FKs
+
+**What requires manual SQL** (`essential-postgres-features.sql`):
+- pgvector extension + HNSW indexes
+- FTS GENERATED columns + GIN indexes
+- Custom search functions (`search_full_text`, `search_chunks_with_sentiment`)
+- Materialized views (`search_stats`)
+- CHECK constraints for enums
+
+**Legacy migrations**: Archived in `docs/sql/archive/` for reference. Tag `pre-sql-consolidation` marks the last state using incremental migrations.
 
 ### Batch Jobs
 
@@ -380,12 +409,13 @@ Default credentials: `user` / `password` (basic auth)
 - Use `ddl-auto: create-drop` in production
 - Ignore transaction boundaries for lazy loading
 - Commit files with secrets (.env, credentials.json)
+- Add PostgreSQL-specific features (FTS, pgvector) to entities without updating `essential-postgres-features.sql`
 
 ✅ **Do**:
 - Use event-driven communication between modules
 - Work with DTOs at service boundaries
 - Add `@Transactional` for lazy loading or use JOIN FETCH
-- Use validated migrations (Flyway/Liquibase) in production
+- Run `essential-postgres-features.sql` after schema changes affecting FTS/vectors
 - Review staged changes before committing
 
 ## Reserved Names (Collision Guardrails)
@@ -456,6 +486,8 @@ Avoid framework-reserved names in templates, model attributes, and local vars.
 | Kapt errors | `./gradlew cleanKapt && rm -rf build/generated/source/kapt` |
 | Test containers won't stop | `docker stop $(docker ps -q --filter ancestor=postgres:18.0)` |
 | LazyInitializationException | Add `@Transactional` or use JOIN FETCH |
+| FTS/search broken after reset | Run `essential-postgres-features.sql` |
+| Schema out of sync | `./docs/sql/reset-database.sh --seed` |
 
 [Complete Troubleshooting →](docs/reference/troubleshooting.md)
 
@@ -480,6 +512,6 @@ Avoid framework-reserved names in templates, model attributes, and local vars.
 
 ---
 
-**Last Updated**: 2026-02-21
-**Version**: 0.2.0
+**Last Updated**: 2026-03-14
+**Version**: 0.2.1
 **Project Lead**: Sean
