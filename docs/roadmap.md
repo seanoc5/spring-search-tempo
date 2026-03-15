@@ -91,7 +91,7 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-### Phase 2 - NLP Integration 🔄 IN PROGRESS (90%)
+### Phase 2 - NLP Integration 🔄 IN PROGRESS (95%)
 
 **Infrastructure Complete:**
 - ✅ Stanford CoreNLP 4.5.5 dependency added
@@ -116,8 +116,8 @@ Phase 1 foundation is complete. All success criteria met:
 - [x] Add NLP fields to FTS vector (searchable nouns, verbs) ✅ 2025-12-11
 - [x] REST API sentiment filter for chunk search ✅ 2025-12-11
 - [ ] Search UI filters by sentiment, entity type (UI work)
-- [ ] Complete email crawl integration with CrawlOrchestrator
-- [ ] Email-to-NLP pipeline
+- [x] Complete email crawl integration with CrawlOrchestrator ✅ 2026-03-15
+- [x] Email-to-NLP pipeline (via NLPAutoTriggerListener) ✅ 2026-03-15
 
 ---
 
@@ -220,8 +220,8 @@ Phase 1 foundation is complete. All success criteria met:
 - [x] ImapConnectionService (Gmail, WorkMail, generic IMAP)
 - [x] EmailQuickSync batch job
 - [x] EmailTextExtractionService (HTML body processing)
-- [ ] Integration with CrawlOrchestrator (REMAINING)
-- **Completed**: 2025-12-10
+- [x] Integration with CrawlOrchestrator (DailyEmailScheduler + EmailAutoTriggerListener)
+- **Completed**: 2026-03-15
 
 #### 2.7 Browser Data Integration (DEFERRED)
 - [ ] Firefox bookmark indexing
@@ -236,7 +236,7 @@ Phase 1 foundation is complete. All success criteria met:
 | ~~NLP Auto-Trigger~~ | ~~High~~ | ~~2-3h~~ | ~~Event listener to start NLP job after crawl~~ ✅ Done |
 | ~~NLP Search Integration~~ | ~~High~~ | ~~4-5h~~ | ~~Add NLP fields to FTS, sentiment filters~~ ✅ Done |
 | ~~Entity Search API~~ | ~~Medium~~ | ~~2-3h~~ | ~~REST endpoints for entity queries~~ ✅ Done (`/api/entities/*`) |
-| Email Orchestrator Integration | Medium | 3-4h | Wire email jobs to CrawlOrchestrator |
+| ~~Email Orchestrator Integration~~ | ~~Medium~~ | ~~3-4h~~ | ~~Wire email jobs to CrawlOrchestrator~~ ✅ Done |
 | Dependency Parse Processing | Medium | 3-4h | Extract and store parse trees |
 | NLP Results UI | Low | 3-4h | Display sentiment, entities in search results |
 

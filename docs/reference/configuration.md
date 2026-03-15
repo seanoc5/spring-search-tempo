@@ -77,6 +77,58 @@ app:
           - "/home/user/Documents"
 ```
 
+### Scheduling
+
+```yaml
+app:
+  scheduling:
+    crawl:
+      enabled: false              # Enable scheduled file crawling
+      cron: "0 0 1 * * *"        # Daily at 01:00
+      zone: "America/New_York"    # Timezone for cron
+      run-missed-on-startup: true # Catch up if missed
+      startup-grace-minutes: 5    # Skip if within grace period
+    email:
+      enabled: false              # Enable scheduled email sync
+      cron: "0 0 */4 * * *"      # Every 4 hours
+      zone: "America/New_York"
+      run-missed-on-startup: true
+      startup-grace-minutes: 5
+      trigger-after-crawl: false  # Chain email sync after file crawl
+```
+
+### Email Configuration
+
+```yaml
+app:
+  email:
+    enabled: true
+    quick-sync-folders:
+      - "INBOX"
+      - "Sent"
+    accounts:
+      - name: "personal-gmail"
+        email: "${GMAIL_EMAIL:}"
+        provider: "GMAIL"           # GMAIL, WORKMAIL, or GENERIC_IMAP
+        credential-env-var: "GMAIL_APP_PASSWORD"
+        enabled: true
+      - name: "work-email"
+        email: "${WORKMAIL_EMAIL:}"
+        provider: "WORKMAIL"
+        imap-host: "imap.mail.us-east-1.awsapps.com"
+        imap-port: 993
+        credential-env-var: "WORKMAIL_PASSWORD"
+        enabled: true
+```
+
+**Environment variables for email:**
+```bash
+GMAIL_EMAIL=your.email@gmail.com
+GMAIL_APP_PASSWORD=your-app-password
+WORKMAIL_EMAIL=your.email@company.com
+WORKMAIL_PASSWORD=your-password
+```
+
 ### Security
 
 ```yaml

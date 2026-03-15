@@ -161,6 +161,13 @@ app:
       zone: "America/New_York" # EDT/EST with DST handling
       run-missed-on-startup: true
       startup-grace-minutes: 5
+    email:
+      enabled: false
+      cron: "0 0 */4 * * *" # Every 4 hours
+      zone: "America/New_York"
+      run-missed-on-startup: true
+      startup-grace-minutes: 5
+      trigger-after-crawl: false  # Chain email sync after file crawl
 
   # Email crawling configuration
   email:
