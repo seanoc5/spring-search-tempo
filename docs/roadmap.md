@@ -91,7 +91,7 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-### Phase 2 - NLP Integration 🔄 IN PROGRESS (95%)
+### Phase 2 - NLP Integration 🔄 IN PROGRESS (98%)
 
 **Infrastructure Complete:**
 - ✅ Stanford CoreNLP 4.5.5 dependency added
@@ -203,11 +203,13 @@ Phase 1 foundation is complete. All success criteria met:
 - [ ] Enable grammatical pattern search (REMAINING)
 - **Completed**: 2025-12-05
 
-#### 2.4 Dependency Parsing ✅ Infrastructure Ready
-- [x] Parse tree infrastructure (parseTree, parseUd, parseNpvp, conllu fields)
-- [ ] Generate and store dependency parse trees
-- [ ] Enable syntax-based search
-- **Status**: Fields ready, processing not yet implemented
+#### 2.4 Dependency Parsing ✅ DONE
+- [x] Parse tree infrastructure (parseTree, parseUd, conllu fields)
+- [x] Generate and store dependency parse trees (NLPChunkProcessor)
+- [x] Stanford CoreNLP `parse` annotator configured
+- [x] Three formats stored: constituency (S-expr), Universal Dependencies, CoNLL-U
+- [ ] Enable syntax-based search (REMAINING - query layer)
+- **Completed**: 2026-03-15
 
 #### 2.5 Sentence Sentiment Analysis ✅ DONE
 - [x] Analyze sentiment per sentence/chunk
@@ -237,7 +239,7 @@ Phase 1 foundation is complete. All success criteria met:
 | ~~NLP Search Integration~~ | ~~High~~ | ~~4-5h~~ | ~~Add NLP fields to FTS, sentiment filters~~ ✅ Done |
 | ~~Entity Search API~~ | ~~Medium~~ | ~~2-3h~~ | ~~REST endpoints for entity queries~~ ✅ Done (`/api/entities/*`) |
 | ~~Email Orchestrator Integration~~ | ~~Medium~~ | ~~3-4h~~ | ~~Wire email jobs to CrawlOrchestrator~~ ✅ Done |
-| Dependency Parse Processing | Medium | 3-4h | Extract and store parse trees |
+| ~~Dependency Parse Processing~~ | ~~Medium~~ | ~~3-4h~~ | ~~Extract and store parse trees~~ ✅ Already implemented |
 | NLP Results UI | Low | 3-4h | Display sentiment, entities in search results |
 
 ### Technical Considerations
