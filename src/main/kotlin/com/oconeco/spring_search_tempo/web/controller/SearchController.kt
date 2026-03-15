@@ -8,11 +8,13 @@ import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
 import com.oconeco.spring_search_tempo.base.service.HybridSearchService
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
+import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import java.time.LocalDate
 
 /**
  * Web controller for search interface.
@@ -31,6 +33,9 @@ class SearchController(
         @RequestParam(required = false) types: List<String>?,
         @RequestParam(required = false) sentiment: String?,
         @RequestParam(required = false) category: String?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) fromDate: LocalDate?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) toDate: LocalDate?,
+        @RequestParam(required = false) author: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         model: Model
@@ -63,8 +68,11 @@ class SearchController(
         model.addAttribute("selectedCategory", emailCategory?.name ?: "")
         model.addAttribute("allCategories", EmailCategory.entries.map { it.name })
 
-        // Pass sentiment filter
+        // Pass other filter values to the view
         model.addAttribute("selectedSentiment", sentiment ?: "")
+        model.addAttribute("selectedFromDate", fromDate?.toString() ?: "")
+        model.addAttribute("selectedToDate", toDate?.toString() ?: "")
+        model.addAttribute("selectedAuthor", author ?: "")
 
         if (!q.isNullOrBlank()) {
             try {
@@ -73,7 +81,10 @@ class SearchController(
                     query = q,
                     contentTypes = contentTypes,
                     sentiment = sentiment,
-                    emailCategory = emailCategory
+                    emailCategory = emailCategory,
+                    fromDate = fromDate,
+                    toDate = toDate,
+                    author = author
                 )
                 val results = searchService.searchWithFilters(filter, pageable)
 

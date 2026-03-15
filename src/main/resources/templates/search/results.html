@@ -171,6 +171,37 @@
                             </div>
                         </div>
 
+                        <!-- Date Range and Author Filters -->
+                        <div class="row g-3 align-items-center mt-2">
+                            <div class="col-auto">
+                                <span class="text-muted">Filters:</span>
+                            </div>
+                            <div class="col-auto">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
+                                    <input type="date" name="fromDate" class="form-control form-control-sm"
+                                           th:value="${selectedFromDate}" placeholder="From">
+                                    <span class="input-group-text">to</span>
+                                    <input type="date" name="toDate" class="form-control form-control-sm"
+                                           th:value="${selectedToDate}" placeholder="To">
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input type="text" name="author" class="form-control form-control-sm"
+                                           th:value="${selectedAuthor}" placeholder="Author/Sender"
+                                           style="width: 150px;">
+                                </div>
+                            </div>
+                            <div class="col-auto" th:if="${selectedFromDate != '' || selectedToDate != '' || selectedAuthor != ''}">
+                                <a th:href="@{/search(q=${query}, types=${selectedTypes})}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-x-circle me-1"></i>Clear Filters
+                                </a>
+                            </div>
+                        </div>
+
                         <div class="mt-2 text-muted small">
                             <i class="bi bi-info-circle me-1"></i>
                             Syntax: <code>spring kotlin</code> (AND) | <code>spring | kotlin</code> (OR) | <code>spring &amp; !java</code> (NOT)

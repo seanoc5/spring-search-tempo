@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.model
 
 import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.service.ContentType
+import java.time.LocalDate
 
 /**
  * Filter parameters for full-text search.
@@ -27,7 +28,25 @@ data class SearchFilterDTO(
     /**
      * Optional email category filter.
      */
-    val emailCategory: EmailCategory? = null
+    val emailCategory: EmailCategory? = null,
+
+    /**
+     * Optional date range filter - start date (inclusive).
+     * Filters by lastModified for files, receivedAt for emails.
+     */
+    val fromDate: LocalDate? = null,
+
+    /**
+     * Optional date range filter - end date (inclusive).
+     * Filters by lastModified for files, receivedAt for emails.
+     */
+    val toDate: LocalDate? = null,
+
+    /**
+     * Optional author/sender filter.
+     * Matches file author or email sender.
+     */
+    val author: String? = null
 ) {
     /**
      * Check if file results should be included.

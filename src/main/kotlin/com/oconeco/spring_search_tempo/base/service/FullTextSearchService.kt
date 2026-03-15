@@ -398,26 +398,26 @@ class FullTextSearchServiceImpl(
     override fun searchWithFilters(filter: SearchFilterDTO, pageable: Pageable): Page<SearchResult> {
         val sanitizedQuery = sanitizeQuery(filter.query)
 
-        log.debug("Searching with filters: types={}, sentiment={}, category={}",
-            filter.contentTypes, filter.sentiment, filter.emailCategory)
+        log.debug("Searching with filters: types={}, sentiment={}, category={}, fromDate={}, toDate={}, author={}",
+            filter.contentTypes, filter.sentiment, filter.emailCategory, filter.fromDate, filter.toDate, filter.author)
 
         val sqlParts = mutableListOf<String>()
 
         // Build UNION query based on selected content types
         if (filter.includeFiles()) {
-            sqlParts.add(buildFileSearchSql())
+            sqlParts.add(buildFileSearchSql(filter))
         }
 
         if (filter.includeEmails()) {
-            sqlParts.add(buildEmailSearchSql(filter.emailCategory))
+            sqlParts.add(buildEmailSearchSql(filter))
         }
 
         if (filter.includeOneDrive()) {
-            sqlParts.add(buildOneDriveSearchSql())
+            sqlParts.add(buildOneDriveSearchSql(filter))
         }
 
         if (filter.includeChunks()) {
-            sqlParts.add(buildChunkSearchSql(filter.sentiment))
+            sqlParts.add(buildChunkSearchSql(filter))
         }
 
         if (sqlParts.isEmpty()) {
@@ -433,18 +433,16 @@ class FullTextSearchServiceImpl(
         // Build count query
         val countParts = mutableListOf<String>()
         if (filter.includeFiles()) {
-            countParts.add("SELECT 1 FROM fsfile WHERE fts_vector @@ to_tsquery('english', :query)")
+            countParts.add(buildFileCountSql(filter))
         }
         if (filter.includeEmails()) {
-            val categoryCondition = if (filter.emailCategory != null) " AND category = :category" else ""
-            countParts.add("SELECT 1 FROM email_message WHERE fts_vector @@ to_tsquery('english', :query)$categoryCondition")
+            countParts.add(buildEmailCountSql(filter))
         }
         if (filter.includeOneDrive()) {
-            countParts.add("SELECT 1 FROM one_drive_item WHERE fts_vector @@ to_tsquery('english', :query) AND is_deleted = false")
+            countParts.add(buildOneDriveCountSql(filter))
         }
         if (filter.includeChunks()) {
-            val sentimentCondition = if (filter.sentiment != null) " AND sentiment = :sentiment" else ""
-            countParts.add("SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$sentimentCondition")
+            countParts.add(buildChunkCountSql(filter))
         }
 
         val countSql = """
@@ -463,18 +461,8 @@ class FullTextSearchServiceImpl(
                 .setParameter("query", sanitizedQuery)
 
             // Set optional filter parameters
-            if (filter.emailCategory != null && filter.includeEmails()) {
-                resultsQuery.setParameter("category", filter.emailCategory.name)
-                countQuery.setParameter("category", filter.emailCategory.name)
-            }
-
-            if (filter.sentiment != null && filter.includeChunks()) {
-                val validSentiment = validateSentiment(filter.sentiment)
-                if (validSentiment != null) {
-                    resultsQuery.setParameter("sentiment", validSentiment)
-                    countQuery.setParameter("sentiment", validSentiment)
-                }
-            }
+            setFilterParameters(resultsQuery, filter)
+            setFilterParameters(countQuery, filter)
 
             val results = resultsQuery.resultList.map { row ->
                 val cols = row as Array<*>
@@ -499,7 +487,34 @@ class FullTextSearchServiceImpl(
         }
     }
 
-    private fun buildFileSearchSql(): String {
+    private fun setFilterParameters(query: jakarta.persistence.Query, filter: SearchFilterDTO) {
+        if (filter.emailCategory != null && filter.includeEmails()) {
+            query.setParameter("category", filter.emailCategory.name)
+        }
+        if (filter.sentiment != null && filter.includeChunks()) {
+            val validSentiment = validateSentiment(filter.sentiment)
+            if (validSentiment != null) {
+                query.setParameter("sentiment", validSentiment)
+            }
+        }
+        if (filter.fromDate != null) {
+            query.setParameter("fromDate", filter.fromDate)
+        }
+        if (filter.toDate != null) {
+            query.setParameter("toDate", filter.toDate)
+        }
+        if (filter.author != null) {
+            query.setParameter("author", "%${filter.author}%")
+        }
+    }
+
+    private fun buildFileSearchSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.fromDate != null) conditions.add("f.last_modified >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("f.last_modified <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("f.author ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) "AND ${conditions.joinToString(" AND ")}" else ""
+
         return """
             SELECT
                 'fsfile' as source_table,
@@ -512,11 +527,27 @@ class FullTextSearchServiceImpl(
                 ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank
             FROM fsfile f
             WHERE f.fts_vector @@ to_tsquery('english', :query)
+            $extraConditions
         """.trimIndent()
     }
 
-    private fun buildEmailSearchSql(category: com.oconeco.spring_search_tempo.base.domain.EmailCategory?): String {
-        val categoryCondition = if (category != null) "AND e.category = :category" else ""
+    private fun buildFileCountSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.fromDate != null) conditions.add("last_modified >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("last_modified <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("author ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) " AND ${conditions.joinToString(" AND ")}" else ""
+        return "SELECT 1 FROM fsfile WHERE fts_vector @@ to_tsquery('english', :query)$extraConditions"
+    }
+
+    private fun buildEmailSearchSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.emailCategory != null) conditions.add("e.category = :category")
+        if (filter.fromDate != null) conditions.add("e.received_at >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("e.received_at <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("e.sender ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) "AND ${conditions.joinToString(" AND ")}" else ""
+
         return """
             SELECT
                 'email_message' as source_table,
@@ -529,11 +560,27 @@ class FullTextSearchServiceImpl(
                 ts_rank(e.fts_vector, to_tsquery('english', :query)) as rank
             FROM email_message e
             WHERE e.fts_vector @@ to_tsquery('english', :query)
-            $categoryCondition
+            $extraConditions
         """.trimIndent()
     }
 
-    private fun buildOneDriveSearchSql(): String {
+    private fun buildEmailCountSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.emailCategory != null) conditions.add("category = :category")
+        if (filter.fromDate != null) conditions.add("received_at >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("received_at <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("sender ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) " AND ${conditions.joinToString(" AND ")}" else ""
+        return "SELECT 1 FROM email_message WHERE fts_vector @@ to_tsquery('english', :query)$extraConditions"
+    }
+
+    private fun buildOneDriveSearchSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.fromDate != null) conditions.add("odi.last_modified_date_time >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("odi.last_modified_date_time <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("odi.created_by ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) "AND ${conditions.joinToString(" AND ")}" else ""
+
         return """
             SELECT
                 'one_drive_item' as source_table,
@@ -547,12 +594,26 @@ class FullTextSearchServiceImpl(
             FROM one_drive_item odi
             WHERE odi.fts_vector @@ to_tsquery('english', :query)
               AND odi.is_deleted = false
+            $extraConditions
         """.trimIndent()
     }
 
-    private fun buildChunkSearchSql(sentiment: String?): String {
-        val validSentiment = validateSentiment(sentiment)
-        val sentimentCondition = if (validSentiment != null) "AND c.sentiment = :sentiment" else ""
+    private fun buildOneDriveCountSql(filter: SearchFilterDTO): String {
+        val conditions = mutableListOf<String>()
+        if (filter.fromDate != null) conditions.add("last_modified_date_time >= CAST(:fromDate AS DATE)")
+        if (filter.toDate != null) conditions.add("last_modified_date_time <= CAST(:toDate AS DATE)")
+        if (filter.author != null) conditions.add("created_by ILIKE :author")
+        val extraConditions = if (conditions.isNotEmpty()) " AND ${conditions.joinToString(" AND ")}" else ""
+        return "SELECT 1 FROM one_drive_item WHERE fts_vector @@ to_tsquery('english', :query) AND is_deleted = false$extraConditions"
+    }
+
+    private fun buildChunkSearchSql(filter: SearchFilterDTO): String {
+        val validSentiment = validateSentiment(filter.sentiment)
+        val conditions = mutableListOf<String>()
+        if (validSentiment != null) conditions.add("c.sentiment = :sentiment")
+        // Note: chunks don't have their own date/author - they inherit from source
+        val extraConditions = if (conditions.isNotEmpty()) "AND ${conditions.joinToString(" AND ")}" else ""
+
         return """
             SELECT
                 'content_chunks' as source_table,
@@ -568,8 +629,14 @@ class FullTextSearchServiceImpl(
             LEFT JOIN email_message em ON c.email_message_id = em.id
             LEFT JOIN one_drive_item odi ON c.one_drive_item_id = odi.id
             WHERE c.fts_vector @@ to_tsquery('english', :query)
-            $sentimentCondition
+            $extraConditions
         """.trimIndent()
+    }
+
+    private fun buildChunkCountSql(filter: SearchFilterDTO): String {
+        val validSentiment = validateSentiment(filter.sentiment)
+        val sentimentCondition = if (validSentiment != null) " AND sentiment = :sentiment" else ""
+        return "SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$sentimentCondition"
     }
 }
 
