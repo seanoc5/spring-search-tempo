@@ -3,7 +3,7 @@ services:
     image:  pgvector/pgvector:pg18
     environment:
     - POSTGRES_DB=tempo
-    - POSTGRES_USER=postgres
+    - POSTGRES_USER=tempo
     - POSTGRES_PASSWORD=password
     ports:
     - 15432:5432
