@@ -156,11 +156,12 @@ class DiscoveryService(
         val startedAt = System.nanoTime()
         val session = sessionRepository.findById(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+        val sessionOsType = session.osType ?: ""
 
         val folders = folderRepository.findBySessionIdAndMaxDepth(sessionId, maxDepth)
         val loadedAt = System.nanoTime()
         val templatePlan = discoveryTemplateClassifier.buildPlan(
-            osType = session.osType ?: "",
+            osType = sessionOsType,
             rootPaths = session.rootPaths?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
             folders = folders.map {
                 TemplateFolderInput(
@@ -197,7 +198,7 @@ class DiscoveryService(
             suggestedProfile = templatePlan.profile.name,
             profileConfidencePercent = templatePlan.confidencePercent,
             profileReason = templatePlan.reason,
-            folders = folders.map { toFolderDTO(it) }
+            folders = folders.map { toFolderDTO(it, sessionOsType) }
         )
     }
 
@@ -205,16 +206,22 @@ class DiscoveryService(
      * Get folders at a specific depth for lazy loading.
      */
     fun getFoldersAtDepth(sessionId: Long, depth: Int): List<DiscoveredFolderDTO> {
+        val sessionOsType = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+            .osType ?: ""
         val folders = folderRepository.findBySessionIdAndDepth(sessionId, depth)
-        return folders.map { toFolderDTO(it) }
+        return folders.map { toFolderDTO(it, sessionOsType) }
     }
 
     /**
      * Get children of a specific folder.
      */
     fun getChildFolders(sessionId: Long, parentPath: String): List<DiscoveredFolderDTO> {
+        val sessionOsType = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+            .osType ?: ""
         val folders = folderRepository.findBySessionIdAndParentPath(sessionId, parentPath)
-        return folders.map { toFolderDTO(it) }
+        return folders.map { toFolderDTO(it, sessionOsType) }
     }
 
     /**
@@ -256,6 +263,9 @@ class DiscoveryService(
             path = normalizedFilter,
             pageable = pageable
         )
+        val sessionOsType = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+            .osType ?: ""
         return AssignedFolderPageResponse(
             status = status.name,
             totalCount = resultPage.totalElements,
@@ -267,7 +277,7 @@ class DiscoveryService(
             sortBy = safeSort,
             sortDir = direction.name.lowercase(),
             filter = normalizedFilter,
-            folders = resultPage.content.map { toFolderDTO(it) }
+            folders = resultPage.content.map { toFolderDTO(it, sessionOsType) }
         )
     }
 
@@ -367,7 +377,7 @@ class DiscoveryService(
         var counter = 0
         session.folders.forEach { folder ->
             counter++
-            if(counter % 1000 == 0) {
+            if(counter % 5000 == 0) {
                 log.info("\t\tProcessed {} folders for session {}", counter, sessionId)
             }
             val path = folder.path ?: return@forEach
@@ -613,14 +623,18 @@ class DiscoveryService(
         }
 
         val lastSep = p.lastIndexOf('/')
-        if (lastSep <= 0) return null
+        if (lastSep < 0) return null
+        if (lastSep == 0) {
+            return if (p.length > 1) "/" else null
+        }
         return p.substring(0, lastSep)
     }
 
-    private fun toFolderDTO(folder: DiscoveredFolder): DiscoveredFolderDTO {
+    private fun toFolderDTO(folder: DiscoveredFolder, osType: String): DiscoveredFolderDTO {
+        val path = folder.path ?: ""
         return DiscoveredFolderDTO(
             id = folder.id!!,
-            path = folder.path ?: "",
+            path = path,
             name = folder.name ?: "",
             depth = folder.depth,
             folderCount = folder.folderCount,
@@ -630,7 +644,7 @@ class DiscoveryService(
             suggestedStatus = folder.suggestedStatus?.name,
             assignedStatus = folder.assignedStatus?.name,
             classified = folder.classified,
-            parentPath = folder.parentPath
+            parentPath = folder.parentPath ?: computeParentPath(path, osType)
         )
     }
 

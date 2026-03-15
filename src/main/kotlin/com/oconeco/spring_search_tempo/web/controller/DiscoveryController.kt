@@ -165,7 +165,7 @@ class DiscoveryController(
     @GetMapping("/{sessionId}/classify")
     fun classify(
         @PathVariable sessionId: Long,
-        @RequestParam(name = "maxDepth", defaultValue = "3") maxDepth: Int,
+        @RequestParam(name = "maxDepth", defaultValue = "5") maxDepth: Int,
         @RequestParam(name = "assignedStatus", required = false) assignedStatus: String?,
         @RequestParam(name = "listPage", defaultValue = "0") listPage: Int,
         @RequestParam(name = "listSize", defaultValue = "100") listSize: Int,

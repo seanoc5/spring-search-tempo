@@ -5,10 +5,12 @@ import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.BaseIT
 import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.notNullValue
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -24,6 +26,9 @@ class RemoteCrawlResourceTest : BaseIT() {
 
     @Autowired
     private lateinit var crawlConfigService: DatabaseCrawlConfigService
+
+    @Autowired
+    private lateinit var discoveryService: DiscoveryService
 
     @Test
     fun `remote queue lifecycle should support start enqueue claim ingest ack and complete`() {
@@ -365,6 +370,42 @@ class RemoteCrawlResourceTest : BaseIT() {
                 .body("host", equalTo("gzip-host"))
                 .body("foldersReceived", equalTo(1))
                 .body("sessionId", notNullValue())
+    }
+
+    @Test
+    fun `discovery classification should keep unix root children attached to slash root`() {
+        val uploadResponse = RestAssured
+            .given()
+                .contentType(ContentType.JSON)
+                .body(
+                    mapOf(
+                        "host" to "linux-root-host",
+                        "folders" to listOf(
+                            mapOf("path" to "/", "name" to "/", "depth" to 0),
+                            mapOf("path" to "/home", "name" to "home", "depth" to 1),
+                            mapOf("path" to "/var", "name" to "var", "depth" to 1),
+                            mapOf("path" to "/home/sean", "name" to "sean", "depth" to 2)
+                        ),
+                        "rootPaths" to listOf("/"),
+                        "osType" to "LINUX",
+                        "discoveryDurationMs" to 42,
+                        "createNewSession" to true
+                    )
+                )
+            .`when`()
+                .post("/api/remote-crawl/discovery/upload")
+            .then()
+                .statusCode(HttpStatus.OK.value())
+                .extract()
+
+        val sessionId = uploadResponse.jsonPath().getLong("sessionId")
+        val session = discoveryService.getSessionForClassification(sessionId, 2)
+        val foldersByPath = session.folders.associateBy { it.path }
+
+        assertThat(foldersByPath["/"]?.parentPath).isNull()
+        assertThat(foldersByPath["/home"]?.parentPath).isEqualTo("/")
+        assertThat(foldersByPath["/var"]?.parentPath).isEqualTo("/")
+        assertThat(foldersByPath["/home/sean"]?.parentPath).isEqualTo("/home")
     }
 
     private fun createRemoteTestCrawlConfig(): Long {

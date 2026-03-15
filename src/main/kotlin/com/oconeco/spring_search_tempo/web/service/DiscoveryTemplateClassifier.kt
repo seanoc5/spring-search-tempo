@@ -533,4 +533,8 @@ data class DiscoveryTemplatePlan(
     val reason: String,
     val statusByPath: Map<String, SuggestedStatus>,
     val counts: Map<SuggestedStatus, Int>
-)
+) {
+    override fun toString(): String {
+        return "(profile:${this.profile}) (${this.confidencePercent}%) ${this.reason}, counts: ${this.counts}"
+    }
+}
