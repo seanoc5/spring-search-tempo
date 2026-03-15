@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
 import com.oconeco.spring_search_tempo.base.service.ContentType
 import com.oconeco.spring_search_tempo.base.service.FullTextSearchService
+import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Controller
@@ -18,7 +19,8 @@ import org.springframework.web.bind.annotation.RequestParam
 @Controller
 @RequestMapping("/search")
 class SearchController(
-    private val searchService: FullTextSearchService
+    private val searchService: FullTextSearchService,
+    private val semanticSearchService: SemanticSearchService
 ) {
 
     @GetMapping
@@ -145,5 +147,37 @@ class SearchController(
         }
 
         return "search/chunk-results"
+    }
+
+    @GetMapping("/semantic")
+    fun searchSemantic(
+        @RequestParam(required = false) q: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+        model: Model
+    ): String {
+        model.addAttribute("query", q ?: "")
+        model.addAttribute("searchType", "semantic")
+
+        // Add stats for display
+        val stats = semanticSearchService.getStats()
+        model.addAttribute("stats", stats)
+
+        if (!q.isNullOrBlank()) {
+            try {
+                val effectiveLimit = limit.coerceIn(1, 100)
+                val results = semanticSearchService.search(q, effectiveLimit)
+
+                model.addAttribute("results", results)
+                model.addAttribute("totalResults", results.size)
+                model.addAttribute("hasResults", results.isNotEmpty())
+            } catch (e: Exception) {
+                model.addAttribute("error", "Semantic search failed: ${e.message}")
+                model.addAttribute("hasResults", false)
+            }
+        } else {
+            model.addAttribute("hasResults", false)
+        }
+
+        return "search/semantic-results"
     }
 }

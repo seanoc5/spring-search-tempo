@@ -1,0 +1,215 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Semantic Search</title>
+        <style>
+            .similarity-bar {
+                height: 8px;
+                background-color: #e9ecef;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .similarity-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #198754, #20c997);
+                border-radius: 4px;
+            }
+            .source-FILE { background-color: #0d6efd !important; }
+            .source-EMAIL { background-color: #198754 !important; }
+            .source-ONEDRIVE { background-color: #0dcaf0 !important; }
+        </style>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/search}">Search</a></li>
+                    <li class="breadcrumb-item active">Semantic</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1"><i class="bi bi-stars me-2"></i>Semantic Search</h1>
+            </div>
+
+            <!-- Search Tabs -->
+            <ul class="nav nav-tabs mb-4">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search(q=${query})}">
+                        <i class="bi bi-collection me-1"></i>All
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/files(q=${query})}">
+                        <i class="bi bi-file-earmark me-1"></i>Files
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/chunks(q=${query})}">
+                        <i class="bi bi-text-paragraph me-1"></i>Chunks
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" th:href="@{/search/semantic(q=${query})}">
+                        <i class="bi bi-stars me-1"></i>Semantic
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Status Banner -->
+            <div th:if="${stats != null}" class="alert mb-4"
+                 th:classappend="${stats.embeddingServiceAvailable} ? 'alert-info' : 'alert-warning'">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi me-2" th:classappend="${stats.embeddingServiceAvailable} ? 'bi-check-circle' : 'bi-exclamation-triangle'"></i>
+                        <span th:if="${stats.embeddingServiceAvailable}">
+                            Embedding service: <strong th:text="${stats.modelName}">model</strong>
+                            (<span th:text="${stats.gpuMode}">mode</span>)
+                        </span>
+                        <span th:unless="${stats.embeddingServiceAvailable}">
+                            Embedding service unavailable. Start Ollama to enable semantic search.
+                        </span>
+                    </div>
+                    <div class="text-muted small">
+                        <span th:text="${stats.chunksWithEmbedding}">0</span> chunks embedded
+                        <span th:if="${stats.chunksPendingEmbedding > 0}" class="ms-2">
+                            (<span th:text="${stats.chunksPendingEmbedding}">0</span> pending)
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Box -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form th:action="@{/search/semantic}" method="get" class="row g-3">
+                        <div class="col-md-10">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-stars"></i></span>
+                                <input type="text"
+                                       name="q"
+                                       th:value="${query}"
+                                       placeholder="Describe what you're looking for..."
+                                       class="form-control form-control-lg"
+                                       autofocus>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary btn-lg w-100"
+                                    th:disabled="${!stats.embeddingServiceAvailable}">Search</button>
+                        </div>
+                    </form>
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Semantic search finds content with similar meaning, not just matching keywords
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Alert -->
+            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>[[${error}]]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <!-- Results -->
+            <div th:if="${hasResults}">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">
+                        Found <strong th:text="${totalResults}">0</strong> similar chunks
+                    </span>
+                </div>
+
+                <div class="list-group mb-4">
+                    <div th:each="result : ${results}" class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">
+                                    <a th:href="@{|/contentChunks/${result.chunkId}|}"
+                                       th:text="${result.sourceLabel ?: 'Chunk #' + result.chunkId}" class="text-decoration-none">
+                                        Result title
+                                    </a>
+                                </h5>
+                                <!-- Source Info -->
+                                <div class="mb-2">
+                                    <span class="badge me-2" th:classappend="'source-' + ${result.sourceType}">
+                                        <i class="bi me-1" th:classappend="${result.sourceType == 'FILE'} ? 'bi-file-earmark' : (${result.sourceType == 'EMAIL'} ? 'bi-envelope' : 'bi-cloud')"></i>
+                                        [[${result.sourceType}]]
+                                    </span>
+                                    <span th:if="${result.chunkType}" class="badge bg-light text-dark me-2">
+                                        [[${result.chunkType}]]
+                                    </span>
+                                    <span th:if="${result.sentiment}" class="badge me-2"
+                                          th:classappend="${result.sentiment == 'POSITIVE' ? 'bg-success' : (result.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                                        [[${result.sentiment}]]
+                                    </span>
+                                </div>
+                                <p th:if="${result.sourceUri}" class="mb-1 text-muted small text-break" th:text="${result.sourceUri}">source uri</p>
+                                <p class="mb-1" th:text="${#strings.abbreviate(result.text, 300)}">
+                                    Content preview...
+                                </p>
+                            </div>
+                            <div class="ms-3 text-end" style="min-width: 100px;">
+                                <div class="mb-1">
+                                    <span class="badge bg-success" th:text="${#numbers.formatPercent(result.similarity, 0, 0)}">85%</span>
+                                </div>
+                                <div class="similarity-bar" style="width: 80px;">
+                                    <div class="similarity-fill" th:style="'width:' + ${result.similarity * 100} + '%'"></div>
+                                </div>
+                                <div class="mt-1 small text-muted">
+                                    dist: [[${#numbers.formatDecimal(result.distance, 1, 3)}]]
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div th:if="${query != null && query != '' && !hasResults && error == null}">
+                <div class="alert alert-warning">
+                    <i class="bi bi-search me-2"></i>
+                    No similar content found for "<strong th:text="${query}">query</strong>"
+                    <p class="mb-0 mt-2">
+                        Try a different description or use
+                        <a th:href="@{/search/chunks(q=${query})}">keyword search</a>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Welcome / Help -->
+            <div th:if="${query == null || query == ''}">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>About Semantic Search</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Semantic search finds content based on <strong>meaning</strong>, not just keywords.</p>
+
+                        <h6 class="mt-3">How it works</h6>
+                        <ul>
+                            <li>Your query is converted to a vector embedding using an AI model</li>
+                            <li>Content chunks with similar embeddings are returned</li>
+                            <li>Results are ranked by cosine similarity (higher = more similar)</li>
+                        </ul>
+
+                        <h6 class="mt-3">When to use</h6>
+                        <ul>
+                            <li><strong>Conceptual queries</strong>: "documents about machine learning optimization"</li>
+                            <li><strong>Paraphrased content</strong>: Find content that says the same thing differently</li>
+                            <li><strong>Related topics</strong>: Discover content on similar subjects</li>
+                        </ul>
+
+                        <h6 class="mt-3">Requirements</h6>
+                        <ul>
+                            <li>Ollama must be running with the embedding model loaded</li>
+                            <li>Content must have embeddings generated (run embedding job)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

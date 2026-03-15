@@ -426,4 +426,112 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     """)
     fun countFilesWithEmbeddingGroupedByCrawlConfig(): List<Array<Any>>
 
+    // ==================== SEMANTIC SEARCH (Vector Similarity) ====================
+
+    /**
+     * Find the nearest content chunks by cosine similarity to a query embedding.
+     * Uses pgvector's `<=>` cosine distance operator with HNSW index.
+     *
+     * Returns tuples of [id, text, chunkType, sentiment, distance, conceptId, emailMessageId].
+     *
+     * @param embedding Query embedding in pgvector string format: "[0.1,0.2,...]"
+     * @param limit Maximum number of results
+     * @return List of result tuples ordered by ascending distance (most similar first)
+     */
+    @Query(
+        value = """
+            SELECT
+                c.id,
+                c.text,
+                c.chunk_type,
+                c.sentiment,
+                c.sentiment_score,
+                (c.embedding <=> CAST(:embedding AS vector)) AS distance,
+                c.concept_id,
+                c.email_message_id,
+                c.one_drive_item_id
+            FROM content_chunks c
+            WHERE c.embedding IS NOT NULL
+            ORDER BY c.embedding <=> CAST(:embedding AS vector)
+            LIMIT :limit
+        """,
+        nativeQuery = true
+    )
+    fun findNearestByEmbedding(
+        @Param("embedding") embedding: String,
+        @Param("limit") limit: Int
+    ): List<Array<Any?>>
+
+    /**
+     * Find similar chunks to a given chunk by its ID.
+     * Excludes the source chunk from results.
+     *
+     * @param chunkId The ID of the chunk to find similar content for
+     * @param limit Maximum number of results
+     * @return List of result tuples ordered by similarity
+     */
+    @Query(
+        value = """
+            SELECT
+                c.id,
+                c.text,
+                c.chunk_type,
+                c.sentiment,
+                c.sentiment_score,
+                (c.embedding <=> source.embedding) AS distance,
+                c.concept_id,
+                c.email_message_id,
+                c.one_drive_item_id
+            FROM content_chunks c
+            CROSS JOIN (
+                SELECT embedding FROM content_chunks WHERE id = :chunkId
+            ) source
+            WHERE c.embedding IS NOT NULL
+              AND c.id != :chunkId
+              AND source.embedding IS NOT NULL
+            ORDER BY c.embedding <=> source.embedding
+            LIMIT :limit
+        """,
+        nativeQuery = true
+    )
+    fun findSimilarToChunk(
+        @Param("chunkId") chunkId: Long,
+        @Param("limit") limit: Int
+    ): List<Array<Any?>>
+
+    /**
+     * Find nearest chunks with a maximum distance threshold.
+     * Only returns chunks within the specified cosine distance.
+     *
+     * @param embedding Query embedding in pgvector string format
+     * @param maxDistance Maximum cosine distance (0 = identical, 2 = opposite)
+     * @param limit Maximum number of results
+     * @return List of result tuples with distance <= maxDistance
+     */
+    @Query(
+        value = """
+            SELECT
+                c.id,
+                c.text,
+                c.chunk_type,
+                c.sentiment,
+                c.sentiment_score,
+                (c.embedding <=> CAST(:embedding AS vector)) AS distance,
+                c.concept_id,
+                c.email_message_id,
+                c.one_drive_item_id
+            FROM content_chunks c
+            WHERE c.embedding IS NOT NULL
+              AND (c.embedding <=> CAST(:embedding AS vector)) <= :maxDistance
+            ORDER BY c.embedding <=> CAST(:embedding AS vector)
+            LIMIT :limit
+        """,
+        nativeQuery = true
+    )
+    fun findNearestByEmbeddingWithThreshold(
+        @Param("embedding") embedding: String,
+        @Param("maxDistance") maxDistance: Double,
+        @Param("limit") limit: Int
+    ): List<Array<Any?>>
+
 }

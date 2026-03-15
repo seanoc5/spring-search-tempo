@@ -4,6 +4,9 @@ import com.oconeco.spring_search_tempo.base.service.ChunkSearchResult
 import com.oconeco.spring_search_tempo.base.service.FileSearchResult
 import com.oconeco.spring_search_tempo.base.service.FullTextSearchService
 import com.oconeco.spring_search_tempo.base.service.SearchResult
+import com.oconeco.spring_search_tempo.base.service.SemanticSearchResult
+import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
+import com.oconeco.spring_search_tempo.base.service.SemanticSearchStats
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -13,19 +16,25 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 /**
- * REST API for full-text search operations.
+ * REST API for full-text and semantic search operations.
  *
- * Provides endpoints for searching indexed content with PostgreSQL FTS.
- * Search includes NLP-enhanced ranking using named entities, nouns, and verbs.
+ * Provides endpoints for searching indexed content using:
+ * - PostgreSQL FTS (keyword-based with NLP-enhanced ranking)
+ * - pgvector semantic search (embedding-based similarity)
  *
- * Endpoints:
+ * Full-Text Search Endpoints:
  * - GET /api/search?q={query} - Search all content (files + chunks)
  * - GET /api/search/files?q={query} - Search files only
- * - GET /api/search/chunks?q={query}&sentiment={filter} - Search chunks with optional sentiment filter
+ * - GET /api/search/chunks?q={query}&sentiment={filter} - Search chunks with sentiment filter
  * - GET /api/search/suggest?q={query} - Get search suggestions (future)
  * - GET /api/search/stats - Get search statistics (future)
  *
- * Query syntax:
+ * Semantic Search Endpoints:
+ * - GET /api/search/semantic?q={query} - Semantic similarity search
+ * - GET /api/search/semantic/similar/{chunkId} - Find similar content to a chunk
+ * - GET /api/search/semantic/stats - Embedding service status
+ *
+ * Query syntax (FTS):
  * - Simple words: "spring kotlin" (automatically joined with AND)
  * - AND operator: "spring & kotlin"
  * - OR operator: "spring | kotlin"
@@ -37,7 +46,8 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/search")
 class SearchResource(
-    private val searchService: FullTextSearchService
+    private val searchService: FullTextSearchService,
+    private val semanticSearchService: SemanticSearchService
 ) {
 
     /**
@@ -117,5 +127,61 @@ class SearchResource(
             "message" to "Search statistics not yet implemented",
             "todo" to "Query search_stats materialized view"
         ))
+    }
+
+    // ==================== SEMANTIC SEARCH (Vector Similarity) ====================
+
+    /**
+     * Semantic search using vector embeddings.
+     *
+     * Finds content chunks that are semantically similar to the query text,
+     * regardless of exact keyword matches. Uses cosine similarity with pgvector.
+     *
+     * @param q The query text to find similar content for
+     * @param limit Maximum number of results (default 10, max 100)
+     * @param maxDistance Optional maximum cosine distance threshold (0-2, lower = more similar)
+     * @return List of semantically similar chunks ordered by similarity
+     */
+    @GetMapping("/semantic", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun searchSemantic(
+        @RequestParam q: String,
+        @RequestParam(defaultValue = "10") limit: Int,
+        @RequestParam(required = false) maxDistance: Double?
+    ): ResponseEntity<List<SemanticSearchResult>> {
+        val effectiveLimit = limit.coerceIn(1, 100)
+        val results = semanticSearchService.search(q, effectiveLimit, maxDistance)
+        return ResponseEntity.ok(results)
+    }
+
+    /**
+     * Find content similar to a specific chunk.
+     *
+     * Uses the embedding of an existing chunk to find other semantically
+     * similar content. Useful for "related content" features.
+     *
+     * @param chunkId The ID of the chunk to find similar content for
+     * @param limit Maximum number of results (default 10, max 100)
+     * @return List of similar chunks, excluding the source chunk
+     */
+    @GetMapping("/semantic/similar/{chunkId}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun findSimilar(
+        @PathVariable chunkId: Long,
+        @RequestParam(defaultValue = "10") limit: Int
+    ): ResponseEntity<List<SemanticSearchResult>> {
+        val effectiveLimit = limit.coerceIn(1, 100)
+        val results = semanticSearchService.findSimilar(chunkId, effectiveLimit)
+        return ResponseEntity.ok(results)
+    }
+
+    /**
+     * Get semantic search status and statistics.
+     *
+     * Returns information about the embedding service availability,
+     * model in use, and embedding coverage of content chunks.
+     */
+    @GetMapping("/semantic/stats", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getSemanticStats(): ResponseEntity<SemanticSearchStats> {
+        val stats = semanticSearchService.getStats()
+        return ResponseEntity.ok(stats)
     }
 }
