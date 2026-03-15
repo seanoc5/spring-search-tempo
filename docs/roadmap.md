@@ -235,9 +235,9 @@ Phase 1 foundation is complete. All success criteria met:
 |------|----------|--------|-------------|
 | ~~NLP Auto-Trigger~~ | ~~High~~ | ~~2-3h~~ | ~~Event listener to start NLP job after crawl~~ ✅ Done |
 | ~~NLP Search Integration~~ | ~~High~~ | ~~4-5h~~ | ~~Add NLP fields to FTS, sentiment filters~~ ✅ Done |
+| ~~Entity Search API~~ | ~~Medium~~ | ~~2-3h~~ | ~~REST endpoints for entity queries~~ ✅ Done (`/api/entities/*`) |
 | Email Orchestrator Integration | Medium | 3-4h | Wire email jobs to CrawlOrchestrator |
 | Dependency Parse Processing | Medium | 3-4h | Extract and store parse trees |
-| Entity Search API | Medium | 2-3h | REST endpoints for entity queries |
 | NLP Results UI | Low | 3-4h | Display sentiment, entities in search results |
 
 ### Technical Considerations
@@ -270,6 +270,52 @@ dependencies {
 - [ ] Browser history indexed and searchable
 - [ ] NLP processing < 5 sec/document average
 - [ ] Test coverage maintained > 70%
+
+---
+
+## Phase 2.5: Remote Crawling ✅ COMPLETE (100%)
+
+**Goal**: Enable distributed crawling from remote hosts (Windows, Linux) with centralized policy management.
+
+**Timeline**: 2026-01-15 to 2026-03-01
+
+### Completed Tasks ✅
+
+#### Remote Crawler CLI
+- [x] Standalone fat JAR with Apache Tika for text extraction
+- [x] Commands: `test`, `status`, `dry-run`, `crawl`, `onboard`
+- [x] Server-driven classification (patterns evaluated server-side)
+- [x] Discovery session support for new host onboarding
+- [x] TLS support with custom truststore for LAN/self-signed certs
+- **Completed**: 2026-02-15
+
+#### Server-Side API
+- [x] Bootstrap endpoint (`GET /api/remote-crawl/bootstrap?host=<hostname>`)
+- [x] Classification endpoint (`POST /api/remote-crawl/classify`)
+- [x] Session lifecycle (`start`, `heartbeat`, `ingest`, `complete`)
+- [x] Task queue (`enqueue-folders`, `next`, `ack`, `status`)
+- [x] Discovery upload and folder snapshot endpoints
+- **Completed**: 2026-02-20
+
+#### Windows Deployment
+- [x] PowerShell scripts for scheduled task setup
+- [x] Auto-update script (`update-remote-crawler.ps1`)
+- [x] Config file and environment variable support
+- [x] Documentation: Windows setup guide, TLS guide
+- **Completed**: 2026-03-01
+
+#### Release Automation
+- [x] `release.sh` script for local builds and GitHub releases
+- [x] GitHub Actions workflow (`publish-remote-crawler.yml`)
+- [x] Hotfix versioning support (e.g., `0.5.3.1`)
+- **Completed**: 2026-03-14
+
+### Deferred Items
+
+| Item | Priority | Description |
+|------|----------|-------------|
+| Staging tables | Low | Dedicated ingest staging instead of direct upsert |
+| Path normalization | Low | UI-friendly path display for remote hosts |
 
 ---
 
@@ -362,11 +408,11 @@ dependencies {
 
 ### Planned Features
 
-#### 4.1 Database Migrations
-- [ ] Migrate from Hibernate ddl-auto to Flyway
-- [ ] Create baseline migration
-- [ ] Version all schema changes
-- [ ] **Effort**: 3 days
+#### 4.1 Database Strategy (REVISED)
+- [x] JPA `ddl-auto: update` for rapid iteration (current approach)
+- [x] `essential-postgres-features.sql` for PostgreSQL-specific features
+- [ ] Production deployment scripts with backup/restore procedures
+- [ ] **Status**: Current approach works well for RAD; revisit if needed for multi-environment deployments
 
 #### 4.2 Advanced Search UI
 - [ ] Faceted search (filter by author, date, type)

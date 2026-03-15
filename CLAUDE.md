@@ -48,9 +48,8 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 - **REST API for manual NLP triggering** (`POST /api/nlp/process`)
 
 **Phase 2 Remaining**:
-- Add NLP results to search (sentiment filters, entity search)
 - Complete email crawl orchestration
-- UI enhancements for NLP results display
+- UI enhancements for NLP results display (sentiment badges, entity links)
 
 **Next Phase**: Semantic search with pgvector embeddings
 
