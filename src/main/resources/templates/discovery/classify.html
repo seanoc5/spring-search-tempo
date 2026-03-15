@@ -5,6 +5,27 @@
 <head>
     <title th:text="|Classify - ${discoverySession.host}|">Classify Folders</title>
     <style>
+        .discovery-classify-page {
+            font-weight: 400;
+        }
+        .discovery-classify-page th,
+        .discovery-classify-page td,
+        .discovery-classify-page label,
+        .discovery-classify-page span,
+        .discovery-classify-page a,
+        .discovery-classify-page button,
+        .discovery-classify-page div,
+        .discovery-classify-page p {
+            font-weight: inherit;
+        }
+        .discovery-classify-page h2,
+        .discovery-classify-page h5,
+        .discovery-classify-page h6,
+        .discovery-classify-page strong,
+        .discovery-classify-page .fw-semibold,
+        .discovery-classify-page .card-header {
+            font-weight: 600;
+        }
         .folder-tree {
             font-size: 0.9rem;
         }
@@ -25,13 +46,22 @@
             display: none;
         }
         .folder-col {
-            min-width: 360px;
+            width: 12rem;
+            min-width: 12rem;
+            max-width: 12rem;
+        }
+        .status-col {
+            width: 7.5rem;
+        }
+        .count-col {
+            width: 5rem;
         }
         .tree-cell {
             display: flex;
             align-items: center;
-            gap: 6px;
-            white-space: nowrap;
+            gap: 4px;
+            min-width: 0;
+            overflow: hidden;
         }
         .tree-guides {
             width: calc(var(--depth) * 16px);
@@ -45,8 +75,14 @@
                 transparent 16px
             );
         }
-        .folder-name {
-            cursor: pointer;
+        .folder-toggle {
+            color: #495057;
+        }
+        .folder-name-label {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .status-badge {
             font-size: 0.75rem;
@@ -73,34 +109,36 @@
             top: 80px;
         }
         .action-btn {
-            padding: 2px 6px;
+            padding: 1px 6px;
             font-size: 0.75rem;
         }
         .action-btn-folder {
-            font-weight: 700;
-            min-width: 30px;
-            border-width: 1px;
+            min-width: 1.8rem;
+            border: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
-        .btn-outline-danger.action-btn-folder { background: rgba(220, 53, 69, 0.08); }
-        .btn-outline-warning.action-btn-folder { background: rgba(255, 193, 7, 0.15); }
-        .btn-outline-success.action-btn-folder { background: rgba(25, 135, 84, 0.1); }
-        .btn-outline-primary.action-btn-folder { background: rgba(13, 110, 253, 0.1); }
+        .action-btn-folder.active-status {
+            box-shadow: none !important;
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 2px;
+        }
         .action-col-folder {
-            width: 170px;
+            width: 8.5rem;
         }
         .action-col-branch {
-            width: 180px;
-            padding-left: 0.9rem;
+            width: 10rem;
         }
         .hidden-folder {
             opacity: 0.6;
         }
         /* Status-based folder/path name styling */
-        .folder-name-skip { color: #dc3545 !important; font-weight: 600; }
-        .folder-name-locate { color: #b8860b !important; font-weight: 600; }
-        .folder-name-index { color: #198754 !important; font-weight: 600; }
-        .folder-name-analyze { color: #0d6efd !important; font-weight: 600; }
-        .folder-name-semantic { color: #6610f2 !important; font-weight: 600; }
+        .folder-name-skip { color: #dc3545 !important; }
+        .folder-name-locate { color: #b8860b !important; }
+        .folder-name-index { color: #198754 !important; }
+        .folder-name-analyze { color: #0d6efd !important; }
+        .folder-name-semantic { color: #6610f2 !important; }
         .folder-name-unknown { color: #6c757d !important; font-style: italic; }
         /* Inactive action buttons (grayed out) */
         .action-btn.inactive {
@@ -123,11 +161,14 @@
             padding: 1px 4px;
             opacity: 0.7;
         }
+        .zero-dash {
+            color: #adb5bd;
+        }
     </style>
 </head>
 <body>
 <main layout:fragment="content">
-    <div class="container-fluid py-4">
+    <div class="container-fluid py-4 discovery-classify-page">
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
@@ -214,11 +255,11 @@
                             <thead>
                             <tr>
                                 <th class="folder-col">Folder</th>
-                                <th class="text-end" style="width: 120px;">Subfolders</th>
-                                <th class="text-end" style="width: 100px;">Files</th>
-                                <th style="width: 220px;">Status</th>
-                                <th class="text-end action-col-folder">Folder Actions</th>
                                 <th class="text-end action-col-branch">Branch Actions</th>
+                                <th class="status-col">Status</th>
+                                <th class="text-end action-col-folder">Folder Actions</th>
+                                <th class="text-end count-col" title="Immediate child folders (subfolders)">Folders</th>
+                                <th class="text-end count-col">Files</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -312,7 +353,7 @@
                                             th:with="nextDir=${assignedFoldersSort == 'folderCount' and assignedFoldersDir == 'asc' ? 'desc' : 'asc'}">
                                             <a class="text-decoration-none"
                                                th:href="@{/discovery/{id}/classify(id=${discoverySession.id}, maxDepth=${maxDepth}, assignedStatus=${selectedAssignedStatus}, listPage=0, listSize=${assignedFoldersPageSize}, listSort='folderCount', listDir=${nextDir}, listQuery=${assignedFoldersQuery})}">
-                                                Subfolders
+                                                <span title="Immediate child folders (subfolders)">Folders</span>
                                             </a>
                                         </th>
                                         <th style="width: 100px;"
@@ -333,8 +374,14 @@
                                             th:classappend="|folder-name-${selectedAssignedStatus.toLowerCase()}|"
                                             th:text="${folder.path}">C:\path</td>
                                         <td th:text="${folder.depth}">0</td>
-                                        <td th:text="${folder.folderCount}">0</td>
-                                        <td th:text="${folder.fileCount}">0</td>
+                                        <td>
+                                            <span th:if="${folder.folderCount > 0}" th:text="${folder.folderCount}">1</span>
+                                            <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${folder.fileCount > 0}" th:text="${folder.fileCount}">1</span>
+                                            <span th:unless="${folder.fileCount > 0}" class="zero-dash">-</span>
+                                        </td>
                                     </tr>
                                     </tbody>
                                 </table>
@@ -613,16 +660,13 @@
                         if (badge) {
                             badge.className = `badge status-badge status-${status.toLowerCase()}`;
                             badge.textContent = status === 'SEMANTIC' ? 'EMBED' : status;
-                        }
-                        const source = row.querySelector('.status-source');
-                        if (source) {
-                            source.textContent = 'ASSIGNED';
+                            badge.title = `ASSIGNED: ${status === 'SEMANTIC' ? 'EMBED' : status}`;
                         }
                         // Update folder name styling
-                        const folderName = row.querySelector('.folder-name.fw-semibold');
+                        const folderName = row.querySelector('.folder-name-label');
                         if (folderName) {
                             folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
-                            folderName.classList.add('folder-name', 'fw-semibold', `folder-name-${status.toLowerCase()}`);
+                            folderName.classList.add('folder-name-label', `folder-name-${status.toLowerCase()}`);
                         }
                         // Update action button active/inactive states
                         row.querySelectorAll('.action-btn').forEach(btn => {
@@ -721,7 +765,7 @@
                        th:data-folder-id="${folder.id}">
 
                 <button type="button"
-                        class="btn btn-link p-0 text-decoration-none folder-name"
+                        class="btn btn-link p-0 text-decoration-none folder-toggle"
                         th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}"
                         onclick="toggleFolder(this)">
                     <i class="bi bi-chevron-right toggle-icon"></i>
@@ -729,20 +773,41 @@
                 <span th:unless="${foldersByParent.containsKey(folder.path) and depth < maxDepth}" style="width: 12px;"></span>
 
                 <i class="bi bi-folder text-warning"></i>
-                <span class="folder-name fw-semibold"
+                <span class="folder-name-label"
+                      th:title="${folder.path}"
                       th:classappend="|folder-name-${effectiveStatusLower}|"
                       th:text="${folder.name}">folder</span>
             </div>
         </td>
 
-        <td class="text-end" th:text="${folder.folderCount}">0</td>
-        <td class="text-end" th:text="${folder.fileCount}">0</td>
+        <td class="text-end action-col-branch">
+            <div class="btn-group btn-group-sm" role="group"
+                 th:if="${foldersByParent.containsKey(folder.path)}"
+                 title="Entire-branch actions">
+                <button type="button" class="btn btn-outline-danger action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="SKIP" title="Branch: SKIP">S</button>
+                <button type="button" class="btn btn-outline-warning action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="LOCATE" title="Branch: LOCATE">L</button>
+                <button type="button" class="btn btn-outline-success action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="INDEX" title="Branch: INDEX">I</button>
+                <button type="button" class="btn btn-outline-primary action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: ANALYZE">A</button>
+                <button type="button" class="btn btn-outline-secondary action-btn subtree-action"
+                        th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                        th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E</button>
+            </div>
+            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="zero-dash">-</span>
+        </td>
 
-        <td>
+        <td class="status-col">
             <span class="badge status-badge"
+                  th:title="|${statusSource}: ${statusLabel != null ? statusLabel : 'UNKNOWN'}|"
                   th:classappend="${effectiveStatus != null} ? |status-${effectiveStatusLower}| : 'status-unknown'"
                   th:text="${statusLabel != null ? statusLabel : 'UNKNOWN'}">UNKNOWN</span>
-            <span class="status-source ms-1" th:text="${statusSource}">ASSIGNED</span>
             <!-- Show suggested status if different from assigned -->
             <span th:if="${suggestedDiffers}" class="suggested-indicator"
                   th:title="|Suggested: ${folder.suggestedStatus}|">
@@ -778,27 +843,14 @@
             </div>
         </td>
 
-        <td class="text-end action-col-branch">
-            <div class="btn-group btn-group-sm" role="group"
-                 th:if="${foldersByParent.containsKey(folder.path)}"
-                 title="Entire-branch actions">
-                <button type="button" class="btn btn-outline-danger action-btn subtree-action"
-                        th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
-                        th:data-folder-path="${folder.path}" data-status="SKIP" title="Branch: SKIP">S*</button>
-                <button type="button" class="btn btn-outline-warning action-btn subtree-action"
-                        th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
-                        th:data-folder-path="${folder.path}" data-status="LOCATE" title="Branch: LOCATE">L*</button>
-                <button type="button" class="btn btn-outline-success action-btn subtree-action"
-                        th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
-                        th:data-folder-path="${folder.path}" data-status="INDEX" title="Branch: INDEX">I*</button>
-                <button type="button" class="btn btn-outline-primary action-btn subtree-action"
-                        th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
-                        th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: ANALYZE">A*</button>
-                <button type="button" class="btn btn-outline-secondary action-btn subtree-action"
-                        th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
-                        th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E*</button>
-            </div>
-            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="text-muted small">-</span>
+        <td class="text-end count-col">
+            <span th:if="${folder.folderCount > 0}" th:text="${folder.folderCount}">1</span>
+            <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
+        </td>
+
+        <td class="text-end count-col">
+            <span th:if="${folder.fileCount > 0}" th:text="${folder.fileCount}">1</span>
+            <span th:unless="${folder.fileCount > 0}" class="zero-dash">-</span>
         </td>
     </tr>
 

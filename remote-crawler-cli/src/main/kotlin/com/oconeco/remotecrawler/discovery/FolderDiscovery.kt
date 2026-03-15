@@ -68,11 +68,30 @@ class FolderDiscovery(
 
     private fun discoverRoot(root: Path, folders: MutableList<DiscoveredFolder>, stats: DiscoveryStats) {
         val rootDepth = root.nameCount
+        val recordedPaths = linkedSetOf<String>()
 
         Files.walkFileTree(root, setOf(), maxDepth, object : SimpleFileVisitor<Path>() {
 
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
                 val pathStr = dir.toAbsolutePath().toString()
+                val specialPolicy = specialFolderPolicy(pathStr)
+
+                if (specialPolicy != null) {
+                    recordFolder(
+                        dir = dir,
+                        pathStr = pathStr,
+                        rootDepth = rootDepth,
+                        folders = folders,
+                        stats = stats,
+                        recordedPaths = recordedPaths,
+                        forcedSuggestedStatus = specialPolicy.suggestedStatus,
+                        skipChildEstimate = !specialPolicy.descend
+                    )
+                    if (!specialPolicy.descend) {
+                        stats.skipped.incrementAndGet()
+                        return FileVisitResult.SKIP_SUBTREE
+                    }
+                }
 
                 // Check system exclusions (hard-coded for performance)
                 if (shouldExcludeSystem(pathStr)) {
@@ -80,36 +99,14 @@ class FolderDiscovery(
                     return FileVisitResult.SKIP_SUBTREE
                 }
 
-                // Calculate depth relative to root
-                val depth = dir.nameCount - rootDepth
-
-                // Quick child count estimate (just count, don't enumerate)
-                val childStats = estimateChildren(dir)
-
-                folders.add(
-                    DiscoveredFolder(
-                        path = pathStr,
-                        name = dir.fileName?.toString() ?: pathStr,
-                        depth = depth,
-                        folderCount = childStats.folders,
-                        fileCount = childStats.files,
-                        totalSize = childStats.totalSize,
-                        isHidden = isHidden(dir),
-                        suggestedStatus = suggestStatus(pathStr, dir.fileName?.toString())
-                    )
+                recordFolder(
+                    dir = dir,
+                    pathStr = pathStr,
+                    rootDepth = rootDepth,
+                    folders = folders,
+                    stats = stats,
+                    recordedPaths = recordedPaths
                 )
-
-                stats.discovered.incrementAndGet()
-
-                // Report progress every 1000 folders
-                if (stats.discovered.get() % 1000 == 0) {
-                    progressCallback?.invoke(
-                        DiscoveryProgress(
-                            foldersDiscovered = stats.discovered.get(),
-                            currentPath = pathStr
-                        )
-                    )
-                }
 
                 return FileVisitResult.CONTINUE
             }
@@ -122,6 +119,21 @@ class FolderDiscovery(
             override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
                 // Don't log every failure - too noisy
                 stats.errors.incrementAndGet()
+                if (runCatching { Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) }.getOrDefault(false)) {
+                    val pathStr = file.toAbsolutePath().toString()
+                    if (!shouldExcludeSystem(pathStr)) {
+                        recordFolder(
+                            dir = file,
+                            pathStr = pathStr,
+                            rootDepth = rootDepth,
+                            folders = folders,
+                            stats = stats,
+                            recordedPaths = recordedPaths,
+                            forcedSuggestedStatus = specialFolderPolicy(pathStr)?.suggestedStatus,
+                            skipChildEstimate = true
+                        )
+                    }
+                }
                 return FileVisitResult.CONTINUE
             }
 
@@ -168,29 +180,69 @@ class FolderDiscovery(
 
     private data class ChildStats(val folders: Int, val files: Int, val totalSize: Long)
 
+    private fun recordFolder(
+        dir: Path,
+        pathStr: String,
+        rootDepth: Int,
+        folders: MutableList<DiscoveredFolder>,
+        stats: DiscoveryStats,
+        recordedPaths: MutableSet<String>,
+        forcedSuggestedStatus: SuggestedStatus? = null,
+        skipChildEstimate: Boolean = false
+    ) {
+        if (!recordedPaths.add(pathStr)) {
+            return
+        }
+
+        val depth = dir.nameCount - rootDepth
+        val childStats = if (skipChildEstimate) ChildStats(0, 0, 0L) else estimateChildren(dir)
+        val name = dir.fileName?.toString() ?: pathStr
+
+        folders.add(
+            DiscoveredFolder(
+                path = pathStr,
+                name = name,
+                depth = depth,
+                folderCount = childStats.folders,
+                fileCount = childStats.files,
+                totalSize = childStats.totalSize,
+                isHidden = isHidden(dir),
+                suggestedStatus = forcedSuggestedStatus ?: suggestStatus(pathStr, name)
+            )
+        )
+
+        stats.discovered.incrementAndGet()
+        if (stats.discovered.get() % 1000 == 0) {
+            progressCallback?.invoke(
+                DiscoveryProgress(
+                    foldersDiscovered = stats.discovered.get(),
+                    currentPath = pathStr
+                )
+            )
+        }
+    }
+
     /**
      * Check if path should be excluded (system directories, virtual filesystems).
      */
     private fun shouldExcludeSystem(path: String): Boolean {
-        val lowerPath = path.lowercase()
+        val lowerPath = normalizeComparablePath(path)
 
         // Linux/Unix system directories
-        if (lowerPath.startsWith("/proc") ||
-            lowerPath.startsWith("/sys") ||
-            lowerPath.startsWith("/dev") ||
-            lowerPath.startsWith("/run") ||
-            lowerPath.startsWith("/snap") ||
-            lowerPath.startsWith("/boot") ||
-            lowerPath.startsWith("/lost+found")
+        if (lowerPath.startsWith("/proc/") ||
+            lowerPath.startsWith("/sys/") ||
+            lowerPath.startsWith("/dev/") ||
+            lowerPath.startsWith("/run/") ||
+            lowerPath.startsWith("/lost+found/")
         ) {
             return true
         }
 
         // Windows system directories
-        if (lowerPath.contains("\\windows\\") ||
-            lowerPath.contains("\\\$recycle.bin") ||
-            lowerPath.contains("\\system volume information") ||
-            lowerPath.endsWith("\\windows")
+        if (lowerPath.contains("/windows/") ||
+            lowerPath.contains("/\$recycle.bin") ||
+            lowerPath.contains("/system volume information") ||
+            lowerPath.endsWith("/windows")
         ) {
             return true
         }
@@ -205,6 +257,33 @@ class FolderDiscovery(
         }
 
         return false
+    }
+
+    internal fun specialFolderPolicy(path: String): SpecialFolderPolicy? {
+        return when (normalizeComparablePath(path)) {
+            "/proc",
+            "/sys",
+            "/dev",
+            "/run",
+            "/lost+found" -> SpecialFolderPolicy(
+                descend = false,
+                suggestedStatus = SuggestedStatus.SKIP
+            )
+            else -> null
+        }
+    }
+
+    private fun normalizeComparablePath(path: String): String {
+        var normalized = path.trim().replace('\\', '/').lowercase()
+        if (normalized.isBlank()) return "/"
+        normalized = normalized.replace(Regex("/{2,}"), "/")
+        if (!normalized.startsWith("/")) {
+            normalized = "/$normalized"
+        }
+        if (normalized.length > 1 && normalized.endsWith("/")) {
+            normalized = normalized.removeSuffix("/")
+        }
+        return normalized
     }
 
     /**
@@ -314,3 +393,8 @@ private class DiscoveryStats {
     val skipped = AtomicInteger(0)
     val errors = AtomicInteger(0)
 }
+
+internal data class SpecialFolderPolicy(
+    val descend: Boolean,
+    val suggestedStatus: SuggestedStatus
+)

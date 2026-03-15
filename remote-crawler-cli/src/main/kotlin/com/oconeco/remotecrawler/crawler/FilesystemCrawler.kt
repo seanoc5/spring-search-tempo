@@ -275,6 +275,8 @@ class FilesystemCrawler(
                 skipBranchCache[path] = true
             }
         }
+        val recordedFolders = ConcurrentHashMap.newKeySet<String>()
+        val accessDeniedNotedFolders = ConcurrentHashMap.newKeySet<String>()
         val skipSampleCountByFolder = ConcurrentHashMap<String, Int>()
 
         // Build file visit options
@@ -367,6 +369,7 @@ class FilesystemCrawler(
                         } else {
                             stats.foldersSuppressed.incrementAndGet()
                         }
+                        recordedFolders.add(normalizedPath)
                     }
                     stats.foldersProcessed.incrementAndGet()
 
@@ -393,6 +396,7 @@ class FilesystemCrawler(
                     } else {
                         stats.foldersSuppressed.incrementAndGet()
                     }
+                    recordedFolders.add(normalizedPath)
                     stats.foldersProcessed.incrementAndGet()
                 }
 
@@ -495,6 +499,27 @@ class FilesystemCrawler(
             override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
                 log.warn("Failed to visit file: {} - {}", file, exc.message)
                 stats.errors.incrementAndGet()
+                if (runCatching { Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) }.getOrDefault(false)) {
+                    recordFolderAccessDenied(
+                        dir = file,
+                        exc = exc,
+                        allStartPaths = allStartPaths,
+                        preloadedFolders = preloadedFolders,
+                        folderStatusCache = folderStatusCache,
+                        effectivePatterns = effectivePatterns,
+                        pendingFolders = pendingFolders,
+                        pendingFiles = pendingFiles,
+                        pendingDiscoveryFolders = pendingDiscoveryFolders,
+                        pendingDiscoveryFileSamples = pendingDiscoveryFileSamples,
+                        host = host,
+                        crawlConfigId = config.crawlConfigId,
+                        sessionId = sessionId,
+                        stats = stats,
+                        batchController = batchController,
+                        recordedFolders = recordedFolders,
+                        accessDeniedNotedFolders = accessDeniedNotedFolders
+                    )
+                }
                 return FileVisitResult.CONTINUE
             }
 
@@ -502,6 +527,25 @@ class FilesystemCrawler(
                 if (exc != null) {
                     log.warn("Error after visiting directory: {} - {}", dir, exc.message)
                     stats.errors.incrementAndGet()
+                    recordFolderAccessDenied(
+                        dir = dir,
+                        exc = exc,
+                        allStartPaths = allStartPaths,
+                        preloadedFolders = preloadedFolders,
+                        folderStatusCache = folderStatusCache,
+                        effectivePatterns = effectivePatterns,
+                        pendingFolders = pendingFolders,
+                        pendingFiles = pendingFiles,
+                        pendingDiscoveryFolders = pendingDiscoveryFolders,
+                        pendingDiscoveryFileSamples = pendingDiscoveryFileSamples,
+                        host = host,
+                        crawlConfigId = config.crawlConfigId,
+                        sessionId = sessionId,
+                        stats = stats,
+                        batchController = batchController,
+                        recordedFolders = recordedFolders,
+                        accessDeniedNotedFolders = accessDeniedNotedFolders
+                    )
                 }
                 return FileVisitResult.CONTINUE
             }
@@ -525,21 +569,110 @@ class FilesystemCrawler(
     private fun createFolderItem(
         path: Path,
         status: AnalysisStatus,
-        metadata: FileSystemMetadata,
-        startPaths: List<Path>
+        metadata: FileSystemMetadata?,
+        startPaths: List<Path>,
+        description: String? = null
     ): FolderIngestItem {
         val depth = PathUtils.calculateCrawlDepth(path, startPaths)
+        val owner = getOwner(path)
+        val group = getGroup(path)
         val permissions = getPermissions(path)
+        val label = metadata?.name
+            ?.takeIf { it.isNotBlank() }
+            ?: path.fileName?.toString()
+            ?: path.toAbsolutePath().toString()
 
         return FolderIngestItem(
             path = path.toAbsolutePath().toString(),
             analysisStatus = status,
-            label = metadata.name,
+            label = label,
+            description = description,
             crawlDepth = depth,
-            size = metadata.size,
-            fsLastModified = metadata.lastModifiedIso(),
+            size = metadata?.size,
+            fsLastModified = metadata?.lastModifiedIso(),
+            owner = owner,
+            group = group,
             permissions = permissions
         )
+    }
+
+    private fun recordFolderAccessDenied(
+        dir: Path,
+        exc: IOException,
+        allStartPaths: List<Path>,
+        preloadedFolders: Map<String, FolderSnapshotState>,
+        folderStatusCache: ConcurrentHashMap<String, AnalysisStatus>,
+        effectivePatterns: EffectivePatterns,
+        pendingFolders: ConcurrentLinkedQueue<FolderIngestItem>,
+        pendingFiles: ConcurrentLinkedQueue<FileIngestItem>,
+        pendingDiscoveryFolders: ConcurrentLinkedQueue<DiscoveryFolderObsIngestItem>,
+        pendingDiscoveryFileSamples: ConcurrentLinkedQueue<DiscoveryFileSampleIngestItem>,
+        host: String,
+        crawlConfigId: Long,
+        sessionId: Long,
+        stats: CrawlStats,
+        batchController: AdaptiveBatchController,
+        recordedFolders: MutableSet<String>,
+        accessDeniedNotedFolders: MutableSet<String>
+    ) {
+        if (exc !is AccessDeniedException && !isPermissionDenied(exc)) {
+            return
+        }
+
+        val pathStr = dir.toAbsolutePath().toString()
+        val normalizedPath = PathUtils.normalizeComparablePath(pathStr)
+        if (!accessDeniedNotedFolders.add(normalizedPath)) {
+            return
+        }
+
+        val normalizedParentPath = dir.parent
+            ?.toAbsolutePath()
+            ?.toString()
+            ?.let { PathUtils.normalizeComparablePath(it) }
+        val preloadedStatus = preloadedFolders[normalizedPath]?.analysisStatus
+        val parentStatus = normalizedParentPath?.let { folderStatusCache[it] }
+        val resolvedStatus = preloadedStatus ?: patternMatcher.determineFolderAnalysisStatus(
+            pathStr,
+            effectivePatterns.folderPatterns,
+            parentStatus,
+            effectivePatterns.folderPatternPriority
+        )
+
+        folderStatusCache[normalizedPath] = resolvedStatus
+        pendingFolders.add(
+            createFolderItem(
+                path = dir,
+                status = resolvedStatus,
+                metadata = FileSystemMetadata.fromPath(dir),
+                startPaths = allStartPaths,
+                description = buildAccessDeniedDescription(pathStr, exc)
+            )
+        )
+        if (recordedFolders.add(normalizedPath)) {
+            stats.foldersProcessed.incrementAndGet()
+        }
+
+        maybeFlush(
+            folders = pendingFolders,
+            files = pendingFiles,
+            discoveryFolders = pendingDiscoveryFolders,
+            discoveryFileSamples = pendingDiscoveryFileSamples,
+            host = host,
+            crawlConfigId = crawlConfigId,
+            sessionId = sessionId,
+            stats = stats,
+            batchController = batchController
+        )
+    }
+
+    private fun buildAccessDeniedDescription(path: String, exc: IOException): String {
+        val detail = exc.message?.trim().orEmpty().ifBlank { "access denied" }
+        return "Directory enumeration blocked for $path: $detail"
+    }
+
+    private fun isPermissionDenied(exc: IOException): Boolean {
+        val message = exc.message?.lowercase().orEmpty()
+        return "permission denied" in message || "access denied" in message
     }
 
     private fun createFileItem(
@@ -549,6 +682,8 @@ class FilesystemCrawler(
         startPaths: List<Path>
     ): FileIngestItem {
         val depth = PathUtils.calculateCrawlDepth(path, startPaths)
+        val owner = getOwner(path)
+        val group = getGroup(path)
         val permissions = getPermissions(path)
 
         // Extract text for INDEX+ files
@@ -597,6 +732,8 @@ class FilesystemCrawler(
             crawlDepth = depth,
             size = metadata.size,
             fsLastModified = metadata.lastModifiedIso(),
+            owner = owner,
+            group = group,
             permissions = permissions,
             bodyText = bodyText,
             bodySize = bodySize,
@@ -617,6 +754,24 @@ class FilesystemCrawler(
         return try {
             val perms = Files.getPosixFilePermissions(path)
             PosixFilePermissions.toString(perms)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getOwner(path: Path): String? {
+        return try {
+            Files.getOwner(path)?.name
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getGroup(path: Path): String? {
+        return try {
+            Files.readAttributes(path, java.nio.file.attribute.PosixFileAttributes::class.java)
+                ?.group()
+                ?.name
         } catch (e: Exception) {
             null
         }
