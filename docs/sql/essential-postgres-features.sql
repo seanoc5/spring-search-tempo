@@ -31,11 +31,12 @@
 \echo '=== Applying PostgreSQL-specific features ==='
 
 -- =============================================================================
--- 1. PGVECTOR EXTENSION
+-- 1. EXTENSIONS
 -- =============================================================================
-\echo '>>> Enabling pgvector extension...'
+\echo '>>> Enabling PostgreSQL extensions...'
 
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For search suggestions/autocomplete
 
 -- =============================================================================
 -- 2. FULL-TEXT SEARCH: GENERATED COLUMNS
@@ -205,10 +206,87 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION search_chunks_with_sentiment IS 'Search content chunks with optional sentiment filtering and NLP-enhanced ranking';
 
+-- Search suggestions using trigram similarity
+DROP FUNCTION IF EXISTS search_suggest(TEXT, INTEGER);
+
+CREATE OR REPLACE FUNCTION search_suggest(
+    partial_query TEXT,
+    limit_results INTEGER DEFAULT 10
+) RETURNS TABLE (
+    term TEXT,
+    source TEXT,
+    similarity REAL
+) AS $$
+BEGIN
+    -- Return terms similar to the partial query from titles, labels, and authors
+    RETURN QUERY
+    WITH candidates AS (
+        -- File titles
+        SELECT DISTINCT
+            f.title as term,
+            'title' as source,
+            similarity(f.title, partial_query) as sim
+        FROM fsfile f
+        WHERE f.title IS NOT NULL
+          AND f.title % partial_query  -- trigram similarity operator
+          AND length(f.title) > 2
+
+        UNION ALL
+
+        -- File labels (filenames)
+        SELECT DISTINCT
+            f.label as term,
+            'label' as source,
+            similarity(f.label, partial_query) as sim
+        FROM fsfile f
+        WHERE f.label IS NOT NULL
+          AND f.label % partial_query
+          AND length(f.label) > 2
+
+        UNION ALL
+
+        -- Authors
+        SELECT DISTINCT
+            f.author as term,
+            'author' as source,
+            similarity(f.author, partial_query) as sim
+        FROM fsfile f
+        WHERE f.author IS NOT NULL
+          AND f.author % partial_query
+          AND length(f.author) > 2
+
+        UNION ALL
+
+        -- Keywords
+        SELECT DISTINCT
+            f.keywords as term,
+            'keywords' as source,
+            similarity(f.keywords, partial_query) as sim
+        FROM fsfile f
+        WHERE f.keywords IS NOT NULL
+          AND f.keywords % partial_query
+          AND length(f.keywords) > 2
+    )
+    SELECT c.term, c.source, c.sim
+    FROM candidates c
+    WHERE c.sim > 0.1
+    ORDER BY c.sim DESC
+    LIMIT limit_results;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION search_suggest IS 'Autocomplete suggestions using trigram similarity on titles, labels, authors, keywords';
+
 -- =============================================================================
 -- 6. PERFORMANCE INDEXES
 -- =============================================================================
 \echo '>>> Creating performance indexes...'
+
+-- Trigram indexes for search suggestions/autocomplete
+CREATE INDEX IF NOT EXISTS idx_fsfile_title_trgm ON fsfile USING GIN(title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fsfile_label_trgm ON fsfile USING GIN(label gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fsfile_author_trgm ON fsfile USING GIN(author gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fsfile_keywords_trgm ON fsfile USING GIN(keywords gin_trgm_ops);
 
 -- Job run lookups (for file/folder browsing by crawl config)
 CREATE INDEX IF NOT EXISTS idx_fsfile_job_run_id ON fsfile(job_run_id);

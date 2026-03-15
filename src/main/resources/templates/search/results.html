@@ -3,6 +3,43 @@
         layout:decorate="~{layout}">
     <head>
         <title>Full-Text Search</title>
+        <style>
+            .autocomplete-container {
+                position: relative;
+            }
+            .autocomplete-dropdown {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                z-index: 1000;
+                max-height: 300px;
+                overflow-y: auto;
+                background: white;
+                border: 1px solid #dee2e6;
+                border-top: none;
+                border-radius: 0 0 0.375rem 0.375rem;
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+                display: none;
+            }
+            .autocomplete-dropdown.show {
+                display: block;
+            }
+            .autocomplete-item {
+                padding: 0.5rem 1rem;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .autocomplete-item:hover, .autocomplete-item.active {
+                background-color: #e9ecef;
+            }
+            .autocomplete-source {
+                font-size: 0.75rem;
+                color: #6c757d;
+            }
+        </style>
     </head>
     <body>
         <div layout:fragment="content">
@@ -59,14 +96,19 @@
                     <form th:action="@{/search}" method="get" id="searchForm">
                         <div class="row g-3 mb-3">
                             <div class="col-md-10">
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                    <input type="text"
-                                           name="q"
-                                           th:value="${query}"
-                                           placeholder="Search indexed content..."
-                                           class="form-control form-control-lg"
-                                           autofocus>
+                                <div class="autocomplete-container">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                        <input type="text"
+                                               id="searchInput"
+                                               name="q"
+                                               th:value="${query}"
+                                               placeholder="Search indexed content..."
+                                               class="form-control form-control-lg"
+                                               autocomplete="off"
+                                               autofocus>
+                                    </div>
+                                    <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -243,5 +285,122 @@
                 </div>
             </div>
         </div>
+
+        <script th:inline="javascript">
+            document.addEventListener('DOMContentLoaded', function() {
+                const searchInput = document.getElementById('searchInput');
+                const dropdown = document.getElementById('autocompleteDropdown');
+                let debounceTimer;
+                let activeIndex = -1;
+
+                if (!searchInput || !dropdown) return;
+
+                // Fetch suggestions from API
+                async function fetchSuggestions(query) {
+                    if (query.length < 2) {
+                        dropdown.classList.remove('show');
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/search/suggest?q=${encodeURIComponent(query)}&limit=8`);
+                        if (!response.ok) return;
+
+                        const suggestions = await response.json();
+                        renderSuggestions(suggestions);
+                    } catch (e) {
+                        console.warn('Failed to fetch suggestions:', e);
+                    }
+                }
+
+                // Render suggestions in dropdown
+                function renderSuggestions(suggestions) {
+                    if (!suggestions || suggestions.length === 0) {
+                        dropdown.classList.remove('show');
+                        return;
+                    }
+
+                    dropdown.innerHTML = suggestions.map((s, index) => `
+                        <div class="autocomplete-item" data-index="${index}" data-term="${escapeHtml(s.term)}">
+                            <span>${escapeHtml(s.term)}</span>
+                            <span class="autocomplete-source">${s.source}</span>
+                        </div>
+                    `).join('');
+
+                    activeIndex = -1;
+                    dropdown.classList.add('show');
+
+                    // Add click handlers
+                    dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                        item.addEventListener('click', function() {
+                            searchInput.value = this.dataset.term;
+                            dropdown.classList.remove('show');
+                            searchInput.form.submit();
+                        });
+                    });
+                }
+
+                // Escape HTML for safe rendering
+                function escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                }
+
+                // Update active suggestion
+                function updateActive(items) {
+                    items.forEach((item, i) => {
+                        item.classList.toggle('active', i === activeIndex);
+                    });
+                    if (activeIndex >= 0 && items[activeIndex]) {
+                        items[activeIndex].scrollIntoView({ block: 'nearest' });
+                    }
+                }
+
+                // Input event with debounce
+                searchInput.addEventListener('input', function() {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        fetchSuggestions(this.value);
+                    }, 200);
+                });
+
+                // Keyboard navigation
+                searchInput.addEventListener('keydown', function(e) {
+                    const items = dropdown.querySelectorAll('.autocomplete-item');
+                    if (!items.length) return;
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        activeIndex = Math.min(activeIndex + 1, items.length - 1);
+                        updateActive(items);
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        activeIndex = Math.max(activeIndex - 1, -1);
+                        updateActive(items);
+                    } else if (e.key === 'Enter' && activeIndex >= 0) {
+                        e.preventDefault();
+                        searchInput.value = items[activeIndex].dataset.term;
+                        dropdown.classList.remove('show');
+                        searchInput.form.submit();
+                    } else if (e.key === 'Escape') {
+                        dropdown.classList.remove('show');
+                        activeIndex = -1;
+                    }
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                    }
+                });
+
+                // Close dropdown on focus out
+                searchInput.addEventListener('blur', function() {
+                    setTimeout(() => dropdown.classList.remove('show'), 150);
+                });
+            });
+        </script>
     </body>
 </html>
