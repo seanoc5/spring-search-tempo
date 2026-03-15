@@ -414,12 +414,16 @@ dependencies {
 - [ ] Production deployment scripts with backup/restore procedures
 - [ ] **Status**: Current approach works well for RAD; revisit if needed for multi-environment deployments
 
-#### 4.2 Advanced Search UI
-- [ ] Faceted search (filter by author, date, type)
-- [ ] Search suggestions/autocomplete
-- [ ] Highlighted snippets
-- [ ] Result previews
-- [ ] **Effort**: 7 days
+#### 4.2 Advanced Search UI 🔄 IN PROGRESS (70%)
+- [x] Search suggestions/autocomplete (pg_trgm trigram similarity)
+- [x] Search statistics endpoint (materialized view)
+- [x] Date range filtering (from/to date pickers)
+- [x] Author/sender filtering (case-insensitive)
+- [x] Highlighted snippets (existing ts_headline)
+- [ ] Entity type facets (filter by PERSON, ORG, etc.)
+- [ ] Search history/recent queries
+- [ ] Result previews (expand/collapse)
+- **Completed**: 2026-03-15 (partial)
 
 #### 4.3 User Management & Permissions
 - [ ] User registration and profiles
