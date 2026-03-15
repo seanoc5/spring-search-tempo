@@ -23,11 +23,11 @@ This document outlines the development roadmap for Spring Search Tempo, a full-t
 
 ---
 
-## Current Status (v0.2.1)
+## Current Status (v0.3.0)
 
-**Version**: 0.2.1 - "Remote Crawling + Batch Observability"
-**Last Updated**: 2026-03-14
-**Active Phase**: Phase 2 - NLP Integration (95% complete)
+**Version**: 0.3.0 - "Semantic Search + Hybrid Ranking"
+**Last Updated**: 2026-03-15
+**Active Phase**: Phase 4 - Advanced Features & Production Hardening
 
 ### Phase 1 - Core Foundation ✅ COMPLETE (100%)
 
@@ -322,7 +322,7 @@ dependencies {
 
 ---
 
-## Phase 3: Semantic Search with Embeddings 🔄 IN PROGRESS (80%)
+## Phase 3: Semantic Search with Embeddings ✅ COMPLETE (100%)
 
 **Goal**: Enable semantic similarity search using vector embeddings and hybrid keyword+semantic ranking.
 
@@ -354,15 +354,17 @@ dependencies {
 - [x] Find similar chunks by ID feature
 - **Completed**: 2026-03-15
 
-### Remaining Features
+#### 3.4 Hybrid Search Ranking ✅ DONE
+- [x] Combine keyword (FTS) and semantic (vector) scores
+- [x] Reciprocal Rank Fusion (RRF) algorithm with configurable weights
+- [x] HybridSearchService with weight normalization
+- [x] REST endpoints: GET /api/search/hybrid, /api/search/hybrid/stats
+- [x] Web UI: /search/hybrid with interactive weight sliders
+- [x] Score breakdown visualization (FTS, semantic, RRF)
+- [x] "Found by" badges (FTS, Semantic, Both)
+- **Completed**: 2026-03-15
 
-#### 3.4 Hybrid Search Ranking (Planned)
-- [ ] Combine keyword (FTS) and semantic (vector) scores
-- [ ] Implement ranking algorithms (RRF, weighted sum)
-- [ ] Unified search API with hybrid mode
-- **Effort**: 4-5 days
-
-#### 3.5 Advanced Features (Future)
+### Future Enhancements (Phase 3.5)
 - [ ] Document-level embeddings (aggregate chunk embeddings)
 - [ ] Query expansion using embeddings
 - [ ] Cross-encoder reranking for precision
@@ -390,7 +392,8 @@ dependencies {
 - [x] Vector search returns semantically similar documents
 - [x] Embedding generation batch job processes all eligible chunks
 - [x] GPU detection warns users about CPU-only performance
-- [ ] Hybrid search outperforms keyword-only (future)
+- [x] Hybrid search combines FTS and semantic with RRF ranking
+- [x] Weight sliders allow tuning FTS vs semantic preference
 - [ ] Search latency < 200ms for 95th percentile
 - [ ] User satisfaction survey shows preference for semantic search
 - [ ] Test coverage maintained > 70%
@@ -729,11 +732,12 @@ Features are prioritized based on:
 
 | Date       | Change                  | Author |
 |------------|-------------------------|--------|
+| 2026-03-15 | Mark Phase 3 complete - hybrid search with RRF ranking | Claude |
 | 2025-12-11 | Updated Phase 2 status - NLP/Email infrastructure complete | Claude |
 | 2025-11-07 | Initial roadmap created | Sean   |
 
 ---
 
-**Last Updated**: 2025-12-11
-**Version**: 1.1
+**Last Updated**: 2026-03-15
+**Version**: 1.2
 **Status**: Living Document
