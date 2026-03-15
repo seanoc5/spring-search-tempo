@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
 import com.oconeco.spring_search_tempo.base.service.ContentType
 import com.oconeco.spring_search_tempo.base.service.FullTextSearchService
 import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
+import com.oconeco.spring_search_tempo.base.service.HybridSearchService
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Controller
@@ -20,7 +21,8 @@ import org.springframework.web.bind.annotation.RequestParam
 @RequestMapping("/search")
 class SearchController(
     private val searchService: FullTextSearchService,
-    private val semanticSearchService: SemanticSearchService
+    private val semanticSearchService: SemanticSearchService,
+    private val hybridSearchService: HybridSearchService
 ) {
 
     @GetMapping
@@ -179,5 +181,41 @@ class SearchController(
         }
 
         return "search/semantic-results"
+    }
+
+    @GetMapping("/hybrid")
+    fun searchHybrid(
+        @RequestParam(required = false) q: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+        @RequestParam(defaultValue = "0.5") ftsWeight: Double,
+        @RequestParam(defaultValue = "0.5") semanticWeight: Double,
+        model: Model
+    ): String {
+        model.addAttribute("query", q ?: "")
+        model.addAttribute("ftsWeight", ftsWeight)
+        model.addAttribute("semanticWeight", semanticWeight)
+        model.addAttribute("searchType", "hybrid")
+
+        // Add stats for display
+        val stats = hybridSearchService.getStats()
+        model.addAttribute("stats", stats)
+
+        if (!q.isNullOrBlank()) {
+            try {
+                val effectiveLimit = limit.coerceIn(1, 100)
+                val results = hybridSearchService.search(q, effectiveLimit, ftsWeight, semanticWeight)
+
+                model.addAttribute("results", results)
+                model.addAttribute("totalResults", results.size)
+                model.addAttribute("hasResults", results.isNotEmpty())
+            } catch (e: Exception) {
+                model.addAttribute("error", "Hybrid search failed: ${e.message}")
+                model.addAttribute("hasResults", false)
+            }
+        } else {
+            model.addAttribute("hasResults", false)
+        }
+
+        return "search/hybrid-results"
     }
 }

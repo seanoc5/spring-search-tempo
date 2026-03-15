@@ -7,6 +7,9 @@ import com.oconeco.spring_search_tempo.base.service.SearchResult
 import com.oconeco.spring_search_tempo.base.service.SemanticSearchResult
 import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
 import com.oconeco.spring_search_tempo.base.service.SemanticSearchStats
+import com.oconeco.spring_search_tempo.base.service.HybridSearchResult
+import com.oconeco.spring_search_tempo.base.service.HybridSearchService
+import com.oconeco.spring_search_tempo.base.service.HybridSearchStats
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -47,7 +50,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/search")
 class SearchResource(
     private val searchService: FullTextSearchService,
-    private val semanticSearchService: SemanticSearchService
+    private val semanticSearchService: SemanticSearchService,
+    private val hybridSearchService: HybridSearchService
 ) {
 
     /**
@@ -182,6 +186,42 @@ class SearchResource(
     @GetMapping("/semantic/stats", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getSemanticStats(): ResponseEntity<SemanticSearchStats> {
         val stats = semanticSearchService.getStats()
+        return ResponseEntity.ok(stats)
+    }
+
+    // ==================== HYBRID SEARCH (FTS + Semantic) ====================
+
+    /**
+     * Hybrid search combining keyword (FTS) and semantic (vector) results.
+     *
+     * Uses Reciprocal Rank Fusion (RRF) to merge results from both search methods:
+     * - FTS provides exact keyword matching with linguistic analysis
+     * - Semantic search finds conceptually similar content regardless of keywords
+     *
+     * @param q Search query
+     * @param limit Maximum results (default 20, max 100)
+     * @param ftsWeight Weight for FTS results (0.0-1.0, default 0.5)
+     * @param semanticWeight Weight for semantic results (0.0-1.0, default 0.5)
+     * @return Combined and re-ranked results
+     */
+    @GetMapping("/hybrid", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun searchHybrid(
+        @RequestParam q: String,
+        @RequestParam(defaultValue = "20") limit: Int,
+        @RequestParam(defaultValue = "0.5") ftsWeight: Double,
+        @RequestParam(defaultValue = "0.5") semanticWeight: Double
+    ): ResponseEntity<List<HybridSearchResult>> {
+        val effectiveLimit = limit.coerceIn(1, 100)
+        val results = hybridSearchService.search(q, effectiveLimit, ftsWeight, semanticWeight)
+        return ResponseEntity.ok(results)
+    }
+
+    /**
+     * Get hybrid search status and statistics.
+     */
+    @GetMapping("/hybrid/stats", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getHybridStats(): ResponseEntity<HybridSearchStats> {
+        val stats = hybridSearchService.getStats()
         return ResponseEntity.ok(stats)
     }
 }

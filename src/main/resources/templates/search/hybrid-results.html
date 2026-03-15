@@ -1,0 +1,314 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>Hybrid Search</title>
+        <style>
+            .score-bar {
+                height: 6px;
+                background-color: #e9ecef;
+                border-radius: 3px;
+                overflow: hidden;
+                width: 60px;
+            }
+            .score-fill-fts {
+                height: 100%;
+                background: #0d6efd;
+                border-radius: 3px;
+            }
+            .score-fill-semantic {
+                height: 100%;
+                background: #198754;
+                border-radius: 3px;
+            }
+            .score-fill-hybrid {
+                height: 100%;
+                background: linear-gradient(90deg, #6f42c1, #d63384);
+                border-radius: 3px;
+            }
+            .found-badge { font-size: 0.7em; }
+            .source-FILE { background-color: #0d6efd !important; }
+            .source-EMAIL { background-color: #198754 !important; }
+            .source-ONEDRIVE { background-color: #0dcaf0 !important; }
+        </style>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+                    <li class="breadcrumb-item"><a th:href="@{/search}">Search</a></li>
+                    <li class="breadcrumb-item active">Hybrid</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex flex-wrap mb-4">
+                <h1 class="flex-grow-1"><i class="bi bi-intersect me-2"></i>Hybrid Search</h1>
+            </div>
+
+            <!-- Search Tabs -->
+            <ul class="nav nav-tabs mb-4">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search(q=${query})}">
+                        <i class="bi bi-collection me-1"></i>All
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/files(q=${query})}">
+                        <i class="bi bi-file-earmark me-1"></i>Files
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/chunks(q=${query})}">
+                        <i class="bi bi-text-paragraph me-1"></i>Chunks
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/search/semantic(q=${query})}">
+                        <i class="bi bi-stars me-1"></i>Semantic
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" th:href="@{/search/hybrid(q=${query})}">
+                        <i class="bi bi-intersect me-1"></i>Hybrid
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Status Banner -->
+            <div th:if="${stats != null}" class="alert mb-4"
+                 th:classappend="${stats.hybridAvailable} ? 'alert-info' : 'alert-warning'">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi me-2" th:classappend="${stats.hybridAvailable} ? 'bi-check-circle' : 'bi-exclamation-triangle'"></i>
+                        <span th:if="${stats.hybridAvailable}">
+                            Hybrid mode: <strong>FTS + Semantic</strong>
+                            (<span th:text="${stats.embeddingModel}">model</span>)
+                        </span>
+                        <span th:unless="${stats.hybridAvailable}">
+                            Hybrid search unavailable. Start Ollama for semantic component.
+                            <br><small class="text-muted">Falling back to FTS-only search.</small>
+                        </span>
+                    </div>
+                    <div class="text-muted small">
+                        <span th:text="${stats.chunksWithEmbedding}">0</span> / <span th:text="${stats.totalChunks}">0</span> chunks embedded
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Box -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form th:action="@{/search/hybrid}" method="get">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-intersect"></i></span>
+                                    <input type="text"
+                                           name="q"
+                                           th:value="${query}"
+                                           placeholder="Search with keywords + meaning..."
+                                           class="form-control form-control-lg"
+                                           autofocus>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary btn-lg w-100">Search</button>
+                            </div>
+                        </div>
+                        <!-- Weight Sliders -->
+                        <div class="row g-3 align-items-center">
+                            <div class="col-auto">
+                                <label class="form-label mb-0 small text-muted">FTS Weight:</label>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="range" class="form-range" name="ftsWeight"
+                                       min="0" max="1" step="0.1" th:value="${ftsWeight}"
+                                       id="ftsWeightSlider">
+                            </div>
+                            <div class="col-auto">
+                                <span id="ftsWeightValue" class="badge bg-primary" th:text="${ftsWeight}">0.5</span>
+                            </div>
+                            <div class="col-auto">
+                                <label class="form-label mb-0 small text-muted">Semantic Weight:</label>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="range" class="form-range" name="semanticWeight"
+                                       min="0" max="1" step="0.1" th:value="${semanticWeight}"
+                                       id="semanticWeightSlider">
+                            </div>
+                            <div class="col-auto">
+                                <span id="semanticWeightValue" class="badge bg-success" th:text="${semanticWeight}">0.5</span>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Combines keyword matching (FTS) with semantic similarity using RRF ranking
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Alert -->
+            <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>[[${error}]]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <!-- Results -->
+            <div th:if="${hasResults}">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">
+                        Found <strong th:text="${totalResults}">0</strong> results
+                    </span>
+                    <div class="small">
+                        <span class="badge bg-primary me-1">FTS</span>
+                        <span class="badge bg-success me-1">Semantic</span>
+                        <span class="badge bg-secondary">Both</span>
+                    </div>
+                </div>
+
+                <div class="list-group mb-4">
+                    <div th:each="result, iter : ${results}" class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h5 class="mb-1">
+                                    <a th:href="@{|/contentChunks/${result.chunkId}|}"
+                                       th:text="${result.sourceLabel ?: 'Chunk #' + result.chunkId}" class="text-decoration-none">
+                                        Result title
+                                    </a>
+                                    <!-- Found-by badges -->
+                                    <span th:if="${result.foundBy.contains(T(com.oconeco.spring_search_tempo.base.service.SearchMethod).BOTH)}"
+                                          class="badge bg-secondary found-badge ms-2">Both</span>
+                                    <span th:if="${!result.foundBy.contains(T(com.oconeco.spring_search_tempo.base.service.SearchMethod).BOTH) && result.foundBy.contains(T(com.oconeco.spring_search_tempo.base.service.SearchMethod).FTS)}"
+                                          class="badge bg-primary found-badge ms-2">FTS</span>
+                                    <span th:if="${!result.foundBy.contains(T(com.oconeco.spring_search_tempo.base.service.SearchMethod).BOTH) && result.foundBy.contains(T(com.oconeco.spring_search_tempo.base.service.SearchMethod).SEMANTIC)}"
+                                          class="badge bg-success found-badge ms-2">Semantic</span>
+                                </h5>
+                                <!-- Source Info -->
+                                <div class="mb-2">
+                                    <span class="badge me-2" th:classappend="'source-' + ${result.sourceType}">
+                                        <i class="bi me-1" th:classappend="${result.sourceType == 'FILE'} ? 'bi-file-earmark' : (${result.sourceType == 'EMAIL'} ? 'bi-envelope' : 'bi-cloud')"></i>
+                                        [[${result.sourceType}]]
+                                    </span>
+                                    <span th:if="${result.chunkType}" class="badge bg-light text-dark me-2">
+                                        [[${result.chunkType}]]
+                                    </span>
+                                    <span th:if="${result.sentiment}" class="badge me-2"
+                                          th:classappend="${result.sentiment == 'POSITIVE' ? 'bg-success' : (result.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                                        [[${result.sentiment}]]
+                                    </span>
+                                </div>
+                                <p th:if="${result.sourceUri}" class="mb-1 text-muted small text-break" th:text="${result.sourceUri}">source uri</p>
+                                <!-- Show snippet if available, otherwise text preview -->
+                                <p class="mb-1" th:if="${result.snippet}" th:utext="${result.snippet}">
+                                    Highlighted snippet...
+                                </p>
+                                <p class="mb-1" th:unless="${result.snippet}" th:text="${#strings.abbreviate(result.text, 300)}">
+                                    Content preview...
+                                </p>
+                            </div>
+                            <div class="ms-3 text-end" style="min-width: 120px;">
+                                <!-- Hybrid Score -->
+                                <div class="mb-2">
+                                    <span class="badge bg-purple" style="background: linear-gradient(90deg, #6f42c1, #d63384);"
+                                          th:text="'#' + ${iter.index + 1}">1</span>
+                                </div>
+                                <!-- Score breakdown -->
+                                <div class="small">
+                                    <div th:if="${result.ftsRank != null}" class="d-flex align-items-center mb-1">
+                                        <span class="text-muted me-1">FTS:</span>
+                                        <div class="score-bar me-1">
+                                            <div class="score-fill-fts" th:style="'width:' + ${result.ftsRank * 100} + '%'"></div>
+                                        </div>
+                                        <span class="text-muted" th:text="${#numbers.formatDecimal(result.ftsRank, 1, 2)}">0.50</span>
+                                    </div>
+                                    <div th:if="${result.semanticSimilarity != null}" class="d-flex align-items-center mb-1">
+                                        <span class="text-muted me-1">Sem:</span>
+                                        <div class="score-bar me-1">
+                                            <div class="score-fill-semantic" th:style="'width:' + ${result.semanticSimilarity * 100} + '%'"></div>
+                                        </div>
+                                        <span class="text-muted" th:text="${#numbers.formatDecimal(result.semanticSimilarity, 1, 2)}">0.85</span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="text-muted me-1">RRF:</span>
+                                        <div class="score-bar me-1">
+                                            <div class="score-fill-hybrid" th:style="'width:' + ${result.hybridScore * 5000} + '%'"></div>
+                                        </div>
+                                        <span class="text-muted" th:text="${#numbers.formatDecimal(result.hybridScore, 1, 4)}">0.0150</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- No Results -->
+            <div th:if="${query != null && query != '' && !hasResults && error == null}">
+                <div class="alert alert-warning">
+                    <i class="bi bi-search me-2"></i>
+                    No results found for "<strong th:text="${query}">query</strong>"
+                    <p class="mb-0 mt-2">
+                        Try different keywords or use
+                        <a th:href="@{/search/semantic(q=${query})}">semantic-only search</a>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Welcome / Help -->
+            <div th:if="${query == null || query == ''}">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>About Hybrid Search</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Hybrid search combines <strong>keyword matching</strong> (FTS) with <strong>semantic similarity</strong> for best results.</p>
+
+                        <h6 class="mt-3">How it works</h6>
+                        <ul>
+                            <li><strong>FTS</strong>: Finds exact keyword matches using PostgreSQL full-text search</li>
+                            <li><strong>Semantic</strong>: Finds conceptually similar content using vector embeddings</li>
+                            <li><strong>RRF</strong>: Reciprocal Rank Fusion combines rankings from both methods</li>
+                        </ul>
+
+                        <h6 class="mt-3">Weight adjustments</h6>
+                        <ul>
+                            <li><strong>Equal weights (0.5/0.5)</strong>: Balanced search for general queries</li>
+                            <li><strong>Higher FTS (0.8/0.2)</strong>: When you need exact keyword matches</li>
+                            <li><strong>Higher Semantic (0.2/0.8)</strong>: When you want conceptually similar content</li>
+                        </ul>
+
+                        <h6 class="mt-3">Result indicators</h6>
+                        <ul>
+                            <li><span class="badge bg-secondary">Both</span> - Found by both FTS and semantic search (highest confidence)</li>
+                            <li><span class="badge bg-primary">FTS</span> - Found by keyword search only</li>
+                            <li><span class="badge bg-success">Semantic</span> - Found by semantic search only</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script th:inline="javascript">
+            document.addEventListener('DOMContentLoaded', function() {
+                const ftsSlider = document.getElementById('ftsWeightSlider');
+                const ftsValue = document.getElementById('ftsWeightValue');
+                const semanticSlider = document.getElementById('semanticWeightSlider');
+                const semanticValue = document.getElementById('semanticWeightValue');
+
+                if (ftsSlider && ftsValue) {
+                    ftsSlider.addEventListener('input', function() {
+                        ftsValue.textContent = this.value;
+                    });
+                }
+
+                if (semanticSlider && semanticValue) {
+                    semanticSlider.addEventListener('input', function() {
+                        semanticValue.textContent = this.value;
+                    });
+                }
+            });
+        </script>
+    </body>
+</html>
