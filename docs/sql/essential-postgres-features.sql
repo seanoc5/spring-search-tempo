@@ -16,14 +16,15 @@
 --      PGPASSWORD=password psql -h minti9 -U tempo -d tempo -f docs/sql/essential-postgres-features.sql
 --
 -- Contents:
---   1. pgvector extension
---   2. Full-text search (GENERATED columns + GIN indexes)
---   3. Vector similarity search (HNSW index)
---   4. Custom search functions
---   5. Performance indexes
---   6. Materialized views
---   7. CHECK constraints for enums
---   8. Seed data (optional)
+--   1. Spring Session & Remember-Me tables
+--   2. pgvector extension
+--   3. Full-text search (GENERATED columns + GIN indexes)
+--   4. Vector similarity search (HNSW index)
+--   5. Custom search functions
+--   6. Performance indexes
+--   7. Materialized views
+--   8. CHECK constraints for enums
+--   9. Seed data (optional)
 --
 -- =============================================================================
 
@@ -31,14 +32,55 @@
 \echo '=== Applying PostgreSQL-specific features ==='
 
 -- =============================================================================
--- 1. PGVECTOR EXTENSION
+-- 1. SPRING SESSION & REMEMBER-ME TABLES
+-- =============================================================================
+-- These tables are required by Spring Session JDBC and Spring Security's
+-- persistent remember-me feature. JPA does not create them because they are
+-- not JPA entities.
+-- =============================================================================
+\echo '>>> Creating Spring Session and Remember-Me tables...'
+
+CREATE TABLE IF NOT EXISTS SPRING_SESSION (
+    PRIMARY_ID CHAR(36) NOT NULL,
+    SESSION_ID CHAR(36) NOT NULL,
+    CREATION_TIME BIGINT NOT NULL,
+    LAST_ACCESS_TIME BIGINT NOT NULL,
+    MAX_INACTIVE_INTERVAL INT NOT NULL,
+    EXPIRY_TIME BIGINT NOT NULL,
+    PRINCIPAL_NAME VARCHAR(100),
+    CONSTRAINT SPRING_SESSION_PK PRIMARY KEY (PRIMARY_ID)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS SPRING_SESSION_IX1 ON SPRING_SESSION (SESSION_ID);
+CREATE INDEX IF NOT EXISTS SPRING_SESSION_IX2 ON SPRING_SESSION (EXPIRY_TIME);
+CREATE INDEX IF NOT EXISTS SPRING_SESSION_IX3 ON SPRING_SESSION (PRINCIPAL_NAME);
+
+CREATE TABLE IF NOT EXISTS SPRING_SESSION_ATTRIBUTES (
+    SESSION_PRIMARY_ID CHAR(36) NOT NULL,
+    ATTRIBUTE_NAME VARCHAR(200) NOT NULL,
+    ATTRIBUTE_BYTES BYTEA NOT NULL,
+    CONSTRAINT SPRING_SESSION_ATTRIBUTES_PK PRIMARY KEY (SESSION_PRIMARY_ID, ATTRIBUTE_NAME),
+    CONSTRAINT SPRING_SESSION_ATTRIBUTES_FK FOREIGN KEY (SESSION_PRIMARY_ID) REFERENCES SPRING_SESSION(PRIMARY_ID) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS persistent_logins (
+    username VARCHAR(64) NOT NULL,
+    series VARCHAR(64) PRIMARY KEY,
+    token VARCHAR(64) NOT NULL,
+    last_used TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS persistent_logins_username_idx ON persistent_logins (username);
+
+-- =============================================================================
+-- 2. PGVECTOR EXTENSION
 -- =============================================================================
 \echo '>>> Enabling pgvector extension...'
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- =============================================================================
--- 2. FULL-TEXT SEARCH: GENERATED COLUMNS
+-- 3. FULL-TEXT SEARCH: GENERATED COLUMNS
 -- =============================================================================
 -- JPA creates fts_vector as a regular bytea column. We need to replace it with
 -- PostgreSQL GENERATED ALWAYS AS tsvector columns for automatic FTS indexing.
@@ -71,7 +113,7 @@ ALTER TABLE content_chunks ADD COLUMN fts_vector tsvector GENERATED ALWAYS AS (
 COMMENT ON COLUMN content_chunks.fts_vector IS 'Auto-generated FTS vector with NLP-enhanced fields (A: nouns, B: verbs, C: text)';
 
 -- =============================================================================
--- 3. FULL-TEXT SEARCH: GIN INDEXES
+-- 4. FULL-TEXT SEARCH: GIN INDEXES
 -- =============================================================================
 \echo '>>> Creating FTS GIN indexes...'
 
@@ -83,7 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_content_chunks_sentiment ON content_chunks(sentim
 CREATE INDEX IF NOT EXISTS idx_content_chunks_nlp_processed ON content_chunks(nlp_processed_at);
 
 -- =============================================================================
--- 4. VECTOR SIMILARITY: HNSW INDEX
+-- 5. VECTOR SIMILARITY: HNSW INDEX
 -- =============================================================================
 -- HNSW (Hierarchical Navigable Small World) provides fast approximate nearest
 -- neighbor search for semantic/embedding queries.
@@ -104,7 +146,7 @@ CREATE INDEX IF NOT EXISTS content_chunks_embedding_not_null_idx
     WHERE embedding IS NOT NULL;
 
 -- =============================================================================
--- 5. CUSTOM SEARCH FUNCTIONS
+-- 6. CUSTOM SEARCH FUNCTIONS
 -- =============================================================================
 \echo '>>> Creating search functions...'
 
@@ -206,7 +248,7 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION search_chunks_with_sentiment IS 'Search content chunks with optional sentiment filtering and NLP-enhanced ranking';
 
 -- =============================================================================
--- 6. PERFORMANCE INDEXES
+-- 7. PERFORMANCE INDEXES
 -- =============================================================================
 \echo '>>> Creating performance indexes...'
 
@@ -215,17 +257,12 @@ CREATE INDEX IF NOT EXISTS idx_fsfile_job_run_id ON fsfile(job_run_id);
 CREATE INDEX IF NOT EXISTS idx_fsfolder_job_run_id ON fsfolder(job_run_id);
 CREATE INDEX IF NOT EXISTS idx_job_run_crawl_config_id ON job_run(crawl_config_id);
 
--- Discovery observation indexes
-CREATE INDEX IF NOT EXISTS idx_discovery_rule_enabled
-    ON discovery_classification_rule(enabled)
-    WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'discovery_classification_rule');
-
-CREATE INDEX IF NOT EXISTS idx_discovery_rule_group
-    ON discovery_classification_rule(rule_group)
-    WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'discovery_classification_rule');
+-- Discovery observation indexes (tables are created by JPA before this script runs)
+CREATE INDEX IF NOT EXISTS idx_discovery_rule_enabled ON discovery_classification_rule(enabled);
+CREATE INDEX IF NOT EXISTS idx_discovery_rule_group ON discovery_classification_rule(rule_group);
 
 -- =============================================================================
--- 7. MATERIALIZED VIEW: SEARCH STATISTICS
+-- 8. MATERIALIZED VIEW: SEARCH STATISTICS
 -- =============================================================================
 \echo '>>> Creating search statistics view...'
 
@@ -257,7 +294,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =============================================================================
--- 8. CHECK CONSTRAINTS FOR ENUMS
+-- 9. CHECK CONSTRAINTS FOR ENUMS
 -- =============================================================================
 -- JPA @Enumerated creates VARCHAR columns but not CHECK constraints.
 -- These ensure database-level validation of enum values.
@@ -352,7 +389,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- 9. SEED DATA (Optional)
+-- 10. SEED DATA (Optional)
 -- =============================================================================
 -- Uncomment to include seed data on fresh installs.
 -- =============================================================================
