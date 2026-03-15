@@ -91,7 +91,7 @@ Phase 1 foundation is complete. All success criteria met:
 
 ---
 
-### Phase 2 - NLP Integration 🔄 IN PROGRESS (98%)
+### Phase 2 - NLP Integration ✅ COMPLETE (100%)
 
 **Infrastructure Complete:**
 - ✅ Stanford CoreNLP 4.5.5 dependency added
@@ -112,10 +112,11 @@ Phase 1 foundation is complete. All success criteria met:
 - ✅ UI endpoint: `POST /nlp/process` - Web UI trigger
 - ✅ Configurable auto-trigger via `app.nlp.auto-trigger` (default: true)
 
-**Integration Remaining:**
+**Integration Complete:**
 - [x] Add NLP fields to FTS vector (searchable nouns, verbs) ✅ 2025-12-11
 - [x] REST API sentiment filter for chunk search ✅ 2025-12-11
-- [ ] Search UI filters by sentiment, entity type (UI work)
+- [x] Search UI filters by sentiment (chunk search + main search) ✅ 2025-12-11
+- [x] Named entity display in chunk search results ✅ 2025-12-11
 - [x] Complete email crawl integration with CrawlOrchestrator ✅ 2026-03-15
 - [x] Email-to-NLP pipeline (via NLPAutoTriggerListener) ✅ 2026-03-15
 
@@ -240,7 +241,7 @@ Phase 1 foundation is complete. All success criteria met:
 | ~~Entity Search API~~ | ~~Medium~~ | ~~2-3h~~ | ~~REST endpoints for entity queries~~ ✅ Done (`/api/entities/*`) |
 | ~~Email Orchestrator Integration~~ | ~~Medium~~ | ~~3-4h~~ | ~~Wire email jobs to CrawlOrchestrator~~ ✅ Done |
 | ~~Dependency Parse Processing~~ | ~~Medium~~ | ~~3-4h~~ | ~~Extract and store parse trees~~ ✅ Already implemented |
-| NLP Results UI | Low | 3-4h | Display sentiment, entities in search results |
+| ~~NLP Results UI~~ | ~~Low~~ | ~~3-4h~~ | ~~Display sentiment, entities in search results~~ ✅ Already implemented |
 
 ### Technical Considerations
 
