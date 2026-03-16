@@ -194,7 +194,35 @@
                                            style="width: 150px;">
                                 </div>
                             </div>
-                            <div class="col-auto" th:if="${selectedFromDate != '' || selectedToDate != '' || selectedAuthor != ''}">
+                        </div>
+
+                        <!-- Entity Type Filters (for chunk search) -->
+                        <div class="row g-2 align-items-center mt-2">
+                            <div class="col-auto">
+                                <span class="text-muted small">Entities:</span>
+                            </div>
+                            <div class="col-auto">
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Entity type filters">
+                                    <th:block th:each="entityType : ${allEntityTypes}">
+                                        <input type="checkbox" class="btn-check"
+                                               th:id="'entity' + ${entityType}"
+                                               name="entityTypes"
+                                               th:value="${entityType}"
+                                               th:checked="${selectedEntityTypes.contains(entityType)}">
+                                        <label class="btn btn-outline-secondary btn-sm"
+                                               th:for="'entity' + ${entityType}">
+                                            <i class="bi me-1"
+                                               th:classappend="${entityType == 'PERSON'} ? 'bi-person-fill' :
+                                                              (${entityType == 'ORGANIZATION'} ? 'bi-building' :
+                                                              (${entityType == 'LOCATION'} ? 'bi-geo-alt' :
+                                                              (${entityType == 'DATE'} ? 'bi-calendar-event' :
+                                                              (${entityType == 'MONEY'} ? 'bi-currency-dollar' : 'bi-tag'))))"></i>
+                                            [[${entityType}]]
+                                        </label>
+                                    </th:block>
+                                </div>
+                            </div>
+                            <div class="col-auto" th:if="${selectedFromDate != '' || selectedToDate != '' || selectedAuthor != '' || !selectedEntityTypes.isEmpty()}">
                                 <a th:href="@{/search(q=${query}, types=${selectedTypes})}"
                                    class="btn btn-sm btn-outline-secondary">
                                     <i class="bi bi-x-circle me-1"></i>Clear Filters

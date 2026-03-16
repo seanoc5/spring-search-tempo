@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.controller
 import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
 import com.oconeco.spring_search_tempo.base.service.ContentType
+import com.oconeco.spring_search_tempo.base.service.EntitySearchService
 import com.oconeco.spring_search_tempo.base.service.FullTextSearchService
 import com.oconeco.spring_search_tempo.base.service.SemanticSearchService
 import com.oconeco.spring_search_tempo.base.service.HybridSearchService
@@ -27,6 +28,11 @@ class SearchController(
     private val hybridSearchService: HybridSearchService
 ) {
 
+    // Common entity types for UI filtering
+    companion object {
+        val COMMON_ENTITY_TYPES = listOf("PERSON", "ORGANIZATION", "LOCATION", "DATE", "MONEY")
+    }
+
     @GetMapping
     fun search(
         @RequestParam(required = false) q: String?,
@@ -36,6 +42,7 @@ class SearchController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) fromDate: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) toDate: LocalDate?,
         @RequestParam(required = false) author: String?,
+        @RequestParam(required = false) entityTypes: List<String>?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         model: Model
@@ -68,6 +75,14 @@ class SearchController(
         model.addAttribute("selectedCategory", emailCategory?.name ?: "")
         model.addAttribute("allCategories", EmailCategory.entries.map { it.name })
 
+        // Parse entity types filter
+        val validEntityTypes = entityTypes
+            ?.filter { it.uppercase() in EntitySearchService.VALID_ENTITY_TYPES }
+            ?.map { it.uppercase() }
+            ?.toSet()
+        model.addAttribute("selectedEntityTypes", validEntityTypes ?: emptySet<String>())
+        model.addAttribute("allEntityTypes", COMMON_ENTITY_TYPES)
+
         // Pass other filter values to the view
         model.addAttribute("selectedSentiment", sentiment ?: "")
         model.addAttribute("selectedFromDate", fromDate?.toString() ?: "")
@@ -84,7 +99,8 @@ class SearchController(
                     emailCategory = emailCategory,
                     fromDate = fromDate,
                     toDate = toDate,
-                    author = author
+                    author = author,
+                    entityTypes = validEntityTypes
                 )
                 val results = searchService.searchWithFilters(filter, pageable)
 

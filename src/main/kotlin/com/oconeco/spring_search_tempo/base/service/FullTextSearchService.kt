@@ -506,6 +506,9 @@ class FullTextSearchServiceImpl(
         if (filter.author != null) {
             query.setParameter("author", "%${filter.author}%")
         }
+        if (!filter.entityTypes.isNullOrEmpty() && filter.includeChunks()) {
+            query.setParameter("entityTypes", filter.entityTypes.toTypedArray())
+        }
     }
 
     private fun buildFileSearchSql(filter: SearchFilterDTO): String {
@@ -611,7 +614,10 @@ class FullTextSearchServiceImpl(
         val validSentiment = validateSentiment(filter.sentiment)
         val conditions = mutableListOf<String>()
         if (validSentiment != null) conditions.add("c.sentiment = :sentiment")
-        // Note: chunks don't have their own date/author - they inherit from source
+        // Entity type filtering using JSONB
+        if (!filter.entityTypes.isNullOrEmpty()) {
+            conditions.add(buildEntityTypeCondition("c"))
+        }
         val extraConditions = if (conditions.isNotEmpty()) "AND ${conditions.joinToString(" AND ")}" else ""
 
         return """
@@ -635,8 +641,27 @@ class FullTextSearchServiceImpl(
 
     private fun buildChunkCountSql(filter: SearchFilterDTO): String {
         val validSentiment = validateSentiment(filter.sentiment)
-        val sentimentCondition = if (validSentiment != null) " AND sentiment = :sentiment" else ""
-        return "SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$sentimentCondition"
+        val conditions = mutableListOf<String>()
+        if (validSentiment != null) conditions.add("sentiment = :sentiment")
+        if (!filter.entityTypes.isNullOrEmpty()) {
+            conditions.add(buildEntityTypeCondition(""))
+        }
+        val extraConditions = if (conditions.isNotEmpty()) " AND ${conditions.joinToString(" AND ")}" else ""
+        return "SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$extraConditions"
+    }
+
+    /**
+     * Build SQL condition for entity type filtering.
+     * Uses JSONB containment to check if any entity matches specified types.
+     */
+    private fun buildEntityTypeCondition(tableAlias: String): String {
+        val prefix = if (tableAlias.isNotEmpty()) "$tableAlias." else ""
+        return """
+            EXISTS (
+                SELECT 1 FROM jsonb_array_elements(${prefix}named_entities::jsonb) elem
+                WHERE elem->>'type' = ANY(:entityTypes)
+            )
+        """.trimIndent()
     }
 }
 

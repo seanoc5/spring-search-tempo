@@ -46,7 +46,13 @@ data class SearchFilterDTO(
      * Optional author/sender filter.
      * Matches file author or email sender.
      */
-    val author: String? = null
+    val author: String? = null,
+
+    /**
+     * Optional entity types filter for chunk search.
+     * Filters chunks containing entities of specified types (PERSON, ORGANIZATION, LOCATION, etc.)
+     */
+    val entityTypes: Set<String>? = null
 ) {
     /**
      * Check if file results should be included.
