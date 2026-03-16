@@ -403,6 +403,33 @@ class DiscoveryService(
         )
     }
 
+    @Transactional
+    fun recomputeSessionSummary(sessionId: Long): DiscoverySessionSummaryRepairResult {
+        val session = sessionRepository.findByIdWithFolders(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+
+        val effectiveCounts = effectiveSessionCounts(session.folders)
+        session.classifiedFolders = effectiveCounts.classifiedFolders
+        session.skipCount = effectiveCounts.skipCount
+        session.locateCount = effectiveCounts.locateCount
+        session.indexCount = effectiveCounts.indexCount
+        session.analyzeCount = effectiveCounts.analyzeCount
+        if (session.status == DiscoveryStatus.PENDING && session.classifiedFolders > 0) {
+            session.status = DiscoveryStatus.CLASSIFYING
+        }
+        sessionRepository.save(session)
+
+        return DiscoverySessionSummaryRepairResult(
+            sessionId = session.id!!,
+            classifiedFolders = session.classifiedFolders,
+            skipCount = session.skipCount,
+            locateCount = session.locateCount,
+            indexCount = session.indexCount,
+            analyzeCount = session.analyzeCount,
+            status = session.status.name
+        )
+    }
+
     /**
      * Get all pending discovery sessions.
      */
@@ -543,12 +570,18 @@ class DiscoveryService(
             }
         }
 
+        val effectiveCounts = effectiveSessionCounts(session.folders)
         val placeholderSeed = seedFsFolderPlaceholders(session, targetConfigId)
         session.crawlConfig = crawlConfigRepository.findById(targetConfigId).orElse(null)
         session.status = DiscoveryStatus.APPLIED
         session.appliedAt = OffsetDateTime.now()
+        session.classifiedFolders = effectiveCounts.classifiedFolders
+        session.skipCount = effectiveCounts.skipCount
+        session.locateCount = effectiveCounts.locateCount
+        session.indexCount = effectiveCounts.indexCount
+        session.analyzeCount = effectiveCounts.analyzeCount
         sessionRepository.save(session)
-j        log.info(
+        log.info(
             "Applied discovery session {} to crawl config {} ({}): seeded {} placeholder folders, reused {} existing folders",
             sessionId,
             targetConfigId,
@@ -585,6 +618,34 @@ j        log.info(
         }
 
         sessionRepository.save(session)
+    }
+
+    private fun effectiveSessionCounts(folders: Collection<DiscoveredFolder>): EffectiveSessionCounts {
+        var classifiedFolders = 0
+        var skipCount = 0
+        var locateCount = 0
+        var indexCount = 0
+        var analyzeCount = 0
+
+        folders.forEach { folder ->
+            val effective = effectiveStatus(folder) ?: return@forEach
+            classifiedFolders++
+            when (effective) {
+                AnalysisStatus.SKIP -> skipCount++
+                AnalysisStatus.LOCATE -> locateCount++
+                AnalysisStatus.INDEX -> indexCount++
+                AnalysisStatus.ANALYZE -> analyzeCount++
+                AnalysisStatus.SEMANTIC -> {}
+            }
+        }
+
+        return EffectiveSessionCounts(
+            classifiedFolders = classifiedFolders,
+            skipCount = skipCount,
+            locateCount = locateCount,
+            indexCount = indexCount,
+            analyzeCount = analyzeCount
+        )
     }
 
     private fun archiveExistingSessionsForHost(host: String): Int {
@@ -950,6 +1011,14 @@ data class ApplyDiscoveryResult(
     val semanticPatterns: Int = 0
 )
 
+private data class EffectiveSessionCounts(
+    val classifiedFolders: Int,
+    val skipCount: Int,
+    val locateCount: Int,
+    val indexCount: Int,
+    val analyzeCount: Int
+)
+
 private data class FsFolderPlaceholderSpec(
     val uri: String,
     val label: String,
@@ -989,6 +1058,16 @@ data class TemplateApplyResponse(
     val indexSuggested: Int,
     val analyzeSuggested: Int,
     val semanticSuggested: Int = 0
+)
+
+data class DiscoverySessionSummaryRepairResult(
+    val sessionId: Long,
+    val classifiedFolders: Int,
+    val skipCount: Int,
+    val locateCount: Int,
+    val indexCount: Int,
+    val analyzeCount: Int,
+    val status: String
 )
 
 data class AssignedFolderPageResponse(

@@ -184,6 +184,14 @@
                 </p>
             </div>
             <div>
+                <form th:action="@{/discovery/{id}/recompute-summary(id=${discoverySession.id})}" method="post" class="d-inline me-2">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="redirectTo" th:value="@{/discovery/{id}/classify(id=${discoverySession.id})}">
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i>
+                        Recompute Summary
+                    </button>
+                </form>
                 <a th:href="@{/discovery/rules}" class="btn btn-outline-primary me-2">
                     <i class="bi bi-sliders me-1"></i>
                     Rules
@@ -436,8 +444,12 @@
                                     hx-swap="none"
                                     hx-on::after-request="handleSuggestionsApplied(event)">
                                 <i class="bi bi-magic me-1"></i>
-                                Apply Suggested Template
+                                Apply Suggested Statuses
                             </button>
+
+                            <p class="small text-muted mb-2">
+                                Copies the current rule/template suggestions into assigned statuses.
+                            </p>
 
                             <hr>
 
@@ -513,9 +525,12 @@
 
                                 <button type="submit" class="btn btn-primary btn-sm w-100">
                                     <i class="bi bi-check2-circle me-1"></i>
-                                    Apply Classifications
+                                    Apply Effective Statuses
                                 </button>
                             </form>
+                            <p class="small text-muted mb-0 mt-2">
+                                Uses assigned statuses when present; otherwise falls back to current suggestions.
+                            </p>
                         </div>
                     </div>
 

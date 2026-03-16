@@ -147,6 +147,13 @@ java -jar remote-crawler.jar onboard -d "C:,D:" --yes</code></pre>
                                             <i class="bi bi-folder-check me-1"></i>
                                             Classify
                                         </a>
+                                        <form th:action="@{/discovery/{id}/recompute-summary(id=${discoverySession.id})}" method="post">
+                                            <input type="hidden" name="redirectTo" value="/discovery">
+                                            <button type="submit" class="btn btn-outline-secondary"
+                                                    title="Recompute summary counts from current effective statuses">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                        </form>
                                         <form th:action="@{/discovery/{id}/delete(id=${discoverySession.id})}" method="post"
                                               onsubmit="return confirm('Delete discovery session ' + [[${discoverySession.id}]] + ' for host ' + '[[${discoverySession.host}]]' + '? This removes all discovered folders for that session.');">
                                             <button type="submit" class="btn btn-outline-danger">

@@ -417,6 +417,28 @@ class DiscoveryController(
         }
     }
 
+    @PostMapping("/{sessionId}/recompute-summary")
+    fun recomputeSummary(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "redirectTo", required = false) redirectTo: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val result = discoveryService.recomputeSessionSummary(sessionId)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Recomputed session ${result.sessionId}: classified=${result.classifiedFolders}, " +
+                    "skip=${result.skipCount}, locate=${result.locateCount}, index=${result.indexCount}, " +
+                    "analyze=${result.analyzeCount}, status=${result.status}"
+            )
+            safeRedirect(redirectTo, "/discovery/$sessionId/classify")
+        } catch (e: Exception) {
+            log.error("Failed to recompute discovery session summary {}", sessionId, e)
+            redirectAttributes.addFlashAttribute("error", "Recompute failed: ${e.message}")
+            safeRedirect(redirectTo, "/discovery/$sessionId/classify")
+        }
+    }
+
     @PostMapping("/{sessionId}/delete")
     fun deleteSession(
         @PathVariable sessionId: Long,
