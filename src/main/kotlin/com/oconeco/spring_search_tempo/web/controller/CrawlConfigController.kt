@@ -123,6 +123,7 @@ class CrawlConfigController(
             maxDepth = 50
             followLinks = false
             parallel = false
+            enabled = true
             sourceHost = HostNameHolder.currentHostName
         })
         model.addAttribute("startPathsText", "")
@@ -195,6 +196,7 @@ class CrawlConfigController(
                     this.maxDepth = preset.maxDepth
                     this.followLinks = followLinks || preset.forceFollowLinks
                     this.parallel = parallel && preset.parallelRecommended
+                    this.enabled = true
                     this.sourceHost = resolvedSourceHost
 
                     folderPatternsSkip = listToJson(preset.folderSkipPatterns)

@@ -33,6 +33,9 @@ class CrawlConfig : SaveableObject() {
     @Column
     var parallel: Boolean? = null
 
+    @Column(nullable = false)
+    var enabled: Boolean = true
+
     // Pattern storage as JSON text
     @Column(columnDefinition = "text")
     var folderPatternsSkip: String? = null

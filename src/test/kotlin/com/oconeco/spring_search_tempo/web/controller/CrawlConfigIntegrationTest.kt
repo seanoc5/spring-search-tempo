@@ -125,6 +125,7 @@ class CrawlConfigIntegrationTest : BaseIT() {
             label = "Discovery MVC IT $suffix"
             description = "Integration test crawl config for discovery review page"
             this.sourceHost = sourceHost
+            enabled = true
             startPaths = listOf("/data")
             maxDepth = 20
             followLinks = false

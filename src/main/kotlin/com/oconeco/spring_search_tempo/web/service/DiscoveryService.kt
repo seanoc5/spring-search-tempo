@@ -518,6 +518,7 @@ class DiscoveryService(
                     maxDepth = 20
                     followLinks = false
                     parallel = true
+                    enabled = true
                     folderPatternsSkip = crawlConfigConverter.toJsonArray(skipPatterns)
                     folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
                     folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
@@ -547,7 +548,7 @@ class DiscoveryService(
         session.status = DiscoveryStatus.APPLIED
         session.appliedAt = OffsetDateTime.now()
         sessionRepository.save(session)
-        log.info(
+j        log.info(
             "Applied discovery session {} to crawl config {} ({}): seeded {} placeholder folders, reused {} existing folders",
             sessionId,
             targetConfigId,

@@ -44,6 +44,8 @@ class CrawlConfigDTO {
 
     var parallel: Boolean? = null
 
+    var enabled: Boolean = true
+
     var folderPatternsSkip: String? = null
 
     var folderPatternsLocate: String? = null
