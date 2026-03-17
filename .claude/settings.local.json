@@ -16,7 +16,12 @@
       "Bash(./gradlew compileKotlin:*)",
       "Bash(chmod:*)",
       "Bash(git add:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUpdate roadmap: add Remote Crawling, fix Phase 2 status\n\n- Add Phase 2.5: Remote Crawling section \\(complete\\)\n- Mark Entity Search API as done \\(already implemented\\)\n- Update Phase 4.1 database strategy to reflect ddl-auto approach\n- Update CLAUDE.md Phase 2 remaining items\n- Add deferred items table for remote crawling\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd configuration reference doc\n\nCreates docs/reference/configuration.md covering:\n- Server, database, batch, NLP, security settings\n- Environment variable overrides\n- Profile configuration \\(auto-detected OS profiles\\)\n- Common configurations \\(dev, production\\)\n\nResolves broken links in commands.md and troubleshooting.md.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(./gradlew test:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
