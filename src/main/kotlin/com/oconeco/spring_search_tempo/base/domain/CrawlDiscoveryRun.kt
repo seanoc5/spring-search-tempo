@@ -37,6 +37,10 @@ class CrawlDiscoveryRun {
     @Column(nullable = false, length = 100)
     var host: String? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_host_id")
+    var sourceHostRef: SourceHost? = null
+
     @Enumerated(EnumType.STRING)
     @Column(name = "run_status", nullable = false, length = 20)
     var runStatus: RunStatus = RunStatus.RUNNING

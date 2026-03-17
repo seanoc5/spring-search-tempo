@@ -13,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
 import com.oconeco.spring_search_tempo.base.service.FileSampleAnalyzer
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.PatternStabilityInput
+import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.slf4j.LoggerFactory
@@ -35,7 +36,8 @@ class CrawlDiscoveryObservationService(
     private val runtimeCrawlConfigService: CrawlConfigService,
     private val patternMatchingService: PatternMatchingService,
     private val crawlSchedulingService: CrawlSchedulingService,
-    private val fileSampleAnalyzer: FileSampleAnalyzer
+    private val fileSampleAnalyzer: FileSampleAnalyzer,
+    private val sourceHostService: SourceHostService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(CrawlDiscoveryObservationService::class.java)
@@ -48,11 +50,13 @@ class CrawlDiscoveryObservationService(
 
         val crawlConfig = crawlConfigRepository.findById(crawlConfigId)
             .orElseThrow { IllegalArgumentException("crawlConfig not found: $crawlConfigId") }
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
 
         val run = CrawlDiscoveryRun().apply {
             this.crawlConfig = crawlConfig
             this.jobRunId = jobRunId
             this.host = host
+            this.sourceHostRef = sourceHostRef
             this.runStatus = RunStatus.RUNNING
         }
         return crawlDiscoveryRunRepository.save(run)
@@ -94,18 +98,21 @@ class CrawlDiscoveryObservationService(
 
         val crawlConfig = crawlConfigRepository.findById(crawlConfigId)
             .orElseThrow { IllegalArgumentException("crawlConfig not found: $crawlConfigId") }
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
 
         val toSave = dedupFolders.map { (normalizedPath, item) ->
             val existing = existingByPath[normalizedPath]
             (existing ?: CrawlDiscoveryFolderObservation().apply {
                 this.crawlConfig = crawlConfig
                 this.host = host
+                this.sourceHostRef = sourceHostRef
                 this.path = normalizedPath
             }).apply {
                 this.depth = item.depth
                 this.inSkipBranch = item.inSkipBranch
                 this.lastSeenAt = now
                 this.lastSeenJobRunId = jobRunId
+                this.sourceHostRef = sourceHostRef
             }
         }
         val persisted = if (toSave.isEmpty()) emptyList() else crawlDiscoveryFolderObservationRepository.saveAll(toSave)

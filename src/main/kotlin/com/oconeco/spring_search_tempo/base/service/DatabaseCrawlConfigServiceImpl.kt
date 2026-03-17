@@ -18,7 +18,8 @@ class DatabaseCrawlConfigServiceImpl(
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigMapper: CrawlConfigMapper,
     private val userOwnershipService: UserOwnershipService,
-    private val smartDeleteService: SmartDeleteService
+    private val smartDeleteService: SmartDeleteService,
+    private val sourceHostService: SourceHostService
 ) : DatabaseCrawlConfigService {
 
     override fun count(): Long = crawlConfigRepository.count()
@@ -64,6 +65,7 @@ class DatabaseCrawlConfigServiceImpl(
 
         val crawlConfig = CrawlConfig()
         crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        crawlConfig.sourceHostRef = sourceHostService.resolveOrCreate(crawlConfigDTO.sourceHost)
         // New DTOs may not carry an explicit version from forms/wizard.
         if (crawlConfig.version == null) {
             crawlConfig.version = 0L
@@ -90,6 +92,7 @@ class DatabaseCrawlConfigServiceImpl(
         }
 
         crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        crawlConfig.sourceHostRef = sourceHostService.resolveOrCreate(crawlConfigDTO.sourceHost)
         try {
             crawlConfigRepository.save(crawlConfig)
         } catch (ex: DataIntegrityViolationException) {

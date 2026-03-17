@@ -13,14 +13,21 @@
                 <i class="bi bi-pc-display-horizontal me-2"></i>
                 Hosts
             </h2>
-            <form th:if="${selectedHost != null && !selectedHost.isEmpty()}"
-                  th:action="@{/hosts/{host}/purge(host=${selectedHost})}"
-                  method="post"
-                  onsubmit="return confirm('Purge all persisted data for source host ' + '[[${selectedHost}]]' + '? This will delete crawl configs, discovery sessions, crawl content, and host-scoped email data.');">
-                <button type="submit" class="btn btn-outline-danger">
-                    <i class="bi bi-exclamation-triangle me-1"></i>Start Fresh
-                </button>
-            </form>
+            <div class="d-flex gap-2">
+                <form th:action="@{/hosts/sync-source-hosts}" method="post">
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i>Sync Core Source Hosts
+                    </button>
+                </form>
+                <form th:if="${selectedHost != null && !selectedHost.isEmpty()}"
+                      th:action="@{/hosts/{host}/purge(host=${selectedHost})}"
+                      method="post"
+                      onsubmit="return confirm('Purge all persisted data for source host ' + '[[${selectedHost}]]' + '? This will delete crawl configs, discovery sessions, crawl content, and host-scoped email data.');">
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Start Fresh
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">

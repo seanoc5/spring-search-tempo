@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.domain.RemoteTaskStatus
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.RemoteCrawlTaskRepository
+import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import java.time.OffsetDateTime
 import java.util.UUID
@@ -20,7 +21,8 @@ class RemoteCrawlTaskService(
     private val jobRunService: JobRunService,
     private val remoteCrawlSessionService: RemoteCrawlSessionService,
     private val remoteCrawlPlannerService: RemoteCrawlPlannerService,
-    private val remoteCrawlTaskRepository: RemoteCrawlTaskRepository
+    private val remoteCrawlTaskRepository: RemoteCrawlTaskRepository,
+    private val sourceHostService: SourceHostService
 ) {
 
     @Transactional
@@ -28,6 +30,7 @@ class RemoteCrawlTaskService(
         val host = normalizeHost(request.host)
         validateConfigForHost(host, request.crawlConfigId)
         validateSession(request.sessionId, request.crawlConfigId, requireRunning = true)
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
 
         val deduped = request.folders
             .filter { it.path.isNotBlank() }
@@ -93,6 +96,7 @@ class RemoteCrawlTaskService(
                 sessionId = request.sessionId
                 crawlConfigId = request.crawlConfigId
                 this.host = host
+                this.sourceHostRef = sourceHostRef
                 folderPath = normalizePath(folder.path)
                 remoteUri = uri
                 analysisStatus = status

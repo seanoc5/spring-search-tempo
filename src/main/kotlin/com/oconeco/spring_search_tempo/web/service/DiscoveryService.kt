@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.repos.DiscoveredFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
+import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
@@ -29,7 +30,8 @@ class DiscoveryService(
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val crawlConfigConverter: CrawlConfigConverter,
-    private val discoveryTemplateClassifier: DiscoveryTemplateClassifier
+    private val discoveryTemplateClassifier: DiscoveryTemplateClassifier,
+    private val sourceHostService: SourceHostService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -64,6 +66,7 @@ class DiscoveryService(
         // Create session
         val session = DiscoverySession().apply {
             host = normalizedHost
+            sourceHostRef = sourceHostService.resolveOrCreate(normalizedHost, request.osType)
             osType = request.osType
             rootPaths = request.rootPaths.joinToString(",")
             status = DiscoveryStatus.PENDING

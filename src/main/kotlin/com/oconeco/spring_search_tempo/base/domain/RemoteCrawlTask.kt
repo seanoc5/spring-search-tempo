@@ -8,6 +8,8 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import jakarta.persistence.SequenceGenerator
@@ -46,6 +48,10 @@ class RemoteCrawlTask {
 
     @Column(nullable = false, length = 50)
     var host: String? = null
+
+    @ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name = "source_host_id")
+    var sourceHostRef: SourceHost? = null
 
     @Column(name = "folder_path", nullable = false, columnDefinition = "text")
     var folderPath: String? = null
