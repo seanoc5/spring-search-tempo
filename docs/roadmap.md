@@ -430,12 +430,13 @@ dependencies {
 - [ ] Personal vs shared content
 - [ ] **Effort**: 5 days
 
-#### 4.4 Monitoring & Observability
-- [ ] Prometheus metrics export
+#### 4.4 Monitoring & Observability (IN PROGRESS - 60%)
+- [x] Prometheus metrics export (SearchMetricsBinder, SearchMetricsAspect)
+- [x] Health indicators (EmbeddingHealthIndicator for embedding service)
+- [x] Search operation timing (AOP-based latency metrics)
 - [ ] Grafana dashboards
-- [ ] Application Performance Monitoring (APM)
 - [ ] Logging aggregation (ELK stack)
-- [ ] **Effort**: 5 days
+- [ ] **Effort**: 5 days (3 days remaining)
 
 #### 4.5 Scalability Improvements
 - [ ] Database connection pooling (HikariCP tuning)
@@ -735,12 +736,13 @@ Features are prioritized based on:
 
 | Date       | Change                  | Author |
 |------------|-------------------------|--------|
+| 2026-03-17 | Add Phase 4.4 monitoring infrastructure (metrics, health indicators) | Claude |
 | 2026-03-15 | Mark Phase 3 complete - hybrid search with RRF ranking | Claude |
 | 2025-12-11 | Updated Phase 2 status - NLP/Email infrastructure complete | Claude |
 | 2025-11-07 | Initial roadmap created | Sean   |
 
 ---
 
-**Last Updated**: 2026-03-15
-**Version**: 1.2
+**Last Updated**: 2026-03-17
+**Version**: 1.3
 **Status**: Living Document
