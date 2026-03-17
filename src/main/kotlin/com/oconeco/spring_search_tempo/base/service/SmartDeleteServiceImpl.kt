@@ -231,7 +231,7 @@ class SmartDeleteServiceImpl(
             ?: throw IllegalArgumentException("sourceHost is required")
 
         val crawlConfigs = crawlConfigRepository.findBySourceHostIgnoreCase(normalizedHost)
-        val discoverySessions = discoverySessionRepository.findByHostOrderByDateCreatedDesc(normalizedHost)
+        val discoverySessions = discoverySessionRepository.findByHostOrSourceHostOrderByDateCreatedDesc(normalizedHost)
         val emailAccounts = emailAccountRepository.findBySourceHostIgnoreCase(normalizedHost)
 
         var chunksDeleted = 0

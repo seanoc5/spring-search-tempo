@@ -226,7 +226,7 @@
         <div class="alert alert-warning py-2 small">
             Showing <strong th:text="${visibleFolders}">0</strong> of
             <strong th:text="${discoverySession.totalFolders}">0</strong> folders (depth <=
-            <strong th:text="${maxDepth}">3</strong>) for faster page load.
+            <strong th:text="${maxDepth}">3</strong>) on initial load. Deeper branches load on demand.
         </div>
 
         <div class="row">
@@ -250,11 +250,11 @@
                             </form>
                             <button type="button" class="btn btn-sm btn-outline-secondary me-2"
                                     onclick="expandAll()">
-                                <i class="bi bi-arrows-expand"></i> Expand All
+                                <i class="bi bi-arrows-expand"></i> Expand Loaded
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                     onclick="collapseAll()">
-                                <i class="bi bi-arrows-collapse"></i> Collapse All
+                                <i class="bi bi-arrows-collapse"></i> Collapse Loaded
                             </button>
                         </div>
                     </div>
@@ -272,7 +272,7 @@
                             </thead>
                             <tbody>
                             <th:block th:each="folder : ${rootFolders}">
-                                <th:block th:replace="~{discovery/classify :: folderRow(${folder}, ${foldersByParent}, 0, ${discoverySession.id}, ${maxDepth}, ${null})}"/>
+                                <th:block th:replace="~{discovery/classify :: folderRow(${folder}, ${foldersByParent}, ${fullyLoadedParentPaths}, 0, ${discoverySession.id}, ${maxDepth}, ${null})}"/>
                             </th:block>
                             </tbody>
                         </table>
@@ -619,12 +619,20 @@
                 return;
             }
 
-            rows.forEach(r => {
-                if (r.dataset.parentPath === path) {
-                    r.classList.remove('row-hidden');
-                }
-            });
-            setRowExpanded(row, true);
+            Promise.resolve()
+                .then(() => {
+                    if (row.dataset.childrenLoaded !== 'true') {
+                        return loadChildren(row);
+                    }
+                })
+                .then(() => {
+                    document.querySelectorAll('.folder-row').forEach(r => {
+                        if (r.dataset.parentPath === path) {
+                            r.classList.remove('row-hidden');
+                        }
+                    });
+                    setRowExpanded(row, true);
+                });
         }
 
         function expandAll() {
@@ -634,6 +642,59 @@
                     setRowExpanded(row, true);
                 }
             });
+        }
+
+        function getInsertAfterRow(parentRow) {
+            let insertAfter = parentRow;
+            document.querySelectorAll('.folder-row').forEach(candidate => {
+                if (candidate !== parentRow && isDescendantPath(candidate.dataset.path, parentRow.dataset.path)) {
+                    insertAfter = candidate;
+                }
+            });
+            return insertAfter;
+        }
+
+        function getInheritedStatusForRow(row) {
+            const status = row.dataset.effectiveStatus || '';
+            return status && status !== 'UNKNOWN' ? status : '';
+        }
+
+        function loadChildren(row) {
+            const parentPath = row.dataset.path;
+            const nextDepth = parseInt(row.dataset.depth || '0', 10) + 1;
+            const maxDepth = parseInt(row.dataset.maxDepth || '0', 10);
+            const inheritedStatus = getInheritedStatusForRow(row);
+            const params = new URLSearchParams({
+                parentPath: parentPath,
+                depth: String(nextDepth),
+                maxDepth: String(maxDepth)
+            });
+            if (inheritedStatus) {
+                params.set('inheritedStatus', inheritedStatus);
+            }
+
+            return fetch(`/discovery/${sessionId}/children?${params.toString()}`, {
+                headers: {
+                    'HX-Request': 'true'
+                }
+            })
+                .then(response => response.text())
+                .then(html => {
+                    const template = document.createElement('template');
+                    template.innerHTML = html.trim();
+                    const existingPaths = new Set(
+                        Array.from(document.querySelectorAll('.folder-row')).map(r => r.dataset.path)
+                    );
+                    const newRows = Array.from(template.content.querySelectorAll('tr.folder-row'))
+                        .filter(newRow => !existingPaths.has(newRow.dataset.path));
+
+                    let insertAfter = getInsertAfterRow(row);
+                    newRows.forEach(newRow => {
+                        insertAfter.insertAdjacentElement('afterend', newRow);
+                        insertAfter = newRow;
+                    });
+                    row.dataset.childrenLoaded = 'true';
+                });
         }
 
         function collapseAll() {
@@ -758,13 +819,16 @@
 </main>
 
 <!-- Folder Row Fragment -->
-<th:block th:fragment="folderRow(folder, foldersByParent, depth, sessionId, maxDepth, inheritedStatus)">
+<th:block th:fragment="folderRow(folder, foldersByParent, fullyLoadedParentPaths, depth, sessionId, maxDepth, inheritedStatus)">
     <tr class="folder-row"
         th:classappend="${depth > 0} ? 'row-hidden' : ''"
         th:data-folder-id="${folder.id}"
         th:data-path="${folder.path}"
         th:data-parent-path="${folder.parentPath}"
         th:data-depth="${depth}"
+        th:data-max-depth="${maxDepth}"
+        th:data-effective-status="${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : 'UNKNOWN'))}"
+        th:data-children-loaded="${fullyLoadedParentPaths.contains(folder.path)}"
         data-expanded="false"
         th:with="
             effectiveStatus=${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : null))},
@@ -781,11 +845,11 @@
 
                 <button type="button"
                         class="btn btn-link p-0 text-decoration-none folder-toggle"
-                        th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}"
+                        th:if="${folder.folderCount > 0 and depth < maxDepth}"
                         onclick="toggleFolder(this)">
                     <i class="bi bi-chevron-right toggle-icon"></i>
                 </button>
-                <span th:unless="${foldersByParent.containsKey(folder.path) and depth < maxDepth}" style="width: 12px;"></span>
+                <span th:unless="${folder.folderCount > 0 and depth < maxDepth}" style="width: 12px;"></span>
 
                 <i class="bi bi-folder text-warning"></i>
                 <span class="folder-name-label"
@@ -797,7 +861,7 @@
 
         <td class="text-end action-col-branch">
             <div class="btn-group btn-group-sm" role="group"
-                 th:if="${foldersByParent.containsKey(folder.path)}"
+                 th:if="${folder.folderCount > 0}"
                  title="Entire-branch actions">
                 <button type="button" class="btn btn-outline-danger action-btn subtree-action"
                         th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
@@ -815,7 +879,7 @@
                         th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
                         th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E</button>
             </div>
-            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="zero-dash">-</span>
+            <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
         </td>
 
         <td class="status-col">
@@ -871,7 +935,7 @@
 
     <th:block th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}">
         <th:block th:each="child : ${foldersByParent.get(folder.path)}">
-            <th:block th:replace="~{discovery/classify :: folderRow(${child}, ${foldersByParent}, ${depth + 1}, ${sessionId}, ${maxDepth}, ${folder.assignedStatus != null ? folder.assignedStatus : inheritedStatus})}"/>
+            <th:block th:replace="~{discovery/classify :: folderRow(${child}, ${foldersByParent}, ${fullyLoadedParentPaths}, ${depth + 1}, ${sessionId}, ${maxDepth}, ${folder.assignedStatus != null ? folder.assignedStatus : inheritedStatus})}"/>
         </th:block>
     </th:block>
 </th:block>

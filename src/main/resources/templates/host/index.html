@@ -129,10 +129,11 @@
                 </ul>
             </div>
             <div class="card-body" id="tab-content">
-                <!-- Initial tab content -->
-                <div th:if="${activeTab == 'configs'}" th:replace="~{host/fragments :: configsTab}"></div>
-                <div th:if="${activeTab == 'discovery'}" th:replace="~{host/fragments :: discoveryTab}"></div>
-                <div th:if="${activeTab == 'content'}" th:replace="~{host/fragments :: contentTab}"></div>
+                <th:block th:switch="${activeTab}">
+                    <th:block th:case="'discovery'" th:replace="~{host/fragments :: discoveryTab}"></th:block>
+                    <th:block th:case="'content'" th:replace="~{host/fragments :: contentTab}"></th:block>
+                    <th:block th:case="*" th:replace="~{host/fragments :: configsTab}"></th:block>
+                </th:block>
             </div>
         </div>
     </div>

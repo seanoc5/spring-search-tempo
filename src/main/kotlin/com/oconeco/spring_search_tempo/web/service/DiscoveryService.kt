@@ -160,13 +160,12 @@ class DiscoveryService(
         val session = sessionRepository.findById(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
         val sessionOsType = session.osType ?: ""
-
-        val folders = folderRepository.findBySessionIdAndMaxDepth(sessionId, maxDepth)
+        val planFolders = folderRepository.findBySessionIdAndMaxDepth(sessionId, minOf(maxDepth.coerceAtLeast(0), 2))
         val loadedAt = System.nanoTime()
         val templatePlan = discoveryTemplateClassifier.buildPlan(
             osType = sessionOsType,
             rootPaths = session.rootPaths?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-            folders = folders.map {
+            folders = planFolders.map {
                 TemplateFolderInput(
                     path = it.path ?: "",
                     name = it.name ?: "",
@@ -176,10 +175,10 @@ class DiscoveryService(
         )
         val plannedAt = System.nanoTime()
         log.debug(
-            "Classification page load session {} maxDepth={} loaded {} folders in {} ms, template plan in {} ms",
+            "Classification page summary load session {} maxDepth={} used {} folders in {} ms, template plan in {} ms",
             sessionId,
             maxDepth,
-            folders.size,
+            planFolders.size,
             (loadedAt - startedAt) / 1_000_000,
             (plannedAt - loadedAt) / 1_000_000
         )
@@ -201,8 +200,149 @@ class DiscoveryService(
             suggestedProfile = templatePlan.profile.name,
             profileConfidencePercent = templatePlan.confidencePercent,
             profileReason = templatePlan.reason,
-            folders = folders.map { toFolderDTO(it, sessionOsType) }
+            folders = emptyList()
         )
+    }
+
+    /**
+     * Build a small initial tree for the classification page and leave the rest to lazy loading.
+     */
+    @Transactional(readOnly = true)
+    fun getInitialFolderTree(sessionId: Long, maxDepth: Int = 3): DiscoveryInitialTreeDTO {
+        val session = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+        val sessionOsType = session.osType ?: ""
+        val shallowDepth = minOf(maxDepth.coerceAtLeast(0), 1)
+
+        val shallowFolders = folderRepository.findBySessionIdAndMaxDepth(sessionId, shallowDepth)
+        val focusPaths = buildInitialFocusPaths(session)
+        val focusTreePaths = focusPaths
+            .flatMap { ancestorChain(it, sessionOsType, maxDepth) }
+            .toCollection(linkedSetOf())
+
+        val focusFolders = if (focusTreePaths.isEmpty()) {
+            emptyList()
+        } else {
+            folderRepository.findBySessionIdAndPathIn(sessionId, focusTreePaths)
+        }
+
+        val mergedFolders = linkedMapOf<String, DiscoveredFolder>()
+        (shallowFolders + focusFolders).forEach { folder ->
+            val path = folder.path ?: return@forEach
+            mergedFolders[path] = folder
+        }
+
+        val fullyLoadedParentPaths = shallowFolders
+            .filter { it.depth < shallowDepth }
+            .mapNotNull { it.path }
+            .toSet()
+
+        return DiscoveryInitialTreeDTO(
+            folders = mergedFolders.values.map { toFolderDTO(it, sessionOsType) },
+            fullyLoadedParentPaths = fullyLoadedParentPaths
+        )
+    }
+
+    private fun buildInitialFocusPaths(session: DiscoverySession): Set<String> {
+        val host = session.host?.trim().orEmpty()
+        val focus = linkedSetOf<String>()
+
+        session.rootPaths
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.forEach { focus.add(it) }
+
+        if (host.isBlank()) {
+            return focus
+        }
+
+        val hostConfigs = crawlConfigService.findAll(null, Pageable.unpaged()).content
+            .filter { it.sourceHost?.trim()?.equals(host, ignoreCase = true) == true }
+
+        hostConfigs.forEach { config ->
+            config.startPaths.orEmpty()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .forEach { focus.add(it) }
+
+            focus.addAll(extractConfiguredFocusPaths(config))
+        }
+
+        return focus
+    }
+
+    private fun extractConfiguredFocusPaths(config: CrawlConfigDTO): Set<String> {
+        val definition = crawlConfigConverter.toDefinition(config)
+        val focus = linkedSetOf<String>()
+
+        focus += selectAnchoredPaths(definition.folderPatterns.skip, maxDepth = 2, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.index, maxDepth = 5, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.analyze, maxDepth = 5, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.semantic, maxDepth = 5, limit = 40)
+
+        return focus
+    }
+
+    private fun selectAnchoredPaths(patterns: List<String>, maxDepth: Int, limit: Int): List<String> {
+        return patterns.asSequence()
+            .mapNotNull { extractAnchoredLiteralPath(it) }
+            .filter { it != "/" }
+            .filter { pathDepth(it) <= maxDepth }
+            .distinct()
+            .sortedWith(compareBy<String>({ pathDepth(it) }, { it.length }, { it.lowercase() }))
+            .take(limit)
+            .toList()
+    }
+
+    private fun extractAnchoredLiteralPath(pattern: String): String? {
+        val trimmed = pattern.trim()
+        if (trimmed == "^[\\\\/].*$") {
+            return "/"
+        }
+
+        if (!trimmed.startsWith("^\\Q")) {
+            return null
+        }
+        val quotedEnd = trimmed.indexOf("\\E(")
+        if (quotedEnd <= 3) {
+            return null
+        }
+
+        val quotedBody = trimmed.substring(3, quotedEnd)
+        return quotedBody
+            .replace("[\\\\\\\\/]", "/")
+            .replace("[\\\\/]", "/")
+            .replace("//", "/")
+            .trim()
+            .takeIf { it.isNotBlank() }
+    }
+
+    private fun ancestorChain(path: String, osType: String, maxDepth: Int): List<String> {
+        val normalized = path.trim().takeIf { it.isNotBlank() } ?: return emptyList()
+        val chain = mutableListOf<String>()
+        var current: String? = normalized
+        while (current != null) {
+            val currentDepth = pathDepth(current)
+            if (currentDepth <= maxDepth) {
+                chain.add(current)
+            }
+            current = computeParentPath(current, osType)
+        }
+        return chain.asReversed()
+    }
+
+    private fun pathDepth(path: String): Int {
+        val normalized = path.trim().replace('\\', '/')
+        if (normalized.isBlank() || normalized == "/") {
+            return 0
+        }
+        if (normalized.length >= 3 && normalized[1] == ':' && normalized[2] == '/') {
+            return normalized.removePrefix(normalized.substring(0, 3))
+                .split('/')
+                .count { it.isNotBlank() }
+        }
+        return normalized.split('/').count { it.isNotBlank() }
     }
 
     /**
@@ -453,7 +593,7 @@ class DiscoveryService(
      * Get all sessions for a host.
      */
     fun getSessionsForHost(host: String): List<DiscoverySessionSummaryDTO> {
-        return sessionRepository.findByHostOrderByDateCreatedDesc(host)
+        return sessionRepository.findByHostOrSourceHostOrderByDateCreatedDesc(host.trim())
             .map { toSummaryDTO(it) }
     }
 
@@ -652,7 +792,7 @@ class DiscoveryService(
     }
 
     private fun archiveExistingSessionsForHost(host: String): Int {
-        val existing = sessionRepository.findByHostOrderByDateCreatedDesc(host)
+        val existing = sessionRepository.findByHostOrSourceHostOrderByDateCreatedDesc(host)
         if (existing.isEmpty()) return 0
         var archived = 0
         existing.forEach { session ->
@@ -954,6 +1094,11 @@ data class DiscoverySessionDTO(
     val profileConfidencePercent: Int,
     val profileReason: String,
     val folders: List<DiscoveredFolderDTO>
+)
+
+data class DiscoveryInitialTreeDTO(
+    val folders: List<DiscoveredFolderDTO>,
+    val fullyLoadedParentPaths: Set<String>
 )
 
 data class DiscoveredFolderDTO(

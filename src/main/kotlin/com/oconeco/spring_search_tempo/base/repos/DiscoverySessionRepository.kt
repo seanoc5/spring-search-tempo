@@ -15,7 +15,18 @@ interface DiscoverySessionRepository : JpaRepository<DiscoverySession, Long> {
     fun findByHostAndStatus(host: String, status: DiscoveryStatus): List<DiscoverySession>
 
     @Query("SELECT s FROM DiscoverySession s WHERE s.host = :host ORDER BY s.dateCreated DESC")
-    fun findByHostOrderByDateCreatedDesc(host: String): List<DiscoverySession>
+    fun findByHostOrderByDateCreatedDesc(@Param("host") host: String): List<DiscoverySession>
+
+    @Query(
+        """
+        SELECT s FROM DiscoverySession s
+        LEFT JOIN s.sourceHostRef sh
+        WHERE LOWER(s.host) = LOWER(:host)
+           OR LOWER(sh.normalizedHost) = LOWER(:host)
+        ORDER BY s.dateCreated DESC
+        """
+    )
+    fun findByHostOrSourceHostOrderByDateCreatedDesc(@Param("host") host: String): List<DiscoverySession>
 
     @Query("SELECT s FROM DiscoverySession s WHERE s.status = :status ORDER BY s.dateCreated DESC")
     fun findByStatusOrderByDateCreatedDesc(status: DiscoveryStatus): List<DiscoverySession>

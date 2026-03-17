@@ -165,7 +165,7 @@ class DiscoveryController(
     @GetMapping("/{sessionId}/classify")
     fun classify(
         @PathVariable sessionId: Long,
-        @RequestParam(name = "maxDepth", defaultValue = "5") maxDepth: Int,
+        @RequestParam(name = "maxDepth", defaultValue = "3") maxDepth: Int,
         @RequestParam(name = "assignedStatus", required = false) assignedStatus: String?,
         @RequestParam(name = "listPage", defaultValue = "0") listPage: Int,
         @RequestParam(name = "listSize", defaultValue = "100") listSize: Int,
@@ -178,6 +178,7 @@ class DiscoveryController(
             log.debug(".... Retrieving classification UI for session {} with maxDepth {}", sessionId, maxDepth)
             val effectiveMaxDepth = maxDepth.coerceIn(0, 8)
             val discoverySession = discoveryService.getSessionForClassification(sessionId, effectiveMaxDepth)
+            val initialTree = discoveryService.getInitialFolderTree(sessionId, effectiveMaxDepth)
             val selectedAssignedStatus = parseAnalysisStatus(assignedStatus)
             val assignedFolders = selectedAssignedStatus?.let {
                 discoveryService.getAssignedFolders(
@@ -200,9 +201,9 @@ class DiscoveryController(
                 minOf(assignedTotal, (assignedPageNumber.toLong() + 1L) * assignedPageSize)
             }
 
-            // Build tree structure for display (limit depth for performance)
-            val rootFolders = discoverySession.folders.filter { it.depth == 0 }
-            val foldersByParent = discoverySession.folders
+            // Build initial tree structure for display. Remaining branches load on demand.
+            val rootFolders = initialTree.folders.filter { it.depth == 0 }
+            val foldersByParent = initialTree.folders
                 // Defensive guard for malformed rows where parentPath == path (self-cycle).
                 .filterNot { it.parentPath != null && it.parentPath == it.path }
                 .groupBy { it.parentPath }
@@ -211,8 +212,9 @@ class DiscoveryController(
             model.addAttribute("sessionId", discoverySession.id)
             model.addAttribute("rootFolders", rootFolders)
             model.addAttribute("foldersByParent", foldersByParent)
+            model.addAttribute("fullyLoadedParentPaths", initialTree.fullyLoadedParentPaths)
             model.addAttribute("maxDepth", effectiveMaxDepth)
-            model.addAttribute("visibleFolders", discoverySession.folders.size)
+            model.addAttribute("visibleFolders", initialTree.folders.size)
             model.addAttribute("selectedAssignedStatus", selectedAssignedStatus?.name)
             model.addAttribute("assignedFolders", assignedFolders?.folders.orEmpty())
             model.addAttribute("assignedFoldersTotal", assignedTotal)
@@ -232,6 +234,7 @@ class DiscoveryController(
             model.addAttribute("hostCrawlConfigs", discoveryService.getCrawlConfigCandidates(discoverySession.host))
             model.addAttribute("defaultNewConfigName", "DISCOVERY_${discoverySession.host}_${discoverySession.id}")
             model.addAttribute("defaultNewDisplayLabel", "Discovery ${discoverySession.host} (${discoverySession.id})")
+            log.debug("\t\trender template: classify.html...")
 
             return "discovery/classify"
         } catch (e: NotFoundException) {
@@ -248,13 +251,19 @@ class DiscoveryController(
     fun getChildren(
         @PathVariable sessionId: Long,
         @RequestParam parentPath: String,
+        @RequestParam depth: Int,
+        @RequestParam maxDepth: Int,
+        @RequestParam(name = "inheritedStatus", required = false) inheritedStatus: String?,
         model: Model
     ): String {
         val children = discoveryService.getChildFolders(sessionId, parentPath)
         log.debug(".... Retrieved {} children for session {} and parent {}", children.size, sessionId, parentPath)
         model.addAttribute("folders", children)
         model.addAttribute("sessionId", sessionId)
-        return "discovery/fragments :: folderChildren"
+        model.addAttribute("depth", depth)
+        model.addAttribute("maxDepth", maxDepth)
+        model.addAttribute("inheritedStatus", inheritedStatus)
+        return "discovery/fragments :: folderRows"
     }
 
     /**
