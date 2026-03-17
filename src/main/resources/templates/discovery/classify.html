@@ -751,18 +751,69 @@
             }
         }
 
-        function refreshLoadedSubtree(rootPath, status) {
-            document.querySelectorAll('.folder-row').forEach(candidate => {
-                const candidatePath = candidate.dataset.path || '';
-                const statusSource = candidate.dataset.statusSource || 'UNKNOWN';
-                const isRoot = candidatePath === rootPath;
-                if (!isRoot && !isDescendantPath(candidatePath, rootPath)) {
-                    return;
-                }
-                if (isRoot || statusSource !== 'ASSIGNED') {
-                    applyStatusToRow(candidate, status, 'ASSIGNED');
+        function captureRowState(row) {
+            return {
+                path: row.dataset.path,
+                hidden: row.classList.contains('row-hidden'),
+                expanded: row.dataset.expanded === 'true',
+                childrenLoaded: row.dataset.childrenLoaded === 'true'
+            };
+        }
+
+        function applyCapturedRowState(row, state) {
+            if (!row || !state) return;
+            row.dataset.childrenLoaded = state.childrenLoaded ? 'true' : 'false';
+            row.classList.toggle('row-hidden', state.hidden);
+            setRowExpanded(row, state.expanded);
+        }
+
+        function refreshRowsFromServer(paths) {
+            const normalizedPaths = Array.from(new Set((paths || []).filter(Boolean)));
+            if (normalizedPaths.length === 0) {
+                return Promise.resolve();
+            }
+            const maxDepth = parseInt(
+                document.querySelector('.folder-row')?.dataset.maxDepth || '3',
+                10
+            );
+
+            const rowState = new Map();
+            normalizedPaths.forEach(path => {
+                const row = document.querySelector(`.folder-row[data-path="${CSS.escape(path)}"]`);
+                if (row) {
+                    rowState.set(path, captureRowState(row));
                 }
             });
+
+            return fetch(`/discovery/${sessionId}/branch-refresh`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'HX-Request': 'true',
+                    [document.querySelector('meta[name="_csrf_header"]').content]:
+                        document.querySelector('meta[name="_csrf"]').content
+                },
+                body: JSON.stringify({ paths: normalizedPaths, maxDepth: maxDepth })
+            })
+                .then(response => response.text())
+                .then(html => {
+                    const template = document.createElement('template');
+                    template.innerHTML = html.trim();
+                    Array.from(template.content.querySelectorAll('tr.folder-row')).forEach(newRow => {
+                        const path = newRow.dataset.path;
+                        const oldRow = document.querySelector(`.folder-row[data-path="${CSS.escape(path)}"]`);
+                        if (!oldRow) return;
+                        const state = rowState.get(path);
+                        oldRow.replaceWith(newRow);
+                        applyCapturedRowState(newRow, state);
+                    });
+                });
+        }
+
+        function loadedSubtreePaths(rootPath) {
+            return Array.from(document.querySelectorAll('.folder-row'))
+                .map(row => row.dataset.path || '')
+                .filter(candidatePath => candidatePath === rootPath || isDescendantPath(candidatePath, rootPath));
         }
 
         function classifyFolder(folderId, folderPath, status, includeSubtree = false) {
@@ -786,14 +837,23 @@
                     const row = folderId != null
                         ? document.querySelector(`[data-folder-id="${folderId}"]`)
                         : document.querySelector(`.folder-row[data-path="${CSS.escape(folderPath)}"]`);
-                    if (includeSubtree && folderPath) {
-                        refreshLoadedSubtree(folderPath, status);
-                    } else {
-                        applyStatusToRow(row, status, 'ASSIGNED');
-                    }
+                    const pathsToRefresh = includeSubtree && folderPath
+                        ? loadedSubtreePaths(folderPath)
+                        : [row?.dataset.path].filter(Boolean);
                     // Trigger status panel refresh
-                    htmx.trigger(document.body, 'classificationChanged');
+                    return refreshRowsFromServer(pathsToRefresh).then(() => {
+                        if (!includeSubtree) {
+                            const updatedRow = row?.dataset.path
+                                ? document.querySelector(`.folder-row[data-path="${CSS.escape(row.dataset.path)}"]`)
+                                : null;
+                            if (updatedRow) {
+                                applyStatusToRow(updatedRow, status, 'ASSIGNED');
+                            }
+                        }
+                        htmx.trigger(document.body, 'classificationChanged');
+                    });
                 }
+                return null;
             });
         }
 

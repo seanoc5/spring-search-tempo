@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryMode
 import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryRequest
 import com.oconeco.spring_search_tempo.web.service.ClassifyFolderRequest
+import com.oconeco.spring_search_tempo.web.service.DiscoveryBranchRefreshRequest
 import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleAdminService
 import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleUpsertRequest
 import com.oconeco.spring_search_tempo.web.service.DiscoveryUserProfile
@@ -264,6 +265,19 @@ class DiscoveryController(
         model.addAttribute("maxDepth", maxDepth)
         model.addAttribute("inheritedStatus", inheritedStatus)
         return "discovery/fragments :: folderRows"
+    }
+
+    @PostMapping("/{sessionId}/branch-refresh")
+    fun refreshBranch(
+        @PathVariable sessionId: Long,
+        @RequestBody request: DiscoveryBranchRefreshRequest,
+        model: Model
+    ): String {
+        val folders = discoveryService.getFoldersByPaths(sessionId, request.paths)
+        model.addAttribute("folders", folders)
+        model.addAttribute("sessionId", sessionId)
+        model.addAttribute("maxDepth", request.maxDepth.coerceIn(0, 8))
+        return "discovery/fragments :: folderRowsByDepth"
     }
 
     /**

@@ -182,4 +182,119 @@
     </th:block>
 </th:block>
 
+<th:block th:fragment="folderRowsByDepth">
+    <th:block th:each="folder : ${folders}"
+              th:with="
+                depth=${folder.depth},
+                effectiveStatus=${folder.assignedStatus != null ? folder.assignedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : null)},
+                statusSource=${folder.assignedStatus != null ? 'ASSIGNED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH')},
+                statusLabel=${effectiveStatus == 'SEMANTIC' ? 'EMBED' : effectiveStatus},
+                effectiveStatusLower=${effectiveStatus != null ? effectiveStatus.toLowerCase() : 'unknown'},
+                suggestedDiffers=${folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' and folder.assignedStatus != null and folder.assignedStatus.toString() != folder.suggestedStatus.toString()}
+              ">
+        <tr class="folder-row"
+            th:data-folder-id="${folder.id}"
+            th:data-path="${folder.path}"
+            th:data-parent-path="${folder.parentPath}"
+            th:data-depth="${depth}"
+            th:data-max-depth="${maxDepth}"
+            th:data-effective-status="${folder.assignedStatus != null ? folder.assignedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : 'UNKNOWN')}"
+            th:data-status-source="${folder.assignedStatus != null ? 'ASSIGNED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH')}"
+            data-children-loaded="false"
+            data-expanded="false">
+            <td class="folder-col" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''">
+                <div class="tree-cell" th:style="|--depth:${depth};|">
+                    <span class="tree-guides" aria-hidden="true"></span>
+                    <input type="checkbox" class="form-check-input folder-checkbox"
+                           th:data-folder-id="${folder.id}">
+                    <button type="button"
+                            class="btn btn-link p-0 text-decoration-none folder-toggle"
+                            th:if="${folder.folderCount > 0 and depth < maxDepth}"
+                            onclick="toggleFolder(this)">
+                        <i class="bi bi-chevron-right toggle-icon"></i>
+                    </button>
+                    <span th:unless="${folder.folderCount > 0 and depth < maxDepth}" style="width: 12px;"></span>
+                    <i class="bi bi-folder text-warning"></i>
+                    <span class="folder-name-label"
+                          th:title="${folder.path}"
+                          th:classappend="|folder-name-${effectiveStatusLower}|"
+                          th:text="${folder.name}">folder</span>
+                </div>
+            </td>
+            <td class="text-end action-col-branch">
+                <div class="btn-group btn-group-sm" role="group"
+                     th:if="${folder.folderCount > 0}"
+                     title="Entire-branch actions">
+                    <button type="button" class="btn btn-outline-danger action-btn subtree-action"
+                            th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                            th:data-folder-path="${folder.path}" data-status="SKIP" title="Branch: SKIP">S</button>
+                    <button type="button" class="btn btn-outline-warning action-btn subtree-action"
+                            th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                            th:data-folder-path="${folder.path}" data-status="LOCATE" title="Branch: LOCATE">L</button>
+                    <button type="button" class="btn btn-outline-success action-btn subtree-action"
+                            th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                            th:data-folder-path="${folder.path}" data-status="INDEX" title="Branch: INDEX">I</button>
+                    <button type="button" class="btn btn-outline-primary action-btn subtree-action"
+                            th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                            th:data-folder-path="${folder.path}" data-status="ANALYZE" title="Branch: ANALYZE">A</button>
+                    <button type="button" class="btn btn-outline-secondary action-btn subtree-action"
+                            th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                            th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E</button>
+                </div>
+                <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
+            </td>
+            <td class="status-col">
+                <span class="badge status-badge"
+                      th:title="|${statusSource}: ${statusLabel != null ? statusLabel : 'UNKNOWN'}|"
+                      th:classappend="${effectiveStatus != null} ? |status-${effectiveStatusLower}| : 'status-unknown'"
+                      th:text="${statusLabel != null ? statusLabel : 'UNKNOWN'}">UNKNOWN</span>
+                <span th:if="${suggestedDiffers}" class="suggested-indicator"
+                      th:title="|Suggested: ${folder.suggestedStatus}|">
+                    <i class="bi bi-lightbulb"></i>
+                    <span class="badge"
+                          th:classappend="|status-${folder.suggestedStatus.toLowerCase()}|"
+                          th:text="${folder.suggestedStatus == 'SEMANTIC' ? 'EMBED' : folder.suggestedStatus}">SUG</span>
+                </span>
+            </td>
+            <td class="text-end action-col-folder">
+                <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
+                    <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
+                            th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                            data-status="SKIP"
+                            th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
+                            title="Folder: SKIP">S</button>
+                    <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
+                            th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                            data-status="LOCATE"
+                            th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
+                            title="Folder: LOCATE">L</button>
+                    <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
+                            th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                            data-status="INDEX"
+                            th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
+                            title="Folder: INDEX">I</button>
+                    <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
+                            th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                            data-status="ANALYZE"
+                            th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
+                            title="Folder: ANALYZE">A</button>
+                    <button type="button" class="btn btn-outline-secondary action-btn action-btn-folder"
+                            th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                            data-status="SEMANTIC"
+                            th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|"
+                            title="Folder: EMBED">E</button>
+                </div>
+            </td>
+            <td class="text-end count-col">
+                <span th:if="${folder.folderCount > 0}" th:text="${folder.folderCount}">1</span>
+                <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
+            </td>
+            <td class="text-end count-col">
+                <span th:if="${folder.fileCount > 0}" th:text="${folder.fileCount}">1</span>
+                <span th:unless="${folder.fileCount > 0}" class="zero-dash">-</span>
+            </td>
+        </tr>
+    </th:block>
+</th:block>
+
 </html>

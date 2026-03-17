@@ -368,6 +368,26 @@ class DiscoveryService(
     }
 
     /**
+     * Re-read a specific ordered set of folder rows from persisted state.
+     */
+    fun getFoldersByPaths(sessionId: Long, paths: List<String>): List<DiscoveredFolderDTO> {
+        if (paths.isEmpty()) return emptyList()
+
+        val sessionOsType = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+            .osType ?: ""
+        val normalizedPaths = paths.map { it.trim() }.filter { it.isNotBlank() }
+        if (normalizedPaths.isEmpty()) return emptyList()
+
+        val byPath = folderRepository.findBySessionIdAndPathIn(sessionId, normalizedPaths)
+            .associateBy { it.path ?: "" }
+
+        return normalizedPaths.mapNotNull { path ->
+            byPath[path]?.let { toFolderDTO(it, sessionOsType) }
+        }
+    }
+
+    /**
      * Get folders explicitly assigned a classification status.
      */
     @Transactional(readOnly = true)
@@ -1237,4 +1257,9 @@ data class ClassifyFolderRequest(
     val folderPath: String? = null,
     val status: String,
     val includeSubtree: Boolean = false
+)
+
+data class DiscoveryBranchRefreshRequest(
+    val paths: List<String> = emptyList(),
+    val maxDepth: Int = 3
 )
