@@ -84,6 +84,7 @@
             th:data-depth="${depth}"
             th:data-max-depth="${maxDepth}"
             th:data-effective-status="${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : 'UNKNOWN'))}"
+            th:data-status-source="${folder.assignedStatus != null ? 'ASSIGNED' : (inheritedStatus != null ? 'INHERITED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH'))}"
             data-children-loaded="false"
             data-expanded="false">
             <td class="folder-col" th:classappend="${folder.isHidden} ? 'hidden-folder' : ''">
@@ -144,22 +145,27 @@
                 <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
                     <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
                             th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                            data-status="SKIP"
                             th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
                             title="Folder: SKIP">S</button>
                     <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
                             th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                            data-status="LOCATE"
                             th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
                             title="Folder: LOCATE">L</button>
                     <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
                             th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                            data-status="INDEX"
                             th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
                             title="Folder: INDEX">I</button>
                     <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
                             th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                            data-status="ANALYZE"
                             th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
                             title="Folder: ANALYZE">A</button>
                     <button type="button" class="btn btn-outline-secondary action-btn action-btn-folder"
                             th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                            data-status="SEMANTIC"
                             th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|"
                             title="Folder: EMBED">E</button>
                 </div>

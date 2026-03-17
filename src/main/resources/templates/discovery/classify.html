@@ -700,13 +700,67 @@
         function collapseAll() {
             document.querySelectorAll('.folder-row').forEach(row => {
                 const depth = parseInt(row.dataset.depth || '0', 10);
-                if (depth > 0) {
+                if (depth > 1) {
                     row.classList.add('row-hidden');
                 } else {
                     row.classList.remove('row-hidden');
                 }
                 if (row.querySelector('.toggle-icon')) {
-                    setRowExpanded(row, false);
+                    setRowExpanded(row, depth === 0);
+                }
+            });
+        }
+
+        function setActionButtonsForStatus(row, status) {
+            row.querySelectorAll('.action-btn').forEach(btn => {
+                const btnStatus = btn.dataset.status
+                    || { 'S': 'SKIP', 'L': 'LOCATE', 'I': 'INDEX', 'A': 'ANALYZE', 'E': 'SEMANTIC' }[
+                        btn.textContent.replace('*', '').trim()
+                    ];
+                const isActive = btnStatus === status;
+                btn.classList.remove('active-status', 'inactive');
+                btn.classList.add(isActive ? 'active-status' : 'inactive');
+            });
+        }
+
+        function applyStatusToRow(row, status, statusSource = 'ASSIGNED') {
+            if (!row) return;
+
+            const displayStatus = status === 'SEMANTIC' ? 'EMBED' : status;
+            row.dataset.effectiveStatus = status;
+            row.dataset.statusSource = statusSource;
+
+            const badge = row.querySelector('.status-badge');
+            if (badge) {
+                badge.className = `badge status-badge status-${status.toLowerCase()}`;
+                badge.textContent = displayStatus;
+                badge.title = `${statusSource}: ${displayStatus}`;
+            }
+
+            const folderName = row.querySelector('.folder-name-label');
+            if (folderName) {
+                folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
+                folderName.classList.add('folder-name-label', `folder-name-${status.toLowerCase()}`);
+            }
+
+            setActionButtonsForStatus(row, status);
+
+            const suggestedIndicator = row.querySelector('.suggested-indicator');
+            if (suggestedIndicator) {
+                suggestedIndicator.style.display = 'none';
+            }
+        }
+
+        function refreshLoadedSubtree(rootPath, status) {
+            document.querySelectorAll('.folder-row').forEach(candidate => {
+                const candidatePath = candidate.dataset.path || '';
+                const statusSource = candidate.dataset.statusSource || 'UNKNOWN';
+                const isRoot = candidatePath === rootPath;
+                if (!isRoot && !isDescendantPath(candidatePath, rootPath)) {
+                    return;
+                }
+                if (isRoot || statusSource !== 'ASSIGNED') {
+                    applyStatusToRow(candidate, status, 'ASSIGNED');
                 }
             });
         }
@@ -729,40 +783,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const row = document.querySelector(`[data-folder-id="${folderId}"]`);
-                    if (row) {
-                        // Update the folder's badge
-                        const badge = row.querySelector('.status-badge');
-                        if (badge) {
-                            badge.className = `badge status-badge status-${status.toLowerCase()}`;
-                            badge.textContent = status === 'SEMANTIC' ? 'EMBED' : status;
-                            badge.title = `ASSIGNED: ${status === 'SEMANTIC' ? 'EMBED' : status}`;
-                        }
-                        // Update folder name styling
-                        const folderName = row.querySelector('.folder-name-label');
-                        if (folderName) {
-                            folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
-                            folderName.classList.add('folder-name-label', `folder-name-${status.toLowerCase()}`);
-                        }
-                        // Update action button active/inactive states
-                        row.querySelectorAll('.action-btn').forEach(btn => {
-                            const btnStatus = btn.textContent.replace('*', '').trim();
-                            const statusMap = {'S': 'SKIP', 'L': 'LOCATE', 'I': 'INDEX', 'A': 'ANALYZE', 'E': 'SEMANTIC'};
-                            const isActive = statusMap[btnStatus] === status;
-                            btn.classList.remove('active-status', 'inactive');
-                            btn.classList.add(isActive ? 'active-status' : 'inactive');
-                        });
-                        // Hide suggested indicator since we just assigned
-                        const suggestedIndicator = row.querySelector('.suggested-indicator');
-                        if (suggestedIndicator) {
-                            suggestedIndicator.style.display = 'none';
-                        }
+                    const row = folderId != null
+                        ? document.querySelector(`[data-folder-id="${folderId}"]`)
+                        : document.querySelector(`.folder-row[data-path="${CSS.escape(folderPath)}"]`);
+                    if (includeSubtree && folderPath) {
+                        refreshLoadedSubtree(folderPath, status);
+                    } else {
+                        applyStatusToRow(row, status, 'ASSIGNED');
                     }
                     // Trigger status panel refresh
                     htmx.trigger(document.body, 'classificationChanged');
-                    if (includeSubtree) {
-                        location.reload();
-                    }
                 }
             });
         }
@@ -814,20 +844,32 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', toggleApplyMode);
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleApplyMode();
+            document.querySelectorAll('.folder-row').forEach(row => {
+                const depth = parseInt(row.dataset.depth || '0', 10);
+                if (depth <= 1) {
+                    row.classList.remove('row-hidden');
+                }
+                if (depth === 0 && row.querySelector('.toggle-icon')) {
+                    setRowExpanded(row, true);
+                }
+            });
+        });
     </script>
 </main>
 
 <!-- Folder Row Fragment -->
 <th:block th:fragment="folderRow(folder, foldersByParent, fullyLoadedParentPaths, depth, sessionId, maxDepth, inheritedStatus)">
     <tr class="folder-row"
-        th:classappend="${depth > 0} ? 'row-hidden' : ''"
+        th:classappend="${depth > 1} ? 'row-hidden' : ''"
         th:data-folder-id="${folder.id}"
         th:data-path="${folder.path}"
         th:data-parent-path="${folder.parentPath}"
         th:data-depth="${depth}"
         th:data-max-depth="${maxDepth}"
         th:data-effective-status="${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : 'UNKNOWN'))}"
+        th:data-status-source="${folder.assignedStatus != null ? 'ASSIGNED' : (inheritedStatus != null ? 'INHERITED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH'))}"
         th:data-children-loaded="${fullyLoadedParentPaths.contains(folder.path)}"
         data-expanded="false"
         th:with="
@@ -901,22 +943,27 @@
             <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
                 <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                        data-status="SKIP"
                         th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
                         title="Folder: SKIP">S</button>
                 <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                        data-status="LOCATE"
                         th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
                         title="Folder: LOCATE">L</button>
                 <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                        data-status="INDEX"
                         th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
                         title="Folder: INDEX">I</button>
                 <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                        data-status="ANALYZE"
                         th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
                         title="Folder: ANALYZE">A</button>
                 <button type="button" class="btn btn-outline-secondary action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                        data-status="SEMANTIC"
                         th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|"
                         title="Folder: EMBED">E</button>
             </div>
