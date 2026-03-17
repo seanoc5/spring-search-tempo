@@ -57,6 +57,7 @@ dependencies {
     implementation("org.springframework.ai:spring-ai-starter-model-ollama")
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("org.springframework.session:spring-session-jdbc")
     implementation("io.github.wimdeblauwe:error-handling-spring-boot-starter:4.6.0")
