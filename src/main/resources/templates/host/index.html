@@ -20,6 +20,14 @@
                     </button>
                 </form>
                 <form th:if="${selectedHost != null && !selectedHost.isEmpty()}"
+                      th:action="@{/hosts/{host}/repair-orphan-fsfiles(host=${selectedHost})}"
+                      method="post"
+                      onsubmit="return confirm('Assign host ' + '[[${selectedHost}]]' + ' to orphan fsfile rows that currently have no host attribution?');">
+                    <button type="submit" class="btn btn-outline-warning">
+                        <i class="bi bi-wrench-adjustable-circle me-1"></i>Adopt Orphan Files
+                    </button>
+                </form>
+                <form th:if="${selectedHost != null && !selectedHost.isEmpty()}"
                       th:action="@{/hosts/{host}/purge(host=${selectedHost})}"
                       method="post"
                       onsubmit="return confirm('Purge all persisted data for source host ' + '[[${selectedHost}]]' + '? This will delete crawl configs, discovery sessions, crawl content, and host-scoped email data.');">

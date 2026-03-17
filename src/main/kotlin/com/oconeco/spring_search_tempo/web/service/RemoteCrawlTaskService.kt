@@ -6,7 +6,9 @@ import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.RemoteCrawlTask
 import com.oconeco.spring_search_tempo.base.domain.RemoteTaskStatus
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
+import com.oconeco.spring_search_tempo.base.domain.HostCrawlSessionFolderStatus
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
+import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.RemoteCrawlTaskRepository
 import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
@@ -21,8 +23,10 @@ class RemoteCrawlTaskService(
     private val jobRunService: JobRunService,
     private val remoteCrawlSessionService: RemoteCrawlSessionService,
     private val remoteCrawlPlannerService: RemoteCrawlPlannerService,
+    private val folderRepository: FSFolderRepository,
     private val remoteCrawlTaskRepository: RemoteCrawlTaskRepository,
-    private val sourceHostService: SourceHostService
+    private val sourceHostService: SourceHostService,
+    private val hostCrawlSessionService: HostCrawlSessionService
 ) {
 
     @Transactional
@@ -108,7 +112,27 @@ class RemoteCrawlTaskService(
         }
 
         if (toCreate.isNotEmpty()) {
-            remoteCrawlTaskRepository.saveAll(toCreate)
+            val savedTasks = remoteCrawlTaskRepository.saveAll(toCreate)
+            val folderByUri = classifiedFolders.associateBy { toRemoteUri(host, it.path) }
+            val persistedFoldersByUri = folderRepository.findByUriIn(savedTasks.map { it.remoteUri!! })
+                .associateBy { it.uri!! }
+            hostCrawlSessionService.recordQueuedFolders(
+                jobRunId = request.sessionId,
+                queueItems = savedTasks.map { task ->
+                    val folder = folderByUri[task.remoteUri!!]
+                    QueuedFolderSelection(
+                        selectedPath = task.folderPath!!,
+                        analysisStatus = task.analysisStatus,
+                        fsFolder = persistedFoldersByUri[task.remoteUri!!],
+                        remoteCrawlTaskId = task.id,
+                        selectionReasonDetail = buildString {
+                            append("host=").append(host)
+                            append(", priority=").append(task.priority)
+                            folder?.parentStatus?.let { append(", parentStatus=").append(it) }
+                        }
+                    )
+                }
+            )
         }
         jobRunService.setCurrentStep(request.sessionId, "Remote folder queue: ${toCreate.size} pending")
 
@@ -187,6 +211,12 @@ class RemoteCrawlTaskService(
                     priority = task.priority
                 )
             }
+
+        hostCrawlSessionService.markClaimed(
+            jobRunId = request.sessionId,
+            remoteTaskIds = tasks.map { it.taskId },
+            claimedAt = now
+        )
 
         jobRunService.setCurrentStep(request.sessionId, "Remote folder queue: claimed ${tasks.size}")
 
@@ -279,6 +309,21 @@ class RemoteCrawlTaskService(
 
         if (updated > 0) {
             remoteCrawlTaskRepository.saveAll(tasksById.values)
+            hostCrawlSessionService.applyResults(
+                jobRunId = request.sessionId,
+                results = request.results.map { result ->
+                    QueuedFolderResult(
+                        remoteCrawlTaskId = result.taskId,
+                        status = when (result.outcome) {
+                            RemoteTaskOutcome.COMPLETED -> HostCrawlSessionFolderStatus.COMPLETED
+                            RemoteTaskOutcome.SKIPPED -> HostCrawlSessionFolderStatus.SKIPPED
+                            RemoteTaskOutcome.FAILED -> HostCrawlSessionFolderStatus.FAILED
+                            RemoteTaskOutcome.RETRY -> HostCrawlSessionFolderStatus.RETRY
+                        },
+                        errorMessage = result.errorMessage
+                    )
+                }
+            )
         }
         request.processedIncrement?.let { if (it > 0) jobRunService.updateProgress(request.sessionId, it, "Remote queue ack") }
 

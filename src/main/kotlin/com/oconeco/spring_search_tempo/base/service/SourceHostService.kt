@@ -5,10 +5,12 @@ import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.CrawlDiscoveryFolderObservationRepository
 import com.oconeco.spring_search_tempo.base.repos.CrawlDiscoveryRunRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
+import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.RemoteCrawlTaskRepository
 import com.oconeco.spring_search_tempo.base.repos.SourceHostRepository
 import com.oconeco.spring_search_tempo.base.repos.UserSourceHostRepository
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -18,6 +20,7 @@ class SourceHostService(
     private val sourceHostRepository: SourceHostRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
     private val discoverySessionRepository: DiscoverySessionRepository,
+    private val fsFileRepository: FSFileRepository,
     private val userSourceHostRepository: UserSourceHostRepository,
     private val remoteCrawlTaskRepository: RemoteCrawlTaskRepository,
     private val crawlDiscoveryRunRepository: CrawlDiscoveryRunRepository,
@@ -187,6 +190,27 @@ class SourceHostService(
     fun findAllHosts(): List<SourceHost> =
         sourceHostRepository.findAll().sortedBy { it.displayName ?: it.normalizedHost ?: "" }
 
+    @Transactional
+    fun repairOrphanFsFiles(fallbackHost: String, limit: Int = 1000): OrphanFsFileRepairResult {
+        val sourceHost = resolveOrCreate(fallbackHost)
+            ?: throw IllegalArgumentException("fallbackHost is required")
+        val page = fsFileRepository.findOrphanSourceHostFiles(PageRequest.of(0, limit.coerceIn(1, 10_000)))
+        val files = page.content
+        files.forEach {
+            it.sourceHost = sourceHost.normalizedHost
+            it.sourceHostRef = sourceHost
+        }
+        if (files.isNotEmpty()) {
+            fsFileRepository.saveAll(files)
+        }
+        return OrphanFsFileRepairResult(
+            fallbackHost = sourceHost.normalizedHost!!,
+            repaired = files.size,
+            remaining = page.totalElements - files.size,
+            repairedIds = files.mapNotNull { it.id }
+        )
+    }
+
     private fun normalizeHost(host: String?): String? =
         host?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
 }
@@ -199,4 +223,11 @@ data class SourceHostBackfillResult(
     val remoteTasksUpdated: Int,
     val discoveryRunsUpdated: Int,
     val discoveryObservationsUpdated: Int
+)
+
+data class OrphanFsFileRepairResult(
+    val fallbackHost: String,
+    val repaired: Int,
+    val remaining: Long,
+    val repairedIds: List<Long>
 )

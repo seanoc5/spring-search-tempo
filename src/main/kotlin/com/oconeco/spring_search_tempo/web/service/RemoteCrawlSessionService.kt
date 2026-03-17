@@ -28,7 +28,8 @@ class RemoteCrawlSessionService(
     private val fileRepository: FSFileRepository,
     private val crawlSchedulingService: CrawlSchedulingService,
     private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService,
-    private val sourceHostService: SourceHostService
+    private val sourceHostService: SourceHostService,
+    private val hostCrawlSessionService: HostCrawlSessionService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(RemoteCrawlSessionService::class.java)
@@ -38,11 +39,20 @@ class RemoteCrawlSessionService(
     fun start(request: RemoteSessionStartRequest): RemoteSessionStartResponse {
         val host = normalizeHost(request.host)
         val config = validateConfigForHost(host, request.crawlConfigId)
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
+            ?: throw IllegalArgumentException("source host is required")
 
         val jobName = "remoteFsIngest-$host-${request.crawlConfigId}"
         val jobRun = jobRunService.startJobRun(request.crawlConfigId, jobName)
         request.expectedTotal?.let { if (it >= 0) jobRunService.setExpectedTotal(jobRun.id!!, it) }
         jobRunService.setCurrentStep(jobRun.id!!, "Remote crawl session started")
+        hostCrawlSessionService.ensureSession(
+            sourceHost = sourceHostRef,
+            crawlConfigId = request.crawlConfigId,
+            jobRunId = jobRun.id!!,
+            crawlMode = config.crawlMode,
+            smartCrawlEnabled = config.smartCrawlEnabled
+        )
 
         if (config.crawlMode == CrawlMode.DISCOVERY) {
             crawlDiscoveryObservationService.startRun(
@@ -331,6 +341,7 @@ class RemoteCrawlSessionService(
             )
         }
         jobRunService.completeJobRun(jobRun.id!!, request.runStatus, request.errorMessage)
+        hostCrawlSessionService.complete(jobRun.id!!, request.runStatus, request.errorMessage)
 
         if (config.crawlMode == CrawlMode.DISCOVERY) {
             crawlDiscoveryObservationService.completeRun(jobRun.id!!, request.runStatus)

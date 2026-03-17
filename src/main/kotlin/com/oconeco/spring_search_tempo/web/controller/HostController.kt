@@ -137,6 +137,24 @@ class HostController(
         }
     }
 
+    @PostMapping("/{host}/repair-orphan-fsfiles")
+    fun repairOrphanFsFiles(
+        @PathVariable(name = "host") host: String,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val result = sourceHostService.repairOrphanFsFiles(host)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Adopted ${result.repaired} orphan fsfile rows into host '${result.fallbackHost}'. Remaining=${result.remaining}."
+            )
+            "redirect:/hosts?host=$host&tab=content"
+        } catch (e: Exception) {
+            redirectAttributes.addFlashAttribute("error", "Orphan fsfile repair failed for '$host': ${e.message}")
+            "redirect:/hosts?host=$host&tab=content"
+        }
+    }
+
     private fun loadConfigsTab(host: String, model: Model) {
         log.debug(".... Retrieving host configs for host: $host")
         // Get all configs for this host
