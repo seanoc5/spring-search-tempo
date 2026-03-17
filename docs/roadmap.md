@@ -430,13 +430,14 @@ dependencies {
 - [ ] Personal vs shared content
 - [ ] **Effort**: 5 days
 
-#### 4.4 Monitoring & Observability (IN PROGRESS - 60%)
+#### 4.4 Monitoring & Observability (IN PROGRESS - 80%)
 - [x] Prometheus metrics export (SearchMetricsBinder, SearchMetricsAspect)
 - [x] Health indicators (EmbeddingHealthIndicator for embedding service)
 - [x] Search operation timing (AOP-based latency metrics)
-- [ ] Grafana dashboards
-- [ ] Logging aggregation (ELK stack)
-- [ ] **Effort**: 5 days (3 days remaining)
+- [x] Grafana dashboard (docs/monitoring/grafana-dashboard.json)
+- [x] Monitoring documentation (docs/monitoring/README.md)
+- [ ] Logging aggregation (ELK/Loki stack) - DEFERRED
+- [ ] **Effort**: 5 days (1 day remaining)
 
 #### 4.5 Scalability Improvements
 - [ ] Database connection pooling (HikariCP tuning)
