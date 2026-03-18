@@ -26,4 +26,12 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
 
     fun findBySourceHostIgnoreCase(sourceHost: String): List<CrawlConfig>
 
+    fun findBySourceHostIgnoreCase(sourceHost: String, pageable: Pageable): Page<CrawlConfig>
+
+    fun findBySourceHostIgnoreCaseAndNameContainingIgnoreCase(
+        sourceHost: String,
+        name: String,
+        pageable: Pageable
+    ): Page<CrawlConfig>
+
 }

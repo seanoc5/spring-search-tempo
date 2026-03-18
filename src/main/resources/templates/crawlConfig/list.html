@@ -17,122 +17,134 @@
             .action-toolbar.show {
                 display: flex;
             }
+            .sortable-header:hover {
+                background-color: #f8f9fa;
+            }
+            .sortable-header.sorted {
+                background-color: #e9ecef;
+            }
+            .nav-tabs .nav-link {
+                border-bottom: 2px solid transparent;
+            }
+            .nav-tabs .nav-link.active {
+                border-bottom: 2px solid #0d6efd;
+                font-weight: 600;
+            }
+            .filter-input {
+                max-width: 300px;
+            }
+            .inline-edit-display {
+                padding: 2px 4px;
+                border-radius: 3px;
+            }
+            .inline-edit-display:hover {
+                background-color: #f8f9fa;
+            }
+            .htmx-request .htmx-indicator {
+                display: inline-block;
+            }
+            .htmx-indicator {
+                display: none;
+            }
         </style>
     </head>
     <body>
         <div layout:fragment="content">
-            <div class="d-flex flex-wrap mb-4">
-                <h1 class="flex-grow-1">Crawl Configurations</h1>
-                <div>
-                    <a th:href="@{/crawlConfigs/wizard}" class="btn btn-primary">Preset Wizard</a>
-                    <a th:href="@{/crawlConfigs/add}" class="btn btn-outline-primary ms-2">Add Config</a>
-                    <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-secondary ms-2">View Job Run History</a>
+            <!-- Header Row -->
+            <div class="d-flex flex-wrap mb-3 align-items-center">
+                <h1 class="flex-grow-1 mb-0">Crawl Configurations</h1>
+                <div class="d-flex gap-2">
+                    <a th:href="@{/crawlConfigs/wizard}" class="btn btn-primary">
+                        <i class="bi bi-magic"></i> Preset Wizard
+                    </a>
+                    <a th:href="@{/crawlConfigs/add}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-lg"></i> Add Config
+                    </a>
+                    <a th:href="@{/crawlConfigs/jobRuns}" class="btn btn-outline-secondary">
+                        <i class="bi bi-clock-history"></i> Job History
+                    </a>
                 </div>
             </div>
 
+            <!-- Alerts -->
             <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
                 [[${message}]]
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-
             <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
                 [[${error}]]
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
 
-            <div th:if="${!crawlConfigs.empty || filter != null}" class="row">
-                <div th:replace="~{fragments/utils::searchFilter(object='crawlConfig')}" />
-                <div th:replace="~{fragments/utils::sorting(object='crawlConfig', sortOptions=${ {'id,ASC', 'name,ASC'} }, columnClass='offset-lg-4')}" />
+            <!-- Filter Bar -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <!-- Search Filter (SAYT) -->
+                <div class="input-group filter-input">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text"
+                           id="filterInput"
+                           class="form-control"
+                           placeholder="Search configs..."
+                           th:value="${filter}"
+                           hx-trigger="keyup changed delay:300ms"
+                           th:hx-get="@{/crawlConfigs/tab/{host}(host=${activeHost})}"
+                           hx-target="#configTableContainer"
+                           hx-swap="innerHTML"
+                           hx-include="[name='sort']"
+                           name="filter">
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearFilter()" title="Clear">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+
+                <!-- Admin: Show All toggle -->
+                <div th:if="${isAdmin}" class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="showAllCheck"
+                           th:checked="${showAll}"
+                           onchange="toggleShowAll(this.checked)">
+                    <label class="form-check-label" for="showAllCheck">Show all hosts</label>
+                </div>
             </div>
 
-            <div th:if="${crawlConfigs.empty}">No crawl configurations found.</div>
-            <div th:if="${!crawlConfigs.empty}" class="table-responsive">
-                <table class="table table-striped table-hover align-middle" id="configTable">
-                    <thead>
-                        <tr>
-                            <th scope="col" style="width: 40px;">
-                                <input type="checkbox" class="form-check-input" id="selectAll"
-                                       onclick="toggleSelectAll(this)">
-                            </th>
-                            <th scope="col">Label</th>
-                            <th scope="col">Start Paths</th>
-                            <th scope="col">Files</th>
-                            <th scope="col">Folders</th>
-                            <th scope="col" title="Files with extracted text (INDEX/ANALYZE/SEMANTIC)">Search</th>
-                            <th scope="col" title="Files with NLP-processed chunks">NLP</th>
-                            <th scope="col" title="Files with vector embeddings">Embed</th>
-                            <th scope="col">[[#{sourceHost.label}]]</th>
-                            <th scope="col">Last Run</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="crawlConfig : ${crawlConfigs}">
-                            <td>
-                                <input type="checkbox" class="form-check-input config-checkbox"
-                                       th:value="${crawlConfig.id}"
-                                       onchange="updateActionToolbar()">
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}(id=${crawlConfig.id})}"
-                                   th:title="|ID: ${crawlConfig.id} - Name: ${crawlConfig.name}|"
-                                   class="text-decoration-none fw-semibold"
-                                   data-bs-toggle="tooltip">
-                                    [[${crawlConfig.label ?: crawlConfig.name}]]
-                                </a>
-                            </td>
-                            <td>
-                                <span th:if="${crawlConfig.startPaths != null && !crawlConfig.startPaths.empty}"
-                                      class="small text-muted">
-                                    <th:block th:each="path, stat : ${crawlConfig.startPaths}">
-                                        <code th:text="${path}" style="font-size: 0.85em;"></code>
-                                        <br th:if="${!stat.last}" />
-                                    </th:block>
-                                </span>
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}/files(id=${crawlConfig.id})}"
-                                   th:text="${fileCounts[crawlConfig.id] ?: 0}"
-                                   class="text-decoration-none">0</a>
-                            </td>
-                            <td>
-                                <a th:href="@{/crawlConfigs/{id}/folders(id=${crawlConfig.id})}"
-                                   th:text="${folderCounts[crawlConfig.id] ?: 0}"
-                                   class="text-decoration-none">0</a>
-                            </td>
-                            <td>
-                                <span class="badge bg-primary" th:text="${searchableCounts[crawlConfig.id] ?: 0}">0</span>
-                            </td>
-                            <td>
-                                <span class="badge bg-success" th:text="${nlpProcessedCounts[crawlConfig.id] ?: 0}">0</span>
-                            </td>
-                            <td>
-                                <span class="badge bg-warning text-dark" th:text="${embeddingCounts[crawlConfig.id] ?: 0}">0</span>
-                            </td>
-                            <td>
-                                <small th:if="${crawlConfig.sourceHost == null}" class="text-muted fst-italic">unknown</small>
-                                <small th:if="${crawlConfig.sourceHost != null}" class="text-body fw-semibold" th:text="${crawlConfig.sourceHost}"></small>
-                            </td>
-                            <td>
-                                <th:block th:if="${lastRuns[crawlConfig.id] != null}"
-                                          th:with="lastRun=${lastRuns[crawlConfig.id]}">
-                                    <span th:text="${#temporals.format(lastRun.startTime, 'yyyy-MM-dd HH:mm')}"
-                                          class="small"></span>
-                                    <span th:switch="${lastRun.runStatus.name()}">
-                                        <span th:case="'RUNNING'" class="badge bg-primary ms-1">Running</span>
-                                        <span th:case="'COMPLETED'" class="badge bg-success ms-1"
-                                              th:classappend="${lastRun.warningMessage != null} ? 'bg-warning text-dark' : 'bg-success'"
-                                              th:text="${lastRun.warningMessage != null ? 'Warnings' : ''}"></span>
-                                        <span th:case="'FAILED'" class="badge bg-danger ms-1">Failed</span>
-                                        <span th:case="'CANCELLED'" class="badge bg-warning ms-1">Cancelled</span>
-                                    </span>
-                                </th:block>
-                                <span th:if="${lastRuns[crawlConfig.id] == null}" class="text-muted">-</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <!-- Tabbed Interface (only if multiple hosts) -->
+            <th:block th:if="${sourceHosts != null && #lists.size(sourceHosts) > 1}">
+                <ul class="nav nav-tabs mb-3" id="hostTabs" role="tablist">
+                    <li class="nav-item" th:each="host, stat : ${sourceHosts}" role="presentation">
+                        <button class="nav-link"
+                                th:classappend="${host == activeHost} ? 'active' : ''"
+                                th:id="|tab-btn-${stat.index}|"
+                                th:hx-get="@{/crawlConfigs/tab/{host}(host=${host}, filter=${filter})}"
+                                hx-target="#configTableContainer"
+                                hx-swap="innerHTML"
+                                hx-indicator="#loadingIndicator"
+                                type="button"
+                                role="tab"
+                                th:attr="data-host=${host}"
+                                onclick="setActiveTab(this)">
+                            <i class="bi bi-pc-display me-1"></i>
+                            [[${host}]]
+                        </button>
+                    </li>
+                </ul>
+            </th:block>
+
+            <!-- Single host header (when only one host) -->
+            <th:block th:if="${sourceHosts == null || #lists.size(sourceHosts) <= 1}">
+                <div th:if="${activeHost != null}" class="mb-3 text-muted">
+                    <i class="bi bi-pc-display me-1"></i>
+                    <span th:text="${activeHost}">hostname</span>
+                </div>
+            </th:block>
+
+            <!-- Loading indicator -->
+            <div id="loadingIndicator" class="htmx-indicator text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
             </div>
-            <div th:replace="~{fragments/utils::pagination()}" />
+
+            <!-- Table Container (loaded via HTMX) -->
+            <div th:replace="~{crawlConfig/fragments/configTable :: configTable}"></div>
 
             <!-- Action Toolbar (appears when rows selected) -->
             <div class="action-toolbar justify-content-between align-items-center" id="actionToolbar">
@@ -142,7 +154,7 @@
                 <div class="d-flex gap-2">
                     <form th:action="@{/crawlConfigs/run-selected}" method="post" class="d-inline" id="runForm">
                         <input type="hidden" name="selectedIds" id="runSelectedIds">
-                        <button type="submit" class="btn btn-primary" id="runSelectedBtn">
+                        <button type="submit" class="btn btn-primary">
                             <i class="bi bi-play-fill"></i> Run Selected
                         </button>
                     </form>
@@ -179,6 +191,33 @@
             </div>
 
             <script th:inline="javascript">
+                // Tab management
+                function setActiveTab(btn) {
+                    document.querySelectorAll('#hostTabs .nav-link').forEach(tab => {
+                        tab.classList.remove('active');
+                    });
+                    btn.classList.add('active');
+                    // Update URL without reload
+                    const host = btn.dataset.host;
+                    const url = new URL(window.location);
+                    url.searchParams.set('sourceHost', host);
+                    history.replaceState(null, '', url);
+                }
+
+                // Filter management
+                function clearFilter() {
+                    const input = document.getElementById('filterInput');
+                    input.value = '';
+                    htmx.trigger(input, 'keyup');
+                }
+
+                function toggleShowAll(checked) {
+                    const url = new URL(window.location);
+                    url.searchParams.set('showAll', checked);
+                    window.location = url;
+                }
+
+                // Selection management
                 function toggleSelectAll(checkbox) {
                     const checkboxes = document.querySelectorAll('.config-checkbox');
                     checkboxes.forEach(cb => cb.checked = checkbox.checked);
@@ -212,16 +251,56 @@
                     });
 
                     // Update "select all" checkbox state
-                    const checkedCount = document.querySelectorAll('.config-checkbox:checked').length;
-                    selectAllCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
-                    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+                    if (selectAllCheckbox && allCheckboxes.length > 0) {
+                        const checkedCount = document.querySelectorAll('.config-checkbox:checked').length;
+                        selectAllCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
+                        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
+                    }
                 }
 
                 function clearSelection() {
                     document.querySelectorAll('.config-checkbox').forEach(cb => cb.checked = false);
-                    document.getElementById('selectAll').checked = false;
+                    const selectAll = document.getElementById('selectAll');
+                    if (selectAll) selectAll.checked = false;
                     updateActionToolbar();
                 }
+
+                // Inline editing support
+                function handleInlineEditKey(event, input) {
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancelInlineEdit(input.closest('form'));
+                    } else if (event.key === 'Enter') {
+                        event.preventDefault();
+                        input.closest('form').requestSubmit();
+                    }
+                }
+
+                function submitInlineEdit(input) {
+                    const form = input.closest('form');
+                    if (!form.dataset.submitting) {
+                        form.dataset.submitting = 'true';
+                        form.requestSubmit();
+                    }
+                }
+
+                function cancelInlineEdit(form) {
+                    const cancelUrl = form.dataset.cancelUrl;
+                    if (cancelUrl) {
+                        htmx.ajax('GET', cancelUrl, { target: form, swap: 'outerHTML' });
+                    }
+                }
+
+                // Re-init after HTMX swaps
+                document.body.addEventListener('htmx:afterSwap', function(event) {
+                    // Re-initialize tooltips
+                    var tooltipTriggerList = [].slice.call(event.detail.target.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                        new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                    // Reset selection state
+                    updateActionToolbar();
+                });
 
                 // Initialize tooltips on page load
                 document.addEventListener('DOMContentLoaded', function() {

@@ -125,6 +125,44 @@ class DatabaseCrawlConfigServiceImpl(
         return crawlConfigRepository.findDistinctSourceHosts()
     }
 
+    override fun findBySourceHost(
+        sourceHost: String,
+        filter: String?,
+        pageable: Pageable,
+        includeAll: Boolean
+    ): Page<CrawlConfigDTO> {
+        val ownedSourceHosts = if (includeAll) {
+            listOf(sourceHost)
+        } else {
+            val userHosts = userOwnershipService.getCurrentUserSourceHosts()
+            if (userHosts.isEmpty() || userHosts.contains(sourceHost)) {
+                listOf(sourceHost)
+            } else {
+                emptyList() // User doesn't own this host
+            }
+        }
+
+        if (ownedSourceHosts.isEmpty()) {
+            return PageImpl(emptyList(), pageable, 0)
+        }
+
+        val page = if (filter.isNullOrBlank()) {
+            crawlConfigRepository.findBySourceHostIgnoreCase(sourceHost, pageable)
+        } else {
+            crawlConfigRepository.findBySourceHostIgnoreCaseAndNameContainingIgnoreCase(
+                sourceHost, filter, pageable
+            )
+        }
+
+        return PageImpl(
+            page.content.map { crawlConfig ->
+                crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+            },
+            pageable,
+            page.totalElements
+        )
+    }
+
     override fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO> {
         var ownedSourceHosts = userOwnershipService.getCurrentUserSourceHosts()
 

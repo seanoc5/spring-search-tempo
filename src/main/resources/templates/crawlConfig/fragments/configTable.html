@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Config Table Fragment - loaded via HTMX for tab content and filtering -->
+<div th:fragment="configTable" id="configTableContainer">
+    <!-- Empty state -->
+    <div th:if="${crawlConfigs == null || crawlConfigs.empty}" class="text-center py-5 text-muted">
+        <i class="bi bi-folder-x" style="font-size: 3rem;"></i>
+        <p class="mt-3">No crawl configurations found for this host.</p>
+        <a th:href="@{/crawlConfigs/add}" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-lg"></i> Add Configuration
+        </a>
+    </div>
+
+    <!-- Config table -->
+    <div th:if="${crawlConfigs != null && !crawlConfigs.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle" id="configTable">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th scope="col" style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll"
+                               onclick="toggleSelectAll(this)">
+                    </th>
+                    <th scope="col" class="sortable-header"
+                        th:hx-get="@{/crawlConfigs/tab/{host}(host=${activeHost}, sort='name', filter=${filter})}"
+                        hx-target="#configTableContainer"
+                        hx-swap="innerHTML"
+                        th:classappend="${#strings.startsWith(param.sort?.get(0) ?: 'name', 'name')} ? 'sorted' : ''"
+                        style="cursor: pointer;">
+                        Label
+                        <i class="bi bi-chevron-expand text-muted ms-1" style="font-size: 0.7rem;"></i>
+                    </th>
+                    <th scope="col" style="width: 60px;" class="text-center"
+                        title="Enabled status - click to toggle">
+                        On
+                    </th>
+                    <th scope="col" style="width: 80px;" class="text-center"
+                        title="Maximum folder depth">
+                        Depth
+                    </th>
+                    <th scope="col">Start Paths</th>
+                    <th scope="col" class="sortable-header text-end" style="width: 80px;">
+                        Files
+                    </th>
+                    <th scope="col" class="text-end" style="width: 80px;">
+                        Folders
+                    </th>
+                    <th scope="col" class="text-center" style="width: 70px;"
+                        title="Files with extracted text (INDEX/ANALYZE/SEMANTIC)">
+                        Search
+                    </th>
+                    <th scope="col" class="text-center" style="width: 60px;"
+                        title="Files with NLP-processed chunks">
+                        NLP
+                    </th>
+                    <th scope="col" class="text-center" style="width: 70px;"
+                        title="Files with vector embeddings">
+                        Embed
+                    </th>
+                    <th scope="col" style="width: 140px;">Last Run</th>
+                    <th scope="col" style="width: 60px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="config : ${crawlConfigs}" th:id="|row-${config.id}|">
+                    <!-- Checkbox -->
+                    <td>
+                        <input type="checkbox" class="form-check-input config-checkbox"
+                               th:value="${config.id}"
+                               onchange="updateActionToolbar()">
+                    </td>
+
+                    <!-- Label (inline editable) -->
+                    <td>
+                        <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
+                           th:title="|ID: ${config.id} - Name: ${config.name}|"
+                           class="text-decoration-none fw-semibold"
+                           data-bs-toggle="tooltip">
+                            [[${config.label ?: config.name}]]
+                        </a>
+                    </td>
+
+                    <!-- Enabled toggle (inline) -->
+                    <td class="text-center" th:id="|enabled-${config.id}|">
+                        <th:block th:replace="~{crawlConfig/fragments/enabledToggle :: *}">
+                            <th:block th:with="id=${config.id}, enabled=${config.enabled}, dashboard=${false}" />
+                        </th:block>
+                        <button type="button"
+                                th:class="${config.enabled} ? 'badge bg-success border-0' : 'badge bg-secondary border-0'"
+                                th:text="${config.enabled} ? 'On' : 'Off'"
+                                th:hx-post="@{/crawlConfigs/{id}/toggle-enabled(id=${config.id})}"
+                                hx-swap="outerHTML"
+                                th:title="${config.enabled} ? 'Click to disable' : 'Click to enable'"
+                                style="cursor: pointer;">
+                        </button>
+                    </td>
+
+                    <!-- Max Depth (inline editable) -->
+                    <td class="text-center" th:id="|maxDepth-${config.id}|">
+                        <span class="inline-edit-display"
+                              th:hx-get="@{/crawlConfigs/{id}/field/maxDepth/edit(id=${config.id}, field='maxDepth')}"
+                              hx-swap="outerHTML"
+                              hx-trigger="click"
+                              title="Click to edit max depth"
+                              style="cursor: pointer; border-bottom: 1px dashed #6c757d; padding: 2px 4px;">
+                            <span th:if="${config.maxDepth != null}" th:text="${config.maxDepth}"></span>
+                            <span th:if="${config.maxDepth == null}" class="text-muted">-</span>
+                        </span>
+                    </td>
+
+                    <!-- Start Paths -->
+                    <td>
+                        <span th:if="${config.startPaths != null && !config.startPaths.empty}"
+                              class="small text-muted">
+                            <th:block th:each="path, stat : ${config.startPaths}">
+                                <code th:text="${path}" style="font-size: 0.8em;"></code>
+                                <br th:if="${!stat.last && stat.index < 2}" />
+                                <span th:if="${stat.index == 2 && !stat.last}" class="text-muted">
+                                    ... +[[${#lists.size(config.startPaths) - 3}]] more
+                                </span>
+                            </th:block>
+                        </span>
+                        <span th:if="${config.startPaths == null || config.startPaths.empty}"
+                              class="text-muted fst-italic small">none</span>
+                    </td>
+
+                    <!-- File Count -->
+                    <td class="text-end">
+                        <a th:href="@{/crawlConfigs/{id}/files(id=${config.id})}"
+                           th:text="${fileCounts[config.id] ?: 0}"
+                           class="text-decoration-none">0</a>
+                    </td>
+
+                    <!-- Folder Count -->
+                    <td class="text-end">
+                        <a th:href="@{/crawlConfigs/{id}/folders(id=${config.id})}"
+                           th:text="${folderCounts[config.id] ?: 0}"
+                           class="text-decoration-none">0</a>
+                    </td>
+
+                    <!-- Search (Indexed) Count -->
+                    <td class="text-center">
+                        <span class="badge bg-primary" th:text="${searchableCounts[config.id] ?: 0}">0</span>
+                    </td>
+
+                    <!-- NLP Processed Count -->
+                    <td class="text-center">
+                        <span class="badge bg-success" th:text="${nlpProcessedCounts[config.id] ?: 0}">0</span>
+                    </td>
+
+                    <!-- Embedding Count -->
+                    <td class="text-center">
+                        <span class="badge bg-warning text-dark" th:text="${embeddingCounts[config.id] ?: 0}">0</span>
+                    </td>
+
+                    <!-- Last Run -->
+                    <td>
+                        <th:block th:if="${lastRuns[config.id] != null}"
+                                  th:with="lastRun=${lastRuns[config.id]}">
+                            <span th:text="${#temporals.format(lastRun.startTime, 'MM-dd HH:mm')}"
+                                  class="small"></span>
+                            <span th:switch="${lastRun.runStatus.name()}">
+                                <span th:case="'RUNNING'" class="badge bg-primary ms-1">
+                                    <span class="spinner-border spinner-border-sm" style="width: 0.6rem; height: 0.6rem;"></span>
+                                </span>
+                                <span th:case="'COMPLETED'"
+                                      th:classappend="${lastRun.warningMessage != null} ? 'badge bg-warning text-dark ms-1' : ''"
+                                      th:if="${lastRun.warningMessage != null}">!</span>
+                                <span th:case="'FAILED'" class="badge bg-danger ms-1" title="Failed">!</span>
+                                <span th:case="'CANCELLED'" class="badge bg-secondary ms-1">X</span>
+                            </span>
+                        </th:block>
+                        <span th:if="${lastRuns[config.id] == null}" class="text-muted small">never</span>
+                    </td>
+
+                    <!-- Actions -->
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <form th:action="@{/crawlConfigs/{id}/run(id=${config.id})}" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-outline-primary btn-sm" title="Run crawl">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                            </form>
+                            <a th:href="@{/crawlConfigs/{id}(id=${config.id})}"
+                               class="btn btn-outline-secondary btn-sm" title="View details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    <div th:if="${page != null && page.totalPages > 1}" class="d-flex justify-content-between align-items-center mt-3">
+        <div class="text-muted small">
+            Showing [[${page.number * page.size + 1}]] - [[${page.number * page.size + page.numberOfElements}]]
+            of [[${page.totalElements}]]
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" th:classappend="${page.first} ? 'disabled'">
+                    <a class="page-link"
+                       th:hx-get="@{/crawlConfigs/tab/{host}(host=${activeHost}, page=${page.number - 1}, filter=${filter})}"
+                       hx-target="#configTableContainer"
+                       hx-swap="innerHTML"
+                       href="#">Prev</a>
+                </li>
+                <li th:each="i : ${#numbers.sequence(0, page.totalPages - 1)}"
+                    class="page-item"
+                    th:if="${i < 3 || i > page.totalPages - 4 || (i >= page.number - 1 && i <= page.number + 1)}"
+                    th:classappend="${i == page.number} ? 'active'">
+                    <a class="page-link"
+                       th:hx-get="@{/crawlConfigs/tab/{host}(host=${activeHost}, page=${i}, filter=${filter})}"
+                       hx-target="#configTableContainer"
+                       hx-swap="innerHTML"
+                       th:text="${i + 1}"
+                       href="#">1</a>
+                </li>
+                <li class="page-item" th:classappend="${page.last} ? 'disabled'">
+                    <a class="page-link"
+                       th:hx-get="@{/crawlConfigs/tab/{host}(host=${activeHost}, page=${page.number + 1}, filter=${filter})}"
+                       hx-target="#configTableContainer"
+                       hx-swap="innerHTML"
+                       href="#">Next</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+</body>
+</html>
