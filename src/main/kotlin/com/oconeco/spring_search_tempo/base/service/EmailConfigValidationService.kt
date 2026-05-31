@@ -110,7 +110,9 @@ class EmailConfigValidationService {
             put("mail.$protocol.writetimeout", PROBE_TIMEOUT_MS.toString())
             if (useSsl) {
                 put("mail.imaps.ssl.enable", "true")
-                put("mail.imaps.ssl.trust", "*")
+                // Use the JVM default trust store so the probe surfaces real
+                // certificate issues to the user — that's exactly what a
+                // pre-flight check is for.
             }
         }
     }
