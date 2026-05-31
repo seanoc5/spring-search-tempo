@@ -383,7 +383,7 @@ class CombinedCrawlProcessor(
     private fun extractTextAndMetadata(file: Path, dto: FSFileDTO) {
         // Pre-read check: verify file is readable before attempting extraction
         if (!Files.isReadable(file)) {
-            log.warn("File not readable (permission denied), skipping extraction: {}", file)
+            log.info("File not readable (permission denied), skipping extraction: {}", file)
             dto.bodyText = "[Access denied: file not readable]"
             dto.accessDenied = true
             return

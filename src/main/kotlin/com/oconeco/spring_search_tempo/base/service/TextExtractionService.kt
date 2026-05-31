@@ -88,13 +88,11 @@ class TextExtractionService {
             TextExtractionResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
 
         } catch (e: AccessDeniedException) {
-            // Permission denied is expected when crawling system directories - use WARN not ERROR
-            logger.warn("Access denied reading file (permission issue): {}", path)
+            logger.info("Access denied reading file, skipping extraction: {}", path)
             TextExtractionResult.Failure("Access denied: ${e.message ?: path.toString()}")
 
         } catch (e: NoSuchFileException) {
-            // File disappeared between discovery and extraction - use WARN not ERROR
-            logger.warn("File not found (may have been deleted): {}", path)
+            logger.info("File not found (may have been deleted), skipping: {}", path)
             TextExtractionResult.Failure("File not found: ${e.message ?: path.toString()}")
 
         } catch (e: IOException) {
@@ -121,9 +119,22 @@ class TextExtractionService {
     fun detectMimeType(path: Path): String {
         return try {
             tika.detect(path.toFile())
+        } catch (e: AccessDeniedException) {
+            logger.info("Access denied detecting MIME type, skipping: {}", path)
+            "application/octet-stream"
+        } catch (e: java.io.FileNotFoundException) {
+            if (e.message?.contains("Permission denied") == true) {
+                logger.info("Permission denied detecting MIME type, skipping: {}", path)
+            } else {
+                logger.info("File not found detecting MIME type, skipping: {}", path)
+            }
+            "application/octet-stream"
+        } catch (e: NoSuchFileException) {
+            logger.info("File not found detecting MIME type, skipping: {}", path)
+            "application/octet-stream"
         } catch (e: Exception) {
             logger.warn("Failed to detect MIME type for: {}", path, e)
-            "application/octet-stream" // Generic binary type
+            "application/octet-stream"
         }
     }
 
@@ -228,13 +239,11 @@ class TextExtractionService {
             TextAndMetadataResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
 
         } catch (e: AccessDeniedException) {
-            // Permission denied is expected when crawling system directories - use WARN not ERROR
-            logger.warn("Access denied reading file (permission issue): {}", path)
+            logger.info("Access denied reading file, skipping extraction: {}", path)
             TextAndMetadataResult.Failure("Access denied: ${e.message ?: path.toString()}")
 
         } catch (e: NoSuchFileException) {
-            // File disappeared between discovery and extraction - use WARN not ERROR
-            logger.warn("File not found (may have been deleted): {}", path)
+            logger.info("File not found (may have been deleted), skipping: {}", path)
             TextAndMetadataResult.Failure("File not found: ${e.message ?: path.toString()}")
 
         } catch (e: IOException) {

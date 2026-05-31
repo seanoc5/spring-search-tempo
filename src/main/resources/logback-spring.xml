@@ -25,10 +25,11 @@
         </triggeringPolicy>
     </appender>
 
-    <!-- Reduce noisy libraries -->
+    <!-- Reduce noisy libraries (font fallbacks, missing glyphs, FIB warnings) -->
     <logger name="org.apache.tika" level="WARN"/>
-    <logger name="org.apache.pdfbox" level="WARN"/>
-    <logger name="org.apache.fontbox" level="WARN"/>
+    <logger name="org.apache.pdfbox" level="ERROR"/>
+    <logger name="org.apache.fontbox" level="ERROR"/>
+    <logger name="org.apache.poi" level="ERROR"/>
     <logger name="org.hibernate.SQL" level="WARN"/>
     <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
 
