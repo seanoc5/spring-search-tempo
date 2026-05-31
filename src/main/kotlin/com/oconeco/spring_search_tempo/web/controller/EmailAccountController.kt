@@ -4,6 +4,9 @@ import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
+import com.oconeco.spring_search_tempo.base.service.EmailAccountForm
+import com.oconeco.spring_search_tempo.base.service.EmailConfigValidationService
+import com.oconeco.spring_search_tempo.base.service.ValidationResult
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
 import jakarta.validation.Valid
@@ -22,7 +25,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes
 class EmailAccountController(
     private val emailAccountService: EmailAccountService,
     private val emailCrawlOrchestrator: EmailCrawlOrchestrator,
-    private val userOwnershipService: UserOwnershipService
+    private val userOwnershipService: UserOwnershipService,
+    private val validationService: EmailConfigValidationService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -263,6 +267,77 @@ class EmailAccountController(
         return "redirect:/emailAccounts/$id"
     }
 
+    /**
+     * Pre-flight validation of an IMAP connection. The password is supplied
+     * inline by the user (not read from the env var) so they can verify
+     * before saving the account.
+     *
+     * HX-Request → returns inline result fragment. Otherwise → renders the
+     * full edit page with the result panel populated (per CLAUDE.md HTMX
+     * response-shape rules).
+     */
+    @PostMapping("/validate")
+    fun validate(
+        @RequestParam(required = false) imapHost: String?,
+        @RequestParam(required = false) imapPort: Int?,
+        @RequestParam(required = false) email: String?,
+        @RequestParam(required = false) password: String?,
+        @RequestParam(required = false, defaultValue = "true") useSsl: Boolean,
+        @RequestHeader(value = "HX-Request", required = false) hxRequest: String?,
+        model: Model
+    ): String {
+        val form = EmailAccountForm(
+            host = imapHost,
+            port = imapPort,
+            username = email,
+            password = password,
+            useSsl = useSsl
+        )
+        val result = validationService.validate(form)
+        model.addAttribute("validationResult", toViewModel(result))
+
+        return if (!hxRequest.isNullOrBlank()) {
+            "emailAccount/validate :: result"
+        } else {
+            model.addAttribute("emailAccount", EmailAccountDTO())
+            "emailAccount/add"
+        }
+    }
+
+    private fun toViewModel(result: ValidationResult): ValidationResultView = when (result) {
+        is ValidationResult.Ok -> ValidationResultView(
+            outcome = "OK",
+            severity = "success",
+            heading = "Connection successful",
+            message = "Discovered ${result.folderCount} folder(s).",
+            capabilities = result.capabilities
+        )
+        is ValidationResult.AuthFailed -> ValidationResultView(
+            outcome = "AUTH_FAILED",
+            severity = "danger",
+            heading = "Authentication failed",
+            message = result.serverMessage
+        )
+        is ValidationResult.TlsFailed -> ValidationResultView(
+            outcome = "TLS_FAILED",
+            severity = "danger",
+            heading = "TLS handshake failed",
+            message = result.reason
+        )
+        is ValidationResult.Unreachable -> ValidationResultView(
+            outcome = "UNREACHABLE",
+            severity = "warning",
+            heading = "Server unreachable",
+            message = result.reason
+        )
+        is ValidationResult.LoginRejected -> ValidationResultView(
+            outcome = "LOGIN_REJECTED",
+            severity = "danger",
+            heading = "Server rejected login",
+            message = result.serverMessage
+        )
+    }
+
     private fun isEnvVarSet(envVarName: String?): Boolean {
         if (envVarName.isNullOrBlank()) return false
         return System.getenv(envVarName) != null
@@ -285,3 +360,11 @@ class EmailAccountController(
         )
     }
 }
+
+data class ValidationResultView(
+    val outcome: String,
+    val severity: String,
+    val heading: String,
+    val message: String,
+    val capabilities: List<String>? = null
+)
