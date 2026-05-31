@@ -1,6 +1,6 @@
 package com.oconeco.spring_search_tempo.web.rest
 
-import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
+import com.oconeco.spring_search_tempo.base.service.EmbeddingAdminService
 import com.oconeco.spring_search_tempo.base.service.EmbeddingService
 import com.oconeco.spring_search_tempo.batch.embedding.EmbeddingJobLauncher
 import org.slf4j.LoggerFactory
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController
 class EmbeddingResource(
     private val embeddingJobLauncher: EmbeddingJobLauncher,
     private val embeddingService: EmbeddingService,
-    private val contentChunkRepository: ContentChunkRepository
+    private val embeddingAdminService: EmbeddingAdminService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(EmbeddingResource::class.java)
@@ -71,17 +71,14 @@ class EmbeddingResource(
      */
     @GetMapping("/status")
     fun getEmbeddingStatus(): ResponseEntity<EmbeddingStatusResponse> {
-        val available = embeddingService.isAvailable()
-        val modelName = embeddingService.getModelName()
-        val processed = contentChunkRepository.countByEmbeddingGeneratedAtIsNotNull()
-        val pending = contentChunkRepository.countEmbeddingPending()
+        val status = embeddingAdminService.getEmbeddingStatus()
 
         return ResponseEntity.ok(
             EmbeddingStatusResponse(
-                available = available,
-                modelName = modelName,
-                chunksProcessed = processed,
-                chunksPending = pending
+                available = status.available,
+                modelName = status.modelName,
+                chunksProcessed = status.chunksProcessed,
+                chunksPending = status.chunksPending
             )
         )
     }

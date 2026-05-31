@@ -5,10 +5,10 @@ import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.service.DiscoveryService
+import com.oconeco.spring_search_tempo.base.service.DiscoverySessionSummaryDTO
 import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
-import com.oconeco.spring_search_tempo.web.service.DiscoveryService
-import com.oconeco.spring_search_tempo.web.service.DiscoverySessionSummaryDTO
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable

@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryClassificationRule
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleGroup
@@ -28,7 +28,7 @@ class DiscoveryTemplateClassifierTest {
 
         assertEquals(DiscoveryUserProfile.PROGRAMMER, plan.profile)
         assertEquals(SuggestedStatus.SKIP, plan.statusByPath["/home/sean/projects/app/node_modules"])
-        assertEquals(SuggestedStatus.ANALYZE, plan.statusByPath["/home/sean/Documents"])
+        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/home/sean/Documents"])
     }
 
     @Test
@@ -45,7 +45,7 @@ class DiscoveryTemplateClassifierTest {
 
         assertEquals(DiscoveryUserProfile.MANAGER, plan.profile)
         assertEquals(SuggestedStatus.SKIP, plan.statusByPath["C:\\Users\\Alice\\AppData\\Local\\Temp"])
-        assertEquals(SuggestedStatus.ANALYZE, plan.statusByPath["C:\\Users\\Alice\\Documents"])
+        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["C:\\Users\\Alice\\Documents"])
     }
 
     @Test
@@ -61,8 +61,8 @@ class DiscoveryTemplateClassifierTest {
         )
 
         assertEquals(DiscoveryUserProfile.POWER_USER, plan.profile)
-        assertEquals(SuggestedStatus.ANALYZE, plan.statusByPath["/Users/sean/Documents"])
-        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/Users/sean/Music"])
+        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/Users/sean/Documents"])
+        assertEquals(SuggestedStatus.LOCATE, plan.statusByPath["/Users/sean/Music"])
     }
 
     @Test
@@ -76,8 +76,8 @@ class DiscoveryTemplateClassifierTest {
             )
         )
 
-        assertEquals(SuggestedStatus.ANALYZE, plan.statusByPath["/home/sean/Documents"])
-        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/home/sean/Documents/Pictures"])
+        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/home/sean/Documents"])
+        assertEquals(SuggestedStatus.LOCATE, plan.statusByPath["/home/sean/Documents/Pictures"])
     }
 
     @Test
@@ -141,6 +141,6 @@ class DiscoveryTemplateClassifierTest {
         )
 
         assertEquals(SuggestedStatus.LOCATE, plan.statusByPath["/home/sean/Documents"])
-        assertEquals(SuggestedStatus.ANALYZE, plan.statusByPath["/home/sean/Proposals"])
+        assertEquals(SuggestedStatus.INDEX, plan.statusByPath["/home/sean/Proposals"])
     }
 }

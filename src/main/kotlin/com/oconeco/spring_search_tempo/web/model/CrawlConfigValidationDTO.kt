@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.model
+package com.oconeco.spring_search_tempo.base.model
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import java.time.OffsetDateTime

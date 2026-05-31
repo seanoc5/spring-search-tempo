@@ -1,10 +1,10 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
-import com.oconeco.spring_search_tempo.web.model.BaselineCaptureRequestDTO
-import com.oconeco.spring_search_tempo.web.model.BaselineCaptureResultDTO
-import com.oconeco.spring_search_tempo.web.model.FolderValidationDiffDTO
-import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
-import com.oconeco.spring_search_tempo.web.model.ValidationFolderSummaryDTO
+import com.oconeco.spring_search_tempo.base.model.BaselineCaptureRequestDTO
+import com.oconeco.spring_search_tempo.base.model.BaselineCaptureResultDTO
+import com.oconeco.spring_search_tempo.base.model.FolderValidationDiffDTO
+import com.oconeco.spring_search_tempo.base.model.ValidationFilterDTO
+import com.oconeco.spring_search_tempo.base.model.ValidationFolderSummaryDTO
 
 /**
  * Contract for CrawlConfig baseline capture + validation diff workflows.

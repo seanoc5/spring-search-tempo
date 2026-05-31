@@ -10,15 +10,16 @@ import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryManualOverride
+import com.oconeco.spring_search_tempo.base.model.BaselineCaptureRequestDTO
+import com.oconeco.spring_search_tempo.base.model.BaselineSamplingPolicy
+import com.oconeco.spring_search_tempo.base.model.ValidationFilterDTO
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.service.CrawlDiscoveryObservationService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigValidationService
 import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
-import com.oconeco.spring_search_tempo.web.model.BaselineSamplingPolicy
-import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
-import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
-import com.oconeco.spring_search_tempo.web.service.CrawlConfigValidationService
 import jakarta.servlet.http.HttpServletRequest
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlCleanupListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.FsCrawlJobBuilder
@@ -574,7 +575,7 @@ class CrawlConfigController(
         crawlConfigValidationService.captureFolderBaseline(
             crawlConfigId = id,
             folderId = folderId,
-            request = com.oconeco.spring_search_tempo.web.model.BaselineCaptureRequestDTO(
+            request = BaselineCaptureRequestDTO(
                 maxSamples = maxSamples,
                 samplingPolicy = samplingPolicy,
                 seed = seed

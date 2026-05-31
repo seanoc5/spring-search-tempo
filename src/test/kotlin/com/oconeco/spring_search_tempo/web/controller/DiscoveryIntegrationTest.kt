@@ -6,9 +6,9 @@ import com.oconeco.spring_search_tempo.base.config.BaseIT
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
-import com.oconeco.spring_search_tempo.web.service.DiscoveredFolderUploadDTO
-import com.oconeco.spring_search_tempo.web.service.DiscoveryService
-import com.oconeco.spring_search_tempo.web.service.DiscoveryUploadRequest
+import com.oconeco.spring_search_tempo.base.service.DiscoveredFolderUploadDTO
+import com.oconeco.spring_search_tempo.base.service.DiscoveryService
+import com.oconeco.spring_search_tempo.base.service.DiscoveryUploadRequest
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import org.hamcrest.Matchers.containsString

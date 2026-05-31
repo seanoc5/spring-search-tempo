@@ -21,7 +21,11 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd configuration reference doc\n\nCreates docs/reference/configuration.md covering:\n- Server, database, batch, NLP, security settings\n- Environment variable overrides\n- Profile configuration \\(auto-detected OS profiles\\)\n- Common configurations \\(dev, production\\)\n\nResolves broken links in commands.md and troubleshooting.md.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(./gradlew test:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(./gradlew :test --tests ModularityTest)",
+      "Bash(find /opt/work/springboot/spring-search-tempo/remote-crawler-cli -name *.yml -o -name *.yaml)",
+      "Bash(./gradlew :remote-crawler-cli:shadowJar)",
+      "WebSearch"
     ]
   }
 }

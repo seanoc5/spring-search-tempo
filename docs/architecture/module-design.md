@@ -1,10 +1,10 @@
 # Spring Modulith Module Design
 
-This document describes the modular architecture of Spring Search Tempo using Spring Modulith.
+This document describes the modular architecture of Spring Search Tempo using Spring Modulith, with emphasis on the current codebase shape rather than an idealized target state.
 
 ## Overview
 
-Spring Modulith helps enforce modular boundaries in a monolithic application. Each module has:
+Spring Modulith helps document and, where enabled, enforce modular boundaries in a monolithic application. Each module should have:
 - **Clear responsibilities**
 - **Defined API boundaries**
 - **Event-driven communication**
@@ -33,6 +33,23 @@ src/main/kotlin/com/oconeco/spring_search_tempo/
 └── SpringSearchTempoApplication.kt
 ```
 
+## Current State
+
+The repo currently follows an explicit Modulith contract, but with some deliberate tradeoffs:
+
+- Most cross-module access is declared through named interfaces instead of a globally open base module.
+- Remote/discovery orchestration now sits behind the `base.service` boundary instead of the `web` module.
+- Some operational and batch workflows still use explicitly exposed internals where the codebase has not yet been fully service-abstracted.
+
+Important current constraints:
+
+- `base` is no longer declared as an `OPEN` module.
+- `web` and `batch` depend on explicit named interfaces.
+- `web` has an explicit dependency on `batch::ops` for the batch admin UI.
+- Some `base` internals, including `domain` and `repos`, are still intentionally exposed to support current workflows.
+
+Treat the rest of this document as current architecture plus guidance for future tightening.
+
 ## Module Definitions
 
 ### Base Module
@@ -54,14 +71,14 @@ src/main/kotlin/com/oconeco/spring_search_tempo/
 package com.oconeco.spring_search_tempo.base;
 ```
 
-**Public API**:
+**Public API / Named interfaces**:
 - `service.*` - Service interfaces (FSFileService, FSFolderService, etc.)
 - `model.*` - DTOs for data transfer
 - `config.*` - Configuration classes
 - `rest.*` - REST resources
 - `repos.*` - Repositories (accessible for specific use cases)
 
-**Internal** (not accessible from other modules):
+**Target internal areas**:
 - `domain.*` - JPA entities
 - `controller.*` - Web controllers (accessed via HTTP, not code)
 - `util.*` - Internal utilities
@@ -81,9 +98,9 @@ package com.oconeco.spring_search_tempo.base;
 package com.oconeco.spring_search_tempo.batch;
 ```
 
-**Dependencies**:
-- Can access `base` module's service, model, and config packages
-- **Cannot** directly access `base` domain or repos
+**Current dependencies**:
+- `base::service`, `base::model`, `base::config`, `base::domain`, `base::repos`, `base::util`
+- These are explicit and verified, but still broader than the long-term target
 
 **Public API**:
 - Job configurations
@@ -105,9 +122,9 @@ package com.oconeco.spring_search_tempo.batch;
 package com.oconeco.spring_search_tempo.web;
 ```
 
-**Dependencies**:
-- Can access `base` module's service and model packages
-- **Cannot** directly access `base` domain or repos
+**Current dependencies**:
+- `base::service`, `base::model`, `base::config`, `base::domain`, `base::util`
+- `batch::ops` for the batch admin UI
 
 **Public API**:
 - Public controllers (HomeController)
@@ -115,7 +132,7 @@ package com.oconeco.spring_search_tempo.web;
 
 ## Communication Patterns
 
-### ✅ Preferred: Application Events
+### Preferred: Application Events
 
 Use events for cross-module communication and loose coupling:
 
@@ -153,7 +170,7 @@ class BatchJobCleaner {
 - Easy to add new listeners without modifying publisher
 - Asynchronous processing possible with `@Async`
 
-### ✅ Acceptable: Public Service Interfaces
+### Preferred: Public Service Interfaces
 
 Access services through well-defined interfaces:
 
@@ -174,7 +191,7 @@ class FsCrawlJobBuilder(
 - Type-safe interaction
 - Testable with mocks
 
-### ❌ Forbidden: Direct Repository Access
+### Target Rule: Avoid Direct Repository Access Across Modules
 
 **DON'T** access repositories from other modules:
 
@@ -196,7 +213,7 @@ class WebController(
 }
 ```
 
-### ❌ Forbidden: Direct Entity Access
+### Target Rule: Avoid Direct Entity Access Across Modules
 
 **DON'T** pass entities across module boundaries:
 
@@ -321,14 +338,10 @@ class AuditLogger {
 Verify module boundaries with:
 
 ```bash
-./gradlew test --tests ModularityTest
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 ```
 
-This test:
-- ✅ Detects cyclic dependencies
-- ✅ Verifies allowed dependencies
-- ✅ Checks package structure
-- ✅ Generates documentation
+This test now runs `modules.verify()` and also generates Modulith documentation. Passing the test means current dependencies are aligned with the declared named interfaces, not that every module is already as narrow as the long-term target.
 
 ### Generated Documentation
 

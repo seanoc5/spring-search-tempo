@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "com.oconeco"
-version = "0.5.3"
+version = "0.5.4"
 
 springBoot {
     buildInfo()

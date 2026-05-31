@@ -9,10 +9,10 @@ import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.model.FolderRowMetrics
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
+import com.oconeco.spring_search_tempo.base.service.DashboardService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
-import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
-import com.oconeco.spring_search_tempo.web.service.DashboardService
 import com.oconeco.spring_search_tempo.web.service.DashboardSystemInfoService
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page

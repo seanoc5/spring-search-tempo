@@ -1,11 +1,10 @@
 package com.oconeco.spring_search_tempo.web.rest
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
-import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
-import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
-import org.slf4j.LoggerFactory
+import com.oconeco.spring_search_tempo.base.service.AnalysisOverrideBatchResult
+import com.oconeco.spring_search_tempo.base.service.AnalysisOverrideResult
+import com.oconeco.spring_search_tempo.base.service.AnalysisOverrideService
 import org.springframework.http.ResponseEntity
-import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
 import java.security.Principal
 import java.time.OffsetDateTime
@@ -26,12 +25,8 @@ import java.time.OffsetDateTime
 @RestController
 @RequestMapping("/api/analysis")
 class AnalysisOverrideResource(
-    private val fileRepository: FSFileRepository,
-    private val folderRepository: FSFolderRepository
+    private val analysisOverrideService: AnalysisOverrideService
 ) {
-    companion object {
-        private val log = LoggerFactory.getLogger(AnalysisOverrideResource::class.java)
-    }
 
     /**
      * Override the analysis status of a single file.
@@ -42,42 +37,15 @@ class AnalysisOverrideResource(
      * @return Updated file info
      */
     @PostMapping("/files/{id}/override")
-    @Transactional
     fun overrideFileStatus(
         @PathVariable id: Long,
         @RequestBody request: OverrideRequest,
         principal: Principal?
     ): ResponseEntity<OverrideResponse> {
-        val file = fileRepository.findById(id).orElse(null)
-            ?: return ResponseEntity.notFound().build()
-
-        val oldStatus = file.analysisStatus
         val user = principal?.name ?: "anonymous"
-        val reason = "MANUAL: ${request.reason ?: "User override"} (by $user)"
-
-        file.analysisStatus = request.status
-        file.analysisStatusReason = reason
-        file.analysisStatusSetBy = "MANUAL"
-
-        fileRepository.save(file)
-
-        log.info(
-            "File {} analysis status changed {} -> {} by {}",
-            file.uri, oldStatus, request.status, user
-        )
-
-        return ResponseEntity.ok(
-            OverrideResponse(
-                id = file.id!!,
-                uri = file.uri!!,
-                entityType = "FILE",
-                oldStatus = oldStatus,
-                newStatus = request.status,
-                reason = reason,
-                updatedBy = user,
-                updatedAt = OffsetDateTime.now()
-            )
-        )
+        val result = analysisOverrideService.overrideFileStatus(id, request.status, request.reason, user)
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(result.toResponse())
     }
 
     /**
@@ -89,42 +57,15 @@ class AnalysisOverrideResource(
      * @return Updated folder info
      */
     @PostMapping("/folders/{id}/override")
-    @Transactional
     fun overrideFolderStatus(
         @PathVariable id: Long,
         @RequestBody request: OverrideRequest,
         principal: Principal?
     ): ResponseEntity<OverrideResponse> {
-        val folder = folderRepository.findById(id).orElse(null)
-            ?: return ResponseEntity.notFound().build()
-
-        val oldStatus = folder.analysisStatus
         val user = principal?.name ?: "anonymous"
-        val reason = "MANUAL: ${request.reason ?: "User override"} (by $user)"
-
-        folder.analysisStatus = request.status
-        folder.analysisStatusReason = reason
-        folder.analysisStatusSetBy = "MANUAL"
-
-        folderRepository.save(folder)
-
-        log.info(
-            "Folder {} analysis status changed {} -> {} by {}",
-            folder.uri, oldStatus, request.status, user
-        )
-
-        return ResponseEntity.ok(
-            OverrideResponse(
-                id = folder.id!!,
-                uri = folder.uri!!,
-                entityType = "FOLDER",
-                oldStatus = oldStatus,
-                newStatus = request.status,
-                reason = reason,
-                updatedBy = user,
-                updatedAt = OffsetDateTime.now()
-            )
-        )
+        val result = analysisOverrideService.overrideFolderStatus(id, request.status, request.reason, user)
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(result.toResponse())
     }
 
     /**
@@ -135,60 +76,13 @@ class AnalysisOverrideResource(
      * @return List of override results
      */
     @PostMapping("/files/bulk-override")
-    @Transactional
     fun bulkOverrideFileStatus(
         @RequestBody request: BulkOverrideRequest,
         principal: Principal?
     ): ResponseEntity<BulkOverrideResponse> {
         val user = principal?.name ?: "anonymous"
-        val reason = "MANUAL: ${request.reason ?: "Bulk override"} (by $user)"
-        val results = mutableListOf<OverrideResponse>()
-        val errors = mutableListOf<String>()
-
-        val files = fileRepository.findAllById(request.ids)
-        val fileMap = files.associateBy { it.id }
-
-        for (id in request.ids) {
-            val file = fileMap[id]
-            if (file == null) {
-                errors.add("File $id not found")
-                continue
-            }
-
-            val oldStatus = file.analysisStatus
-            file.analysisStatus = request.status
-            file.analysisStatusReason = reason
-            file.analysisStatusSetBy = "MANUAL"
-
-            results.add(
-                OverrideResponse(
-                    id = file.id!!,
-                    uri = file.uri!!,
-                    entityType = "FILE",
-                    oldStatus = oldStatus,
-                    newStatus = request.status,
-                    reason = reason,
-                    updatedBy = user,
-                    updatedAt = OffsetDateTime.now()
-                )
-            )
-        }
-
-        fileRepository.saveAll(files)
-
-        log.info(
-            "Bulk file override: {} files updated to {} by {}",
-            results.size, request.status, user
-        )
-
-        return ResponseEntity.ok(
-            BulkOverrideResponse(
-                updated = results,
-                errors = errors,
-                totalRequested = request.ids.size,
-                totalUpdated = results.size
-            )
-        )
+        val result = analysisOverrideService.bulkOverrideFileStatus(request.ids, request.status, request.reason, user)
+        return ResponseEntity.ok(result.toResponse())
     }
 
     /**
@@ -199,60 +93,13 @@ class AnalysisOverrideResource(
      * @return List of override results
      */
     @PostMapping("/folders/bulk-override")
-    @Transactional
     fun bulkOverrideFolderStatus(
         @RequestBody request: BulkOverrideRequest,
         principal: Principal?
     ): ResponseEntity<BulkOverrideResponse> {
         val user = principal?.name ?: "anonymous"
-        val reason = "MANUAL: ${request.reason ?: "Bulk override"} (by $user)"
-        val results = mutableListOf<OverrideResponse>()
-        val errors = mutableListOf<String>()
-
-        val folders = folderRepository.findAllById(request.ids)
-        val folderMap = folders.associateBy { it.id }
-
-        for (id in request.ids) {
-            val folder = folderMap[id]
-            if (folder == null) {
-                errors.add("Folder $id not found")
-                continue
-            }
-
-            val oldStatus = folder.analysisStatus
-            folder.analysisStatus = request.status
-            folder.analysisStatusReason = reason
-            folder.analysisStatusSetBy = "MANUAL"
-
-            results.add(
-                OverrideResponse(
-                    id = folder.id!!,
-                    uri = folder.uri!!,
-                    entityType = "FOLDER",
-                    oldStatus = oldStatus,
-                    newStatus = request.status,
-                    reason = reason,
-                    updatedBy = user,
-                    updatedAt = OffsetDateTime.now()
-                )
-            )
-        }
-
-        folderRepository.saveAll(folders)
-
-        log.info(
-            "Bulk folder override: {} folders updated to {} by {}",
-            results.size, request.status, user
-        )
-
-        return ResponseEntity.ok(
-            BulkOverrideResponse(
-                updated = results,
-                errors = errors,
-                totalRequested = request.ids.size,
-                totalUpdated = results.size
-            )
-        )
+        val result = analysisOverrideService.bulkOverrideFolderStatus(request.ids, request.status, request.reason, user)
+        return ResponseEntity.ok(result.toResponse())
     }
 
     /**
@@ -334,3 +181,23 @@ data class AnalysisStatusInfo(
     val value: String,
     val description: String
 )
+
+private fun AnalysisOverrideResult.toResponse(): OverrideResponse =
+    OverrideResponse(
+        id = id,
+        uri = uri,
+        entityType = entityType,
+        oldStatus = oldStatus,
+        newStatus = newStatus,
+        reason = reason,
+        updatedBy = updatedBy,
+        updatedAt = updatedAt
+    )
+
+private fun AnalysisOverrideBatchResult.toResponse(): BulkOverrideResponse =
+    BulkOverrideResponse(
+        updated = updated.map { it.toResponse() },
+        errors = errors,
+        totalRequested = totalRequested,
+        totalUpdated = totalUpdated
+    )

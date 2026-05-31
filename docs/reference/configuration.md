@@ -77,6 +77,11 @@ app:
           - "/home/user/Documents"
 ```
 
+For remote-host crawling and onboarding, see:
+- [Remote Crawler Guide](../guides/remote-crawler.md)
+- [Remote Crawler Windows Setup](../guides/remote-crawler-windows-setup.md)
+- [Remote Crawler TLS Setup](../guides/remote-crawler-tls-lan-setup.md)
+
 ### Scheduling
 
 ```yaml

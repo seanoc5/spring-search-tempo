@@ -5,5 +5,5 @@ import org.springframework.modulith.PackageInfo
 
 
 @PackageInfo
-@NamedInterface("base.model")
+@NamedInterface("model")
 class ModuleMetadata

@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.JobRunService
@@ -149,6 +149,7 @@ class RemoteCrawlSessionService(
             entity.jobRunId = jobRun.id
             entity.sourceHost = host
             entity.sourceHostRef = sourceHostRef
+            entity.lastCrawledAt = OffsetDateTime.now()
 
             if (status == AnalysisStatus.SKIP) {
                 foldersSkipped++
@@ -170,6 +171,12 @@ class RemoteCrawlSessionService(
         val fileUris = dedupFiles.map { toRemoteUri(host, it.path) }
         val existingFiles = if (fileUris.isEmpty()) emptyMap() else {
             fileRepository.findByUriIn(fileUris).associateBy { it.uri!! }
+        }
+        val existingFileStateByUri = existingFiles.mapValues { (_, file) ->
+            ExistingRemoteFileState(
+                fsLastModified = file.fsLastModified,
+                size = file.size
+            )
         }
 
         val parentUris = dedupFiles.mapNotNull { file ->
@@ -273,7 +280,7 @@ class RemoteCrawlSessionService(
             host = host,
             crawlConfigId = request.crawlConfigId,
             filesToSave = filesToSave,
-            existingFiles = existingFiles,
+            existingFileStateByUri = existingFileStateByUri,
             persistedFolderByUri = persistedFolderByUri
         )
 
@@ -444,7 +451,7 @@ class RemoteCrawlSessionService(
         host: String, // Reserved for future per-host temperature thresholds
         crawlConfigId: Long,
         filesToSave: List<FSFile>,
-        existingFiles: Map<String, FSFile>,
+        existingFileStateByUri: Map<String, ExistingRemoteFileState>,
         persistedFolderByUri: Map<String, FSFolder>
     ) {
         // Check if smart crawl is enabled for this config
@@ -470,7 +477,7 @@ class RemoteCrawlSessionService(
 
         for (file in filesToSave) {
             val folderId = file.fsFolder?.id ?: continue
-            val existingFile = existingFiles[file.uri]
+            val existingFile = existingFileStateByUri[file.uri]
 
             // Detect change: new file or modified timestamp changed
             val isChanged = existingFile == null ||
@@ -526,6 +533,11 @@ class RemoteCrawlSessionService(
         )
     }
 }
+
+private data class ExistingRemoteFileState(
+    val fsLastModified: OffsetDateTime?,
+    val size: Long?
+)
 
 data class RemoteSessionStartRequest(
     val host: String,

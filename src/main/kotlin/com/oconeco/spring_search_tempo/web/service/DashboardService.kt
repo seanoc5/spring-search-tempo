@@ -1,16 +1,16 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigFacet
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigRowMetrics
+import com.oconeco.spring_search_tempo.base.model.CrawlConfigSummary
+import com.oconeco.spring_search_tempo.base.model.DashboardStatsDTO
+import com.oconeco.spring_search_tempo.base.model.FolderRowMetrics
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
-import com.oconeco.spring_search_tempo.web.model.CrawlConfigRowMetrics
-import com.oconeco.spring_search_tempo.web.model.CrawlConfigFacet
-import com.oconeco.spring_search_tempo.web.model.CrawlConfigSummary
-import com.oconeco.spring_search_tempo.web.model.DashboardStatsDTO
-import com.oconeco.spring_search_tempo.web.model.FolderRowMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
