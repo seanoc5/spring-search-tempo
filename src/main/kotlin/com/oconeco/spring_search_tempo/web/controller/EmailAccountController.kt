@@ -133,7 +133,34 @@ class EmailAccountController(
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
         model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
+        model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/edit"
+    }
+
+    /**
+     * Set or clear the IMAP password for an account.
+     *
+     * The form field is write-only: GETs never echo the stored value. Submitting an empty value
+     * clears the stored password (falling back to credentialEnvVar). Plaintext is never logged.
+     */
+    @PostMapping("/{id}/password")
+    fun setPassword(
+        @PathVariable id: Long,
+        @RequestParam("password") password: String,
+        @RequestParam(name = "clear", required = false, defaultValue = "false") clear: Boolean,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        val account = emailAccountService.get(id)
+        if (clear) {
+            emailAccountService.setPassword(id, "")
+            redirectAttributes.addFlashAttribute("message", "Stored password cleared for ${account.email}")
+        } else if (password.isBlank()) {
+            redirectAttributes.addFlashAttribute("error", "Password cannot be blank — use the clear action to remove the stored password")
+        } else {
+            emailAccountService.setPassword(id, password)
+            redirectAttributes.addFlashAttribute("message", "Encrypted password updated for ${account.email}")
+        }
+        return "redirect:/emailAccounts/$id/edit"
     }
 
     /**

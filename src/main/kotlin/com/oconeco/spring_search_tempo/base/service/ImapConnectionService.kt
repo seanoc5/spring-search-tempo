@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.config.EmailAccountConfig
 import com.oconeco.spring_search_tempo.base.config.EmailConfiguration
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
@@ -7,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import jakarta.mail.Session
 import jakarta.mail.Store
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import java.util.Properties
 
@@ -15,11 +17,13 @@ import java.util.Properties
  * Service for managing IMAP connections to email providers.
  *
  * Supports Gmail, Amazon WorkMail, and generic IMAP servers.
- * Credentials are loaded from environment variables for security.
+ * Credentials are loaded from the account's encrypted password column when set,
+ * falling back to environment variables (via `credentialEnvVar`) for legacy accounts.
  */
 @Service
 class ImapConnectionService(
-    private val emailConfiguration: EmailConfiguration
+    private val emailConfiguration: EmailConfiguration,
+    @Lazy private val emailAccountService: EmailAccountService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ImapConnectionService::class.java)
@@ -93,23 +97,40 @@ class ImapConnectionService(
     }
 
     /**
-     * Get credential from environment variable.
+     * Resolve the IMAP password for an account.
      *
-     * Checks the account's own credentialEnvVar (from DB) first,
-     * then falls back to the YAML config lookup for backwards compatibility.
+     * Resolution order:
+     *  1. Encrypted password stored on the account (preferred).
+     *  2. `credentialEnvVar` on the account → environment variable lookup (legacy fallback).
+     *  3. `credentialEnvVar` from `application.yml` for the matching account (legacy fallback).
+     *
+     * Never logs the plaintext password.
      */
     private fun getCredential(account: EmailAccountDTO): String {
+        val id = account.id
+        if (id != null) {
+            val decrypted = try {
+                emailAccountService.getPassword(id)
+            } catch (e: IllegalStateException) {
+                log.warn("Encrypted password present for {} but cannot be decrypted: {}", account.email, e.message)
+                null
+            }
+            if (!decrypted.isNullOrBlank()) {
+                return decrypted
+            }
+        }
+
         val envVar = account.credentialEnvVar?.takeIf { it.isNotBlank() }
             ?: findAccountConfig(account)?.credentialEnvVar
             ?: throw IllegalStateException(
-                "No credential env var configured for ${account.email}. " +
-                "Set it on the account edit page or in application.yml."
+                "No credential configured for ${account.email}. " +
+                "Either set a password on the account edit page or configure a credentialEnvVar in application.yml."
             )
 
         return System.getenv(envVar)
             ?: throw IllegalStateException(
                 "Environment variable '$envVar' not set for ${account.email}. " +
-                "Set it with: export $envVar=your_password"
+                "Set it with: export $envVar=your_password (or set the password via the account edit page)."
             )
     }
 

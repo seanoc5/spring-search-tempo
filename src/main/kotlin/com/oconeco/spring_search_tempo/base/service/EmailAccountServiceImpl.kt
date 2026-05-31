@@ -29,7 +29,8 @@ class EmailAccountServiceImpl(
     private val contentChunkRepository: ContentChunkRepository,
     private val jobRunRepository: JobRunRepository,
     private val userOwnershipService: UserOwnershipService,
-    private val smartDeleteService: SmartDeleteService
+    private val smartDeleteService: SmartDeleteService,
+    private val tokenEncryptionService: TokenEncryptionService
 ) : EmailAccountService {
 
     companion object {
@@ -130,6 +131,38 @@ class EmailAccountServiceImpl(
         emailAccount.lastErrorAt = null
 
         emailAccountRepository.save(emailAccount)
+    }
+
+    @Transactional
+    override fun setPassword(id: Long, plaintext: String) {
+        val emailAccount = emailAccountRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+
+        if (plaintext.isBlank()) {
+            emailAccount.encryptedPassword = null
+            emailAccountRepository.save(emailAccount)
+            log.info("Cleared encrypted password for email account id={}", id)
+            return
+        }
+
+        emailAccount.encryptedPassword = tokenEncryptionService.encrypt(plaintext)
+        emailAccountRepository.save(emailAccount)
+        log.info("Stored encrypted password for email account id={}", id)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getPassword(id: Long): String? {
+        val emailAccount = emailAccountRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        val encrypted = emailAccount.encryptedPassword ?: return null
+        return tokenEncryptionService.decrypt(encrypted)
+    }
+
+    @Transactional(readOnly = true)
+    override fun hasPassword(id: Long): Boolean {
+        val emailAccount = emailAccountRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        return !emailAccount.encryptedPassword.isNullOrBlank()
     }
 
     override fun findAllWithSummary(): List<EmailAccountSummaryDTO> {
