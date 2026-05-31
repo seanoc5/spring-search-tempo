@@ -1,0 +1,1 @@
+Semantic fixture text intended for embedding generation coverage.

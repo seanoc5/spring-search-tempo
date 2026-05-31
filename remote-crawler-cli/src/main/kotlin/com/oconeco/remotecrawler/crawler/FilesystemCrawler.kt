@@ -1,5 +1,9 @@
 package com.oconeco.remotecrawler.crawler
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.oconeco.remotecrawler.client.*
 import com.oconeco.remotecrawler.extraction.TextAndMetadataResult
 import com.oconeco.remotecrawler.extraction.TextExtractionService
@@ -14,6 +18,8 @@ import java.io.IOException
 import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
@@ -43,13 +49,23 @@ class FilesystemCrawler(
     private val startPathProbeTimeoutMs: Long = 5_000
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val snapshotMapper: ObjectMapper = jacksonObjectMapper()
+        .registerModule(JavaTimeModule())
+        .enable(SerializationFeature.INDENT_OUTPUT)
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+
+    companion object {
+        private val SNAPSHOT_DIR: Path = Paths.get("logs/remote-crawl-snapshots")
+        private val TIMESTAMP_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
+    }
 
     /**
      * Run a crawl for the given configuration.
      */
     fun crawl(config: CrawlConfigAssignment, host: String): CrawlResult {
-        log.info("Starting crawl for config '{}' with {} start paths",
-            config.name, config.startPaths.size)
+        log.info("Starting crawl for config '{}' with {} start paths, freshnessHours={}",
+            config.name, config.startPaths.size, config.freshnessHours)
+        saveSnapshot("assignment", host, config.crawlConfigId, config)
 
         val startTime = System.currentTimeMillis()
         val stats = CrawlStats()
@@ -144,11 +160,12 @@ class FilesystemCrawler(
 
             val duration = System.currentTimeMillis() - startTime
             log.info(
-                "Crawl completed in {}ms - {} folders, {} files, {} folder sends suppressed, {} errors",
+                "Crawl completed in {}ms - {} folders, {} files, {} folder sends suppressed, {} skipped (fresh), {} errors",
                 duration,
                 stats.foldersProcessed.get(),
                 stats.filesProcessed.get(),
                 stats.foldersSuppressed.get(),
+                stats.foldersSkippedByFreshness.get(),
                 stats.errors.get()
             )
 
@@ -279,6 +296,11 @@ class FilesystemCrawler(
         val accessDeniedNotedFolders = ConcurrentHashMap.newKeySet<String>()
         val skipSampleCountByFolder = ConcurrentHashMap<String, Int>()
 
+        // Freshness threshold: skip subtrees crawled within this window
+        val freshnessThreshold = OffsetDateTime.now().minusHours(config.freshnessHours.toLong())
+        val startPathSet = allStartPaths.map { PathUtils.normalizeComparablePath(it.toAbsolutePath().toString()) }.toSet()
+        log.info("Freshness threshold: {}h — folders crawled after {} will be skipped", config.freshnessHours, freshnessThreshold)
+
         // Build file visit options
         val visitOptions = if (followLinks) {
             setOf(FileVisitOption.FOLLOW_LINKS)
@@ -299,6 +321,19 @@ class FilesystemCrawler(
                 val parentInSkipBranch = if (normalizedParentPath != null) skipBranchCache[normalizedParentPath] == true else false
                 val preloadedFolder = preloadedFolders[normalizedPath]
                 val preloadedStatus = preloadedFolder?.analysisStatus
+
+                // Freshness check: skip subtrees recently crawled (ENFORCE mode only, never skip start paths)
+                if (config.crawlMode == CrawlMode.ENFORCE
+                    && normalizedPath !in startPathSet
+                    && preloadedFolder?.lastCrawledAt != null
+                    && preloadedFolder.lastCrawledAt.isAfter(freshnessThreshold)
+                ) {
+                    stats.foldersSkippedByFreshness.incrementAndGet()
+                    log.trace("Skipping recently crawled folder (lastCrawledAt={}): {}", preloadedFolder.lastCrawledAt, pathStr)
+                    // Preserve status in cache so child lookups still work
+                    folderStatusCache[normalizedPath] = preloadedStatus ?: AnalysisStatus.LOCATE
+                    return FileVisitResult.SKIP_SUBTREE
+                }
 
                 // Quick SKIP check during walk
                 val skipCheck = if (preloadedStatus == null) {
@@ -497,7 +532,11 @@ class FilesystemCrawler(
             }
 
             override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
-                log.warn("Failed to visit file: {} - {}", file, exc.message)
+                if (exc is AccessDeniedException) {
+                    log.info("Access denied (skipping): {}", file)
+                } else {
+                    log.warn("Failed to visit file: {} - {}", file, exc.message)
+                }
                 stats.errors.incrementAndGet()
                 if (runCatching { Files.isDirectory(file, LinkOption.NOFOLLOW_LINKS) }.getOrDefault(false)) {
                     recordFolderAccessDenied(
@@ -525,7 +564,11 @@ class FilesystemCrawler(
 
             override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
                 if (exc != null) {
-                    log.warn("Error after visiting directory: {} - {}", dir, exc.message)
+                    if (exc is AccessDeniedException) {
+                        log.info("Access denied after visiting directory: {}", dir)
+                    } else {
+                        log.warn("Error after visiting directory: {} - {}", dir, exc.message)
+                    }
                     stats.errors.incrementAndGet()
                     recordFolderAccessDenied(
                         dir = dir,
@@ -780,10 +823,12 @@ class FilesystemCrawler(
     private fun loadFolderSnapshot(host: String, crawlConfigId: Long): Map<String, FolderSnapshotState> {
         return try {
             val response = client.folderSnapshot(host, crawlConfigId)
+            saveSnapshot("folder-snapshot", host, crawlConfigId, response)
             val statusByPath = response.folders.associate { folder ->
                 PathUtils.normalizeComparablePath(folder.path) to FolderSnapshotState(
                     analysisStatus = folder.analysisStatus,
-                    fsLastModified = folder.fsLastModified
+                    fsLastModified = folder.fsLastModified,
+                    lastCrawledAt = folder.lastCrawledAt
                 )
             }
             log.info(
@@ -799,6 +844,19 @@ class FilesystemCrawler(
                 e.message
             )
             emptyMap()
+        }
+    }
+
+    private fun saveSnapshot(type: String, host: String, crawlConfigId: Long?, payload: Any) {
+        try {
+            Files.createDirectories(SNAPSHOT_DIR)
+            val ts = OffsetDateTime.now().format(TIMESTAMP_FMT)
+            val configSuffix = if (crawlConfigId != null) "_config-$crawlConfigId" else ""
+            val file = SNAPSHOT_DIR.resolve("${type}_${host}${configSuffix}_$ts.json")
+            snapshotMapper.writeValue(file.toFile(), payload)
+            log.info("Saved {} snapshot to {}", type, file)
+        } catch (e: Exception) {
+            log.warn("Failed to save {} snapshot for host {}: {}", type, host, e.message)
         }
     }
 
@@ -1133,13 +1191,15 @@ private class CrawlStats {
     val foldersProcessed = AtomicInteger(0)
     val filesProcessed = AtomicInteger(0)
     val foldersSuppressed = AtomicInteger(0)
+    val foldersSkippedByFreshness = AtomicInteger(0)
     val bytesProcessed = AtomicLong(0)
     val errors = AtomicInteger(0)
 }
 
 private data class FolderSnapshotState(
     val analysisStatus: AnalysisStatus,
-    val fsLastModified: java.time.OffsetDateTime?
+    val fsLastModified: java.time.OffsetDateTime?,
+    val lastCrawledAt: java.time.OffsetDateTime? = null
 )
 
 data class CrawlResult(

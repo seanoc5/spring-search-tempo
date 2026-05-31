@@ -6,10 +6,11 @@
         </encoder>
     </appender>
 
-    <!-- Reduce Tika noise -->
+    <!-- Reduce Tika/PDFBox/POI noise (font fallbacks, missing glyphs, FIB warnings) -->
     <logger name="org.apache.tika" level="WARN"/>
-    <logger name="org.apache.pdfbox" level="WARN"/>
-    <logger name="org.apache.fontbox" level="WARN"/>
+    <logger name="org.apache.pdfbox" level="ERROR"/>
+    <logger name="org.apache.fontbox" level="ERROR"/>
+    <logger name="org.apache.poi" level="ERROR"/>
 
     <!-- App logging -->
     <logger name="com.oconeco.remotecrawler" level="INFO"/>

@@ -2,6 +2,7 @@ package com.oconeco.remotecrawler.util
 
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -42,6 +43,10 @@ data class FileSystemMetadata(
                     } else {
                         0L
                     }
+                } catch (e: NoSuchFileException) {
+                    // Broken symlink — common in conda/pip pkgs directories
+                    log.info("Broken symlink (skipping size): {}", path)
+                    0L
                 } catch (e: Exception) {
                     log.warn("Failed to get size for: {}", path, e)
                     0L
@@ -51,6 +56,10 @@ data class FileSystemMetadata(
                     val fileTime = Files.getLastModifiedTime(path)
                     OffsetDateTime.ofInstant(fileTime.toInstant(), ZoneId.systemDefault())
                         .truncatedTo(ChronoUnit.MILLIS)
+                } catch (e: NoSuchFileException) {
+                    // Broken symlink — target doesn't exist
+                    log.info("Broken symlink (skipping mtime): {}", path)
+                    null
                 } catch (e: Exception) {
                     log.warn("Failed to get last modified time for: {}", path, e)
                     null

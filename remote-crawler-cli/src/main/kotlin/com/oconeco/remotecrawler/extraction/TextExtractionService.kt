@@ -74,10 +74,10 @@ class TextExtractionService(
             log.warn("Tika failed to parse file: {}", path, e)
             TextExtractionResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
         } catch (e: AccessDeniedException) {
-            log.warn("Access denied reading file (permission issue): {}", path)
+            log.info("Access denied reading file, skipping extraction: {}", path)
             TextExtractionResult.Failure("Access denied: ${e.message ?: path.toString()}")
         } catch (e: NoSuchFileException) {
-            log.warn("File not found (may have been deleted): {}", path)
+            log.info("File not found (may have been deleted), skipping: {}", path)
             TextExtractionResult.Failure("File not found: ${e.message ?: path.toString()}")
         } catch (e: IOException) {
             log.error("I/O error reading file: {}", path, e)
@@ -97,6 +97,19 @@ class TextExtractionService(
     fun detectMimeType(path: Path): String {
         return try {
             tika.detect(path.toFile())
+        } catch (e: AccessDeniedException) {
+            log.info("Access denied detecting MIME type, skipping: {}", path)
+            "application/octet-stream"
+        } catch (e: java.io.FileNotFoundException) {
+            if (e.message?.contains("Permission denied") == true) {
+                log.info("Permission denied detecting MIME type, skipping: {}", path)
+            } else {
+                log.info("File not found detecting MIME type, skipping: {}", path)
+            }
+            "application/octet-stream"
+        } catch (e: NoSuchFileException) {
+            log.info("File not found detecting MIME type, skipping: {}", path)
+            "application/octet-stream"
         } catch (e: Exception) {
             log.warn("Failed to detect MIME type for: {}", path, e)
             "application/octet-stream"
@@ -183,10 +196,10 @@ class TextExtractionService(
             log.warn("Tika failed to parse file: {}", path, e)
             TextAndMetadataResult.Failure("Tika parsing error: ${e.message ?: "Unknown Tika error"}")
         } catch (e: AccessDeniedException) {
-            log.warn("Access denied reading file (permission issue): {}", path)
+            log.info("Access denied reading file, skipping extraction: {}", path)
             TextAndMetadataResult.Failure("Access denied: ${e.message ?: path.toString()}")
         } catch (e: NoSuchFileException) {
-            log.warn("File not found (may have been deleted): {}", path)
+            log.info("File not found (may have been deleted), skipping: {}", path)
             TextAndMetadataResult.Failure("File not found: ${e.message ?: path.toString()}")
         } catch (e: IOException) {
             log.error("I/O error reading file: {}", path, e)
