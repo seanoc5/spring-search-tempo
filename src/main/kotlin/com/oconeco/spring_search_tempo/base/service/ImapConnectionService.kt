@@ -109,10 +109,13 @@ class ImapConnectionService(
     private fun getCredential(account: EmailAccountDTO): String {
         val id = account.id
         if (id != null) {
+            // Only IllegalStateException ("key not configured") falls through to the env-var fallback —
+            // a real crypto failure (e.g. AEADBadTagException from a rotated key or tampered ciphertext)
+            // must propagate so the misconfiguration is loud, not silently masked by a stale env var.
             val decrypted = try {
                 emailAccountService.getPassword(id)
             } catch (e: IllegalStateException) {
-                log.warn("Encrypted password present for {} but cannot be decrypted: {}", account.email, e.message)
+                log.warn("Encryption key not configured; will try env-var fallback for {}: {}", account.email, e.message)
                 null
             }
             if (!decrypted.isNullOrBlank()) {
