@@ -1,3 +1,7 @@
+DELETE FROM mirrored_message;
+
+DELETE FROM mirror_config;
+
 DELETE FROM host_crawl_session_folder;
 
 DELETE FROM host_crawl_session;
