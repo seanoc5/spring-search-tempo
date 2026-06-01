@@ -30,9 +30,13 @@ class BrowserBookmark : SaveableObject() {
      * BOOKMARK rows have a non-null [firefoxBookmarkId] and [folderPath];
      * HISTORY rows are visited-but-not-bookmarked URLs from `moz_places`.
      * If a HISTORY row is later bookmarked it is promoted to BOOKMARK in place.
+     *
+     * The SQL DEFAULT keeps `ddl-auto: update` from failing when adding
+     * this NOT NULL column to a non-empty `browser_bookmark` table —
+     * existing rows backfill to BOOKMARK.
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(nullable = false, columnDefinition = "text NOT NULL DEFAULT 'BOOKMARK'")
     var sourceType: BrowserSourceType = BrowserSourceType.BOOKMARK
 
     // Firefox-specific IDs for deduplication
