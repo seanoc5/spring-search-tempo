@@ -11,8 +11,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher
+import org.springframework.scheduling.support.CronExpression
 import org.springframework.stereotype.Service
+import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneId
 
 
 /**
@@ -306,6 +309,92 @@ class EmailCrawlOrchestrator(
     }
 
     /**
+     * Per-account cron dispatch (issue #2, ADR-004).
+     *
+     * Enumerates enabled accounts and, for each, evaluates the stored
+     * `cronSchedule` against `now`. Dispatches one [EmailQuickSyncJob] per
+     * account whose next cron boundary (after `lastDispatchedAt`) has
+     * elapsed. Failure to dispatch one account does NOT halt the loop —
+     * each per-account dispatch is wrapped in its own try/catch and the
+     * error is recorded on the account.
+     *
+     * Returns one [AccountDispatchResult] per enabled account so callers
+     * (the minute-tick scheduler, tests) can see what fired and what was
+     * skipped.
+     */
+    fun runDueAccounts(now: Instant): List<AccountDispatchResult> {
+        if (!emailConfiguration.enabled) {
+            log.debug("Email crawling disabled; runDueAccounts is a no-op")
+            return emptyList()
+        }
+
+        val accounts = emailAccountService.findEnabled()
+        if (accounts.isEmpty()) {
+            log.debug("No enabled email accounts; runDueAccounts is a no-op")
+            return emptyList()
+        }
+
+        val zone = ZoneId.systemDefault()
+        val results = mutableListOf<AccountDispatchResult>()
+
+        for (account in accounts) {
+            val accountId = account.id ?: continue
+            try {
+                val cron = try {
+                    CronExpression.parse(account.cronSchedule)
+                } catch (e: Exception) {
+                    val reason = "invalid cron '${account.cronSchedule}': ${e.message}"
+                    log.warn("Skipping account {} — {}", account.email, reason)
+                    emailAccountService.recordError(accountId, reason)
+                    results += AccountDispatchResult(accountId, account.email, DispatchOutcome.INVALID_CRON, reason)
+                    continue
+                }
+
+                // Anchor point for next-cron-boundary lookup. If never dispatched, anchor
+                // at epoch so the first eligible boundary fires immediately.
+                val anchor = (account.lastDispatchedAt
+                    ?: OffsetDateTime.ofInstant(Instant.EPOCH, zone))
+                    .atZoneSameInstant(zone)
+
+                val nextBoundary = cron.next(anchor)
+                val nowZdt = now.atZone(zone)
+
+                if (nextBoundary == null || nextBoundary.isAfter(nowZdt)) {
+                    results += AccountDispatchResult(accountId, account.email, DispatchOutcome.NOT_DUE, null)
+                    continue
+                }
+
+                log.info("Dispatching quick sync for account {} (cron='{}', last={}, due={})",
+                    account.email, account.cronSchedule, account.lastDispatchedAt, nextBoundary)
+
+                val execution = runQuickSyncForAccount(accountId = accountId)
+
+                // Record dispatch time AFTER successful launch so a failed dispatch
+                // is retried on the next tick.
+                emailAccountService.recordDispatched(accountId, OffsetDateTime.ofInstant(now, zone))
+
+                results += AccountDispatchResult(
+                    accountId, account.email, DispatchOutcome.DISPATCHED,
+                    "executionId=${execution.id}"
+                )
+            } catch (e: Exception) {
+                log.error("Failed to dispatch sync for account {}: {}", account.email, e.message, e)
+                try {
+                    emailAccountService.recordError(accountId, e.message ?: "Unknown dispatch error")
+                } catch (recordError: Exception) {
+                    log.warn("Failed to record dispatch error on account {}: {}", account.email, recordError.message)
+                }
+                results += AccountDispatchResult(
+                    accountId, account.email, DispatchOutcome.ERROR, e.message
+                )
+                // Continue iterating — sibling accounts must not be blocked.
+            }
+        }
+
+        return results
+    }
+
+    /**
      * Get sync status for all accounts.
      */
     fun getSyncStatus(): List<AccountSyncStatus> {
@@ -320,6 +409,27 @@ class EmailCrawlOrchestrator(
             )
         }
     }
+}
+
+/**
+ * Outcome for one account in a [EmailCrawlOrchestrator.runDueAccounts] sweep.
+ */
+data class AccountDispatchResult(
+    val accountId: Long,
+    val email: String?,
+    val outcome: DispatchOutcome,
+    val detail: String?
+)
+
+enum class DispatchOutcome {
+    /** Account's cron boundary elapsed and the job launched successfully. */
+    DISPATCHED,
+    /** Account's next cron boundary is still in the future. */
+    NOT_DUE,
+    /** Account's cronSchedule string is invalid; recorded as account error. */
+    INVALID_CRON,
+    /** Exception during dispatch; the loop continues for sibling accounts. */
+    ERROR
 }
 
 /**

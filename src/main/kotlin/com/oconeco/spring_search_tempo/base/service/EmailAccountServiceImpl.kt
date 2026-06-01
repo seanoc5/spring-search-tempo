@@ -123,6 +123,13 @@ class EmailAccountServiceImpl(
         emailAccountRepository.save(emailAccount)
     }
 
+    override fun recordDispatched(id: Long, dispatchedAt: OffsetDateTime) {
+        val emailAccount = emailAccountRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        emailAccount.lastDispatchedAt = dispatchedAt
+        emailAccountRepository.save(emailAccount)
+    }
+
     override fun clearError(id: Long) {
         val emailAccount = emailAccountRepository.findById(id)
             .orElseThrow { NotFoundException() }

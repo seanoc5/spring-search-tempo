@@ -151,6 +151,28 @@ class EmailSyncResource(
     }
 
     /**
+     * Sync a specific email account — issue #2 spec form.
+     *
+     * Equivalent to `/api/email/sync/{accountId}` but named under
+     * `/api/email/accounts/{id}/sync` to match the per-account REST
+     * pattern called out in the multi-account ticket. Defaults to
+     * incremental quick sync; pass `forceFullSync=true` for a full
+     * recrawl.
+     *
+     * POST /api/email/accounts/{id}/sync
+     */
+    @PostMapping("/accounts/{id}/sync")
+    fun syncAccountByAccountId(
+        @PathVariable("id") accountId: Long,
+        @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
+        @RequestParam(name = "stepThreads", required = false, defaultValue = "1") stepThreads: Int,
+        @RequestParam(name = "itemAsync", required = false, defaultValue = "false") itemAsync: Boolean,
+        @RequestParam(name = "asyncThreads", required = false, defaultValue = "4") asyncThreads: Int,
+        @RequestParam(name = "chunkSize", required = false, defaultValue = "20") chunkSize: Int
+    ): ResponseEntity<EmailSyncResponse> =
+        syncAccount(accountId, forceFullSync, stepThreads, itemAsync, asyncThreads, chunkSize)
+
+    /**
      * Test IMAP connection for a specific account.
      *
      * POST /api/email/test/{accountId}

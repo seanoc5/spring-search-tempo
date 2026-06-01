@@ -70,6 +70,13 @@ class EmailAccountDTO {
     // Account status
     var enabled: Boolean = true
 
+    // Per-account cron schedule (Spring 6-field: sec min hr dom mon dow).
+    // See ADR-004.
+    var cronSchedule: String = "0 0 0 * * *"
+
+    // Last dispatch time, set by MultiAccountEmailScheduler.
+    var lastDispatchedAt: OffsetDateTime? = null
+
     var lastError: String? = null
 
     var lastErrorAt: OffsetDateTime? = null
