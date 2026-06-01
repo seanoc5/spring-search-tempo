@@ -38,7 +38,16 @@ import java.util.Properties
  * spins up its own dual-server pair directly — the second mirror ticket
  * (#24) can extract a `DualGreenMail` fixture if the shape recurs.
  */
-@SpringBootTest(classes = [SpringSearchTempoApplication::class])
+@SpringBootTest(
+    classes = [SpringSearchTempoApplication::class],
+    // BaseIT autowires `@LocalServerPort var serverPort: Int`; in the default
+    // `MOCK` environment that placeholder is never populated and bean
+    // injection fails with "Could not resolve placeholder 'local.server.port'".
+    // We don't actually hit any HTTP endpoint from this test, but the field
+    // injection runs unconditionally — so spin up a random servlet port to
+    // satisfy the placeholder.
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
+)
 @DisplayName("ImapMirrorService — lossless APPEND with Message-ID dedup (issue #23)")
 class ImapMirrorServiceTest : BaseIT() {
 
@@ -96,6 +105,7 @@ class ImapMirrorServiceTest : BaseIT() {
 
         configId = mirrorConfigRepository.save(
             MirrorConfig().apply {
+                uri = "mirror://test-${System.nanoTime()}"
                 name = "test mirror"
                 sourceAccountId = srcAccount
                 destAccountId = dstAccount
@@ -131,12 +141,11 @@ class ImapMirrorServiceTest : BaseIT() {
 
         // The destination message body must match — proving APPEND wrote
         // the full RFC822 octets, not just headers.
-        val destMessages = fetchAll(DST_PORT, DST_EMAIL, "INBOX")
+        val destMessages = fetchAllSnapshots(DST_PORT, DST_EMAIL, "INBOX")
         assertThat(destMessages).hasSize(1)
         val destMsg = destMessages.single()
-        val body = destMsg.content.toString()
-        assertThat(body).contains("test body for lossless copy")
-        assertThat(destMsg.getHeader("Message-ID")?.firstOrNull()).isEqualTo(messageId)
+        assertThat(destMsg.body).contains("test body for lossless copy")
+        assertThat(destMsg.messageId).isEqualTo(messageId)
 
         // Flag preservation — both \Seen and \Flagged round-tripped via APPEND.
         assertThat(destMsg.flags.contains(Flags.Flag.SEEN)).isTrue
@@ -145,7 +154,7 @@ class ImapMirrorServiceTest : BaseIT() {
         // INTERNALDATE preservation — note GreenMail honours the supplied
         // INTERNALDATE on APPEND; Gmail/Cloudflare/Fastmail/Outlook do too
         // per ADR-005 (some servers stamp their own; documented limitation).
-        assertThat(destMsg.receivedDate).isEqualTo(internalDate)
+        assertThat(destMsg.internalDate).isEqualTo(internalDate)
 
         // Audit row written with the right keys.
         val record = mirroredMessageRepository.findByMirrorConfigIdAndMessageId(configId, messageId)
@@ -175,7 +184,7 @@ class ImapMirrorServiceTest : BaseIT() {
 
         // The destination must hold exactly one copy — proving the second
         // call short-circuited before APPEND.
-        val destMessages = fetchAll(DST_PORT, DST_EMAIL, "INBOX")
+        val destMessages = fetchAllSnapshots(DST_PORT, DST_EMAIL, "INBOX")
         assertThat(destMessages).hasSize(1)
 
         // And only one audit row exists.
@@ -249,6 +258,7 @@ class ImapMirrorServiceTest : BaseIT() {
         // We can't reuse the no-throttle config from setUp; create a throttled one.
         val throttledConfigId = mirrorConfigRepository.save(
             MirrorConfig().apply {
+                uri = "mirror://throttled-${System.nanoTime()}"
                 name = "throttled"
                 sourceAccountId = mirrorConfigRepository.findById(configId).get().sourceAccountId
                 destAccountId = mirrorConfigRepository.findById(configId).get().destAccountId
@@ -340,7 +350,19 @@ class ImapMirrorServiceTest : BaseIT() {
         }
     }
 
-    private fun fetchAll(port: Int, email: String, folderName: String): List<MimeMessage> {
+    /**
+     * Snapshot of an IMAP message that detaches from the IMAP folder
+     * (which gets closed before the test assertions run, so reading any
+     * lazy field after that point would trip `FolderClosedException`).
+     */
+    private data class MessageSnapshot(
+        val body: String,
+        val messageId: String?,
+        val flags: Flags,
+        val internalDate: Date?
+    )
+
+    private fun fetchAllSnapshots(port: Int, email: String, folderName: String): List<MessageSnapshot> {
         val store = Session.getInstance(Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
@@ -351,7 +373,15 @@ class ImapMirrorServiceTest : BaseIT() {
             val folder = store.getFolder(folderName)
             folder.open(Folder.READ_ONLY)
             try {
-                return folder.messages.map { it as MimeMessage }
+                return folder.messages.map { raw ->
+                    val msg = raw as MimeMessage
+                    MessageSnapshot(
+                        body = msg.content.toString(),
+                        messageId = msg.getHeader("Message-ID")?.firstOrNull(),
+                        flags = Flags(msg.flags),
+                        internalDate = msg.receivedDate
+                    )
+                }
             } finally {
                 folder.close(false)
             }
