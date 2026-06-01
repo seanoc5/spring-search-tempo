@@ -2,6 +2,27 @@
 -- Seed crawl configurations for Linux systems
 -- Only runs if the crawl_config table is empty
 
+-- Ensure NOT NULL columns have DB-level defaults so seed INSERTs can omit them.
+-- (Hibernate does not create DEFAULT constraints from Kotlin field initializers.)
+ALTER TABLE crawl_config ALTER COLUMN id SET DEFAULT nextval('primary_sequence');
+ALTER TABLE crawl_config ALTER COLUMN date_created SET DEFAULT NOW();
+ALTER TABLE crawl_config ALTER COLUMN last_updated SET DEFAULT NOW();
+ALTER TABLE crawl_config ALTER COLUMN crawl_mode SET DEFAULT 'ENFORCE';
+ALTER TABLE crawl_config ALTER COLUMN discovery_keeper_max_depth SET DEFAULT 20;
+ALTER TABLE crawl_config ALTER COLUMN discovery_skip_max_depth SET DEFAULT 10;
+ALTER TABLE crawl_config ALTER COLUMN discovery_file_sample_cap SET DEFAULT 50;
+ALTER TABLE crawl_config ALTER COLUMN discovery_auto_suggest_enabled SET DEFAULT true;
+ALTER TABLE crawl_config ALTER COLUMN folder_priority_skip SET DEFAULT 500;
+ALTER TABLE crawl_config ALTER COLUMN folder_priority_semantic SET DEFAULT 400;
+ALTER TABLE crawl_config ALTER COLUMN folder_priority_analyze SET DEFAULT 300;
+ALTER TABLE crawl_config ALTER COLUMN folder_priority_index SET DEFAULT 200;
+ALTER TABLE crawl_config ALTER COLUMN folder_priority_locate SET DEFAULT 100;
+ALTER TABLE crawl_config ALTER COLUMN file_priority_skip SET DEFAULT 500;
+ALTER TABLE crawl_config ALTER COLUMN file_priority_semantic SET DEFAULT 400;
+ALTER TABLE crawl_config ALTER COLUMN file_priority_analyze SET DEFAULT 300;
+ALTER TABLE crawl_config ALTER COLUMN file_priority_index SET DEFAULT 200;
+ALTER TABLE crawl_config ALTER COLUMN file_priority_locate SET DEFAULT 100;
+
 -- Check if table is empty before inserting
 DO $$
 BEGIN
@@ -9,17 +30,16 @@ BEGIN
         -- ===== PHASE 1: USER CONTENT (Specific Directories) =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_DOCUMENTS',
             'USER_DOCUMENTS',
-            'User Documents',
             'Crawl Config: User Documents',
             'User document files (Documents folder)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean/Documents'],
             20, false, true, 1, false,
             NULL,
@@ -33,17 +53,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_PICTURES',
             'USER_PICTURES',
-            'User Pictures',
             'Crawl Config: User Pictures',
             'User image files (Pictures folder)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean/Pictures'],
             15, false, false, 1, false,
             '[".*/\\.thumbnails/.*",".*/cache/.*",".*/\\.cache/.*"]',
@@ -57,17 +76,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_VIDEOS',
             'USER_VIDEOS',
-            'User Videos',
             'Crawl Config: User Videos',
             'User video files (Videos folder)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean/Videos'],
             10, false, false, 1, false,
             '[".*/\\.thumbnails/.*",".*/cache/.*"]',
@@ -81,17 +99,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_MUSIC',
             'USER_MUSIC',
-            'User Music',
             'Crawl Config: User Music',
             'User audio files (Music folder)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean/Music'],
             10, false, false, 1, false,
             NULL,
@@ -107,17 +124,16 @@ BEGIN
         -- ===== PHASE 2: USER HOME (General) =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_HOME_GENERAL',
             'USER_HOME_GENERAL',
-            'User Home (General)',
             'Crawl Config: User Home (General)',
             'General user home directory (excluding specific folders)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean'],
             20, false, true, 1, false,
             '["/home/sean/Documents/.*","/home/sean/Pictures/.*","/home/sean/Videos/.*","/home/sean/Music/.*","/home/sean/Downloads/.*","/home/sean/Desktop/.*",".*/\\.cache/.*",".*/\\.local/share/Trash/.*",".*/\\.thumbnails/.*",".*/snap/.*/.*"]',
@@ -131,17 +147,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_DOWNLOADS',
             'USER_DOWNLOADS',
-            'User Downloads',
             'Crawl Config: User Downloads',
             'User downloads folder',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/opt/Downloads'],
             5, false, true, 1, false,
             NULL,
@@ -155,17 +170,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:USER_DESKTOP',
             'USER_DESKTOP',
-            'User Desktop',
             'Crawl Config: User Desktop',
             'User desktop folder',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/home/sean/Desktop'],
             5, false, false, 1, false,
             NULL,
@@ -181,17 +195,16 @@ BEGIN
         -- ===== PHASE 3: WORK =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:WORK',
             'WORK',
-            'Work Projects',
             'Crawl Config: Work Projects',
             'Work projects directory (/opt/work)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/opt/work'],
             12, false, true, 1, false,
             NULL,
@@ -207,17 +220,16 @@ BEGIN
         -- ===== PHASE 4: LOGGING =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_LOGS',
             'SYSTEM_LOGS',
-            'System Logs',
             'Crawl Config: System Logs',
             'System log files (/var/log)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/var/log'],
             8, false, false, 1, false,
             '[".*/journal/.*"]',
@@ -233,17 +245,16 @@ BEGIN
         -- ===== PHASE 5: OS CONFIGS =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_CONFIG',
             'SYSTEM_CONFIG',
-            'System Configuration (/etc)',
             'Crawl Config: System Configuration (/etc)',
             'System configuration files (/etc)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/etc'],
             5, false, false, 1, false,
             '[".*/ssl/.*",".*/pki/.*",".*/ssh/.*",".*/openvpn/.*"]',
@@ -259,17 +270,16 @@ BEGIN
         -- ===== PHASE 6: SYSTEM DIRECTORIES =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_USR',
             'SYSTEM_USR',
-            'System /usr',
             'Crawl Config: System /usr',
             'System /usr directory',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/usr'],
             6, false, false, 1, false,
             '["/usr/lib/.*","/usr/lib64/.*","/usr/libexec/.*"]',
@@ -283,17 +293,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_OPT',
             'SYSTEM_OPT',
-            'System /opt',
             'Crawl Config: System /opt',
             'System /opt directory (excluding /opt/work)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/opt'],
             8, false, false, 1, false,
             '["/opt/work/.*"]',
@@ -307,17 +316,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_VAR',
             'SYSTEM_VAR',
-            'System /var',
             'Crawl Config: System /var',
             'System /var directory',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/var'],
             6, false, false, 1, false,
             '["/var/cache/.*","/var/tmp/.*","/var/lib/docker/.*","/var/lib/flatpak/.*","/var/snap/.*"]',
@@ -331,17 +339,16 @@ BEGIN
         );
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_BOOT',
             'SYSTEM_BOOT',
-            'System /boot',
             'Crawl Config: System /boot',
             'System boot directory',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/boot'],
             3, false, false, 1, false,
             NULL,
@@ -357,17 +364,16 @@ BEGIN
         -- ===== PHASE 7: EVERYTHING ELSE (Root Filesystem) =====
 
         INSERT INTO crawl_config (
-            uri, name, display_label, label, description, enabled, status, analysis_status,
+            uri, name, label, description, status, analysis_status,
             start_paths, max_depth, follow_links, parallel, version, archived,
             folder_patterns_skip, folder_patterns_locate, folder_patterns_index, folder_patterns_analyze,
             file_patterns_skip, file_patterns_locate, file_patterns_index, file_patterns_analyze
         ) VALUES (
             'crawl-config:SYSTEM_ROOT',
             'SYSTEM_ROOT',
-            'Root Filesystem',
             'Crawl Config: Root Filesystem',
             'Root filesystem (catches anything missed by other configs)',
-            true, 'NEW', 'LOCATE',
+            'NEW', 'LOCATE',
             ARRAY['/'],
             20, false, false, 1, false,
             '["/home/sean/.*","/opt/work/.*","/etc/.*","/var/log/.*","/usr/.*","/boot/.*","/proc/.*","/sys/.*","/dev/.*","/tmp/.*","/run/.*","/mnt/.*","/media/.*","/lost\\+found/.*","/snap/.*","/home/(?!sean).*","/root/.*"]',
