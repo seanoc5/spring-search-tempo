@@ -109,6 +109,11 @@
                             <i class="bi bi-envelope"></i>
                             <span>[[#{nav.emailAccounts}]]</span>
                         </a>
+                        <a th:href="@{/emailMirrors}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/emailMirrors')} ? 'active' : ''">
+                            <i class="bi bi-arrow-left-right"></i>
+                            <span>Email Mirrors</span>
+                        </a>
                         <a th:href="@{/oneDriveAccounts}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/oneDriveAccounts')} ? 'active' : ''">
                             <i class="bi bi-cloud"></i>

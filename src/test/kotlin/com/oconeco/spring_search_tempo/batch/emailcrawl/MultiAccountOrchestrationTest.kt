@@ -1,9 +1,11 @@
 package com.oconeco.spring_search_tempo.batch.emailcrawl
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
+import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.config.EmailConfiguration
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
+import com.oconeco.spring_search_tempo.base.service.EmailFolderSyncService
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -48,6 +50,8 @@ class MultiAccountOrchestrationTest {
 
     private lateinit var emailConfiguration: EmailConfiguration
     private lateinit var emailAccountService: EmailAccountService
+    private lateinit var emailFolderService: EmailFolderService
+    private lateinit var emailFolderSyncService: EmailFolderSyncService
     private lateinit var emailQuickSyncJobBuilder: EmailQuickSyncJobBuilder
     private lateinit var jobLauncher: JobLauncher
     private lateinit var imapConnectionService: ImapConnectionService
@@ -64,6 +68,8 @@ class MultiAccountOrchestrationTest {
             quickSyncFolders = listOf("INBOX")
         )
         emailAccountService = mock(EmailAccountService::class.java)
+        emailFolderService = mock(EmailFolderService::class.java)
+        emailFolderSyncService = mock(EmailFolderSyncService::class.java)
         emailQuickSyncJobBuilder = mock(EmailQuickSyncJobBuilder::class.java)
         jobLauncher = mock(JobLauncher::class.java)
         // getExpectedMessageCount() already catches all exceptions and
@@ -74,6 +80,8 @@ class MultiAccountOrchestrationTest {
         orchestrator = EmailCrawlOrchestrator(
             emailConfiguration = emailConfiguration,
             emailAccountService = emailAccountService,
+            emailFolderService = emailFolderService,
+            emailFolderSyncService = emailFolderSyncService,
             emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
             jobLauncher = jobLauncher,
             imapConnectionService = imapConnectionService
@@ -205,6 +213,8 @@ class MultiAccountOrchestrationTest {
         orchestrator = EmailCrawlOrchestrator(
             emailConfiguration = emailConfiguration,
             emailAccountService = emailAccountService,
+            emailFolderService = emailFolderService,
+            emailFolderSyncService = emailFolderSyncService,
             emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
             jobLauncher = jobLauncher,
             imapConnectionService = imapConnectionService

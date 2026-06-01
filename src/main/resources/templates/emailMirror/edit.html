@@ -1,0 +1,164 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Edit Mirror</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailMirrors}">Email Mirrors</a></li>
+            <li class="breadcrumb-item"><a th:href="@{/emailMirrors/{id}(id=${mirror.id})}">[[${mirror.name}]]</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4"><i class="bi bi-pencil-square me-2"></i>Edit Mirror</h1>
+
+    <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger">
+        <ul class="mb-0">
+            <li th:each="err : ${#fields.globalErrors()}" th:text="${err}"></li>
+        </ul>
+    </div>
+
+    <form th:action="@{/emailMirrors/{id}/edit(id=${mirror.id})}" th:object="${mirror}" method="post">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="mb-0">Mirror Details</h5></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="name" th:field="*{name}"
+                                   th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'" required>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="sourceAccountId" class="form-label">Source Account *</label>
+                                <select class="form-select" id="sourceAccountId" th:field="*{sourceAccountId}"
+                                        hx-get="/emailMirrors/folderSuggestions"
+                                        hx-trigger="change"
+                                        hx-target="#folderMappingsEditor"
+                                        hx-swap="outerHTML"
+                                        hx-include="[name='destAccountId']"
+                                        required>
+                                    <option value="">-- Select source --</option>
+                                    <option th:each="a : ${accounts}" th:value="${a.id}"
+                                            th:text="${a.email + (a.label != null ? ' (' + a.label + ')' : '')}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="destAccountId" class="form-label">Destination Account *</label>
+                                <select class="form-select" id="destAccountId" th:field="*{destAccountId}"
+                                        hx-get="/emailMirrors/folderSuggestions"
+                                        hx-trigger="change"
+                                        hx-target="#folderMappingsEditor"
+                                        hx-swap="outerHTML"
+                                        hx-include="[name='sourceAccountId']"
+                                        required>
+                                    <option value="">-- Select destination --</option>
+                                    <option th:each="a : ${accounts}" th:value="${a.id}"
+                                            th:text="${a.email + (a.label != null ? ' (' + a.label + ')' : '')}"></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="appendRateLimitPerSecond" class="form-label">APPEND Rate Limit (per second)</label>
+                                <input type="number" min="1" class="form-control" id="appendRateLimitPerSecond"
+                                       th:field="*{appendRateLimitPerSecond}">
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
+                                    <label class="form-check-label" for="enabled">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" th:field="*{description}" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Folder Mappings</h5></div>
+                    <div class="card-body">
+                        <div id="folderMappingsEditor">
+                            <table class="table table-sm align-middle" th:unless="${mirror.folderMappings.empty}">
+                                <thead>
+                                <tr>
+                                    <th style="width: 5rem;">Enabled</th>
+                                    <th>Source folder</th>
+                                    <th>Destination folder</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="fm,iter : ${mirror.folderMappings}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input folder-mapping-enabled"
+                                               th:attr="data-index=${iter.index}" th:checked="${fm.enabled}">
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm folder-mapping-source"
+                                               th:attr="data-index=${iter.index}" th:value="${fm.source}">
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm folder-mapping-dest"
+                                               th:attr="data-index=${iter.index}" th:value="${fm.dest}">
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                            <div th:if="${mirror.folderMappings.empty}" class="alert alert-info small mb-2">
+                                No folder mappings yet. Re-select the source/destination accounts above to populate suggestions.
+                            </div>
+                            <textarea name="folderMappingsJson" id="folderMappingsJson" class="d-none"></textarea>
+                            <script>
+                                (function () {
+                                    const root = document.getElementById('folderMappingsEditor');
+                                    if (!root) return;
+                                    const out = root.querySelector('#folderMappingsJson');
+                                    function collect() {
+                                        const rows = [];
+                                        root.querySelectorAll('.folder-mapping-source').forEach((srcInput) => {
+                                            const idx = srcInput.dataset.index;
+                                            const destInput = root.querySelector('.folder-mapping-dest[data-index="' + idx + '"]');
+                                            const enabledInput = root.querySelector('.folder-mapping-enabled[data-index="' + idx + '"]');
+                                            const source = srcInput.value.trim();
+                                            const dest = destInput ? destInput.value.trim() : source;
+                                            if (!source) return;
+                                            rows.push({
+                                                source: source,
+                                                dest: dest || source,
+                                                enabled: enabledInput ? enabledInput.checked : true
+                                            });
+                                        });
+                                        out.value = JSON.stringify(rows);
+                                    }
+                                    root.addEventListener('input', collect);
+                                    root.addEventListener('change', collect);
+                                    collect();
+                                })();
+                            </script>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Save Changes
+                    </button>
+                    <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+    Folder mappings editor fragment.
+    Inputs into a hidden textarea named "folderMappingsJson" which is read on
+    form POST. Source/Dest cells are editable inputs; enabled is a checkbox.
+-->
+<div th:fragment="editor" id="folderMappingsEditor">
+    <div th:if="${suggestions.empty}" class="alert alert-warning small mb-2">
+        <i class="bi bi-info-circle me-1"></i>
+        No folders are known yet on the source account. Run a sync on the source first,
+        or save this mirror with an empty mapping list and edit later.
+    </div>
+    <table class="table table-sm align-middle" th:unless="${suggestions.empty}">
+        <thead>
+        <tr>
+            <th style="width: 5rem;">Enabled</th>
+            <th>Source folder</th>
+            <th>Destination folder</th>
+            <th>Notes</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="s,iter : ${suggestions}">
+            <td>
+                <input type="checkbox" class="form-check-input folder-mapping-enabled"
+                       th:attr="data-index=${iter.index}" th:checked="${s.enabled}">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm folder-mapping-source"
+                       th:attr="data-index=${iter.index}" th:value="${s.source}">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm folder-mapping-dest"
+                       th:attr="data-index=${iter.index}" th:value="${s.dest}">
+            </td>
+            <td>
+                <span th:if="${s.warning != null}" class="text-warning small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>[[${s.warning}]]
+                </span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <textarea name="folderMappingsJson" id="folderMappingsJson"
+              class="d-none" th:text="${suggestionsJson}"></textarea>
+    <script th:inline="javascript">
+        (function () {
+            const root = document.getElementById('folderMappingsEditor');
+            if (!root) return;
+            const out = root.querySelector('#folderMappingsJson');
+
+            function collect() {
+                const rows = [];
+                const sources = root.querySelectorAll('.folder-mapping-source');
+                sources.forEach((srcInput) => {
+                    const idx = srcInput.dataset.index;
+                    const destInput = root.querySelector('.folder-mapping-dest[data-index="' + idx + '"]');
+                    const enabledInput = root.querySelector('.folder-mapping-enabled[data-index="' + idx + '"]');
+                    const source = srcInput.value.trim();
+                    const dest = destInput ? destInput.value.trim() : source;
+                    if (!source) return;
+                    rows.push({
+                        source: source,
+                        dest: dest || source,
+                        enabled: enabledInput ? enabledInput.checked : true
+                    });
+                });
+                out.value = JSON.stringify(rows);
+            }
+
+            root.addEventListener('input', collect);
+            root.addEventListener('change', collect);
+            collect();
+        })();
+    </script>
+</div>
+</body>
+</html>
