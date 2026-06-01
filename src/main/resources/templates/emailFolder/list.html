@@ -1,0 +1,116 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>IMAP Folders — [[${emailAccount.email}]]</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailAccounts}">Email Accounts</a></li>
+            <li class="breadcrumb-item">
+                <a th:href="@{/emailAccounts/{id}(id=${emailAccount.id})}">[[${emailAccount.email}]]</a>
+            </li>
+            <li class="breadcrumb-item active">Folders</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-folder2-open me-2"></i>IMAP Folders
+        </h1>
+        <form th:action="@{/emailAccounts/{id}/folders/refresh(id=${emailAccount.id})}" method="post" class="d-inline">
+            <button type="submit" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh from server
+            </button>
+        </form>
+    </div>
+
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${message}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${error}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div th:if="${folders.empty}" class="alert alert-info">
+        No folders enumerated yet. Click <strong>Refresh from server</strong> to run
+        an IMAP <code>LIST *</code> against <code>[[${emailAccount.email}]]</code>.
+    </div>
+
+    <form th:if="${!folders.empty}"
+          th:action="@{/emailAccounts/{id}/folders/update(id=${emailAccount.id})}"
+          method="post">
+        <div class="card">
+            <div class="card-header d-flex align-items-center">
+                <h5 class="mb-0 flex-grow-1">
+                    Folders ([[${folders.size()}]])
+                </h5>
+                <small class="text-muted">
+                    Tick folders to include in sync. <code>\Noselect</code>
+                    containers cannot be opened by IMAP and are disabled.
+                </small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 3rem;">Sync</th>
+                            <th>Path</th>
+                            <th>Type</th>
+                            <th class="text-end">Messages</th>
+                            <th class="text-end">Last UID</th>
+                            <th>UIDVALIDITY</th>
+                            <th>Attributes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="folder : ${folders}">
+                            <td>
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       name="syncEnabledFolderIds"
+                                       th:value="${folder.id}"
+                                       th:checked="${folder.syncEnabled}"
+                                       th:disabled="${folder.noselect}"/>
+                            </td>
+                            <td>
+                                <code>[[${folder.path ?: folder.folderName}]]</code>
+                            </td>
+                            <td>
+                                <span th:if="${folder.isInbox}" class="badge bg-primary me-1">Inbox</span>
+                                <span th:if="${folder.isSent}" class="badge bg-info me-1">Sent</span>
+                                <span th:if="${folder.isDraft}" class="badge bg-secondary me-1">Drafts</span>
+                                <span th:if="${folder.isTrash}" class="badge bg-warning text-dark me-1">Trash</span>
+                                <span th:if="${folder.isSpam}" class="badge bg-warning text-dark me-1">Spam</span>
+                                <span th:if="${folder.isArchive}" class="badge bg-dark me-1">Archive</span>
+                            </td>
+                            <td class="text-end">[[${folder.messageCount}]]</td>
+                            <td class="text-end">[[${folder.lastSyncUid ?: '-'}]]</td>
+                            <td>[[${folder.uidValidity ?: '-'}]]</td>
+                            <td>
+                                <span th:if="${folder.noselect}" class="badge bg-danger me-1">\Noselect</span>
+                                <span th:if="${folder.hasChildren}" class="badge bg-light text-dark me-1">\HasChildren</span>
+                                <span th:if="${folder.noinferiors}" class="badge bg-light text-dark me-1">\NoInferiors</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <a th:href="@{/emailAccounts/{id}(id=${emailAccount.id})}" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>Save folder selection
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>

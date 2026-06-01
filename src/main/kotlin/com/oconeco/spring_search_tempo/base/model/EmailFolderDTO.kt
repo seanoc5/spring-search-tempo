@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.base.model
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.Status
 import jakarta.validation.constraints.NotNull
+import java.time.OffsetDateTime
 
 
 class EmailFolderDTO {
@@ -37,7 +38,9 @@ class EmailFolderDTO {
     @NotNull
     var folderName: String? = null
 
-    var fullPath: String? = null
+    var path: String? = null
+
+    var delimiter: String? = null
 
     // Sync state
     var lastSyncUid: Long? = null
@@ -45,6 +48,23 @@ class EmailFolderDTO {
     var messageCount: Long = 0
 
     var uidValidity: Long? = null
+
+    var syncEnabled: Boolean = true
+
+    var lastEnumeratedAt: OffsetDateTime? = null
+
+    // IMAP attribute flags
+    var hasChildren: Boolean = false
+
+    var noselect: Boolean = false
+
+    var noinferiors: Boolean = false
+
+    var marked: Boolean = false
+
+    var unmarked: Boolean = false
+
+    var subscribed: Boolean = false
 
     // Folder type flags
     var isInbox: Boolean = false

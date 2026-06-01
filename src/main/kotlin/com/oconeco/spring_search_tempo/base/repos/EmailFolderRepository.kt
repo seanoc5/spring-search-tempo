@@ -9,7 +9,12 @@ interface EmailFolderRepository : JpaRepository<EmailFolder, Long> {
 
     fun findByEmailAccountIdAndFolderName(accountId: Long, folderName: String): EmailFolder?
 
+    fun findByEmailAccountIdAndPath(accountId: Long, path: String): EmailFolder?
+
     fun findByEmailAccountId(accountId: Long): List<EmailFolder>
+
+    /** Folders flagged as sync targets and not `\Noselect` (i.e. actually openable). */
+    fun findByEmailAccountIdAndSyncEnabledTrueAndNoselectFalse(accountId: Long): List<EmailFolder>
 
     fun findByUri(uri: String): EmailFolder?
 
