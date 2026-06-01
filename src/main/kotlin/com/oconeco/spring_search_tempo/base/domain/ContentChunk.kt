@@ -223,6 +223,14 @@ class ContentChunk {
     @Column(length = 50)
     var sourceHost: String? = null
 
+    /**
+     * Original filename for chunks sourced from a discrete file artifact
+     * (e.g. an email attachment). Lets the UI surface "invoice-Q1.pdf"
+     * alongside the extracted text without re-parsing the attachment list.
+     */
+    @Column
+    var sourceFileName: String? = null
+
     @CreatedDate
     @Column(
         nullable = false,

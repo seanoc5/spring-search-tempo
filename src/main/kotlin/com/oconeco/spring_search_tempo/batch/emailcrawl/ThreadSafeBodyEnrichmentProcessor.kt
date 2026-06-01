@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.model.EmailMessageDTO
+import com.oconeco.spring_search_tempo.base.service.AttachmentExtraction
+import com.oconeco.spring_search_tempo.base.service.EmailAttachmentExtractionService
 import com.oconeco.spring_search_tempo.base.service.EmailTextExtractionService
 import com.oconeco.spring_search_tempo.base.service.EmailTextResult
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
@@ -33,6 +35,7 @@ class ThreadSafeBodyEnrichmentProcessor(
     private val emailAccountService: EmailAccountService,
     private val emailFolderService: EmailFolderService,
     private val emailTextExtractionService: EmailTextExtractionService,
+    private val emailAttachmentExtractionService: EmailAttachmentExtractionService,
     private val objectMapper: ObjectMapper = ObjectMapper()
 ) : ItemProcessor<EmailMessageDTO, BodyEnrichmentResult>, StepExecutionListener {
 
@@ -130,10 +133,11 @@ class ThreadSafeBodyEnrichmentProcessor(
                 }
             }
 
-            // Extract attachment info
+            // Extract attachment info + content
             var hasAttachments = false
             var attachmentCount = 0
             var attachmentNames: String? = null
+            var attachmentExtractions: List<AttachmentExtraction> = emptyList()
 
             try {
                 if (message.content is Multipart) {
@@ -143,6 +147,10 @@ class ThreadSafeBodyEnrichmentProcessor(
                     attachmentNames = if (attachments.isNotEmpty()) {
                         objectMapper.writeValueAsString(attachments)
                     } else null
+
+                    if (hasAttachments) {
+                        attachmentExtractions = emailAttachmentExtractionService.extractAttachments(message)
+                    }
                 }
             } catch (e: Exception) {
                 log.warn("Failed to extract attachments for message {}: {}", messageId, e.message)
@@ -160,7 +168,8 @@ class ThreadSafeBodyEnrichmentProcessor(
                 bodySize = bodySize,
                 hasAttachments = hasAttachments,
                 attachmentCount = attachmentCount,
-                attachmentNames = attachmentNames
+                attachmentNames = attachmentNames,
+                attachmentExtractions = attachmentExtractions
             )
 
         } catch (e: Exception) {

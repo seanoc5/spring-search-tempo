@@ -20,6 +20,12 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun findFirstByEmailMessageId(id: Long): ContentChunk?
 
     /**
+     * All chunks linked to a given email message, ordered by chunk number.
+     * Used by attachment-indexing tests and the email detail view.
+     */
+    fun findByEmailMessageIdOrderByChunkNumberAsc(id: Long): List<ContentChunk>
+
+    /**
      * Find chunks that have not been NLP processed yet and have text.
      * Used by NLP batch job to find chunks to process.
      * @deprecated Use findChunksForNlpProcessing instead to respect parent analysisStatus

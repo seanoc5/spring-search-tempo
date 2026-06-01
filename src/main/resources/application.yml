@@ -211,6 +211,13 @@ app:
     quick-sync-folders:
       - "INBOX"
       - "Sent"
+    # Attachments are streamed through Tika during body enrichment and
+    # persisted as ContentChunk rows (chunkType=EmailAttachment).
+    # Set max-attachment-size to 0 or attachment-extraction.enabled=false
+    # to skip entirely.
+    max-attachment-size: 26214400  # 25 MB
+    attachment-extraction:
+      enabled: true
     accounts:
       # Gmail account (requires App Password)
       # To enable:
