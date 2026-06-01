@@ -93,7 +93,7 @@ class ContentChunkDTO {
 
     var sourceHost: String? = null
 
-    @Size(max = 1000)
+    @Size(max = 1024)
     var sourceFileName: String? = null
 
     var parentChunk: Long? = null

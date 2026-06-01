@@ -227,8 +227,11 @@ class ContentChunk {
      * Original filename for chunks sourced from a discrete file artifact
      * (e.g. an email attachment). Lets the UI surface "invoice-Q1.pdf"
      * alongside the extracted text without re-parsing the attachment list.
+     *
+     * Length matches `ContentChunkDTO.sourceFileName`'s @Size cap — MIME
+     * `Content-Disposition: filename` can carry long encoded names.
      */
-    @Column
+    @Column(length = 1024)
     var sourceFileName: String? = null
 
     @CreatedDate
