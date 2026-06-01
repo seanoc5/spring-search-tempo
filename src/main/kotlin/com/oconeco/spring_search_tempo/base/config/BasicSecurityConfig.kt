@@ -64,6 +64,7 @@ class BasicSecurityConfig(
                 "/emailAccounts/**",     // All email account actions
                 "/oneDriveAccounts/**",  // All OneDrive account actions
                 "/emailFolders/**",      // All email folder actions
+                "/emailMirrors/**",      // IMAP mirror CRUD + dry-run (issue #22, #25)
                 "/fSFiles/**",           // All file actions
                 "/fSFolders/**",         // All folder actions
                 "/contentChunks/**",     // All chunk actions

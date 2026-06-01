@@ -1,0 +1,61 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="result"
+     th:id="|dry-run-panel-${dryRun.mirrorConfigId}|"
+     class="p-3 border-top">
+    <div th:class="'alert alert-' + ${dryRun.severity} + ' mb-2'" role="alert">
+        <h6 class="alert-heading mb-1">
+            <i class="bi bi-check-circle me-1" th:if="${dryRun.severity == 'success'}"></i>
+            <i class="bi bi-exclamation-triangle me-1" th:unless="${dryRun.severity == 'success'}"></i>
+            <span th:text="${dryRun.heading}">Heading</span>
+        </h6>
+        <p class="mb-0 small" th:text="${dryRun.message}">Detail</p>
+    </div>
+
+    <div th:if="${dryRun.outcome == 'OK' and !dryRun.perFolder.isEmpty()}">
+        <table class="table table-sm table-bordered mb-2">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Source folder</th>
+                    <th scope="col">→ Destination</th>
+                    <th scope="col" class="text-end">Source msgs</th>
+                    <th scope="col" class="text-end">Source size</th>
+                    <th scope="col" class="text-end">Dest msgs</th>
+                    <th scope="col" class="text-end">Dest size</th>
+                    <th scope="col" class="text-end">Already mirrored</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="f : ${dryRun.perFolder}">
+                    <td><code th:text="${f.sourceFolder}">INBOX</code></td>
+                    <td><code th:text="${f.destFolder}">INBOX</code></td>
+                    <td class="text-end" th:text="${f.sourceMessageCount}">0</td>
+                    <td class="text-end" th:text="${f.sourceBytesHuman}">0 B</td>
+                    <td class="text-end" th:text="${f.destMessageCount}">0</td>
+                    <td class="text-end" th:text="${f.destBytesHuman}">0 B</td>
+                    <td class="text-end" th:text="${f.alreadyMirroredCount}">0</td>
+                </tr>
+            </tbody>
+            <tfoot th:if="${dryRun.totals != null}">
+                <tr class="table-light fw-semibold">
+                    <td colspan="2">Totals (to copy)</td>
+                    <td class="text-end" th:text="${dryRun.totals.messages}">0</td>
+                    <td class="text-end" th:text="${dryRun.totals.bytesHuman}">0 B</td>
+                    <td class="text-end text-muted" colspan="2">
+                        est. <span th:text="${dryRun.totals.estimatedHuman}">~1m</span>
+                    </td>
+                    <td class="text-end" th:text="${dryRun.totals.alreadyMirrored}">0</td>
+                </tr>
+            </tfoot>
+        </table>
+        <p class="small text-muted mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            "Already mirrored" is approximate — it counts what we've recorded for this
+            mirror config so far. Exact dedup happens during the real run via
+            <code>Message-ID</code> lookup on each source UID.
+        </p>
+    </div>
+</div>
+</body>
+</html>

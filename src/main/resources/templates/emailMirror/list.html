@@ -47,62 +47,82 @@
             </tr>
             </thead>
             <tbody>
-                <tr th:each="mirror : ${mirrors}">
-                    <td>
-                        <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}">
-                            <i class="bi bi-arrow-left-right me-1"></i>[[${mirror.name}]]
-                        </a>
-                    </td>
-                    <td>
-                        <span th:if="${accountEmailById.get(mirror.sourceAccountId) != null}"
-                              th:text="${accountEmailById.get(mirror.sourceAccountId)}">source</span>
-                        <span th:if="${accountEmailById.get(mirror.sourceAccountId) == null}"
-                              class="text-muted" th:text="'#' + ${mirror.sourceAccountId}">?</span>
-                    </td>
-                    <td>
-                        <span th:if="${accountEmailById.get(mirror.destAccountId) != null}"
-                              th:text="${accountEmailById.get(mirror.destAccountId)}">dest</span>
-                        <span th:if="${accountEmailById.get(mirror.destAccountId) == null}"
-                              class="text-muted" th:text="'#' + ${mirror.destAccountId}">?</span>
-                    </td>
-                    <td>
-                        <span th:if="${mirror.enabled}" class="badge bg-success">Enabled</span>
-                        <span th:unless="${mirror.enabled}" class="badge bg-secondary">Disabled</span>
-                    </td>
-                    <td>
-                        <span th:if="${mirror.lastRunCompletedAt != null}"
-                              th:text="${#temporals.format(mirror.lastRunCompletedAt, 'yyyy-MM-dd HH:mm')}">never</span>
-                        <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt != null}"
-                              class="text-info">running…</span>
-                        <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt == null}"
-                              class="text-muted">never</span>
-                        <div th:if="${mirror.lastError}" class="text-danger small" th:title="${mirror.lastError}">
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                            [[${#strings.abbreviate(mirror.lastError, 40)}]]
-                        </div>
-                    </td>
-                    <td>
-                        <div class="btn-group btn-group-sm">
-                            <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}"
-                               class="btn btn-outline-secondary" title="View">
-                                <i class="bi bi-eye"></i>
+                <th:block th:each="mirror : ${mirrors}">
+                    <tr>
+                        <td>
+                            <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}">
+                                <i class="bi bi-arrow-left-right me-1"></i>[[${mirror.name}]]
                             </a>
-                            <a th:href="@{/emailMirrors/{id}/edit(id=${mirror.id})}"
-                               class="btn btn-outline-secondary" title="Edit">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <form th:action="@{/emailMirrors/{id}/delete(id=${mirror.id})}"
-                                  method="post" class="d-inline"
-                                  onsubmit="return confirm('Delete this mirror configuration?');">
-                                <button type="submit" class="btn btn-outline-danger" title="Delete">
-                                    <i class="bi bi-trash"></i>
+                        </td>
+                        <td>
+                            <span th:if="${accountEmailById.get(mirror.sourceAccountId) != null}"
+                                  th:text="${accountEmailById.get(mirror.sourceAccountId)}">source</span>
+                            <span th:if="${accountEmailById.get(mirror.sourceAccountId) == null}"
+                                  class="text-muted" th:text="'#' + ${mirror.sourceAccountId}">?</span>
+                        </td>
+                        <td>
+                            <span th:if="${accountEmailById.get(mirror.destAccountId) != null}"
+                                  th:text="${accountEmailById.get(mirror.destAccountId)}">dest</span>
+                            <span th:if="${accountEmailById.get(mirror.destAccountId) == null}"
+                                  class="text-muted" th:text="'#' + ${mirror.destAccountId}">?</span>
+                        </td>
+                        <td>
+                            <span th:if="${mirror.enabled}" class="badge bg-success">Enabled</span>
+                            <span th:unless="${mirror.enabled}" class="badge bg-secondary">Disabled</span>
+                        </td>
+                        <td>
+                            <span th:if="${mirror.lastRunCompletedAt != null}"
+                                  th:text="${#temporals.format(mirror.lastRunCompletedAt, 'yyyy-MM-dd HH:mm')}">never</span>
+                            <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt != null}"
+                                  class="text-info">running…</span>
+                            <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt == null}"
+                                  class="text-muted">never</span>
+                            <div th:if="${mirror.lastError}" class="text-danger small" th:title="${mirror.lastError}">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                [[${#strings.abbreviate(mirror.lastError, 40)}]]
+                            </div>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-primary" title="Preview run"
+                                        th:hx-post="@{|/emailMirrors/${mirror.id}/dry-run|}"
+                                        th:attr="hx-target=|#dry-run-panel-${mirror.id}|"
+                                        hx-swap="outerHTML"
+                                        hx-indicator="closest tr">
+                                    <i class="bi bi-search"></i>
                                 </button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
+                                <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}"
+                                   class="btn btn-outline-secondary" title="View">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a th:href="@{/emailMirrors/{id}/edit(id=${mirror.id})}"
+                                   class="btn btn-outline-secondary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form th:action="@{/emailMirrors/{id}/delete(id=${mirror.id})}"
+                                      method="post" class="d-inline"
+                                      onsubmit="return confirm('Delete this mirror configuration?');">
+                                    <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="table-light">
+                        <td colspan="6" class="p-0">
+                            <div th:id="|dry-run-panel-${mirror.id}|"></div>
+                        </td>
+                    </tr>
+                </th:block>
             </tbody>
         </table>
+    </div>
+
+    <!-- Non-HTMX dry-run fallback: the controller renders this when the user
+         submits without HX-Request (full-page request). -->
+    <div th:if="${dryRun != null}" class="mt-3">
+        <div th:replace="~{emailMirror/dryRun :: result}"></div>
     </div>
 </div>
 </body>
