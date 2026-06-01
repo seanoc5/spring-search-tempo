@@ -38,16 +38,7 @@ import java.util.Properties
  * spins up its own dual-server pair directly — the second mirror ticket
  * (#24) can extract a `DualGreenMail` fixture if the shape recurs.
  */
-@SpringBootTest(
-    classes = [SpringSearchTempoApplication::class],
-    // BaseIT autowires `@LocalServerPort var serverPort: Int`; in the default
-    // `MOCK` environment that placeholder is never populated and bean
-    // injection fails with "Could not resolve placeholder 'local.server.port'".
-    // We don't actually hit any HTTP endpoint from this test, but the field
-    // injection runs unconditionally — so spin up a random servlet port to
-    // satisfy the placeholder.
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
-)
+@SpringBootTest(classes = [SpringSearchTempoApplication::class])
 @DisplayName("ImapMirrorService — lossless APPEND with Message-ID dedup (issue #23)")
 class ImapMirrorServiceTest : BaseIT() {
 
