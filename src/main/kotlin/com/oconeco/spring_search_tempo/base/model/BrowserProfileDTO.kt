@@ -49,6 +49,12 @@ class BrowserProfileDTO {
 
     var lastSyncBookmarkCount: Int? = null
 
+    var lastHistorySyncAt: OffsetDateTime? = null
+
+    var lastSyncHistoryCount: Int? = null
+
+    var lastHistoryVisitPrTime: Long? = null
+
     var enabled: Boolean = true
 
     var lastError: String? = null

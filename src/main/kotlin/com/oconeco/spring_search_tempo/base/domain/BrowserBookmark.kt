@@ -2,6 +2,8 @@ package com.oconeco.spring_search_tempo.base.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.JoinTable
@@ -21,6 +23,17 @@ import java.time.OffsetDateTime
  */
 @Entity
 class BrowserBookmark : SaveableObject() {
+
+    /**
+     * Where this row came from in the browser DB.
+     *
+     * BOOKMARK rows have a non-null [firefoxBookmarkId] and [folderPath];
+     * HISTORY rows are visited-but-not-bookmarked URLs from `moz_places`.
+     * If a HISTORY row is later bookmarked it is promoted to BOOKMARK in place.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "text")
+    var sourceType: BrowserSourceType = BrowserSourceType.BOOKMARK
 
     // Firefox-specific IDs for deduplication
     @Column

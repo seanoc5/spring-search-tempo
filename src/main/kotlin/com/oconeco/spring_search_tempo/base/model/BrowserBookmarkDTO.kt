@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.model
 
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.BrowserSourceType
 import com.oconeco.spring_search_tempo.base.domain.Status
 import jakarta.validation.constraints.NotNull
 import java.time.OffsetDateTime
@@ -35,6 +36,8 @@ class BrowserBookmarkDTO {
     var jobRunId: Long? = null
 
     // Browser bookmark-specific fields
+    var sourceType: BrowserSourceType = BrowserSourceType.BOOKMARK
+
     var firefoxPlaceId: Long? = null
 
     var firefoxBookmarkId: Long? = null

@@ -79,6 +79,24 @@ class FirefoxPlacesService {
     )
 
     /**
+     * Data class for history entries read from Firefox.
+     *
+     * Source: aggregated visit info from `moz_places` (visit_count,
+     * last_visit_date are populated by Firefox from `moz_historyvisits`).
+     * The raw PRTime is carried alongside the parsed timestamp so callers
+     * can persist it as an incremental-sync watermark.
+     */
+    data class FirefoxHistoryData(
+        val placeId: Long,
+        val url: String,
+        val title: String?,
+        val visitCount: Int,
+        val lastVisitDate: OffsetDateTime?,
+        val lastVisitDatePrTime: Long,
+        val frecency: Int
+    )
+
+    /**
      * Read all bookmarks from a Firefox places.sqlite database.
      *
      * @param placesDbPath Path to the places.sqlite file
@@ -100,6 +118,121 @@ class FirefoxPlacesService {
         } finally {
             tempDb.deleteIfExists()
         }
+    }
+
+    /**
+     * Read history entries from a Firefox places.sqlite database.
+     *
+     * Only returns URLs whose most recent visit is strictly after
+     * [sinceVisitPrTime] and within [retentionDays] of "now"; URLs that
+     * are also bookmarked are excluded so the BOOKMARK import remains
+     * the canonical source for those.
+     *
+     * @param placesDbPath Path to the places.sqlite file.
+     * @param sinceVisitPrTime Watermark from the previous sync (Firefox
+     *   PRTime — microseconds since Unix epoch). Pass `null` or `0` for
+     *   a full pull.
+     * @param retentionDays Ignore entries with last_visit_date older
+     *   than this many days. Pass `null` to disable the retention cutoff.
+     */
+    fun readHistory(
+        placesDbPath: Path,
+        sinceVisitPrTime: Long? = null,
+        retentionDays: Int? = null
+    ): List<FirefoxHistoryData> {
+        if (!placesDbPath.exists()) {
+            log.error("places.sqlite does not exist: {}", placesDbPath)
+            return emptyList()
+        }
+
+        val tempDb = Files.createTempFile("places_history_", ".sqlite")
+        try {
+            log.info("Copying places.sqlite to temp file for history read")
+            Files.copy(placesDbPath, tempDb, StandardCopyOption.REPLACE_EXISTING)
+            return readHistoryFromDatabase(tempDb, sinceVisitPrTime, retentionDays)
+        } finally {
+            tempDb.deleteIfExists()
+        }
+    }
+
+    private fun readHistoryFromDatabase(
+        dbPath: Path,
+        sinceVisitPrTime: Long?,
+        retentionDays: Int?
+    ): List<FirefoxHistoryData> {
+        val jdbcUrl = "jdbc:sqlite:${dbPath.toAbsolutePath()}"
+
+        val watermark = sinceVisitPrTime ?: 0L
+        // PRTime is microseconds since Unix epoch.
+        val retentionCutoffPrTime: Long? = retentionDays?.let {
+            (System.currentTimeMillis() - it.toLong() * 24L * 60L * 60L * 1000L) * 1000L
+        }
+        val effectiveSince = maxOf(watermark, retentionCutoffPrTime ?: 0L)
+
+        // Exclude URLs that are bookmarked — those are imported as BOOKMARK rows
+        // by BookmarkImportProcessor and carry the same visit_count / last_visit_date.
+        // `b.parent != TAGS_ROOT_ID` filters out tag-association rows in moz_bookmarks
+        // (those have type=1 but represent tag membership, not real bookmarks).
+        val sql = """
+            SELECT
+                p.id AS place_id,
+                p.url,
+                p.title,
+                p.visit_count,
+                p.last_visit_date,
+                p.frecency
+            FROM moz_places p
+            WHERE p.url IS NOT NULL
+              AND p.url NOT LIKE 'place:%'
+              AND p.visit_count > 0
+              AND p.last_visit_date IS NOT NULL
+              AND p.last_visit_date > ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM moz_bookmarks b
+                  WHERE b.fk = p.id
+                    AND b.type = 1
+                    AND b.parent != ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM moz_bookmarks tagParent
+                        WHERE tagParent.id = b.parent
+                          AND tagParent.parent = ?
+                    )
+              )
+            ORDER BY p.last_visit_date DESC
+        """
+
+        val out = mutableListOf<FirefoxHistoryData>()
+
+        DriverManager.getConnection(jdbcUrl).use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setLong(1, effectiveSince)
+                stmt.setLong(2, TAGS_ROOT_ID)
+                stmt.setLong(3, TAGS_ROOT_ID)
+                stmt.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        val url = rs.getString("url") ?: continue
+                        val lastVisitPrTime = rs.getLong("last_visit_date")
+                        out.add(
+                            FirefoxHistoryData(
+                                placeId = rs.getLong("place_id"),
+                                url = url,
+                                title = rs.getString("title"),
+                                visitCount = rs.getInt("visit_count"),
+                                lastVisitDate = prTimeToOffsetDateTime(lastVisitPrTime),
+                                lastVisitDatePrTime = lastVisitPrTime,
+                                frecency = rs.getInt("frecency")
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        log.info(
+            "Read {} history entries from places.sqlite (since PRTime={}, retentionDays={})",
+            out.size, effectiveSince, retentionDays
+        )
+        return out
     }
 
     private fun readFromDatabase(dbPath: Path): List<FirefoxBookmarkData> {

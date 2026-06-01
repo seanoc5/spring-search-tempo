@@ -36,6 +36,27 @@ class BrowserProfile : SaveableObject() {
     @Column
     var lastSyncBookmarkCount: Int? = null
 
+    /**
+     * Last successful history sync timestamp.
+     */
+    @Column
+    var lastHistorySyncAt: OffsetDateTime? = null
+
+    /**
+     * Number of history entries imported on the most recent history sync.
+     */
+    @Column
+    var lastSyncHistoryCount: Int? = null
+
+    /**
+     * Watermark for incremental history sync. Stores the maximum
+     * `moz_places.last_visit_date` (Firefox PRTime — microseconds since
+     * Unix epoch) seen during the previous sync; the next sync only
+     * pulls rows with a strictly greater `last_visit_date`.
+     */
+    @Column
+    var lastHistoryVisitPrTime: Long? = null
+
     @Column
     var enabled: Boolean = true
 
@@ -57,4 +78,16 @@ enum class BrowserType {
     FIREFOX,
     CHROME,   // Future
     EDGE      // Future
+}
+
+/**
+ * Source that produced a BrowserBookmark row.
+ *
+ * - BOOKMARK: explicit user bookmark from `moz_bookmarks`
+ * - HISTORY:  URL discovered through `moz_places` / `moz_historyvisits` only
+ *             (visited but never bookmarked)
+ */
+enum class BrowserSourceType {
+    BOOKMARK,
+    HISTORY
 }

@@ -55,13 +55,20 @@ interface BrowserBookmarkRepository : JpaRepository<BrowserBookmark, Long> {
     fun findBookmarksNeedingChunking(pageable: Pageable): Page<BrowserBookmark>
 
     /**
-     * Full-text search across bookmarks.
+     * Full-text search across bookmarks and history entries.
+     *
+     * Ranking blends FTS relevance with visit-frequency: the FTS score is
+     * multiplied by `1 + log(visit_count + 1)`, so a result the user has
+     * actually visited many times outranks a same-relevance result they
+     * have not. Linear log keeps the boost from dominating relevance for
+     * extreme outliers (one tab opened 10,000 times in dev tooling).
      */
     @Query(
         value = """
             SELECT * FROM browser_bookmark
             WHERE fts_vector @@ plainto_tsquery('english', :query)
-            ORDER BY ts_rank(fts_vector, plainto_tsquery('english', :query)) DESC
+            ORDER BY ts_rank(fts_vector, plainto_tsquery('english', :query))
+                     * (1 + ln(COALESCE(visit_count, 0) + 1)) DESC
         """,
         countQuery = """
             SELECT COUNT(*) FROM browser_bookmark

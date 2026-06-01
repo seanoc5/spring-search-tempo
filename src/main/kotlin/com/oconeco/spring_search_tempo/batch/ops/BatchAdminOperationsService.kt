@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.model.BrowserProfileDTO
 import com.oconeco.spring_search_tempo.batch.assignment.AnalysisAssignmentJobBuilder
 import com.oconeco.spring_search_tempo.batch.bookmarkcrawl.BookmarkImportJobBuilder
 import com.oconeco.spring_search_tempo.batch.discovery.DiscoveryJobBuilder
+import com.oconeco.spring_search_tempo.batch.historycrawl.HistoryImportJobBuilder
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.embedding.EmbeddingJobLauncher
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlOrchestrator
@@ -27,7 +28,8 @@ class BatchAdminOperationsService(
     private val discoveryJobBuilder: DiscoveryJobBuilder,
     private val analysisAssignmentJobBuilder: AnalysisAssignmentJobBuilder,
     private val progressiveAnalysisJobBuilder: ProgressiveAnalysisJobBuilder,
-    private val bookmarkImportJobBuilder: BookmarkImportJobBuilder
+    private val bookmarkImportJobBuilder: BookmarkImportJobBuilder,
+    private val historyImportJobBuilder: HistoryImportJobBuilder
 ) {
 
     fun launchNlp(triggeredBy: String = "batch-admin"): JobExecution =
@@ -94,6 +96,16 @@ class BatchAdminOperationsService(
     fun launchBookmarkImportForProfile(profile: BrowserProfileDTO): JobExecution {
         val profileId = profile.id ?: throw IllegalArgumentException("Browser profile ID is required")
         val job = bookmarkImportJobBuilder.buildJob(profile)
+        val params = JobParametersBuilder()
+            .addString("profileId", profileId.toString())
+            .addLong("timestamp", System.currentTimeMillis())
+            .toJobParameters()
+        return jobLauncher.run(job, params)
+    }
+
+    fun launchHistoryImportForProfile(profile: BrowserProfileDTO): JobExecution {
+        val profileId = profile.id ?: throw IllegalArgumentException("Browser profile ID is required")
+        val job = historyImportJobBuilder.buildJob(profile)
         val params = JobParametersBuilder()
             .addString("profileId", profileId.toString())
             .addLong("timestamp", System.currentTimeMillis())

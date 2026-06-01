@@ -527,6 +527,33 @@ class BatchAdminController(
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
+                // History import for all enabled profiles
+                jobName == "historyImportJob" -> {
+                    val enabledProfiles = browserProfileService.findEnabled()
+                    if (enabledProfiles.isEmpty()) {
+                        redirectAttributes.addFlashAttribute("error",
+                            "No enabled browser profiles found for history import.")
+                        return "redirect:/batch"
+                    }
+                    enabledProfiles.forEach { batchAdminOperationsService.launchHistoryImportForProfile(it) }
+                    redirectAttributes.addFlashAttribute("message",
+                        "Started history import for ${enabledProfiles.size} profile(s)")
+                    return "redirect:/batch"
+                }
+
+                // History import for one profile (job name from history)
+                jobName.startsWith("historyImportJob_") -> {
+                    val profileId = jobName.substringAfter("historyImportJob_").toLongOrNull()
+                    if (profileId == null) {
+                        redirectAttributes.addFlashAttribute("error",
+                            "Could not determine browser profile from job name: $jobName")
+                        return "redirect:/batch"
+                    }
+                    val profile = browserProfileService.get(profileId)
+                    val execution = batchAdminOperationsService.launchHistoryImportForProfile(profile)
+                    return redirectToExecution(jobName, execution, redirectAttributes)
+                }
+
                 // Discovery for all enabled crawls
                 jobName == "discoveryJob" -> {
                     val crawls = crawlConfigService.getEnabledCrawls()
