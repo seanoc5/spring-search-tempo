@@ -150,6 +150,13 @@ tasks.withType<Test> {
         "-Xms512m",
         "-Xmx4g"
     )
+
+    // Pin the Docker Engine API version negotiated by Testcontainers' shaded
+    // docker-java client. Without this, the client defaults to API 1.32 and
+    // is rejected by modern Docker daemons (Docker 25+ requires API >= 1.40).
+    // The `api.version` system property is read by
+    // `org.testcontainers.shaded.com.github.dockerjava.core.DefaultDockerClientConfig`.
+    systemProperty("api.version", System.getProperty("api.version", "1.45"))
 }
 
 // Handle duplicate dependencies in bootJar
