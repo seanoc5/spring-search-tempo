@@ -53,6 +53,9 @@ class BookmarkImportWriter(
             // Add tags
             if (result.tags.isNotEmpty()) {
                 saved.tags.addAll(result.tags)
+                saved.tagsText = result.tags
+                    .mapNotNull { it.name }
+                    .joinToString(" ")
                 browserBookmarkRepository.save(saved)
                 tagIdsToIncrement.addAll(result.tags.mapNotNull { it.id })
             }

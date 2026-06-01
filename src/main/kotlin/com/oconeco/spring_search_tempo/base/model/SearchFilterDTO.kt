@@ -52,7 +52,21 @@ data class SearchFilterDTO(
      * Optional entity types filter for chunk search.
      * Filters chunks containing entities of specified types (PERSON, ORGANIZATION, LOCATION, etc.)
      */
-    val entityTypes: Set<String>? = null
+    val entityTypes: Set<String>? = null,
+
+    /**
+     * Optional bookmark tag filter. Matches bookmarks whose `bookmark_tag.name`
+     * (lowercased) equals any of the given values. Parsed server-side from
+     * `tag:foo` tokens in the raw query string.
+     */
+    val tagFilters: Set<String>? = null,
+
+    /**
+     * Optional bookmark folder filter. Matches bookmarks whose `folder_path`
+     * contains the given substring (case-insensitive). Parsed server-side
+     * from `folder:bar` tokens in the raw query string.
+     */
+    val folderFilter: String? = null
 ) {
     /**
      * Check if file results should be included.
@@ -73,4 +87,9 @@ data class SearchFilterDTO(
      * Check if chunk results should be included.
      */
     fun includeChunks(): Boolean = ContentType.CHUNK in contentTypes
+
+    /**
+     * Check if browser bookmark results should be included.
+     */
+    fun includeBookmarks(): Boolean = ContentType.BOOKMARK in contentTypes
 }

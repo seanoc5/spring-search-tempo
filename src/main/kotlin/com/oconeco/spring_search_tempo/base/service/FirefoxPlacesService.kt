@@ -195,8 +195,11 @@ class FirefoxPlacesService {
 
         // Find all bookmark entries that are children of tag folders
         val tagFolderIds = tagFolders.keys.joinToString(",")
+        // `parent` must be qualified — both moz_bookmarks aliases expose it via
+        // the self-join below. Some SQLite builds tolerate the ambiguity, but
+        // newer ones (including the test fixture) raise SQLITE_ERROR.
         val sql = """
-            SELECT b.fk AS place_id, parent, tf.title AS tag_name
+            SELECT b.fk AS place_id, b.parent AS parent, tf.title AS tag_name
             FROM moz_bookmarks b
             JOIN moz_bookmarks tf ON tf.id = b.parent
             WHERE b.parent IN ($tagFolderIds) AND b.type = 1 AND b.fk IS NOT NULL

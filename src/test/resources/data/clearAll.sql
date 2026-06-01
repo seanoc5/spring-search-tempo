@@ -34,6 +34,14 @@ DELETE FROM source_host;
 
 DELETE FROM annotation;
 
+DELETE FROM browser_bookmark_tags;
+
+DELETE FROM bookmark_tag;
+
+DELETE FROM browser_bookmark;
+
+DELETE FROM browser_profile;
+
 -- spring_role must be deleted before spring_user (FK constraint)
 DELETE FROM spring_role;
 
