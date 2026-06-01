@@ -49,22 +49,26 @@ class ImapConnectionService(
         val settings = getImapSettings(account)
         val password = getCredential(account)
 
-        log.debug("\t\tConnecting to IMAP server: {}:{} for {}", settings.host, settings.port, account.email)
+        log.debug("\t\tConnecting to IMAP server: {}:{} ssl={} for {}",
+            settings.host, settings.port, settings.useSsl, account.email)
 
+        val protocol = if (settings.useSsl) "imaps" else "imap"
         val props = Properties().apply {
-            put("mail.store.protocol", "imaps")
-            put("mail.imaps.host", settings.host)
-            put("mail.imaps.port", settings.port.toString())
-            put("mail.imaps.ssl.enable", settings.useSsl.toString())
-            put("mail.imaps.connectiontimeout", "15000")
-            put("mail.imaps.timeout", "60000")
-            put("mail.imaps.ssl.trust", "*")  // Trust all certificates for now
+            put("mail.store.protocol", protocol)
+            put("mail.$protocol.host", settings.host)
+            put("mail.$protocol.port", settings.port.toString())
+            put("mail.$protocol.ssl.enable", settings.useSsl.toString())
+            put("mail.$protocol.connectiontimeout", "15000")
+            put("mail.$protocol.timeout", "60000")
+            if (settings.useSsl) {
+                put("mail.$protocol.ssl.trust", "*")  // Trust all certificates for now
+            }
             // Note: Don't set auth.mechanisms - let JavaMail auto-negotiate
             // XOAUTH2 requires OAuth2 tokens, not app passwords
         }
 
         val session = Session.getInstance(props)
-        val store = session.getStore("imaps")
+        val store = session.getStore(protocol)
 
         try {
             store.connect(settings.host, account.email, password)

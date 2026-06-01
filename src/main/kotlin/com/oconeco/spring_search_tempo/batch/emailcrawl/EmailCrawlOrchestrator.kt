@@ -1,9 +1,11 @@
 package com.oconeco.spring_search_tempo.batch.emailcrawl
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
+import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.config.EmailConfiguration
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
+import com.oconeco.spring_search_tempo.base.service.EmailFolderSyncService
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobExecution
@@ -23,6 +25,8 @@ import java.time.OffsetDateTime
 class EmailCrawlOrchestrator(
     private val emailConfiguration: EmailConfiguration,
     private val emailAccountService: EmailAccountService,
+    private val emailFolderService: EmailFolderService,
+    private val emailFolderSyncService: EmailFolderSyncService,
     private val emailQuickSyncJobBuilder: EmailQuickSyncJobBuilder,
     private val jobLauncher: JobLauncher,
     private val imapConnectionService: ImapConnectionService
@@ -75,12 +79,12 @@ class EmailCrawlOrchestrator(
             parallelConfig)
 
         val results = mutableMapOf<String, String>()
-        val folders = emailConfiguration.quickSyncFolders
 
         // Get or create accounts from configuration
         val accounts = getOrCreateAccounts()
 
         accounts.filter { it.enabled == true }.forEach { account ->
+            val folders = resolveFolders(account)
             try {
                 log.info("Launching {} for account: {} with folders: {} ({})",
                     if (forceFullSync) "FULL sync" else "quick sync",
@@ -149,7 +153,7 @@ class EmailCrawlOrchestrator(
         parallelConfig: ParallelizationConfig = ParallelizationConfig()
     ): JobExecution {
         val account = emailAccountService.get(accountId)
-        val folders = emailConfiguration.quickSyncFolders
+        val folders = resolveFolders(account)
 
         log.info("Launching {} for account {} with folders: {} ({})",
             if (forceFullSync) "FULL sync" else "quick sync",
@@ -247,6 +251,40 @@ class EmailCrawlOrchestrator(
                 log.error("Error processing account config {}: {}", config.email, e.message, e)
                 null
             }
+        }
+    }
+
+    /**
+     * Resolve which folders to sync for an account.
+     *
+     * Order of preference:
+     *  1. Enumerated `EmailFolder` rows with `syncEnabled=true` and not `\Noselect`.
+     *     This is the path the user controls from the UI (issue #3).
+     *  2. If no folder rows exist yet (account never enumerated), enumerate now
+     *     so first-run accounts work without an explicit user action.
+     *  3. If enumeration fails or surfaces no selectable folders, fall back to
+     *     the legacy `application.yml` `quickSyncFolders` list so misconfigured
+     *     servers still get a best-effort sync.
+     */
+    private fun resolveFolders(account: EmailAccountDTO): List<String> {
+        val id = account.id
+            ?: return emailConfiguration.quickSyncFolders
+
+        val targets = emailFolderService.fetchTargets(id)
+        if (targets.isNotEmpty()) {
+            return targets
+        }
+
+        // First-run: try to enumerate. Best-effort — IMAP errors fall through to config.
+        return try {
+            log.info("[{}] No enumerated folders found; running first-time enumeration", account.email)
+            emailFolderSyncService.enumerateFolders(id)
+            val enumerated = emailFolderService.fetchTargets(id)
+            if (enumerated.isNotEmpty()) enumerated else emailConfiguration.quickSyncFolders
+        } catch (e: Exception) {
+            log.warn("Folder enumeration failed for {}: {}. Falling back to configured quick-sync folders.",
+                account.email, e.message)
+            emailConfiguration.quickSyncFolders
         }
     }
 
