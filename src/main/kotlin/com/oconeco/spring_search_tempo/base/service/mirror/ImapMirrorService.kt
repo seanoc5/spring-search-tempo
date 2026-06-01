@@ -15,7 +15,8 @@ import jakarta.mail.UIDFolder
 import jakarta.mail.internet.MimeMessage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import java.io.IOException
 import java.io.OutputStream
 import java.time.OffsetDateTime
@@ -49,14 +50,26 @@ class ImapMirrorService(
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val imapConnectionService: ImapConnectionService,
     private val emailAccountService: EmailAccountService,
-    private val rateLimiter: MirrorRateLimiter
+    private val rateLimiter: MirrorRateLimiter,
+    transactionManager: PlatformTransactionManager
 ) {
+
+    // Dedicated tx for the post-APPEND audit row — see [saveAuditRow] below.
+    private val auditTx = TransactionTemplate(transactionManager)
 
     companion object {
         private val log = LoggerFactory.getLogger(ImapMirrorService::class.java)
     }
 
-    @Transactional
+    /**
+     * Intentionally NOT `@Transactional` on the whole method. Wrapping the
+     * APPEND inside a database transaction is a footgun: the IMAP APPEND is
+     * a network side effect, so a DB rollback *after* a successful APPEND
+     * would silently break the dedup invariant (the message is on the
+     * destination but no audit row exists, so the next call re-APPENDs and
+     * duplicates). Instead the audit row is persisted via [saveAuditRow]
+     * in its own short transaction *after* the APPEND completes.
+     */
     fun mirrorMessage(
         mirrorConfigId: Long,
         sourceFolder: String,
@@ -149,16 +162,9 @@ class ImapMirrorService(
                                 null
                             }
 
-                            mirroredMessageRepository.save(
-                                MirroredMessage().apply {
-                                    this.mirrorConfigId = mirrorConfigId
-                                    this.sourceFolder = sourceFolder
-                                    this.sourceUid = sourceUid
-                                    this.destFolder = destFolder
-                                    this.destUid = destUid
-                                    this.messageId = messageId
-                                    this.mirroredAt = OffsetDateTime.now()
-                                }
+                            saveAuditRow(
+                                mirrorConfigId, sourceFolder, sourceUid,
+                                destFolder, destUid, messageId
                             )
 
                             log.info(
@@ -188,6 +194,37 @@ class ImapMirrorService(
             log.error("Mirror failed (non-retryable) for config={} src={}/{}: {}",
                 mirrorConfigId, sourceFolder, sourceUid, e.message, e)
             return MirrorResult.Failed("Mirror error: ${e.message}", retryable = false)
+        }
+    }
+
+    /**
+     * Persist the audit row in its own short transaction (via
+     * [TransactionTemplate], not `@Transactional` — Spring's tx proxy is
+     * bypassed on self-invocation, so the annotation wouldn't take effect
+     * here). Called *after* the destination APPEND has returned
+     * successfully so the audit-row commit can't roll back a successful
+     * APPEND.
+     */
+    private fun saveAuditRow(
+        mirrorConfigId: Long,
+        sourceFolder: String,
+        sourceUid: Long,
+        destFolder: String,
+        destUid: Long?,
+        messageId: String
+    ) {
+        auditTx.executeWithoutResult {
+            mirroredMessageRepository.save(
+                MirroredMessage().apply {
+                    this.mirrorConfigId = mirrorConfigId
+                    this.sourceFolder = sourceFolder
+                    this.sourceUid = sourceUid
+                    this.destFolder = destFolder
+                    this.destUid = destUid
+                    this.messageId = messageId
+                    this.mirroredAt = OffsetDateTime.now()
+                }
+            )
         }
     }
 
