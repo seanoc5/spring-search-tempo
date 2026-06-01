@@ -2,6 +2,8 @@
 
 A **Spotlight-style full-system search engine** built with Spring Boot 3.5. Index your files, email, browser data, and remote hosts with full-text search, NLP analysis, and centralized crawl policy management.
 
+Domain context and glossary: see [docs/architecture/CONTEXT.md](docs/architecture/CONTEXT.md).
+
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.25-blue.svg)](https://kotlinlang.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-green.svg)](https://spring.io/projects/spring-boot)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-blue.svg)](https://www.postgresql.org)
