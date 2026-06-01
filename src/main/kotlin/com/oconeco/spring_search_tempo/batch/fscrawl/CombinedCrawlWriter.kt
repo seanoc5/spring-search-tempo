@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.CrawlCheckpointService
 import com.oconeco.spring_search_tempo.base.service.FSFileMapper
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import org.slf4j.LoggerFactory
@@ -39,7 +40,8 @@ class CombinedCrawlWriter(
     private val folderRepository: FSFolderRepository,
     private val fileRepository: FSFileRepository,
     private val folderMapper: FSFolderMapper,
-    private val fileMapper: FSFileMapper
+    private val fileMapper: FSFileMapper,
+    private val checkpointService: CrawlCheckpointService? = null
 ) : ItemWriter<CombinedCrawlResult>, StepExecutionListener {
 
     companion object {
@@ -123,6 +125,39 @@ class CombinedCrawlWriter(
         } else 0
 
         log.info("Wrote chunk: {} folders, {} files", foldersWritten, filesWritten)
+
+        // Issue #8: persist crawl checkpoint at end of each chunk so a crash
+        // can resume from the last directory we successfully wrote. The reader
+        // emits items in deterministic sorted order, so the last directory URI
+        // in this chunk is the highest URI processed so far.
+        if (checkpointService != null && currentCrawlConfigId != null) {
+            val lastDirUri = chunk.asSequence()
+                .mapNotNull { result -> lastDirectoryUriFor(result) }
+                .lastOrNull()
+            if (lastDirUri != null) {
+                try {
+                    checkpointService.upsert(currentCrawlConfigId!!, lastDirUri)
+                    log.debug("Updated crawl checkpoint: configId={}, uri={}", currentCrawlConfigId, lastDirUri)
+                } catch (e: Exception) {
+                    log.warn("Failed to persist crawl checkpoint (configId={}, uri={}): {}",
+                        currentCrawlConfigId, lastDirUri, e.message)
+                }
+            }
+        }
+    }
+
+    /**
+     * Derive the directory URI represented by a chunk result. Folder is non-null
+     * for first-batch items; for continuation batches and unchanged folders we
+     * fall back to a file's parent path (all files in a result share a parent).
+     */
+    private fun lastDirectoryUriFor(result: CombinedCrawlResult): String? {
+        result.folder?.uri?.let { return it }
+        val firstFile = result.files.firstOrNull() ?: return null
+        return firstFile.uri?.let { uri ->
+            val slash = uri.lastIndexOf('/')
+            if (slash > 0) uri.substring(0, slash) else null
+        }
     }
 
     private fun writeFoldersBulk(folderDTOs: List<FSFolderDTO>): Int {

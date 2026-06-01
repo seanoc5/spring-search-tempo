@@ -5,6 +5,7 @@ import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.CrawlCheckpointService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
@@ -52,6 +53,8 @@ class FsCrawlJobBuilder(
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
     private val crawlCleanupListener: CrawlCleanupListener,
     private val jobRunTrackingListener: JobRunTrackingListener,
+    private val crawlCheckpointListener: CrawlCheckpointListener,
+    private val checkpointService: CrawlCheckpointService,
     private val nlpAutoTriggerListener: NLPAutoTriggerListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val jobRunService: JobRunService,
@@ -102,6 +105,7 @@ class FsCrawlJobBuilder(
             .listener(crawlCleanupListener)  // Cleanup listener runs first (beforeJob order)
             .listener(jobRunTrackingListener)  // Creates JobRun record
             .listener(pathValidationListener)  // Validates paths and records warnings (needs jobRunId)
+            .listener(crawlCheckpointListener)  // Resume from checkpoint / clear on success (issue #8)
             .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
             .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, effectiveFreshnessHours))
             .next(buildChunkingStep(crawl, chunkProcessAll))
@@ -181,14 +185,16 @@ class FsCrawlJobBuilder(
 
         val startPaths = crawl.startPaths.map { Path(it) }
 
+        val reader = createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns, crawlConfigId, freshnessHours)
         val writer = createCombinedWriter()
 
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
             .chunk<CombinedCrawlItem, CombinedCrawlResult>(100, transactionManager)
-            .reader(createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns, crawlConfigId, freshnessHours))
+            .reader(reader)
             .processor(createCombinedProcessor(startPaths, effectivePatterns, forceFullRecrawl))
             .writer(writer)
             .listener(CrawlStepListener())
+            .listener(reader) // Reader is also a step listener (reads resume URI in beforeStep)
             .listener(writer) // Writer is also a step listener
             .listener(heartbeatChunkListener) // Update heartbeat after each chunk
             .taskExecutor(stepTaskExecutor)
@@ -208,7 +214,7 @@ class FsCrawlJobBuilder(
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
         crawlConfigId: Long? = null,
         freshnessHours: Int = 24
-    ): ItemReader<CombinedCrawlItem> {
+    ): CombinedCrawlReader {
         log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}, crawlConfigId={}, freshnessHours={}",
             startPaths.size, maxDepth, followLinks, crawlConfigId, freshnessHours)
 
@@ -266,8 +272,10 @@ class FsCrawlJobBuilder(
 
     /**
      * Create a combined writer that persists folders and files.
+     * The checkpoint service is wired in so the writer can advance the resumption
+     * marker after each chunk (issue #8).
      */
-    private fun createCombinedWriter(): ItemWriter<CombinedCrawlResult> {
+    private fun createCombinedWriter(): CombinedCrawlWriter {
         log.debug("Creating CombinedCrawlWriter")
         return CombinedCrawlWriter(
             folderService = folderService,
@@ -275,7 +283,8 @@ class FsCrawlJobBuilder(
             folderRepository = fsFolderRepository,
             fileRepository = fsFileRepository,
             folderMapper = folderMapper,
-            fileMapper = fileMapper
+            fileMapper = fileMapper,
+            checkpointService = checkpointService
         )
     }
 }
