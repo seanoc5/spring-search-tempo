@@ -50,6 +50,13 @@ interface EmailAccountService {
     fun clearError(id: Long)
 
     /**
+     * Record the wall-clock time at which the per-account scheduler dispatched
+     * a sync for this account. Used by the minute-tick scheduler to decide
+     * which accounts are due without re-firing within the same cron boundary.
+     */
+    fun recordDispatched(id: Long, dispatchedAt: java.time.OffsetDateTime)
+
+    /**
      * Encrypt and store an IMAP password for the account. Pass a blank string to clear the stored
      * password (falling back to credentialEnvVar). The plaintext is never logged or persisted.
      */

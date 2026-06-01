@@ -91,6 +91,20 @@
                             <label class="form-check-label" for="enabled">Enabled</label>
                             <div class="form-text">Disabled accounts won't be synced</div>
                         </div>
+
+                        <div class="mb-3">
+                            <label for="cronSchedule" class="form-label">Sync Schedule (cron)</label>
+                            <input type="text" class="form-control" id="cronSchedule" th:field="*{cronSchedule}"
+                                   placeholder="0 0 0 * * *">
+                            <div class="form-text">
+                                Spring 6-field cron expression
+                                (<code>sec min hour day month dow</code>).
+                                Examples:
+                                <code>0 0 0 * * *</code> = daily at midnight,
+                                <code>0 */15 * * * *</code> = every 15 minutes,
+                                <code>0 0 */4 * * *</code> = every 4 hours.
+                            </div>
+                        </div>
                     </div>
                 </div>
 

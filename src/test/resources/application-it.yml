@@ -7,6 +7,12 @@ spring:
   sql:
     init:
       mode: always  # Run schema.sql to enable pgvector extension
+  flyway:
+    # Tests use ddl-auto: create-drop to manage schema. Flyway running in
+    # parallel would leave a stale schema_history pointing at dropped tables.
+    # Hibernate, driven by the JPA entities, is the source of truth for the
+    # test schema; Flyway is for the dev/prod path.
+    enabled: false
   jpa:
     hibernate:
       ddl-auto: create-drop  # Auto-create schema for tests

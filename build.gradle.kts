@@ -50,6 +50,11 @@ dependencies {
 
     runtimeOnly("org.postgresql:postgresql")
 
+    // Flyway for tracked, repeatable database migrations.
+    // Coexists with ddl-auto: update during rapid development (see ADR-004).
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
+
     // pgvector support for vector embeddings
     implementation("com.pgvector:pgvector:0.1.6")
 

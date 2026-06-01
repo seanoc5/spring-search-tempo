@@ -61,6 +61,18 @@ class EmailAccount : SaveableObject() {
     @Column
     var enabled: Boolean = true
 
+    // Per-account sync cadence. Spring 6-field cron expression
+    // (sec min hr dom mon dow). Default: daily at 00:00.
+    // See ADR-004 (per-account email scheduling).
+    @Column(nullable = false, columnDefinition = "text")
+    var cronSchedule: String = "0 0 0 * * *"
+
+    // When this account was last dispatched by MultiAccountEmailScheduler.
+    // Used to compute the next cron boundary so we don't re-dispatch within
+    // the same boundary, and to enable startup catch-up.
+    @Column
+    var lastDispatchedAt: OffsetDateTime? = null
+
     // Owner for multi-tenancy visibility
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_user_id")
