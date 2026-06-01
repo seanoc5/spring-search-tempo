@@ -74,6 +74,10 @@ along with Full-text search AND semantic search.
   searching, plus a programmatic API for integration with other tools.
 - **Job control & observability** — long-running crawls and enrichment
   jobs can be monitored, paused, and resumed.
+- **IMAP mailbox mirroring** — losslessly copy messages from one IMAP
+  account to another (preserving body, attachments, flags, and
+  `INTERNALDATE`) for one-time mailbox migration between providers.
+  Idempotent and resumable. See ADR-005.
 - **Packaged distribution** — installable as a native application on at
   least one major OS.
 
@@ -95,6 +99,9 @@ along with Full-text search AND semantic search.
 | **Overlapping crawl detection** | When two crawl configs cover the same items, the system avoids re-processing items already handled within the freshness window by another config.                                   |
 | **Freshness window**            | Per-config time interval inside which an already-processed item is considered fresh enough to skip.                                                                                 |
 | **NLP auto-trigger**            | After a successful INDEX crawl, automatically launch ANALYZE for newly indexed chunks. Configurable.                                                                                |
+| **Mirror**                      | A user-configured pairing of a *source* IMAP account with a *destination* IMAP account that copies messages losslessly between them. Used primarily for one-time mailbox migration. Idempotent (deduplicated on `Message-ID`) and resumable (per-folder checkpoint). See ADR-005. |
+| **MirrorConfig**                | The persistent record of a mirror pairing — source/dest account IDs, folder mapping rules, optional APPEND rate limit, status timestamps. One per migration relationship.            |
+| **MirrorJob**                   | The Spring Batch job that executes a full mirror run against a `MirrorConfig`. Reuses the crawl-checkpoint shape for resumability.                                                   |
 
 ## Sources (initial set)
 
@@ -168,6 +175,12 @@ before relitigating.
   ([decisions/002-spring-modulith.md](decisions/002-spring-modulith.md))
 - **ADR-003** — Apache Tika for text extraction across 400+ formats.
   ([decisions/003-apache-tika.md](decisions/003-apache-tika.md))
+- **ADR-004** — Per-account email sync scheduling (Spring `@Scheduled`
+  minute tick + stored per-account cron).
+  ([decisions/004-per-account-email-scheduling.md](decisions/004-per-account-email-scheduling.md))
+- **ADR-005** — IMAP mailbox mirroring via `APPEND` with `Message-ID`
+  dedup.
+  ([decisions/005-imap-mailbox-mirroring.md](decisions/005-imap-mailbox-mirroring.md))
 
 ## Known divergence from the v2 research notes
 
