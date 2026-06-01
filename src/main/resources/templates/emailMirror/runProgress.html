@@ -1,0 +1,126 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  Auto-refreshing progress fragment. The `hx-trigger="every 5s"` is only
+  rendered while the run is still RUNNING — once it completes the next
+  swap arrives without a trigger and the polling stops on its own.
+-->
+<div th:fragment="progress"
+     th:id="|mirror-progress-${progress.jobRun.id}|"
+     hx-swap="outerHTML"
+     th:hx-get="@{/emailMirrors/{id}/runs/{jobRunId}/progress(id=${progress.mirrorConfigId},jobRunId=${progress.jobRun.id})}"
+     th:attr="hx-trigger=${progress.isRunning} ? 'every 5s' : null">
+
+    <div class="card mb-3">
+        <div class="card-header d-flex align-items-center">
+            <h5 class="mb-0 flex-grow-1">Progress</h5>
+            <span th:switch="${progress.jobRun.runStatus.name()}">
+                <span th:case="'RUNNING'" class="badge bg-primary">
+                    <i class="bi bi-arrow-repeat me-1"></i>Running
+                </span>
+                <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
+                <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
+                <span th:case="'CANCELLED'" class="badge bg-warning">Cancelled</span>
+            </span>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">
+                <strong>[[${progress.processedCount}]] / [[${progress.expectedTotal}]] messages</strong>
+                processed this run.
+                <span th:if="${progress.totalFailedThisRun > 0}" class="text-danger">
+                    [[${progress.totalFailedThisRun}]] failed
+                </span>
+                <span class="text-muted">
+                    ([[${progress.totalMirroredAllTime}]] mirrored under this config all-time)
+                </span>
+            </p>
+
+            <div th:if="${progress.jobRun.errorMessage != null}" class="alert alert-danger small mb-3">
+                <strong>Run error:</strong> [[${progress.jobRun.errorMessage}]]
+            </div>
+
+            <h6 class="mt-3">Per-folder</h6>
+            <div th:if="${progress.folders.empty}" class="text-muted">
+                No folder mappings configured.
+            </div>
+            <table class="table table-sm align-middle" th:unless="${progress.folders.empty}">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>Mirrored</th>
+                        <th>Failed (this run)</th>
+                        <th>Current UID</th>
+                        <th>% complete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="f : ${progress.folders}">
+                        <td>
+                            <code th:text="${f.source}">INBOX</code>
+                            <span th:unless="${f.enabled}" class="badge bg-secondary ms-1">disabled</span>
+                        </td>
+                        <td><code th:text="${f.dest}">INBOX</code></td>
+                        <td>
+                            <span th:text="|${f.mirroredCount} / ${f.mirroredCount + f.failedThisRun} messages|">0 / 0 messages</span>
+                        </td>
+                        <td>
+                            <span th:if="${f.failedThisRun > 0}" class="text-danger" th:text="${f.failedThisRun}">0</span>
+                            <span th:unless="${f.failedThisRun > 0}" class="text-muted">0</span>
+                        </td>
+                        <td>
+                            <span th:if="${f.currentUid != null}" th:text="${f.currentUid}">0</span>
+                            <span th:if="${f.currentUid == null}" class="text-muted">–</span>
+                        </td>
+                        <td>
+                            <span th:if="${f.percentComplete != null}" th:text="|${f.percentComplete}%|">0%</span>
+                            <span th:if="${f.percentComplete == null}" class="text-muted">–</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h5 class="mb-0">Error log</h5></div>
+        <div class="card-body">
+            <div th:if="${progress.recentErrors.empty}" class="text-muted">
+                No errors recorded for this run.
+            </div>
+            <table class="table table-sm" th:unless="${progress.recentErrors.empty}">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Folder</th>
+                        <th>UID</th>
+                        <th>Message-ID</th>
+                        <th>Retryable</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="err : ${progress.recentErrors}">
+                        <td>
+                            <small th:if="${err.occurredAt != null}"
+                                   th:text="${#temporals.format(err.occurredAt, 'HH:mm:ss')}">00:00:00</small>
+                        </td>
+                        <td><code th:text="${err.sourceFolder}">INBOX</code></td>
+                        <td th:text="${err.sourceUid}">0</td>
+                        <td>
+                            <small th:if="${err.messageId != null}" class="text-muted" th:text="${err.messageId}"></small>
+                        </td>
+                        <td>
+                            <span th:if="${err.retryable}" class="badge bg-warning text-dark">retryable</span>
+                            <span th:unless="${err.retryable}" class="badge bg-danger">permanent</span>
+                        </td>
+                        <td><small th:text="${err.reason}">reason</small></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

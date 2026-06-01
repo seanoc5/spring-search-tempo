@@ -71,12 +71,21 @@
                             <span th:unless="${mirror.enabled}" class="badge bg-secondary">Disabled</span>
                         </td>
                         <td>
-                            <span th:if="${mirror.lastRunCompletedAt != null}"
-                                  th:text="${#temporals.format(mirror.lastRunCompletedAt, 'yyyy-MM-dd HH:mm')}">never</span>
-                            <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt != null}"
-                                  class="text-info">running…</span>
-                            <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt == null}"
-                                  class="text-muted">never</span>
+                            <th:block th:with="latest=${latestRunByMirror.get(mirror.id)}">
+                                <a th:if="${latest != null}"
+                                   th:href="@{/emailMirrors/{id}/runs/{jobRunId}(id=${mirror.id},jobRunId=${latest.id})}"
+                                   class="text-decoration-none">
+                                    <span th:switch="${latest.runStatus.name()}">
+                                        <span th:case="'RUNNING'" class="badge bg-primary">Running</span>
+                                        <span th:case="'COMPLETED'" class="badge bg-success">Completed</span>
+                                        <span th:case="'FAILED'" class="badge bg-danger">Failed</span>
+                                        <span th:case="'CANCELLED'" class="badge bg-warning">Cancelled</span>
+                                    </span>
+                                    <small class="d-block text-muted"
+                                           th:text="${#temporals.format(latest.startTime, 'yyyy-MM-dd HH:mm')}">when</small>
+                                </a>
+                                <span th:if="${latest == null}" class="text-muted">never</span>
+                            </th:block>
                             <div th:if="${mirror.lastError}" class="text-danger small" th:title="${mirror.lastError}">
                                 <i class="bi bi-exclamation-triangle-fill"></i>
                                 [[${#strings.abbreviate(mirror.lastError, 40)}]]

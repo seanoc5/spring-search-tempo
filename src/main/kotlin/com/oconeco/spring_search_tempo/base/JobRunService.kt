@@ -36,6 +36,15 @@ interface JobRunService {
     fun startJobRunWithoutConfig(jobName: String, label: String? = null): JobRunDTO
 
     /**
+     * Create a new job run tied to a `MirrorConfig`. Used by `MirrorJob`
+     * (issue #26) so the progress dashboard can query `JobRun` for
+     * start/finish/status/error history per mirror.
+     */
+    fun startJobRunForMirror(mirrorConfigId: Long, jobName: String): JobRunDTO
+
+    fun getLatestRunForMirrorConfig(mirrorConfigId: Long): JobRunDTO?
+
+    /**
      * Update job run statistics.
      */
     fun updateJobRunStats(

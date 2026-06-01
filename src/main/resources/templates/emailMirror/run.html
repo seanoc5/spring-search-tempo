@@ -1,0 +1,75 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="|Run #${progress.jobRun.id} — ${progress.mirrorName}|">Mirror Run</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailMirrors}">Email Mirrors</a></li>
+            <li class="breadcrumb-item">
+                <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}" th:text="${progress.mirrorName}">Mirror</a>
+            </li>
+            <li class="breadcrumb-item active" th:text="|Run #${progress.jobRun.id}|">Run</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-activity me-2"></i>
+            <span th:text="${progress.mirrorName}">Mirror</span>
+            <small class="text-muted" th:text="|Run #${progress.jobRun.id}|">Run #N</small>
+        </h1>
+        <div class="d-flex gap-2">
+            <a th:href="@{/emailMirrors/{id}/runs/{jobRunId}/errors.csv(id=${mirror.id},jobRunId=${progress.jobRun.id})}"
+               class="btn btn-outline-secondary">
+                <i class="bi bi-download me-1"></i>Errors CSV
+            </a>
+            <form th:action="@{/api/email/mirrors/{id}/retry-failed(id=${mirror.id})}" method="post" class="d-inline"
+                  th:if="${progress.retryableFailedThisRun > 0}"
+                  onsubmit="return confirm('Re-queue ' + this.dataset.count + ' retryable failures?');"
+                  th:data-count="${progress.retryableFailedThisRun}">
+                <button type="submit" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Retry [[${progress.retryableFailedThisRun}]] failed
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header"><h5 class="mb-0">Run Header</h5></div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Source account</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${sourceAccount != null}" th:text="${sourceAccount.email}"></span>
+                    <span th:if="${sourceAccount == null}" class="text-muted">missing</span>
+                </dd>
+                <dt class="col-sm-3">Destination account</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${destAccount != null}" th:text="${destAccount.email}"></span>
+                    <span th:if="${destAccount == null}" class="text-muted">missing</span>
+                </dd>
+                <dt class="col-sm-3">Started</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${progress.jobRun.startTime != null}"
+                          th:text="${#temporals.format(progress.jobRun.startTime, 'yyyy-MM-dd HH:mm:ss')}"></span>
+                    <span th:if="${progress.jobRun.startTime == null}" class="text-muted">unknown</span>
+                </dd>
+                <dt class="col-sm-3">Elapsed</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${progress.elapsedSeconds != null}"
+                          th:text="|${progress.elapsedSeconds}s|">0s</span>
+                    <span th:if="${progress.elapsedSeconds == null}" class="text-muted">–</span>
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <div th:replace="~{emailMirror/runProgress :: progress}"></div>
+</div>
+</body>
+</html>

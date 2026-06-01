@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
+import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.MirrorConfigService
 import com.oconeco.spring_search_tempo.base.model.FolderMapping
 import com.oconeco.spring_search_tempo.base.model.MirrorConfigDTO
@@ -36,6 +37,7 @@ class MirrorConfigController(
     private val mirrorConfigService: MirrorConfigService,
     private val emailAccountService: EmailAccountService,
     private val emailFolderService: EmailFolderService,
+    private val jobRunService: JobRunService,
     private val objectMapper: ObjectMapper
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -44,9 +46,14 @@ class MirrorConfigController(
     fun list(model: Model): String {
         val accounts = emailAccountService.findAll()
         val accountEmailById = accounts.mapNotNull { it.id?.let { id -> id to (it.email ?: "?") } }.toMap()
-        model.addAttribute("mirrors", mirrorConfigService.findAll())
+        val mirrors = mirrorConfigService.findAll()
+        val latestRunByMirror = mirrors.mapNotNull { m ->
+            m.id?.let { id -> jobRunService.getLatestRunForMirrorConfig(id)?.let { id to it } }
+        }.toMap()
+        model.addAttribute("mirrors", mirrors)
         model.addAttribute("accounts", accounts)
         model.addAttribute("accountEmailById", accountEmailById)
+        model.addAttribute("latestRunByMirror", latestRunByMirror)
         return "emailMirror/list"
     }
 

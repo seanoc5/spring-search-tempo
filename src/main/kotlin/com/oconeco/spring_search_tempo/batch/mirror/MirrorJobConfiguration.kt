@@ -1,7 +1,9 @@
 package com.oconeco.spring_search_tempo.batch.mirror
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
+import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.MirrorConfigService
+import com.oconeco.spring_search_tempo.base.repos.MirrorErrorRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
@@ -41,6 +43,8 @@ class MirrorJobConfiguration(
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val checkpointService: MirrorCheckpointService,
     private val imapMirrorService: ImapMirrorService,
+    private val mirrorErrorRepository: MirrorErrorRepository,
+    private val jobRunService: JobRunService,
     private val mirrorJobLifecycleListener: MirrorJobLifecycleListener,
     private val properties: MirrorJobProperties
 ) {
@@ -65,7 +69,11 @@ class MirrorJobConfiguration(
             mirroredMessageRepository = mirroredMessageRepository,
             checkpointService = checkpointService
         )
-        val processor = MirrorMessageProcessor(imapMirrorService)
+        val processor = MirrorMessageProcessor(
+            imapMirrorService = imapMirrorService,
+            mirrorErrorRepository = mirrorErrorRepository,
+            jobRunService = jobRunService
+        )
         val writer = MirrorCheckpointWriter(checkpointService)
 
         return StepBuilder("mirrorStep", jobRepository)
@@ -73,10 +81,12 @@ class MirrorJobConfiguration(
             .reader(reader)
             .processor(processor)
             .writer(writer)
-            // Register the reader as a step listener so it can rebind to
-            // the current job's mirrorConfigId in `beforeStep`, avoiding
-            // `@JobScope` proxy refresh issues across consecutive runs.
+            // Register the reader + processor as step listeners so they
+            // can rebind to the current job's mirrorConfigId / jobRunId
+            // in `beforeStep`, avoiding `@JobScope` proxy refresh issues
+            // across consecutive runs.
             .listener(reader)
+            .listener(processor)
             .build()
     }
 }
