@@ -101,6 +101,15 @@ class BrowserBookmark : SaveableObject() {
     var folderPath: String? = null
 
     /**
+     * Denormalized space-separated list of tag names (lowercased) for inclusion
+     * in `fts_vector`. Populated by the import writer whenever the bookmark's
+     * `tags` set is mutated. Kept in sync rather than computed via subquery
+     * because `GENERATED ALWAYS` columns cannot reference joined tables.
+     */
+    @Column(name = "tags_text", columnDefinition = "text")
+    var tagsText: String? = null
+
+    /**
      * Fetched page content (populated by future BookmarkFetchJob).
      */
     @Column(columnDefinition = "text")
@@ -122,7 +131,7 @@ class BrowserBookmark : SaveableObject() {
      * PostgreSQL tsvector for full-text search.
      *
      * Includes weighted fields:
-     * - Weight A: title
+     * - Weight A: title, tags_text
      * - Weight B: domain, folder_path
      * - Weight C: body_text (first 250K chars)
      * - Weight D: url
@@ -131,11 +140,12 @@ class BrowserBookmark : SaveableObject() {
         name = "fts_vector",
         columnDefinition = """
         tsvector GENERATED ALWAYS AS (
+            setweight(to_tsvector('simple', coalesce(tags_text, '')), 'A') ||
             setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
             setweight(to_tsvector('english', coalesce(domain, '')), 'B') ||
-            setweight(to_tsvector('english', coalesce(folder_path, '')), 'B') ||
+            setweight(to_tsvector('simple', coalesce(folder_path, '')), 'B') ||
             setweight(to_tsvector('english', coalesce(substring(body_text, 1, 250000), '')), 'C') ||
-            setweight(to_tsvector('english', coalesce(url, '')), 'D')
+            setweight(to_tsvector('simple', coalesce(url, '')), 'D')
         ) STORED
         """,
         insertable = false,

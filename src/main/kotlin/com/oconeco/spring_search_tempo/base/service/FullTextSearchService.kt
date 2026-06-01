@@ -396,28 +396,35 @@ class FullTextSearchServiceImpl(
     }
 
     override fun searchWithFilters(filter: SearchFilterDTO, pageable: Pageable): Page<SearchResult> {
-        val sanitizedQuery = sanitizeQuery(filter.query)
+        // A bookmark-only search with tag/folder facets can run without any free-text query.
+        // For every other source, an empty query means there's nothing to rank against.
+        val hasFreeText = filter.query.isNotBlank()
+        val sanitizedQuery = if (hasFreeText) sanitizeQuery(filter.query) else null
 
-        log.debug("Searching with filters: types={}, sentiment={}, category={}, fromDate={}, toDate={}, author={}",
-            filter.contentTypes, filter.sentiment, filter.emailCategory, filter.fromDate, filter.toDate, filter.author)
+        log.debug(
+            "Searching with filters: types={}, sentiment={}, category={}, fromDate={}, toDate={}, author={}, tags={}, folder={}",
+            filter.contentTypes, filter.sentiment, filter.emailCategory, filter.fromDate, filter.toDate,
+            filter.author, filter.tagFilters, filter.folderFilter
+        )
 
         val sqlParts = mutableListOf<String>()
 
-        // Build UNION query based on selected content types
-        if (filter.includeFiles()) {
+        // Build UNION query based on selected content types.
+        // Non-bookmark sources require a free-text query — skip them when only facet filters were given.
+        if (hasFreeText && filter.includeFiles()) {
             sqlParts.add(buildFileSearchSql(filter))
         }
-
-        if (filter.includeEmails()) {
+        if (hasFreeText && filter.includeEmails()) {
             sqlParts.add(buildEmailSearchSql(filter))
         }
-
-        if (filter.includeOneDrive()) {
+        if (hasFreeText && filter.includeOneDrive()) {
             sqlParts.add(buildOneDriveSearchSql(filter))
         }
-
-        if (filter.includeChunks()) {
+        if (hasFreeText && filter.includeChunks()) {
             sqlParts.add(buildChunkSearchSql(filter))
+        }
+        if (filter.includeBookmarks()) {
+            sqlParts.add(buildBookmarkSearchSql(filter, hasFreeText))
         }
 
         if (sqlParts.isEmpty()) {
@@ -432,17 +439,20 @@ class FullTextSearchServiceImpl(
 
         // Build count query
         val countParts = mutableListOf<String>()
-        if (filter.includeFiles()) {
+        if (hasFreeText && filter.includeFiles()) {
             countParts.add(buildFileCountSql(filter))
         }
-        if (filter.includeEmails()) {
+        if (hasFreeText && filter.includeEmails()) {
             countParts.add(buildEmailCountSql(filter))
         }
-        if (filter.includeOneDrive()) {
+        if (hasFreeText && filter.includeOneDrive()) {
             countParts.add(buildOneDriveCountSql(filter))
         }
-        if (filter.includeChunks()) {
+        if (hasFreeText && filter.includeChunks()) {
             countParts.add(buildChunkCountSql(filter))
+        }
+        if (filter.includeBookmarks()) {
+            countParts.add(buildBookmarkCountSql(filter, hasFreeText))
         }
 
         val countSql = """
@@ -453,12 +463,15 @@ class FullTextSearchServiceImpl(
 
         try {
             val resultsQuery = entityManager.createNativeQuery(sql)
-                .setParameter("query", sanitizedQuery)
                 .setParameter("limit", pageable.pageSize)
                 .setParameter("offset", pageable.offset)
 
             val countQuery = entityManager.createNativeQuery(countSql)
-                .setParameter("query", sanitizedQuery)
+
+            if (sanitizedQuery != null) {
+                resultsQuery.setParameter("query", sanitizedQuery)
+                countQuery.setParameter("query", sanitizedQuery)
+            }
 
             // Set optional filter parameters
             setFilterParameters(resultsQuery, filter)
@@ -508,6 +521,12 @@ class FullTextSearchServiceImpl(
         }
         if (!filter.entityTypes.isNullOrEmpty() && filter.includeChunks()) {
             query.setParameter("entityTypes", filter.entityTypes.toTypedArray())
+        }
+        if (!filter.tagFilters.isNullOrEmpty() && filter.includeBookmarks()) {
+            query.setParameter("bookmarkTags", filter.tagFilters.toTypedArray())
+        }
+        if (!filter.folderFilter.isNullOrBlank() && filter.includeBookmarks()) {
+            query.setParameter("bookmarkFolder", "%${filter.folderFilter}%")
         }
     }
 
@@ -648,6 +667,75 @@ class FullTextSearchServiceImpl(
         }
         val extraConditions = if (conditions.isNotEmpty()) " AND ${conditions.joinToString(" AND ")}" else ""
         return "SELECT 1 FROM content_chunks WHERE fts_vector @@ to_tsquery('english', :query)$extraConditions"
+    }
+
+    private fun buildBookmarkSearchSql(filter: SearchFilterDTO, hasFreeText: Boolean): String {
+        val conditions = bookmarkConditions(filter, hasFreeText, alias = "b")
+        val whereClause = if (conditions.isNotEmpty()) "WHERE ${conditions.joinToString(" AND ")}" else ""
+
+        val rankExpr = if (hasFreeText) {
+            "ts_rank(b.fts_vector, to_tsquery('english', :query))"
+        } else {
+            // No free text: rank by frecency so popular bookmarks bubble up. Cast to real to
+            // keep the UNION row type stable with the other branches.
+            "COALESCE(b.frecency, 0)::real / 1000.0"
+        }
+        val snippetExpr = if (hasFreeText) {
+            """ts_headline('english', COALESCE(b.title, b.url, ''),
+                           to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, MaxFragments=1')"""
+        } else {
+            "COALESCE(b.folder_path, '') || CASE WHEN b.folder_path IS NULL THEN '' ELSE ' • ' END || COALESCE(b.url, '')"
+        }
+
+        return """
+            SELECT
+                'browser_bookmark' as source_table,
+                b.id,
+                COALESCE(b.url, '') as uri,
+                COALESCE(b.title, b.url, 'Bookmark #' || b.id) as label,
+                $snippetExpr as snippet,
+                $rankExpr as rank
+            FROM browser_bookmark b
+            $whereClause
+        """.trimIndent()
+    }
+
+    private fun buildBookmarkCountSql(filter: SearchFilterDTO, hasFreeText: Boolean): String {
+        val conditions = bookmarkConditions(filter, hasFreeText, alias = "")
+        val whereClause = if (conditions.isNotEmpty()) "WHERE ${conditions.joinToString(" AND ")}" else ""
+        return "SELECT 1 FROM browser_bookmark $whereClause"
+    }
+
+    /**
+     * Conditions shared between the bookmark search and count queries.
+     * `alias` is the table alias used in the calling SQL ("b" for search,
+     * empty for count); we prefix column references accordingly.
+     */
+    private fun bookmarkConditions(filter: SearchFilterDTO, hasFreeText: Boolean, alias: String): List<String> {
+        val prefix = if (alias.isNotEmpty()) "$alias." else ""
+        val conditions = mutableListOf<String>()
+
+        if (hasFreeText) {
+            conditions.add("${prefix}fts_vector @@ to_tsquery('english', :query)")
+        }
+        if (!filter.tagFilters.isNullOrEmpty()) {
+            // EXISTS subquery joins through the M2M; ANY(:bookmarkTags) matches any provided tag.
+            conditions.add(
+                """
+                EXISTS (
+                    SELECT 1 FROM browser_bookmark_tags bbt
+                    JOIN bookmark_tag bt ON bt.id = bbt.tag_id
+                    WHERE bbt.bookmark_id = ${prefix}id
+                      AND bt.name = ANY(:bookmarkTags)
+                )
+                """.trimIndent()
+            )
+        }
+        if (!filter.folderFilter.isNullOrBlank()) {
+            conditions.add("${prefix}folder_path ILIKE :bookmarkFolder")
+        }
+        return conditions
     }
 
     /**

@@ -23,5 +23,11 @@ enum class ContentType {
     /**
      * Content chunks (ContentChunk entities) - sentences/paragraphs from files or emails
      */
-    CHUNK
+    CHUNK,
+
+    /**
+     * Browser bookmarks (BrowserBookmark entities) - Firefox/other-browser bookmarks
+     * with tag and folder facets.
+     */
+    BOOKMARK
 }

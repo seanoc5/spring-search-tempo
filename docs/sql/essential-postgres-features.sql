@@ -78,6 +78,9 @@ COMMENT ON COLUMN content_chunks.fts_vector IS 'Auto-generated FTS vector with N
 
 CREATE INDEX IF NOT EXISTS idx_fsfile_fts ON fsfile USING GIN(fts_vector);
 CREATE INDEX IF NOT EXISTS idx_content_chunks_fts ON content_chunks USING GIN(fts_vector);
+CREATE INDEX IF NOT EXISTS idx_browser_bookmark_fts ON browser_bookmark USING GIN(fts_vector);
+CREATE INDEX IF NOT EXISTS idx_browser_bookmark_folder_path ON browser_bookmark (folder_path);
+CREATE INDEX IF NOT EXISTS idx_bookmark_tag_name ON bookmark_tag (name);
 
 -- NLP field indexes
 CREATE INDEX IF NOT EXISTS idx_content_chunks_sentiment ON content_chunks(sentiment);

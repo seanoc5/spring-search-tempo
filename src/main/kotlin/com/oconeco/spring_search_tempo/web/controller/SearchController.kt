@@ -1,7 +1,9 @@
 package com.oconeco.spring_search_tempo.web.controller
 
+import com.oconeco.spring_search_tempo.base.BookmarkTagService
 import com.oconeco.spring_search_tempo.base.domain.EmailCategory
 import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
+import com.oconeco.spring_search_tempo.base.service.BookmarkQueryParser
 import com.oconeco.spring_search_tempo.base.service.ContentType
 import com.oconeco.spring_search_tempo.base.service.EntitySearchService
 import com.oconeco.spring_search_tempo.base.service.FullTextSearchService
@@ -25,7 +27,8 @@ import java.time.LocalDate
 class SearchController(
     private val searchService: FullTextSearchService,
     private val semanticSearchService: SemanticSearchService,
-    private val hybridSearchService: HybridSearchService
+    private val hybridSearchService: HybridSearchService,
+    private val bookmarkTagService: BookmarkTagService
 ) {
 
     // Common entity types for UI filtering
@@ -43,14 +46,27 @@ class SearchController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) toDate: LocalDate?,
         @RequestParam(required = false) author: String?,
         @RequestParam(required = false) entityTypes: List<String>?,
+        @RequestParam(required = false) tags: List<String>?,
+        @RequestParam(required = false) folder: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
         model: Model
     ): String {
+        // Parse bookmark facet tokens (`tag:foo`, `folder:bar`) out of the raw query
+        // before we hand the residual text off to PostgreSQL's tsquery parser.
+        val parsed = BookmarkQueryParser.parse(q)
+        val combinedTags = (parsed.tagFilters + (tags ?: emptyList())
+            .map { it.lowercase() }).toSet()
+        val effectiveFolder = parsed.folderFilter ?: folder
+
+        // Display the raw user input so the user can edit it; we keep the
+        // residualQuery internal for execution.
         model.addAttribute("query", q ?: "")
 
-        // Parse content types (default to all if none specified)
-        val contentTypes = if (types.isNullOrEmpty()) {
+        // Parse content types (default to all if none specified).
+        // If the user supplied a tag:/folder: token (or explicit ?tags/?folder),
+        // auto-narrow to BOOKMARK so filters don't silently no-op on other sources.
+        val requestedTypes = if (types.isNullOrEmpty()) {
             ContentType.entries.toSet()
         } else {
             types.mapNotNull { type ->
@@ -61,8 +77,24 @@ class SearchController(
                 }
             }.toSet().ifEmpty { ContentType.entries.toSet() }
         }
+        val contentTypes =
+            if ((combinedTags.isNotEmpty() || !effectiveFolder.isNullOrBlank()) && types.isNullOrEmpty()) {
+                setOf(ContentType.BOOKMARK)
+            } else {
+                requestedTypes
+            }
         model.addAttribute("selectedTypes", contentTypes.map { it.name }.toSet())
         model.addAttribute("allTypes", ContentType.entries.map { it.name })
+
+        // Surface popular tags for the facet UI; cap small so the picker stays usable.
+        val popularTags = try {
+            bookmarkTagService.findPopular(20).mapNotNull { it.name }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        model.addAttribute("popularTags", popularTags)
+        model.addAttribute("selectedTagFilters", combinedTags)
+        model.addAttribute("selectedFolderFilter", effectiveFolder ?: "")
 
         // Parse email category filter
         val emailCategory = category?.let {
@@ -89,18 +121,25 @@ class SearchController(
         model.addAttribute("selectedToDate", toDate?.toString() ?: "")
         model.addAttribute("selectedAuthor", author ?: "")
 
-        if (!q.isNullOrBlank()) {
+        // We can execute when the user supplied either free text or a facet filter
+        // (a bare `tag:foo` query has no residual text but should still return results).
+        val hasFreeText = parsed.residualQuery.isNotBlank()
+        val canExecute = hasFreeText || combinedTags.isNotEmpty() || !effectiveFolder.isNullOrBlank()
+
+        if (canExecute) {
             try {
                 val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "rank"))
                 val filter = SearchFilterDTO(
-                    query = q,
+                    query = parsed.residualQuery,
                     contentTypes = contentTypes,
                     sentiment = sentiment,
                     emailCategory = emailCategory,
                     fromDate = fromDate,
                     toDate = toDate,
                     author = author,
-                    entityTypes = validEntityTypes
+                    entityTypes = validEntityTypes,
+                    tagFilters = combinedTags.ifEmpty { null },
+                    folderFilter = effectiveFolder?.takeIf { it.isNotBlank() }
                 )
                 val results = searchService.searchWithFilters(filter, pageable)
 

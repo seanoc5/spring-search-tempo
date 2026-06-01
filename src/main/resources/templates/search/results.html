@@ -146,6 +146,12 @@
                                     <label class="btn btn-outline-secondary" for="typeChunk">
                                         <i class="bi bi-text-paragraph me-1"></i>Chunks
                                     </label>
+
+                                    <input type="checkbox" class="btn-check" id="typeBookmark" name="types" value="BOOKMARK"
+                                           th:checked="${selectedTypes.contains('BOOKMARK')}">
+                                    <label class="btn btn-outline-warning" for="typeBookmark">
+                                        <i class="bi bi-bookmark-star me-1"></i>Bookmarks
+                                    </label>
                                 </div>
                             </div>
 
@@ -230,9 +236,48 @@
                             </div>
                         </div>
 
+                        <!-- Bookmark facets (tag + folder) -->
+                        <div class="row g-2 align-items-center mt-2"
+                             th:if="${selectedTypes.contains('BOOKMARK')}">
+                            <div class="col-auto">
+                                <span class="text-muted small"><i class="bi bi-bookmark-star me-1"></i>Bookmark facets:</span>
+                            </div>
+                            <div class="col-auto">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text"><i class="bi bi-folder2"></i></span>
+                                    <input type="text" name="folder" class="form-control form-control-sm"
+                                           th:value="${selectedFolderFilter}"
+                                           placeholder="folder path contains…"
+                                           style="width: 220px;">
+                                </div>
+                            </div>
+                            <div class="col-auto" th:if="${!popularTags.isEmpty()}">
+                                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Tag facet filters">
+                                    <th:block th:each="tagName : ${popularTags}">
+                                        <input type="checkbox" class="btn-check"
+                                               th:id="'tag-' + ${tagName}"
+                                               name="tags"
+                                               th:value="${tagName}"
+                                               th:checked="${selectedTagFilters.contains(tagName)}">
+                                        <label class="btn btn-outline-warning btn-sm"
+                                               th:for="'tag-' + ${tagName}">
+                                            <i class="bi bi-tag me-1"></i>[[${tagName}]]
+                                        </label>
+                                    </th:block>
+                                </div>
+                            </div>
+                            <div class="col-auto" th:if="${popularTags.isEmpty()}">
+                                <span class="text-muted small fst-italic">
+                                    (No tags imported yet — type
+                                    <code>tag:foo</code> in the search box.)
+                                </span>
+                            </div>
+                        </div>
+
                         <div class="mt-2 text-muted small">
                             <i class="bi bi-info-circle me-1"></i>
                             Syntax: <code>spring kotlin</code> (AND) | <code>spring | kotlin</code> (OR) | <code>spring &amp; !java</code> (NOT)
+                            <span class="ms-2">Bookmarks: <code>tag:work</code> <code>folder:Dev</code> <code>folder:"Bookmarks Toolbar/Dev"</code></span>
                         </div>
                     </form>
                 </div>
@@ -260,9 +305,15 @@
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <h5 class="mb-1">
-                                    <a th:href="@{|/${result.sourceTable == 'fsfile' ? 'fSFile' : (result.sourceTable == 'email_message' ? 'emailMessages' : (result.sourceTable == 'one_drive_item' ? 'oneDriveAccounts' : 'contentChunks'))}/${result.id}|}"
+                                    <a th:if="${result.sourceTable != 'browser_bookmark'}"
+                                       th:href="@{|/${result.sourceTable == 'fsfile' ? 'fSFile' : (result.sourceTable == 'email_message' ? 'emailMessages' : (result.sourceTable == 'one_drive_item' ? 'oneDriveAccounts' : 'contentChunks'))}/${result.id}|}"
                                        th:text="${result.label}" class="text-decoration-none">
                                         Result title
+                                    </a>
+                                    <a th:if="${result.sourceTable == 'browser_bookmark'}"
+                                       th:href="${result.uri}" target="_blank" rel="noopener noreferrer"
+                                       th:text="${result.label}" class="text-decoration-none">
+                                        Bookmark title
                                     </a>
                                 </h5>
                                 <p class="mb-1 text-muted small text-break" th:text="${result.uri}">file:///path/to/file</p>
@@ -285,6 +336,9 @@
                                     <span th:if="${result.sourceTable == 'content_chunks'}" class="badge bg-secondary">
                                         <i class="bi bi-text-paragraph me-1"></i>Chunk
                                     </span>
+                                    <span th:if="${result.sourceTable == 'browser_bookmark'}" class="badge bg-warning text-dark">
+                                        <i class="bi bi-bookmark-star me-1"></i>Bookmark
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -294,7 +348,7 @@
                 <!-- Pagination (preserves all filter parameters) -->
                 <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
                     <a th:if="${results.hasPrevious()}"
-                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, page=${results.number - 1}, size=${results.size})}"
+                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, tags=${selectedTagFilters}, folder=${selectedFolderFilter}, page=${results.number - 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         <i class="bi bi-chevron-left me-1"></i>Previous
                     </a>
@@ -303,7 +357,7 @@
                         Page [[${results.number + 1}]] of [[${results.totalPages}]]
                     </span>
                     <a th:if="${results.hasNext()}"
-                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, page=${results.number + 1}, size=${results.size})}"
+                       th:href="@{/search(q=${query}, types=${selectedTypes}, sentiment=${selectedSentiment}, category=${selectedCategory}, tags=${selectedTagFilters}, folder=${selectedFolderFilter}, page=${results.number + 1}, size=${results.size})}"
                        class="btn btn-outline-secondary">
                         Next<i class="bi bi-chevron-right ms-1"></i>
                     </a>
