@@ -49,6 +49,10 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
 
     fun findFirstByCrawlConfigIdOrderByStartTimeDesc(crawlConfigId: Long): JobRun?
 
+    fun findFirstByMirrorConfigIdOrderByStartTimeDesc(mirrorConfigId: Long): JobRun?
+
+    fun findByMirrorConfigId(mirrorConfigId: Long, pageable: Pageable): Page<JobRun>
+
     fun findFirstByOrderByStartTimeDesc(): JobRun?
 
     /**

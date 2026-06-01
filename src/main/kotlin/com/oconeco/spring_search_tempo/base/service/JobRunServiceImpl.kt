@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.JobRunRepository
+import com.oconeco.spring_search_tempo.base.repos.MirrorConfigRepository
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -23,6 +24,7 @@ import java.time.OffsetDateTime
 class JobRunServiceImpl(
     private val jobRunRepository: JobRunRepository,
     private val crawlConfigRepository: CrawlConfigRepository,
+    private val mirrorConfigRepository: MirrorConfigRepository,
     private val jobRunMapper: JobRunMapper,
     private val meterRegistry: MeterRegistry
 ) : JobRunService {
@@ -111,6 +113,34 @@ class JobRunServiceImpl(
         val savedJobRun = jobRunRepository.save(jobRun)
         recordJobRunStarted(savedJobRun.jobName)
         return jobRunMapper.updateJobRunDTO(savedJobRun, JobRunDTO())
+    }
+
+    override fun startJobRunForMirror(mirrorConfigId: Long, jobName: String): JobRunDTO {
+        val mirrorConfig = mirrorConfigRepository.findById(mirrorConfigId)
+            .orElseThrow { NotFoundException("MirrorConfig not found: $mirrorConfigId") }
+
+        val now = OffsetDateTime.now()
+        val jobRun = JobRun().apply {
+            this.mirrorConfig = mirrorConfig
+            this.jobName = jobName
+            this.label = mirrorConfig.name ?: jobName
+            this.startTime = now
+            this.lastHeartbeatAt = now
+            this.runStatus = RunStatus.RUNNING
+            this.status = Status.IN_PROGRESS
+            this.uri = "job-run:$jobName:${mirrorConfigId}:${System.currentTimeMillis()}"
+            this.version = 0L
+        }
+
+        val savedJobRun = jobRunRepository.save(jobRun)
+        recordJobRunStarted(savedJobRun.jobName)
+        return jobRunMapper.updateJobRunDTO(savedJobRun, JobRunDTO())
+    }
+
+    override fun getLatestRunForMirrorConfig(mirrorConfigId: Long): JobRunDTO? {
+        val jobRun = jobRunRepository.findFirstByMirrorConfigIdOrderByStartTimeDesc(mirrorConfigId)
+            ?: return null
+        return jobRunMapper.updateJobRunDTO(jobRun, JobRunDTO())
     }
 
     override fun startJobRunWithoutConfig(jobName: String, label: String?): JobRunDTO {

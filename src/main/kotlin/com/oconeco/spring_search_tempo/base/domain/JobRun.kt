@@ -20,6 +20,10 @@ class JobRun : SaveableObject() {
     @JoinColumn(name = "crawl_config_id")
     var crawlConfig: CrawlConfig? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mirror_config_id")
+    var mirrorConfig: MirrorConfig? = null
+
     @Column(columnDefinition = "text")
     var jobName: String? = null
 

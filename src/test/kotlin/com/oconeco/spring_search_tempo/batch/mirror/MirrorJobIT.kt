@@ -106,6 +106,7 @@ class MirrorJobIT : BaseIT() {
     @Autowired lateinit var mirroredMessageRepository: MirroredMessageRepository
     @Autowired lateinit var mirrorCheckpointRepository: MirrorCheckpointRepository
     @Autowired lateinit var mirrorCheckpointService: MirrorCheckpointService
+    @Autowired lateinit var jobRunRepository: com.oconeco.spring_search_tempo.base.repos.JobRunRepository
     @Autowired lateinit var emailAccountRepository: EmailAccountRepository
     @Autowired lateinit var emailAccountService: EmailAccountService
     @Autowired lateinit var rateLimiter: MirrorRateLimiter
@@ -124,6 +125,7 @@ class MirrorJobIT : BaseIT() {
 
         mirrorCheckpointRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
+        jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
         emailAccountRepository.deleteAll()
         rateLimiter.reset()
@@ -153,6 +155,7 @@ class MirrorJobIT : BaseIT() {
     fun tearDown() {
         mirrorCheckpointRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
+        jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
         emailAccountRepository.deleteAll()
     }
