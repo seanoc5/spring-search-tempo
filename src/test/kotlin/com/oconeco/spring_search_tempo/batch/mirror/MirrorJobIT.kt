@@ -13,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.model.FolderMapping
 import com.oconeco.spring_search_tempo.base.repos.EmailAccountRepository
 import com.oconeco.spring_search_tempo.base.repos.MirrorCheckpointRepository
 import com.oconeco.spring_search_tempo.base.repos.MirrorConfigRepository
+import com.oconeco.spring_search_tempo.base.repos.MirrorFolderProgressRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
 import com.oconeco.spring_search_tempo.base.service.mirror.MirrorRateLimiter
@@ -105,6 +106,7 @@ class MirrorJobIT : BaseIT() {
     @Autowired lateinit var mirrorConfigRepository: MirrorConfigRepository
     @Autowired lateinit var mirroredMessageRepository: MirroredMessageRepository
     @Autowired lateinit var mirrorCheckpointRepository: MirrorCheckpointRepository
+    @Autowired lateinit var mirrorFolderProgressRepository: MirrorFolderProgressRepository
     @Autowired lateinit var mirrorCheckpointService: MirrorCheckpointService
     @Autowired lateinit var jobRunRepository: com.oconeco.spring_search_tempo.base.repos.JobRunRepository
     @Autowired lateinit var emailAccountRepository: EmailAccountRepository
@@ -124,6 +126,7 @@ class MirrorJobIT : BaseIT() {
         dstServer.setUser(DST_EMAIL, DST_EMAIL, PASSWORD)
 
         mirrorCheckpointRepository.deleteAll()
+        mirrorFolderProgressRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
         jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
@@ -154,6 +157,7 @@ class MirrorJobIT : BaseIT() {
     @AfterEach
     fun tearDown() {
         mirrorCheckpointRepository.deleteAll()
+        mirrorFolderProgressRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
         jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
@@ -182,6 +186,15 @@ class MirrorJobIT : BaseIT() {
         // lastRunCompletedAt was stamped.
         val refreshed = mirrorConfigRepository.findById(configId).orElseThrow()
         assertThat(refreshed.lastRunCompletedAt).isNotNull
+        // Folder-progress (#33): reader recorded INBOX as opened with the
+        // right denominator AND stamped it complete on exit.
+        val folderProgress = mirrorFolderProgressRepository.findAll()
+        assertThat(folderProgress).hasSize(1)
+        val inboxFp = folderProgress.single()
+        assertThat(inboxFp.sourceFolder).isEqualTo("INBOX")
+        assertThat(inboxFp.totalConsidered).isEqualTo(5L)
+        assertThat(inboxFp.openedAt).isNotNull
+        assertThat(inboxFp.completedAt).isNotNull
     }
 
     @Test

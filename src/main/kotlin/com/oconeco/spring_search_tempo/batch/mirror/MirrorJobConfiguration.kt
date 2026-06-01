@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.repos.MirrorErrorRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
+import com.oconeco.spring_search_tempo.base.service.MirrorFolderProgressService
 import com.oconeco.spring_search_tempo.base.service.mirror.ImapMirrorService
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -42,6 +43,7 @@ class MirrorJobConfiguration(
     private val imapConnectionService: ImapConnectionService,
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val checkpointService: MirrorCheckpointService,
+    private val folderProgressService: MirrorFolderProgressService,
     private val imapMirrorService: ImapMirrorService,
     private val mirrorErrorRepository: MirrorErrorRepository,
     private val jobRunService: JobRunService,
@@ -67,7 +69,8 @@ class MirrorJobConfiguration(
             emailAccountService = emailAccountService,
             imapConnectionService = imapConnectionService,
             mirroredMessageRepository = mirroredMessageRepository,
-            checkpointService = checkpointService
+            checkpointService = checkpointService,
+            folderProgressService = folderProgressService
         )
         val processor = MirrorMessageProcessor(
             imapMirrorService = imapMirrorService,

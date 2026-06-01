@@ -33,7 +33,8 @@ class MirrorProgressService(
     private val jobRunRepository: JobRunRepository,
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val mirrorErrorRepository: MirrorErrorRepository,
-    private val mirrorCheckpointRepository: MirrorCheckpointRepository
+    private val mirrorCheckpointRepository: MirrorCheckpointRepository,
+    private val folderProgressService: MirrorFolderProgressService
 ) {
 
     fun getJobRunOrThrow(jobRunId: Long): JobRun =
@@ -55,6 +56,8 @@ class MirrorProgressService(
         }
 
         val checkpoint = mirrorCheckpointRepository.findByMirrorConfigId(mirrorConfigId)
+        val folderProgressByFolder = folderProgressService.findByJobRun(jobRunId)
+            .associateBy { it.sourceFolder }
 
         val folders = mirror.folderMappings.map { fm: FolderMapping ->
             val mirrored = mirroredMessageRepository
@@ -62,10 +65,7 @@ class MirrorProgressService(
             val failedThisRun = mirrorErrorRepository
                 .countByMirrorConfigIdAndJobRunIdAndSourceFolder(mirrorConfigId, jobRunId, fm.source)
             val currentUid = if (checkpoint?.currentFolder == fm.source) checkpoint.lastSourceUidProcessed else null
-            val totalCandidate = mirrored + failedThisRun
-            val percent = if (totalCandidate > 0) {
-                ((mirrored.toDouble() / totalCandidate.toDouble()) * 100.0).toInt()
-            } else null
+            val fp = folderProgressByFolder[fm.source]
             FolderProgress(
                 source = fm.source,
                 dest = fm.dest,
@@ -73,9 +73,15 @@ class MirrorProgressService(
                 mirroredCount = mirrored,
                 failedThisRun = failedThisRun,
                 currentUid = currentUid,
-                percentComplete = percent
+                totalConsidered = fp?.totalConsidered,
+                folderComplete = fp?.completedAt != null,
+                folderOpened = fp?.openedAt != null
             )
         }
+
+        val foldersTotal = folders.count { it.enabled }
+        val foldersComplete = folders.count { it.enabled && it.folderComplete }
+        val foldersInFlight = folders.count { it.enabled && it.folderOpened && !it.folderComplete }
 
         val totalFailedThisRun = mirrorErrorRepository.countByMirrorConfigIdAndJobRunId(mirrorConfigId, jobRunId)
         val totalRetryableFailedThisRun = mirrorErrorRepository
@@ -98,6 +104,9 @@ class MirrorProgressService(
             isRunning = jobRun.runStatus == RunStatus.RUNNING,
             elapsedSeconds = elapsedSeconds,
             folders = folders,
+            foldersTotal = foldersTotal,
+            foldersComplete = foldersComplete,
+            foldersInFlight = foldersInFlight,
             processedCount = processed,
             expectedTotal = expected,
             totalMirroredAllTime = totalMirroredAllTime,
@@ -119,6 +128,12 @@ data class MirrorProgressView(
     val isRunning: Boolean,
     val elapsedSeconds: Long?,
     val folders: List<FolderProgress>,
+    /** Enabled folder mappings on the config — denominator for the status line. */
+    val foldersTotal: Int,
+    /** Folders whose reader pass has finished (completedAt is set). */
+    val foldersComplete: Int,
+    /** Folders that have been opened this run but not yet completed. */
+    val foldersInFlight: Int,
     val processedCount: Long,
     val expectedTotal: Long,
     val totalMirroredAllTime: Long,
@@ -134,5 +149,12 @@ data class FolderProgress(
     val mirroredCount: Long,
     val failedThisRun: Long,
     val currentUid: Long?,
-    val percentComplete: Int?
+    /**
+     * UIDs the reader planned to walk for this folder this run, captured
+     * at folder-open time. `null` means the reader hasn't opened the
+     * folder yet (so we have no honest denominator to render).
+     */
+    val totalConsidered: Long?,
+    val folderComplete: Boolean,
+    val folderOpened: Boolean
 )

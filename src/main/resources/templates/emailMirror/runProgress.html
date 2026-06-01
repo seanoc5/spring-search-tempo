@@ -26,10 +26,13 @@
         </div>
         <div class="card-body">
             <p class="mb-2">
-                <strong>[[${progress.processedCount}]] / [[${progress.expectedTotal}]] messages</strong>
-                processed this run.
+                <strong>Folders: [[${progress.foldersComplete}]] / [[${progress.foldersTotal}]] complete</strong>
+                <span th:if="${progress.foldersInFlight > 0}" class="text-muted">
+                    · [[${progress.foldersInFlight}]] in flight
+                </span>
+                · [[${progress.processedCount}]] messages mirrored this run
                 <span th:if="${progress.totalFailedThisRun > 0}" class="text-danger">
-                    [[${progress.totalFailedThisRun}]] failed
+                    · [[${progress.totalFailedThisRun}]] failed
                 </span>
                 <span class="text-muted">
                     ([[${progress.totalMirroredAllTime}]] mirrored under this config all-time)
@@ -44,6 +47,14 @@
             <div th:if="${progress.folders.empty}" class="text-muted">
                 No folder mappings configured.
             </div>
+            <!--
+              Per-folder rows. The "Mirrored" cell renders an honest
+              fraction (mirroredCount / totalConsidered) only when the
+              reader has opened the folder and recorded a denominator;
+              otherwise we show the count alone rather than fabricate
+              one. The "Status" cell replaces the old % column from
+              PR #32, which was a success-rate masquerading as progress.
+            -->
             <table class="table table-sm align-middle" th:unless="${progress.folders.empty}">
                 <thead>
                     <tr>
@@ -52,7 +63,7 @@
                         <th>Mirrored</th>
                         <th>Failed (this run)</th>
                         <th>Current UID</th>
-                        <th>% complete</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -63,7 +74,10 @@
                         </td>
                         <td><code th:text="${f.dest}">INBOX</code></td>
                         <td>
-                            <span th:text="|${f.mirroredCount} / ${f.mirroredCount + f.failedThisRun} messages|">0 / 0 messages</span>
+                            <span th:if="${f.totalConsidered != null}"
+                                  th:text="|${f.mirroredCount} / ${f.totalConsidered} messages|">0 / 0 messages</span>
+                            <span th:if="${f.totalConsidered == null}"
+                                  th:text="|${f.mirroredCount} messages|">0 messages</span>
                         </td>
                         <td>
                             <span th:if="${f.failedThisRun > 0}" class="text-danger" th:text="${f.failedThisRun}">0</span>
@@ -74,8 +88,9 @@
                             <span th:if="${f.currentUid == null}" class="text-muted">–</span>
                         </td>
                         <td>
-                            <span th:if="${f.percentComplete != null}" th:text="|${f.percentComplete}%|">0%</span>
-                            <span th:if="${f.percentComplete == null}" class="text-muted">–</span>
+                            <span th:if="${f.folderComplete}" class="badge bg-success">complete</span>
+                            <span th:if="${!f.folderComplete && f.folderOpened}" class="badge bg-primary">in flight</span>
+                            <span th:if="${!f.folderOpened}" class="badge bg-light text-dark">queued</span>
                         </td>
                     </tr>
                 </tbody>

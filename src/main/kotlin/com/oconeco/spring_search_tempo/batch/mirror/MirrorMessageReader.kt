@@ -6,6 +6,8 @@ import com.oconeco.spring_search_tempo.base.model.FolderMapping
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
+import com.oconeco.spring_search_tempo.base.service.MirrorFolderProgressService
+import com.oconeco.spring_search_tempo.batch.mirror.MirrorJobLifecycleListener.Companion.JOB_RUN_ID_KEY
 import com.sun.mail.imap.IMAPFolder
 import jakarta.mail.FetchProfile
 import jakarta.mail.Folder
@@ -54,6 +56,7 @@ class MirrorMessageReader(
     private val imapConnectionService: ImapConnectionService,
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val checkpointService: MirrorCheckpointService,
+    private val folderProgressService: MirrorFolderProgressService? = null,
     private val messageIdFetchBatchSize: Int = 500
 ) : ItemReader<MirrorTask>, StepExecutionListener {
 
@@ -79,6 +82,15 @@ class MirrorMessageReader(
     private var resumeFolder: String? = null
     private var resumeApplied: Boolean = false
     private var opened: Boolean = false
+
+    /**
+     * Pulled from [JobExecution.executionContext] in [beforeStep]; the
+     * lifecycle listener stamps it under [JOB_RUN_ID_KEY] in `beforeJob`.
+     * `null` means the reader was wired directly in a test that doesn't
+     * exercise the JobRun lifecycle — folder-progress recording is then
+     * a no-op (the dashboard test seeds rows directly).
+     */
+    private var jobRunId: Long? = null
 
     /**
      * Initialize state, open source store, and read the resume marker.
@@ -138,8 +150,50 @@ class MirrorMessageReader(
                     sourceUid = uid
                 )
             }
+            // We exhausted the previous folder's pending queue; stamp it
+            // complete on the progress dashboard before moving on so the
+            // "folders complete" count advances in near-real-time.
+            currentFolderName?.let { finished ->
+                recordFolderCompletedSafely(finished)
+            }
             if (mappingIndex >= mappings.size) return null
             advanceToNextFolder()
+        }
+    }
+
+    private fun recordFolderOpenedSafely(
+        sourceFolder: String,
+        destFolder: String,
+        totalConsidered: Long
+    ) {
+        val svc = folderProgressService ?: return
+        val runId = jobRunId ?: return
+        try {
+            svc.recordFolderOpened(
+                mirrorConfigId = mirrorConfigId,
+                jobRunId = runId,
+                sourceFolder = sourceFolder,
+                destFolder = destFolder,
+                totalConsidered = totalConsidered
+            )
+        } catch (e: Exception) {
+            log.warn(
+                "Failed to record folder-opened progress (jobRunId={}, folder='{}'): {}",
+                runId, sourceFolder, e.message
+            )
+        }
+    }
+
+    private fun recordFolderCompletedSafely(sourceFolder: String) {
+        val svc = folderProgressService ?: return
+        val runId = jobRunId ?: return
+        try {
+            svc.recordFolderCompleted(runId, sourceFolder)
+        } catch (e: Exception) {
+            log.warn(
+                "Failed to record folder-completed progress (jobRunId={}, folder='{}'): {}",
+                runId, sourceFolder, e.message
+            )
         }
     }
 
@@ -155,12 +209,14 @@ class MirrorMessageReader(
         val folder = store.getFolder(mapping.source) as? IMAPFolder
         if (folder == null || !folder.exists() || (folder.type and Folder.HOLDS_MESSAGES) == 0) {
             log.warn("Source folder '{}' is missing or holds no messages; skipping", mapping.source)
+            recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered = 0L)
             return
         }
         folder.open(Folder.READ_ONLY)
         try {
             val messages = folder.messages
             if (messages.isEmpty()) {
+                recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered = 0L)
                 return
             }
 
@@ -206,6 +262,7 @@ class MirrorMessageReader(
                 "MirrorJob folder '{}': {} UIDs considered, {} pending after pre-filter (mirrorConfigId={})",
                 mapping.source, totalConsidered, pending.size, mirrorConfigId
             )
+            recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered.toLong())
         } finally {
             try { folder.close(false) } catch (_: Exception) {}
             // Resume marker only applies the *first* time we land on the resume folder.
@@ -240,6 +297,10 @@ class MirrorMessageReader(
         if (fromParams != null) {
             mirrorConfigId = fromParams
         }
+        // JobRun id is stamped by the lifecycle listener in beforeJob; pull
+        // it here so per-folder progress rows can be tied back to the run.
+        val ctxJobRunId = stepExecution.jobExecution.executionContext.getLong(JOB_RUN_ID_KEY, -1L)
+        jobRunId = if (ctxJobRunId > 0L) ctxJobRunId else null
         // Reset per-run state in case the bean instance is shared across
         // executions by the scope proxy.
         opened = false
