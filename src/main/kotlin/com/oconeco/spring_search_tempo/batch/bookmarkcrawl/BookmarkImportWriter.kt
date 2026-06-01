@@ -53,7 +53,10 @@ class BookmarkImportWriter(
             // Add tags
             if (result.tags.isNotEmpty()) {
                 saved.tags.addAll(result.tags)
-                saved.tagsText = result.tags
+                // Recompute from the merged set so an incremental re-import
+                // that only carries a subset of tags doesn't truncate
+                // tags_text (and therefore the fts_vector at weight A).
+                saved.tagsText = saved.tags
                     .mapNotNull { it.name }
                     .joinToString(" ")
                 browserBookmarkRepository.save(saved)
