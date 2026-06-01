@@ -184,6 +184,14 @@
                 </p>
             </div>
             <div>
+                <form th:action="@{/discovery/{id}/recompute-summary(id=${discoverySession.id})}" method="post" class="d-inline me-2">
+                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                    <input type="hidden" name="redirectTo" th:value="@{/discovery/{id}/classify(id=${discoverySession.id})}">
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i>
+                        Recompute Summary
+                    </button>
+                </form>
                 <a th:href="@{/discovery/rules}" class="btn btn-outline-primary me-2">
                     <i class="bi bi-sliders me-1"></i>
                     Rules
@@ -218,7 +226,7 @@
         <div class="alert alert-warning py-2 small">
             Showing <strong th:text="${visibleFolders}">0</strong> of
             <strong th:text="${discoverySession.totalFolders}">0</strong> folders (depth <=
-            <strong th:text="${maxDepth}">3</strong>) for faster page load.
+            <strong th:text="${maxDepth}">3</strong>) on initial load. Deeper branches load on demand.
         </div>
 
         <div class="row">
@@ -242,11 +250,11 @@
                             </form>
                             <button type="button" class="btn btn-sm btn-outline-secondary me-2"
                                     onclick="expandAll()">
-                                <i class="bi bi-arrows-expand"></i> Expand All
+                                <i class="bi bi-arrows-expand"></i> Expand Loaded
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-secondary"
                                     onclick="collapseAll()">
-                                <i class="bi bi-arrows-collapse"></i> Collapse All
+                                <i class="bi bi-arrows-collapse"></i> Collapse Loaded
                             </button>
                         </div>
                     </div>
@@ -264,7 +272,7 @@
                             </thead>
                             <tbody>
                             <th:block th:each="folder : ${rootFolders}">
-                                <th:block th:replace="~{discovery/classify :: folderRow(${folder}, ${foldersByParent}, 0, ${discoverySession.id}, ${maxDepth}, ${null})}"/>
+                                <th:block th:replace="~{discovery/classify :: folderRow(${folder}, ${foldersByParent}, ${fullyLoadedParentPaths}, 0, ${discoverySession.id}, ${maxDepth}, ${null})}"/>
                             </th:block>
                             </tbody>
                         </table>
@@ -436,8 +444,12 @@
                                     hx-swap="none"
                                     hx-on::after-request="handleSuggestionsApplied(event)">
                                 <i class="bi bi-magic me-1"></i>
-                                Apply Suggested Template
+                                Apply Suggested Statuses
                             </button>
+
+                            <p class="small text-muted mb-2">
+                                Copies the current rule/template suggestions into assigned statuses.
+                            </p>
 
                             <hr>
 
@@ -513,9 +525,12 @@
 
                                 <button type="submit" class="btn btn-primary btn-sm w-100">
                                     <i class="bi bi-check2-circle me-1"></i>
-                                    Apply Classifications
+                                    Apply Effective Statuses
                                 </button>
                             </form>
+                            <p class="small text-muted mb-0 mt-2">
+                                Uses assigned statuses when present; otherwise falls back to current suggestions.
+                            </p>
                         </div>
                     </div>
 
@@ -604,12 +619,20 @@
                 return;
             }
 
-            rows.forEach(r => {
-                if (r.dataset.parentPath === path) {
-                    r.classList.remove('row-hidden');
-                }
-            });
-            setRowExpanded(row, true);
+            Promise.resolve()
+                .then(() => {
+                    if (row.dataset.childrenLoaded !== 'true') {
+                        return loadChildren(row);
+                    }
+                })
+                .then(() => {
+                    document.querySelectorAll('.folder-row').forEach(r => {
+                        if (r.dataset.parentPath === path) {
+                            r.classList.remove('row-hidden');
+                        }
+                    });
+                    setRowExpanded(row, true);
+                });
         }
 
         function expandAll() {
@@ -621,18 +644,176 @@
             });
         }
 
+        function getInsertAfterRow(parentRow) {
+            let insertAfter = parentRow;
+            document.querySelectorAll('.folder-row').forEach(candidate => {
+                if (candidate !== parentRow && isDescendantPath(candidate.dataset.path, parentRow.dataset.path)) {
+                    insertAfter = candidate;
+                }
+            });
+            return insertAfter;
+        }
+
+        function getInheritedStatusForRow(row) {
+            const status = row.dataset.effectiveStatus || '';
+            return status && status !== 'UNKNOWN' ? status : '';
+        }
+
+        function loadChildren(row) {
+            const parentPath = row.dataset.path;
+            const nextDepth = parseInt(row.dataset.depth || '0', 10) + 1;
+            const maxDepth = parseInt(row.dataset.maxDepth || '0', 10);
+            const inheritedStatus = getInheritedStatusForRow(row);
+            const params = new URLSearchParams({
+                parentPath: parentPath,
+                depth: String(nextDepth),
+                maxDepth: String(maxDepth)
+            });
+            if (inheritedStatus) {
+                params.set('inheritedStatus', inheritedStatus);
+            }
+
+            return fetch(`/discovery/${sessionId}/children?${params.toString()}`, {
+                headers: {
+                    'HX-Request': 'true'
+                }
+            })
+                .then(response => response.text())
+                .then(html => {
+                    const template = document.createElement('template');
+                    template.innerHTML = html.trim();
+                    const existingPaths = new Set(
+                        Array.from(document.querySelectorAll('.folder-row')).map(r => r.dataset.path)
+                    );
+                    const newRows = Array.from(template.content.querySelectorAll('tr.folder-row'))
+                        .filter(newRow => !existingPaths.has(newRow.dataset.path));
+
+                    let insertAfter = getInsertAfterRow(row);
+                    newRows.forEach(newRow => {
+                        insertAfter.insertAdjacentElement('afterend', newRow);
+                        insertAfter = newRow;
+                    });
+                    row.dataset.childrenLoaded = 'true';
+                });
+        }
+
         function collapseAll() {
             document.querySelectorAll('.folder-row').forEach(row => {
                 const depth = parseInt(row.dataset.depth || '0', 10);
-                if (depth > 0) {
+                if (depth > 1) {
                     row.classList.add('row-hidden');
                 } else {
                     row.classList.remove('row-hidden');
                 }
                 if (row.querySelector('.toggle-icon')) {
-                    setRowExpanded(row, false);
+                    setRowExpanded(row, depth === 0);
                 }
             });
+        }
+
+        function setActionButtonsForStatus(row, status) {
+            row.querySelectorAll('.action-btn').forEach(btn => {
+                const btnStatus = btn.dataset.status
+                    || { 'S': 'SKIP', 'L': 'LOCATE', 'I': 'INDEX', 'A': 'ANALYZE', 'E': 'SEMANTIC' }[
+                        btn.textContent.replace('*', '').trim()
+                    ];
+                const isActive = btnStatus === status;
+                btn.classList.remove('active-status', 'inactive');
+                btn.classList.add(isActive ? 'active-status' : 'inactive');
+            });
+        }
+
+        function applyStatusToRow(row, status, statusSource = 'ASSIGNED') {
+            if (!row) return;
+
+            const displayStatus = status === 'SEMANTIC' ? 'EMBED' : status;
+            row.dataset.effectiveStatus = status;
+            row.dataset.statusSource = statusSource;
+
+            const badge = row.querySelector('.status-badge');
+            if (badge) {
+                badge.className = `badge status-badge status-${status.toLowerCase()}`;
+                badge.textContent = displayStatus;
+                badge.title = `${statusSource}: ${displayStatus}`;
+            }
+
+            const folderName = row.querySelector('.folder-name-label');
+            if (folderName) {
+                folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
+                folderName.classList.add('folder-name-label', `folder-name-${status.toLowerCase()}`);
+            }
+
+            setActionButtonsForStatus(row, status);
+
+            const suggestedIndicator = row.querySelector('.suggested-indicator');
+            if (suggestedIndicator) {
+                suggestedIndicator.style.display = 'none';
+            }
+        }
+
+        function captureRowState(row) {
+            return {
+                path: row.dataset.path,
+                hidden: row.classList.contains('row-hidden'),
+                expanded: row.dataset.expanded === 'true',
+                childrenLoaded: row.dataset.childrenLoaded === 'true'
+            };
+        }
+
+        function applyCapturedRowState(row, state) {
+            if (!row || !state) return;
+            row.dataset.childrenLoaded = state.childrenLoaded ? 'true' : 'false';
+            row.classList.toggle('row-hidden', state.hidden);
+            setRowExpanded(row, state.expanded);
+        }
+
+        function refreshRowsFromServer(paths) {
+            const normalizedPaths = Array.from(new Set((paths || []).filter(Boolean)));
+            if (normalizedPaths.length === 0) {
+                return Promise.resolve();
+            }
+            const maxDepth = parseInt(
+                document.querySelector('.folder-row')?.dataset.maxDepth || '3',
+                10
+            );
+
+            const rowState = new Map();
+            normalizedPaths.forEach(path => {
+                const row = document.querySelector(`.folder-row[data-path="${CSS.escape(path)}"]`);
+                if (row) {
+                    rowState.set(path, captureRowState(row));
+                }
+            });
+
+            return fetch(`/discovery/${sessionId}/branch-refresh`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'HX-Request': 'true',
+                    [document.querySelector('meta[name="_csrf_header"]').content]:
+                        document.querySelector('meta[name="_csrf"]').content
+                },
+                body: JSON.stringify({ paths: normalizedPaths, maxDepth: maxDepth })
+            })
+                .then(response => response.text())
+                .then(html => {
+                    const template = document.createElement('template');
+                    template.innerHTML = html.trim();
+                    Array.from(template.content.querySelectorAll('tr.folder-row')).forEach(newRow => {
+                        const path = newRow.dataset.path;
+                        const oldRow = document.querySelector(`.folder-row[data-path="${CSS.escape(path)}"]`);
+                        if (!oldRow) return;
+                        const state = rowState.get(path);
+                        oldRow.replaceWith(newRow);
+                        applyCapturedRowState(newRow, state);
+                    });
+                });
+        }
+
+        function loadedSubtreePaths(rootPath) {
+            return Array.from(document.querySelectorAll('.folder-row'))
+                .map(row => row.dataset.path || '')
+                .filter(candidatePath => candidatePath === rootPath || isDescendantPath(candidatePath, rootPath));
         }
 
         function classifyFolder(folderId, folderPath, status, includeSubtree = false) {
@@ -653,41 +834,26 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const row = document.querySelector(`[data-folder-id="${folderId}"]`);
-                    if (row) {
-                        // Update the folder's badge
-                        const badge = row.querySelector('.status-badge');
-                        if (badge) {
-                            badge.className = `badge status-badge status-${status.toLowerCase()}`;
-                            badge.textContent = status === 'SEMANTIC' ? 'EMBED' : status;
-                            badge.title = `ASSIGNED: ${status === 'SEMANTIC' ? 'EMBED' : status}`;
-                        }
-                        // Update folder name styling
-                        const folderName = row.querySelector('.folder-name-label');
-                        if (folderName) {
-                            folderName.className = folderName.className.replace(/folder-name-\w+/g, '');
-                            folderName.classList.add('folder-name-label', `folder-name-${status.toLowerCase()}`);
-                        }
-                        // Update action button active/inactive states
-                        row.querySelectorAll('.action-btn').forEach(btn => {
-                            const btnStatus = btn.textContent.replace('*', '').trim();
-                            const statusMap = {'S': 'SKIP', 'L': 'LOCATE', 'I': 'INDEX', 'A': 'ANALYZE', 'E': 'SEMANTIC'};
-                            const isActive = statusMap[btnStatus] === status;
-                            btn.classList.remove('active-status', 'inactive');
-                            btn.classList.add(isActive ? 'active-status' : 'inactive');
-                        });
-                        // Hide suggested indicator since we just assigned
-                        const suggestedIndicator = row.querySelector('.suggested-indicator');
-                        if (suggestedIndicator) {
-                            suggestedIndicator.style.display = 'none';
-                        }
-                    }
+                    const row = folderId != null
+                        ? document.querySelector(`[data-folder-id="${folderId}"]`)
+                        : document.querySelector(`.folder-row[data-path="${CSS.escape(folderPath)}"]`);
+                    const pathsToRefresh = includeSubtree && folderPath
+                        ? loadedSubtreePaths(folderPath)
+                        : [row?.dataset.path].filter(Boolean);
                     // Trigger status panel refresh
-                    htmx.trigger(document.body, 'classificationChanged');
-                    if (includeSubtree) {
-                        location.reload();
-                    }
+                    return refreshRowsFromServer(pathsToRefresh).then(() => {
+                        if (!includeSubtree) {
+                            const updatedRow = row?.dataset.path
+                                ? document.querySelector(`.folder-row[data-path="${CSS.escape(row.dataset.path)}"]`)
+                                : null;
+                            if (updatedRow) {
+                                applyStatusToRow(updatedRow, status, 'ASSIGNED');
+                            }
+                        }
+                        htmx.trigger(document.body, 'classificationChanged');
+                    });
                 }
+                return null;
             });
         }
 
@@ -738,18 +904,33 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', toggleApplyMode);
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleApplyMode();
+            document.querySelectorAll('.folder-row').forEach(row => {
+                const depth = parseInt(row.dataset.depth || '0', 10);
+                if (depth <= 1) {
+                    row.classList.remove('row-hidden');
+                }
+                if (depth === 0 && row.querySelector('.toggle-icon')) {
+                    setRowExpanded(row, true);
+                }
+            });
+        });
     </script>
 </main>
 
 <!-- Folder Row Fragment -->
-<th:block th:fragment="folderRow(folder, foldersByParent, depth, sessionId, maxDepth, inheritedStatus)">
+<th:block th:fragment="folderRow(folder, foldersByParent, fullyLoadedParentPaths, depth, sessionId, maxDepth, inheritedStatus)">
     <tr class="folder-row"
-        th:classappend="${depth > 0} ? 'row-hidden' : ''"
+        th:classappend="${depth > 1} ? 'row-hidden' : ''"
         th:data-folder-id="${folder.id}"
         th:data-path="${folder.path}"
         th:data-parent-path="${folder.parentPath}"
         th:data-depth="${depth}"
+        th:data-max-depth="${maxDepth}"
+        th:data-effective-status="${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : 'UNKNOWN'))}"
+        th:data-status-source="${folder.assignedStatus != null ? 'ASSIGNED' : (inheritedStatus != null ? 'INHERITED' : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? 'SUGGESTED' : 'NO MATCH'))}"
+        th:data-children-loaded="${fullyLoadedParentPaths.contains(folder.path)}"
         data-expanded="false"
         th:with="
             effectiveStatus=${folder.assignedStatus != null ? folder.assignedStatus : (inheritedStatus != null ? inheritedStatus : (folder.suggestedStatus != null and folder.suggestedStatus.toString() != 'UNKNOWN' ? folder.suggestedStatus : null))},
@@ -766,11 +947,11 @@
 
                 <button type="button"
                         class="btn btn-link p-0 text-decoration-none folder-toggle"
-                        th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}"
+                        th:if="${folder.folderCount > 0 and depth < maxDepth}"
                         onclick="toggleFolder(this)">
                     <i class="bi bi-chevron-right toggle-icon"></i>
                 </button>
-                <span th:unless="${foldersByParent.containsKey(folder.path) and depth < maxDepth}" style="width: 12px;"></span>
+                <span th:unless="${folder.folderCount > 0 and depth < maxDepth}" style="width: 12px;"></span>
 
                 <i class="bi bi-folder text-warning"></i>
                 <span class="folder-name-label"
@@ -782,7 +963,7 @@
 
         <td class="text-end action-col-branch">
             <div class="btn-group btn-group-sm" role="group"
-                 th:if="${foldersByParent.containsKey(folder.path)}"
+                 th:if="${folder.folderCount > 0}"
                  title="Entire-branch actions">
                 <button type="button" class="btn btn-outline-danger action-btn subtree-action"
                         th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
@@ -800,7 +981,7 @@
                         th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
                         th:data-folder-path="${folder.path}" data-status="SEMANTIC" title="Branch: EMBED">E</button>
             </div>
-            <span th:unless="${foldersByParent.containsKey(folder.path)}" class="zero-dash">-</span>
+            <span th:unless="${folder.folderCount > 0}" class="zero-dash">-</span>
         </td>
 
         <td class="status-col">
@@ -822,22 +1003,27 @@
             <div class="btn-group btn-group-sm" role="group" title="Folder-level actions">
                 <button type="button" class="btn btn-outline-danger action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'SKIP'} ? 'active-status' : 'inactive'"
+                        data-status="SKIP"
                         th:onclick="|classifyFolder(${folder.id}, null, 'SKIP')|"
                         title="Folder: SKIP">S</button>
                 <button type="button" class="btn btn-outline-warning action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'LOCATE'} ? 'active-status' : 'inactive'"
+                        data-status="LOCATE"
                         th:onclick="|classifyFolder(${folder.id}, null, 'LOCATE')|"
                         title="Folder: LOCATE">L</button>
                 <button type="button" class="btn btn-outline-success action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'INDEX'} ? 'active-status' : 'inactive'"
+                        data-status="INDEX"
                         th:onclick="|classifyFolder(${folder.id}, null, 'INDEX')|"
                         title="Folder: INDEX">I</button>
                 <button type="button" class="btn btn-outline-primary action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'ANALYZE'} ? 'active-status' : 'inactive'"
+                        data-status="ANALYZE"
                         th:onclick="|classifyFolder(${folder.id}, null, 'ANALYZE')|"
                         title="Folder: ANALYZE">A</button>
                 <button type="button" class="btn btn-outline-secondary action-btn action-btn-folder"
                         th:classappend="${effectiveStatus == 'SEMANTIC'} ? 'active-status' : 'inactive'"
+                        data-status="SEMANTIC"
                         th:onclick="|classifyFolder(${folder.id}, null, 'SEMANTIC')|"
                         title="Folder: EMBED">E</button>
             </div>
@@ -856,7 +1042,7 @@
 
     <th:block th:if="${foldersByParent.containsKey(folder.path) and depth < maxDepth}">
         <th:block th:each="child : ${foldersByParent.get(folder.path)}">
-            <th:block th:replace="~{discovery/classify :: folderRow(${child}, ${foldersByParent}, ${depth + 1}, ${sessionId}, ${maxDepth}, ${folder.assignedStatus != null ? folder.assignedStatus : inheritedStatus})}"/>
+            <th:block th:replace="~{discovery/classify :: folderRow(${child}, ${foldersByParent}, ${fullyLoadedParentPaths}, ${depth + 1}, ${sessionId}, ${maxDepth}, ${folder.assignedStatus != null ? folder.assignedStatus : inheritedStatus})}"/>
         </th:block>
     </th:block>
 </th:block>

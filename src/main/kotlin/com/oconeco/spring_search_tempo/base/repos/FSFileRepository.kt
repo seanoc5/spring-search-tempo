@@ -13,6 +13,14 @@ import org.springframework.data.repository.query.Param
 
 interface FSFileRepository : JpaRepository<FSFile, Long> {
 
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.sourceHostRef IS NULL
+        AND (f.sourceHost IS NULL OR TRIM(f.sourceHost) = '')
+        ORDER BY f.id
+    """)
+    fun findOrphanSourceHostFiles(pageable: Pageable): Page<FSFile>
+
     fun findAllById(id: Long?, pageable: Pageable): Page<FSFile>
 
     fun findFirstByFsFolderId(id: Long): FSFile?

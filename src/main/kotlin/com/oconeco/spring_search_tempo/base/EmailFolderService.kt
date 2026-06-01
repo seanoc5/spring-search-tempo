@@ -25,7 +25,7 @@ interface EmailFolderService {
      * Find or create a folder for an account.
      * Used during sync to ensure folder exists before adding messages.
      */
-    fun findOrCreate(accountId: Long, folderName: String, fullPath: String): EmailFolderDTO
+    fun findOrCreate(accountId: Long, folderName: String, path: String): EmailFolderDTO
 
     /**
      * Update sync state after processing a folder.
@@ -48,5 +48,22 @@ interface EmailFolderService {
      * If UIDVALIDITY changed, returns true (indicating UIDs are invalid).
      */
     fun updateUidValidity(id: Long, newUidValidity: Long): Boolean
+
+    /**
+     * Toggle a folder's `syncEnabled` flag.
+     *
+     * Re-enabling a folder (false → true) resets its `lastSyncUid` to 0 so the
+     * next sync pulls full history — per spec, the user expects a freshly
+     * re-enabled folder to backfill, not to silently resume from the stale UID
+     * cursor it had when last disabled.
+     */
+    fun setSyncEnabled(id: Long, enabled: Boolean)
+
+    /**
+     * Folders that should be visited by `EmailQuickSyncReader` for this account:
+     * `syncEnabled = true` and not `\Noselect`. Returns folder paths in stable
+     * order (path ascending) so job step naming is deterministic.
+     */
+    fun fetchTargets(accountId: Long): List<String>
 
 }

@@ -15,6 +15,15 @@ interface DiscoveredFolderRepository : JpaRepository<DiscoveredFolder, Long> {
 
     fun findBySessionIdAndDepth(sessionId: Long, depth: Int): List<DiscoveredFolder>
 
+    @Query("""
+        SELECT f FROM DiscoveredFolder f
+        WHERE f.session.id = :sessionId
+          AND (
+            (:parentPath IS NULL AND f.parentPath IS NULL)
+            OR f.parentPath = :parentPath
+          )
+        ORDER BY f.path
+    """)
     fun findBySessionIdAndParentPath(sessionId: Long, parentPath: String?): List<DiscoveredFolder>
 
     @Query("SELECT f FROM DiscoveredFolder f WHERE f.session.id = :sessionId ORDER BY f.path")
@@ -22,6 +31,14 @@ interface DiscoveredFolderRepository : JpaRepository<DiscoveredFolder, Long> {
 
     @Query("SELECT f FROM DiscoveredFolder f WHERE f.session.id = :sessionId AND f.depth <= :maxDepth ORDER BY f.path")
     fun findBySessionIdAndMaxDepth(sessionId: Long, maxDepth: Int): List<DiscoveredFolder>
+
+    @Query("""
+        SELECT f FROM DiscoveredFolder f
+        WHERE f.session.id = :sessionId
+          AND f.path IN :paths
+        ORDER BY f.path
+    """)
+    fun findBySessionIdAndPathIn(sessionId: Long, paths: Collection<String>): List<DiscoveredFolder>
 
     fun countBySessionId(sessionId: Long): Long
 

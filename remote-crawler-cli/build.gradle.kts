@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.nio.file.Files
 
 plugins {
     kotlin("jvm") version "1.9.25"
@@ -78,12 +79,25 @@ tasks.shadowJar {
             "Implementation-Version" to version
         )
     }
+
+    doLast {
+        val jar = archiveFile.get().asFile
+        val link = rootProject.projectDir.resolve("remote-crawler.jar").toPath()
+        Files.deleteIfExists(link)
+        Files.createSymbolicLink(link, jar.toPath())
+        println("Symlink: ${link} -> ${jar}")
+    }
 }
 
-// Convenience task to build the fat JAR
+// Convenience task to build the fat JAR and create symlink in repo root
 tasks.register("buildCli") {
     dependsOn(tasks.shadowJar)
     doLast {
-        println("Built: build/libs/remote-crawler-${version}.jar")
+        val jar = tasks.shadowJar.get().archiveFile.get().asFile
+        val link = rootProject.projectDir.resolve("remote-crawler.jar").toPath()
+        Files.deleteIfExists(link)
+        Files.createSymbolicLink(link, jar.toPath())
+        println("Built: ${jar}")
+        println("Symlink: ${link} -> ${jar}")
     }
 }

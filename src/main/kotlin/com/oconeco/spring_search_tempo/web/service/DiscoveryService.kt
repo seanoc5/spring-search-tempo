@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.domain.*
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.repos.DiscoveredFolderRepository
 import com.oconeco.spring_search_tempo.base.repos.DiscoverySessionRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
+import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
@@ -29,7 +30,8 @@ class DiscoveryService(
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigService: DatabaseCrawlConfigService,
     private val crawlConfigConverter: CrawlConfigConverter,
-    private val discoveryTemplateClassifier: DiscoveryTemplateClassifier
+    private val discoveryTemplateClassifier: DiscoveryTemplateClassifier,
+    private val sourceHostService: SourceHostService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -64,6 +66,7 @@ class DiscoveryService(
         // Create session
         val session = DiscoverySession().apply {
             host = normalizedHost
+            sourceHostRef = sourceHostService.resolveOrCreate(normalizedHost, request.osType)
             osType = request.osType
             rootPaths = request.rootPaths.joinToString(",")
             status = DiscoveryStatus.PENDING
@@ -157,13 +160,12 @@ class DiscoveryService(
         val session = sessionRepository.findById(sessionId)
             .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
         val sessionOsType = session.osType ?: ""
-
-        val folders = folderRepository.findBySessionIdAndMaxDepth(sessionId, maxDepth)
+        val planFolders = folderRepository.findBySessionIdAndMaxDepth(sessionId, minOf(maxDepth.coerceAtLeast(0), 2))
         val loadedAt = System.nanoTime()
         val templatePlan = discoveryTemplateClassifier.buildPlan(
             osType = sessionOsType,
             rootPaths = session.rootPaths?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
-            folders = folders.map {
+            folders = planFolders.map {
                 TemplateFolderInput(
                     path = it.path ?: "",
                     name = it.name ?: "",
@@ -173,10 +175,10 @@ class DiscoveryService(
         )
         val plannedAt = System.nanoTime()
         log.debug(
-            "Classification page load session {} maxDepth={} loaded {} folders in {} ms, template plan in {} ms",
+            "Classification page summary load session {} maxDepth={} used {} folders in {} ms, template plan in {} ms",
             sessionId,
             maxDepth,
-            folders.size,
+            planFolders.size,
             (loadedAt - startedAt) / 1_000_000,
             (plannedAt - loadedAt) / 1_000_000
         )
@@ -198,8 +200,149 @@ class DiscoveryService(
             suggestedProfile = templatePlan.profile.name,
             profileConfidencePercent = templatePlan.confidencePercent,
             profileReason = templatePlan.reason,
-            folders = folders.map { toFolderDTO(it, sessionOsType) }
+            folders = emptyList()
         )
+    }
+
+    /**
+     * Build a small initial tree for the classification page and leave the rest to lazy loading.
+     */
+    @Transactional(readOnly = true)
+    fun getInitialFolderTree(sessionId: Long, maxDepth: Int = 3): DiscoveryInitialTreeDTO {
+        val session = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+        val sessionOsType = session.osType ?: ""
+        val shallowDepth = minOf(maxDepth.coerceAtLeast(0), 1)
+
+        val shallowFolders = folderRepository.findBySessionIdAndMaxDepth(sessionId, shallowDepth)
+        val focusPaths = buildInitialFocusPaths(session)
+        val focusTreePaths = focusPaths
+            .flatMap { ancestorChain(it, sessionOsType, maxDepth) }
+            .toCollection(linkedSetOf())
+
+        val focusFolders = if (focusTreePaths.isEmpty()) {
+            emptyList()
+        } else {
+            folderRepository.findBySessionIdAndPathIn(sessionId, focusTreePaths)
+        }
+
+        val mergedFolders = linkedMapOf<String, DiscoveredFolder>()
+        (shallowFolders + focusFolders).forEach { folder ->
+            val path = folder.path ?: return@forEach
+            mergedFolders[path] = folder
+        }
+
+        val fullyLoadedParentPaths = shallowFolders
+            .filter { it.depth < shallowDepth }
+            .mapNotNull { it.path }
+            .toSet()
+
+        return DiscoveryInitialTreeDTO(
+            folders = mergedFolders.values.map { toFolderDTO(it, sessionOsType) },
+            fullyLoadedParentPaths = fullyLoadedParentPaths
+        )
+    }
+
+    private fun buildInitialFocusPaths(session: DiscoverySession): Set<String> {
+        val host = session.host?.trim().orEmpty()
+        val focus = linkedSetOf<String>()
+
+        session.rootPaths
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            ?.forEach { focus.add(it) }
+
+        if (host.isBlank()) {
+            return focus
+        }
+
+        val hostConfigs = crawlConfigService.findAll(null, Pageable.unpaged()).content
+            .filter { it.sourceHost?.trim()?.equals(host, ignoreCase = true) == true }
+
+        hostConfigs.forEach { config ->
+            config.startPaths.orEmpty()
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .forEach { focus.add(it) }
+
+            focus.addAll(extractConfiguredFocusPaths(config))
+        }
+
+        return focus
+    }
+
+    private fun extractConfiguredFocusPaths(config: CrawlConfigDTO): Set<String> {
+        val definition = crawlConfigConverter.toDefinition(config)
+        val focus = linkedSetOf<String>()
+
+        focus += selectAnchoredPaths(definition.folderPatterns.skip, maxDepth = 2, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.index, maxDepth = 5, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.analyze, maxDepth = 5, limit = 40)
+        focus += selectAnchoredPaths(definition.folderPatterns.semantic, maxDepth = 5, limit = 40)
+
+        return focus
+    }
+
+    private fun selectAnchoredPaths(patterns: List<String>, maxDepth: Int, limit: Int): List<String> {
+        return patterns.asSequence()
+            .mapNotNull { extractAnchoredLiteralPath(it) }
+            .filter { it != "/" }
+            .filter { pathDepth(it) <= maxDepth }
+            .distinct()
+            .sortedWith(compareBy<String>({ pathDepth(it) }, { it.length }, { it.lowercase() }))
+            .take(limit)
+            .toList()
+    }
+
+    private fun extractAnchoredLiteralPath(pattern: String): String? {
+        val trimmed = pattern.trim()
+        if (trimmed == "^[\\\\/].*$") {
+            return "/"
+        }
+
+        if (!trimmed.startsWith("^\\Q")) {
+            return null
+        }
+        val quotedEnd = trimmed.indexOf("\\E(")
+        if (quotedEnd <= 3) {
+            return null
+        }
+
+        val quotedBody = trimmed.substring(3, quotedEnd)
+        return quotedBody
+            .replace("[\\\\\\\\/]", "/")
+            .replace("[\\\\/]", "/")
+            .replace("//", "/")
+            .trim()
+            .takeIf { it.isNotBlank() }
+    }
+
+    private fun ancestorChain(path: String, osType: String, maxDepth: Int): List<String> {
+        val normalized = path.trim().takeIf { it.isNotBlank() } ?: return emptyList()
+        val chain = mutableListOf<String>()
+        var current: String? = normalized
+        while (current != null) {
+            val currentDepth = pathDepth(current)
+            if (currentDepth <= maxDepth) {
+                chain.add(current)
+            }
+            current = computeParentPath(current, osType)
+        }
+        return chain.asReversed()
+    }
+
+    private fun pathDepth(path: String): Int {
+        val normalized = path.trim().replace('\\', '/')
+        if (normalized.isBlank() || normalized == "/") {
+            return 0
+        }
+        if (normalized.length >= 3 && normalized[1] == ':' && normalized[2] == '/') {
+            return normalized.removePrefix(normalized.substring(0, 3))
+                .split('/')
+                .count { it.isNotBlank() }
+        }
+        return normalized.split('/').count { it.isNotBlank() }
     }
 
     /**
@@ -222,6 +365,26 @@ class DiscoveryService(
             .osType ?: ""
         val folders = folderRepository.findBySessionIdAndParentPath(sessionId, parentPath)
         return folders.map { toFolderDTO(it, sessionOsType) }
+    }
+
+    /**
+     * Re-read a specific ordered set of folder rows from persisted state.
+     */
+    fun getFoldersByPaths(sessionId: Long, paths: List<String>): List<DiscoveredFolderDTO> {
+        if (paths.isEmpty()) return emptyList()
+
+        val sessionOsType = sessionRepository.findById(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+            .osType ?: ""
+        val normalizedPaths = paths.map { it.trim() }.filter { it.isNotBlank() }
+        if (normalizedPaths.isEmpty()) return emptyList()
+
+        val byPath = folderRepository.findBySessionIdAndPathIn(sessionId, normalizedPaths)
+            .associateBy { it.path ?: "" }
+
+        return normalizedPaths.mapNotNull { path ->
+            byPath[path]?.let { toFolderDTO(it, sessionOsType) }
+        }
     }
 
     /**
@@ -403,6 +566,33 @@ class DiscoveryService(
         )
     }
 
+    @Transactional
+    fun recomputeSessionSummary(sessionId: Long): DiscoverySessionSummaryRepairResult {
+        val session = sessionRepository.findByIdWithFolders(sessionId)
+            .orElseThrow { NotFoundException("Discovery session $sessionId not found") }
+
+        val effectiveCounts = effectiveSessionCounts(session.folders)
+        session.classifiedFolders = effectiveCounts.classifiedFolders
+        session.skipCount = effectiveCounts.skipCount
+        session.locateCount = effectiveCounts.locateCount
+        session.indexCount = effectiveCounts.indexCount
+        session.analyzeCount = effectiveCounts.analyzeCount
+        if (session.status == DiscoveryStatus.PENDING && session.classifiedFolders > 0) {
+            session.status = DiscoveryStatus.CLASSIFYING
+        }
+        sessionRepository.save(session)
+
+        return DiscoverySessionSummaryRepairResult(
+            sessionId = session.id!!,
+            classifiedFolders = session.classifiedFolders,
+            skipCount = session.skipCount,
+            locateCount = session.locateCount,
+            indexCount = session.indexCount,
+            analyzeCount = session.analyzeCount,
+            status = session.status.name
+        )
+    }
+
     /**
      * Get all pending discovery sessions.
      */
@@ -423,7 +613,7 @@ class DiscoveryService(
      * Get all sessions for a host.
      */
     fun getSessionsForHost(host: String): List<DiscoverySessionSummaryDTO> {
-        return sessionRepository.findByHostOrderByDateCreatedDesc(host)
+        return sessionRepository.findByHostOrSourceHostOrderByDateCreatedDesc(host.trim())
             .map { toSummaryDTO(it) }
     }
 
@@ -518,6 +708,7 @@ class DiscoveryService(
                     maxDepth = 20
                     followLinks = false
                     parallel = true
+                    enabled = true
                     folderPatternsSkip = crawlConfigConverter.toJsonArray(skipPatterns)
                     folderPatternsLocate = crawlConfigConverter.toJsonArray(locatePatterns)
                     folderPatternsIndex = crawlConfigConverter.toJsonArray(indexPatterns)
@@ -542,10 +733,16 @@ class DiscoveryService(
             }
         }
 
+        val effectiveCounts = effectiveSessionCounts(session.folders)
         val placeholderSeed = seedFsFolderPlaceholders(session, targetConfigId)
         session.crawlConfig = crawlConfigRepository.findById(targetConfigId).orElse(null)
         session.status = DiscoveryStatus.APPLIED
         session.appliedAt = OffsetDateTime.now()
+        session.classifiedFolders = effectiveCounts.classifiedFolders
+        session.skipCount = effectiveCounts.skipCount
+        session.locateCount = effectiveCounts.locateCount
+        session.indexCount = effectiveCounts.indexCount
+        session.analyzeCount = effectiveCounts.analyzeCount
         sessionRepository.save(session)
         log.info(
             "Applied discovery session {} to crawl config {} ({}): seeded {} placeholder folders, reused {} existing folders",
@@ -586,8 +783,36 @@ class DiscoveryService(
         sessionRepository.save(session)
     }
 
+    private fun effectiveSessionCounts(folders: Collection<DiscoveredFolder>): EffectiveSessionCounts {
+        var classifiedFolders = 0
+        var skipCount = 0
+        var locateCount = 0
+        var indexCount = 0
+        var analyzeCount = 0
+
+        folders.forEach { folder ->
+            val effective = effectiveStatus(folder) ?: return@forEach
+            classifiedFolders++
+            when (effective) {
+                AnalysisStatus.SKIP -> skipCount++
+                AnalysisStatus.LOCATE -> locateCount++
+                AnalysisStatus.INDEX -> indexCount++
+                AnalysisStatus.ANALYZE -> analyzeCount++
+                AnalysisStatus.SEMANTIC -> {}
+            }
+        }
+
+        return EffectiveSessionCounts(
+            classifiedFolders = classifiedFolders,
+            skipCount = skipCount,
+            locateCount = locateCount,
+            indexCount = indexCount,
+            analyzeCount = analyzeCount
+        )
+    }
+
     private fun archiveExistingSessionsForHost(host: String): Int {
-        val existing = sessionRepository.findByHostOrderByDateCreatedDesc(host)
+        val existing = sessionRepository.findByHostOrSourceHostOrderByDateCreatedDesc(host)
         if (existing.isEmpty()) return 0
         var archived = 0
         existing.forEach { session ->
@@ -891,6 +1116,11 @@ data class DiscoverySessionDTO(
     val folders: List<DiscoveredFolderDTO>
 )
 
+data class DiscoveryInitialTreeDTO(
+    val folders: List<DiscoveredFolderDTO>,
+    val fullyLoadedParentPaths: Set<String>
+)
+
 data class DiscoveredFolderDTO(
     val id: Long,
     val path: String,
@@ -949,6 +1179,14 @@ data class ApplyDiscoveryResult(
     val semanticPatterns: Int = 0
 )
 
+private data class EffectiveSessionCounts(
+    val classifiedFolders: Int,
+    val skipCount: Int,
+    val locateCount: Int,
+    val indexCount: Int,
+    val analyzeCount: Int
+)
+
 private data class FsFolderPlaceholderSpec(
     val uri: String,
     val label: String,
@@ -990,6 +1228,16 @@ data class TemplateApplyResponse(
     val semanticSuggested: Int = 0
 )
 
+data class DiscoverySessionSummaryRepairResult(
+    val sessionId: Long,
+    val classifiedFolders: Int,
+    val skipCount: Int,
+    val locateCount: Int,
+    val indexCount: Int,
+    val analyzeCount: Int,
+    val status: String
+)
+
 data class AssignedFolderPageResponse(
     val status: String,
     val totalCount: Long,
@@ -1009,4 +1257,9 @@ data class ClassifyFolderRequest(
     val folderPath: String? = null,
     val status: String,
     val includeSubtree: Boolean = false
+)
+
+data class DiscoveryBranchRefreshRequest(
+    val paths: List<String> = emptyList(),
+    val maxDepth: Int = 3
 )

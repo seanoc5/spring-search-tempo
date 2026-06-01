@@ -1,5 +1,6 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
@@ -14,7 +15,10 @@ import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 @Service
 class RemoteCrawlPlannerService(
@@ -23,10 +27,13 @@ class RemoteCrawlPlannerService(
     private val crawlConfigConverter: CrawlConfigConverter,
     private val runtimeCrawlConfigService: RuntimeCrawlConfigService,
     private val patternMatchingService: PatternMatchingService,
-    private val crawlSchedulingService: CrawlSchedulingService
+    private val crawlSchedulingService: CrawlSchedulingService,
+    private val objectMapper: ObjectMapper
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(RemoteCrawlPlannerService::class.java)
+        private val SNAPSHOT_DIR: Path = Path.of("logs/remote-crawl-snapshots")
+        private val TIMESTAMP_FMT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
     }
 
     fun buildBootstrap(host: String): RemoteBootstrapResponse {
@@ -53,6 +60,7 @@ class RemoteCrawlPlannerService(
                 followLinks = definition.getFollowLinks(defaults),
                 parallel = definition.getParallel(defaults),
                 crawlMode = config.crawlMode,
+                freshnessHours = config.freshnessHours ?: 24,
                 discoveryKeeperMaxDepth = config.discoveryKeeperMaxDepth,
                 discoverySkipMaxDepth = config.discoverySkipMaxDepth,
                 discoveryFileSampleCap = config.discoveryFileSampleCap,
@@ -87,11 +95,13 @@ class RemoteCrawlPlannerService(
             )
         }
 
-        return RemoteBootstrapResponse(
+        val response = RemoteBootstrapResponse(
             serverHost = HostNameHolder.currentHostName,
             requestedHost = trimmedHost,
             assignments = configs
         )
+        saveSnapshot("bootstrap", trimmedHost, null, response)
+        return response
     }
 
     fun buildFolderSnapshot(host: String, crawlConfigId: Long): RemoteFolderSnapshotResponse {
@@ -109,11 +119,13 @@ class RemoteCrawlPlannerService(
                     else -> null
                 }
                 val fsLastModified = row.getOrNull(3) as? OffsetDateTime
+                val lastCrawledAt = row.getOrNull(4) as? OffsetDateTime
                 RemoteFolderSnapshotEntry(
                     path = extractPathFromUri(uri),
                     analysisStatus = analysisStatus,
                     crawlDepth = crawlDepth,
-                    fsLastModified = fsLastModified
+                    fsLastModified = fsLastModified,
+                    lastCrawledAt = lastCrawledAt
                 )
             }
 
@@ -124,13 +136,15 @@ class RemoteCrawlPlannerService(
             folders.size
         )
 
-        return RemoteFolderSnapshotResponse(
+        val response = RemoteFolderSnapshotResponse(
             serverHost = HostNameHolder.currentHostName,
             requestedHost = requestedHost,
             crawlConfigId = crawlConfigId,
             folderCount = folders.size,
             folders = folders
         )
+        saveSnapshot("folder-snapshot", normalizedHost, crawlConfigId, response)
+        return response
     }
 
     fun classify(request: RemoteClassifyRequest): RemoteClassifyResponse {
@@ -281,12 +295,14 @@ class RemoteCrawlPlannerService(
             trimmedHost, summary.totalDue, summary.hotCount, summary.warmCount, summary.coldCount
         )
 
-        return SmartBootstrapResponse(
+        val response = SmartBootstrapResponse(
             standardBootstrap = standardBootstrap,
             smartCrawlEnabled = true,
             prioritizedFolders = prioritizedFolders,
             temperatureSummary = summary
         )
+        saveSnapshot("smart-bootstrap", trimmedHost, crawlConfigId, response)
+        return response
     }
 
     /**
@@ -313,6 +329,19 @@ class RemoteCrawlPlannerService(
         return config
     }
 
+    private fun saveSnapshot(type: String, host: String, crawlConfigId: Long?, payload: Any) {
+        try {
+            Files.createDirectories(SNAPSHOT_DIR)
+            val ts = OffsetDateTime.now().format(TIMESTAMP_FMT)
+            val configSuffix = if (crawlConfigId != null) "_config-$crawlConfigId" else ""
+            val file = SNAPSHOT_DIR.resolve("${type}_${host}${configSuffix}_$ts.json")
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), payload)
+            log.info("Saved {} snapshot to {}", type, file)
+        } catch (e: Exception) {
+            log.warn("Failed to save {} snapshot for host {}: {}", type, host, e.message)
+        }
+    }
+
     private fun normalizeHost(host: String): String {
         val trimmed = host.trim().lowercase()
         require(trimmed.isNotBlank()) { "host is required" }
@@ -337,6 +366,7 @@ data class RemoteCrawlConfigAssignment(
     val followLinks: Boolean,
     val parallel: Boolean,
     val crawlMode: CrawlMode = CrawlMode.ENFORCE,
+    val freshnessHours: Int = 24,
     val discoveryKeeperMaxDepth: Int = 20,
     val discoverySkipMaxDepth: Int = 10,
     val discoveryFileSampleCap: Int = 50,
@@ -358,7 +388,8 @@ data class RemoteFolderSnapshotEntry(
     val path: String,
     val analysisStatus: AnalysisStatus,
     val crawlDepth: Int? = null,
-    val fsLastModified: OffsetDateTime? = null
+    val fsLastModified: OffsetDateTime? = null,
+    val lastCrawledAt: OffsetDateTime? = null
 )
 
 data class PatternPayload(

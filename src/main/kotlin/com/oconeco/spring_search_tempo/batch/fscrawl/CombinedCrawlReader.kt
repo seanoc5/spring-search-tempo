@@ -172,11 +172,11 @@ class CombinedCrawlReader(
 
             } catch (e: AccessDeniedException) {
                 errorsEncountered++
-                log.warn("Access denied to directory (skipping): {} - {}", dir, e.message)
+                log.info("Access denied to directory (skipping): {}", dir)
                 return FileVisitResult.SKIP_SUBTREE
             } catch (e: NoSuchFileException) {
                 errorsEncountered++
-                log.warn("Directory disappeared during processing (skipping): {} - {}", dir, e.message)
+                log.info("Directory disappeared during processing (skipping): {}", dir)
                 return FileVisitResult.SKIP_SUBTREE
             } catch (e: Exception) {
                 errorsEncountered++
@@ -189,14 +189,22 @@ class CombinedCrawlReader(
 
         override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
             errorsEncountered++
-            log.warn("Unable to access path (skipping): {} - {}", file, exc.message)
+            if (exc is AccessDeniedException) {
+                log.info("Access denied (skipping): {}", file)
+            } else {
+                log.warn("Unable to access path (skipping): {} - {}", file, exc.message)
+            }
             return FileVisitResult.SKIP_SUBTREE
         }
 
         override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
             if (exc != null) {
                 errorsEncountered++
-                log.warn("Error after visiting directory (continuing): {} - {}", dir, exc.message)
+                if (exc is AccessDeniedException) {
+                    log.info("Access denied after visiting directory (continuing): {}", dir)
+                } else {
+                    log.warn("Error after visiting directory (continuing): {} - {}", dir, exc.message)
+                }
             }
             return FileVisitResult.CONTINUE
         }

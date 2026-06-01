@@ -125,25 +125,61 @@ app:
       folder-patterns:
         # SKIP: Persist folder metadata but don't crawl children (processing stops here)
         skip:
+          # --- Version control & IDE ---
           - ".*/\\.git/.*"
-          - ".*/\\.gradle/.*"
+          - ".*/\\.svn/.*"
+          - ".*/\\.hg/.*"
           - ".*/\\.idea/.*"
+          - ".*/\\.vscode/.*"
+          # --- Build outputs ---
+          - ".*/\\.gradle/.*"
           - ".*/build/.*"
           - ".*/out/.*"
           - ".*/target/.*"
           - ".*/dist/.*"
+          # --- Package managers / dependencies ---
           - ".*/node_modules/.*"
           - ".*/vendor/.*"
           - ".*/packages/.*"
+          - ".*/\\.npm/.*"
+          - ".*/\\.yarn/.*"
+          - ".*/\\.pnpm-store/.*"
+          - ".*/bower_components/.*"
+          # --- Python environments & caches ---
+          - ".*/\\.venv/.*"
+          - ".*/venv/.*"
+          - ".*/__pycache__/.*"
+          - ".*/\\.mypy_cache/.*"
+          - ".*/\\.pytest_cache/.*"
+          - ".*/\\.tox/.*"
+          - ".*/.eggs/.*"
+          - ".*/\\.egg-info/.*"
+          - ".*/site-packages/.*"
+          # --- Conda / Miniforge / Mamba ---
+          - ".*/miniforge3/.*"
+          - ".*/miniconda3/.*"
+          - ".*/anaconda3/.*"
+          - ".*/mambaforge/.*"
+          - ".*/\\.conda/.*"
+          # --- Java / Kotlin ---
+          - ".*/\\.m2/.*"
+          - ".*/\\.ivy2/.*"
+          # --- Rust / Go ---
+          - ".*/\\.cargo/.*"
+          - ".*/\\.rustup/.*"
+          - ".*/.cache/go-build/.*"
+          # --- OS / system ---
           - "/tmp/.*"
           - "/run/.*"
           - "/root/.*"
           - "/proc/.*"
           - "/sys/.*"
           - "/dev/.*"
-#          - "/mnt/.*"
-#          - "/media/.*"
+          - "/snap/.*"
           - "/lost\\+found/.*"
+          # --- User caches & trash ---
+          - ".*/\\.cache/.*"
+          - ".*/\\.local/share/Trash/.*"
       file-patterns:
         # SKIP: Persist file metadata only (no text extraction)
         skip:
@@ -175,6 +211,13 @@ app:
     quick-sync-folders:
       - "INBOX"
       - "Sent"
+    # Attachments are streamed through Tika during body enrichment and
+    # persisted as ContentChunk rows (chunkType=EmailAttachment).
+    # Set max-attachment-size to 0 or attachment-extraction.enabled=false
+    # to skip entirely.
+    max-attachment-size: 26214400  # 25 MB
+    attachment-extraction:
+      enabled: true
     accounts:
       # Gmail account (requires App Password)
       # To enable:

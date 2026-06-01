@@ -95,6 +95,13 @@
                                 </div>
 
                                 <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enabled" th:field="*{enabled}" />
+                                        <label class="form-check-label" for="enabled">Enabled</label>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
                                     <label for="crawlMode" class="form-label">Crawl Mode</label>
                                     <select class="form-select" id="crawlMode" th:field="*{crawlMode}">
                                         <option value="ENFORCE">ENFORCE (normal skip behavior)</option>

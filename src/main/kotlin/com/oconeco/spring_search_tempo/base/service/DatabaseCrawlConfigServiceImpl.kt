@@ -18,7 +18,8 @@ class DatabaseCrawlConfigServiceImpl(
     private val crawlConfigRepository: CrawlConfigRepository,
     private val crawlConfigMapper: CrawlConfigMapper,
     private val userOwnershipService: UserOwnershipService,
-    private val smartDeleteService: SmartDeleteService
+    private val smartDeleteService: SmartDeleteService,
+    private val sourceHostService: SourceHostService
 ) : DatabaseCrawlConfigService {
 
     override fun count(): Long = crawlConfigRepository.count()
@@ -64,6 +65,7 @@ class DatabaseCrawlConfigServiceImpl(
 
         val crawlConfig = CrawlConfig()
         crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        crawlConfig.sourceHostRef = sourceHostService.resolveOrCreate(crawlConfigDTO.sourceHost)
         // New DTOs may not carry an explicit version from forms/wizard.
         if (crawlConfig.version == null) {
             crawlConfig.version = 0L
@@ -90,6 +92,7 @@ class DatabaseCrawlConfigServiceImpl(
         }
 
         crawlConfigMapper.updateCrawlConfig(crawlConfigDTO, crawlConfig)
+        crawlConfig.sourceHostRef = sourceHostService.resolveOrCreate(crawlConfigDTO.sourceHost)
         try {
             crawlConfigRepository.save(crawlConfig)
         } catch (ex: DataIntegrityViolationException) {
@@ -120,6 +123,44 @@ class DatabaseCrawlConfigServiceImpl(
 
     override fun findDistinctSourceHosts(): List<String> {
         return crawlConfigRepository.findDistinctSourceHosts()
+    }
+
+    override fun findBySourceHost(
+        sourceHost: String,
+        filter: String?,
+        pageable: Pageable,
+        includeAll: Boolean
+    ): Page<CrawlConfigDTO> {
+        val ownedSourceHosts = if (includeAll) {
+            listOf(sourceHost)
+        } else {
+            val userHosts = userOwnershipService.getCurrentUserSourceHosts()
+            if (userHosts.isEmpty() || userHosts.contains(sourceHost)) {
+                listOf(sourceHost)
+            } else {
+                emptyList() // User doesn't own this host
+            }
+        }
+
+        if (ownedSourceHosts.isEmpty()) {
+            return PageImpl(emptyList(), pageable, 0)
+        }
+
+        val page = if (filter.isNullOrBlank()) {
+            crawlConfigRepository.findBySourceHostIgnoreCase(sourceHost, pageable)
+        } else {
+            crawlConfigRepository.findBySourceHostIgnoreCaseAndNameContainingIgnoreCase(
+                sourceHost, filter, pageable
+            )
+        }
+
+        return PageImpl(
+            page.content.map { crawlConfig ->
+                crawlConfigMapper.updateCrawlConfigDTO(crawlConfig, CrawlConfigDTO())
+            },
+            pageable,
+            page.totalElements
+        )
     }
 
     override fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO> {

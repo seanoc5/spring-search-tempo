@@ -2,6 +2,8 @@
 
 Concise guidance for Claude Code when working with Spring Search Tempo.
 
+Domain context: see [docs/architecture/CONTEXT.md](docs/architecture/CONTEXT.md).
+
 ---
 
 ## Project Overview

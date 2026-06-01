@@ -1,6 +1,8 @@
 # Spring Search Tempo
 
-A **Spotlight-style full-system search engine** built with Spring Boot 3.5. Index your entire digital life - files, emails, bookmarks, and more - with powerful full-text search and NLP analysis.
+A **Spotlight-style full-system search engine** built with Spring Boot 3.5. Index your files, email, browser data, and remote hosts with full-text search, NLP analysis, and centralized crawl policy management.
+
+Domain context and glossary: see [docs/architecture/CONTEXT.md](docs/architecture/CONTEXT.md).
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.25-blue.svg)](https://kotlinlang.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.7-green.svg)](https://spring.io/projects/spring-boot)
@@ -32,6 +34,7 @@ A **Spotlight-style full-system search engine** built with Spring Boot 3.5. Inde
 ## Features
 
 - 🗂️ **Full System Crawling**: Index entire filesystems with intelligent processing levels
+- 🌐 **Remote Crawling**: Crawl Windows/Linux hosts with a thin CLI and central server-side policy
 - 📄 **400+ Formats**: Extract text from PDF, DOCX, XLSX, HTML, code, configs, and more (Apache Tika)
 - 📊 **Rich Metadata**: Author, title, dates, page count, POSIX attributes
 - 🔍 **Full-Text Search**: PostgreSQL GIN indexes with ranking and highlighting
@@ -41,7 +44,7 @@ A **Spotlight-style full-system search engine** built with Spring Boot 3.5. Inde
 - 🔖 **Browser Integration**: Firefox bookmarks and history
 - ⚡ **Incremental Updates**: Only re-process changed files
 - 🔄 **Overlapping Crawl Detection**: Smart skipping when crawl configs overlap
-- 🏗️ **Modular Architecture**: Spring Modulith with enforced boundaries
+- 🏗️ **Modular Architecture**: Spring Modulith-guided module structure with generated docs
 - 🚀 **Batch Processing**: Resilient, resumable Spring Batch jobs
 
 ## Quick Start
@@ -78,8 +81,8 @@ docker compose up -d
 # Run with coverage
 ./gradlew test jacocoTestReport
 
-# Verify module boundaries
-./gradlew test --tests ModularityTest
+# Run the root Modulith documentation test
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 ```
 
 ## Architecture
@@ -107,10 +110,10 @@ src/main/kotlin/com/oconeco/spring_search_tempo/
 ```
 
 **Key Architectural Principles**:
-- Modules communicate via events and service interfaces
-- No direct repository access across modules
-- DTOs for all external boundaries
-- Verified module boundaries with Spring Modulith
+- Modules are organized around `base`, `batch`, and `web`
+- Spring Modulith verification and documentation are generated from the live codebase
+- Cross-module access is now declared via explicit named interfaces instead of a globally open `base` module
+- Some internals are still intentionally exposed for operational and batch workflows; docs in `docs/architecture/` describe those tradeoffs
 
 [Read more about architecture →](docs/architecture/module-design.md)
 
@@ -146,7 +149,21 @@ You can define multiple crawl configurations that overlap:
 
 The system automatically detects when a parent crawl encounters a recently-crawled child config root and skips that subtree.
 
-[Configuration guide →](docs/guides/crawling.md)
+[Configuration guide →](docs/guides/crawl-configuration.md)
+
+## Remote Crawling
+
+Spring Search Tempo also supports a **remote crawler CLI** for crawling Windows or Linux hosts and shipping results back to the server.
+
+- Thin client, smart server: classification and policy stay on the server
+- Compatible with scheduled Windows deployments
+- Supports onboarding/discovery, dry runs, and task-queue based crawling
+
+Start here:
+
+- [Remote Crawler Guide →](docs/guides/remote-crawler.md)
+- [Windows Setup →](docs/guides/remote-crawler-windows-setup.md)
+- [TLS / LAN Setup →](docs/guides/remote-crawler-tls-lan-setup.md)
 
 ## Development
 
@@ -154,6 +171,7 @@ The system automatically detects when a parent crawl encounters a recently-crawl
 
 ```
 spring-search-tempo/
+├── remote-crawler-cli/    # Standalone remote crawler client
 ├── src/
 │   ├── main/
 │   │   ├── kotlin/        # Kotlin source code
@@ -165,7 +183,7 @@ spring-search-tempo/
 │   ├── guides/           # Step-by-step tutorials
 │   ├── architecture/     # Design docs and ADRs
 │   └── reference/        # Commands, config, troubleshooting
-├── build.gradle.kts      # Build configuration
+├── build.gradle.kts      # Root application build
 ├── docker-compose.yml    # PostgreSQL setup
 ├── CLAUDE.md            # AI assistant context
 └── README.md            # This file
@@ -197,8 +215,8 @@ During development, use the `local` profile. In IntelliJ IDEA, add `-Dspring.pro
 
 **Run specific tests**:
 ```bash
-./gradlew test --tests "FSFileServiceTest"
-./gradlew test --tests "ModularityTest"
+./gradlew :test --tests "FSFileServiceTest"
+./gradlew :test --tests "com.oconeco.spring_search_tempo.ModularityTest"
 ```
 
 [Complete developer guide →](docs/guides/)
@@ -327,8 +345,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-jpackage.ps1 `
 ./gradlew test jacocoTestReport
 open build/reports/jacoco/test/html/index.html
 
-# Verify module boundaries
-./gradlew test --tests ModularityTest
+# Run the root Modulith documentation test
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 ```
 
 ### Testcontainers
@@ -339,7 +357,7 @@ Integration tests use [Testcontainers](https://testcontainers.com/) for PostgreS
 docker stop $(docker ps -q --filter ancestor=postgres:18.0)
 ```
 
-The `ModularityTest` verifies the module structure and generates documentation in `build/spring-modulith-docs/`.
+The `ModularityTest` verifies module boundaries and generates documentation in `build/spring-modulith-docs/`.
 
 ## Build
 
@@ -353,7 +371,7 @@ Run with a specific profile:
 
 ```bash
 java -Dspring.profiles.active=production \
-     -jar ./build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+     -jar ./build/libs/spring-search-tempo-<version>.jar
 ```
 
 Build Docker image:
@@ -375,7 +393,7 @@ Contributions welcome! Please:
 **Development Guidelines**:
 - Follow Kotlin coding conventions
 - Add tests for new features
-- Run `./gradlew test --tests ModularityTest` to verify module boundaries
+- Run `./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest` to regenerate Modulith docs
 - Update documentation as needed
 
 ## Troubleshooting

@@ -37,6 +37,10 @@ class CrawlDiscoveryFolderObservation {
     @Column(nullable = false, length = 100)
     var host: String? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_host_id")
+    var sourceHostRef: SourceHost? = null
+
     @Column(nullable = false, columnDefinition = "text")
     var path: String? = null
 

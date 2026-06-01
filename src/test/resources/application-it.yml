@@ -1,3 +1,8 @@
+app:
+  onedrive:
+    # 32-byte AES key (Base64) — deterministic for tests only; rotate in prod.
+    token-encryption-key: "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+
 spring:
   sql:
     init:

@@ -57,29 +57,29 @@ kill -9 <PID>
 
 ```bash
 # Run specific test class
-./gradlew test --tests ModularityTest
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 
 # Run specific test method
-./gradlew test --tests "FSFileServiceTest.testFindById"
+./gradlew :test --tests "FSFileServiceTest.testFindById"
 
 # Run all tests in a package
-./gradlew test --tests "com.oconeco.spring_search_tempo.base.*"
+./gradlew :test --tests "com.oconeco.spring_search_tempo.base.*"
 
 # Run tests matching pattern
-./gradlew test --tests "*Repository*"
+./gradlew :test --tests "*Repository*"
 
 # Run tests by category
-./gradlew test --tests "*IntegrationTest"
+./gradlew :test --tests "*IntegrationTest"
 ```
 
 ### Clean Test Cache
 
 ```bash
 # Force tests to re-run (ignore up-to-date check)
-./gradlew cleanTest test
+./gradlew :cleanTest :test
 
 # Clean and test specific class
-./gradlew cleanTest test --tests ChunkingStepTest
+./gradlew :cleanTest :test --tests ChunkingStepTest
 ```
 
 ## Building
@@ -97,7 +97,7 @@ kill -9 <PID>
 ./gradlew clean build
 ```
 
-**Build output**: `build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar`
+**Build output**: `build/libs/spring-search-tempo-<version>.jar`
 
 ### Production Builds
 
@@ -130,24 +130,40 @@ docker run -p 8082:8082 com.oconeco/spring-search-tempo
 
 ```bash
 # Run JAR with default profile
-java -jar build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+java -jar build/libs/spring-search-tempo-<version>.jar
 
 # Run with specific profile
 java -Dspring.profiles.active=production \
-     -jar build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+     -jar build/libs/spring-search-tempo-<version>.jar
 
 # Run with custom port
 java -Dserver.port=9090 \
-     -jar build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+     -jar build/libs/spring-search-tempo-<version>.jar
 
 # Run with increased memory
 java -Xmx2g -Xms512m \
-     -jar build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+     -jar build/libs/spring-search-tempo-<version>.jar
 
 # Run with JVM debug enabled
 java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 \
-     -jar build/libs/spring-search-tempo-0.0.1-SNAPSHOT.jar
+     -jar build/libs/spring-search-tempo-<version>.jar
 ```
+
+## Remote Crawler CLI
+
+```bash
+# Build the remote crawler fat JAR
+./gradlew :remote-crawler-cli:shadowJar
+
+# Print the main app version
+./gradlew printAppVersion
+
+# Run the CLI against a server
+java -jar remote-crawler-cli/build/libs/remote-crawler-<version>.jar \
+  -s https://your-server -u admin -p password status
+```
+
+See [Remote Crawler Guide](../guides/remote-crawler.md) for onboarding, dry-run, release, and Windows scheduled-task workflows.
 
 ## Database Management
 
@@ -257,13 +273,13 @@ EOF
 
 ```bash
 # Run modularity tests
-./gradlew test --tests ModularityTest
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 
 # View generated documentation
 open build/spring-modulith-docs/index.html
 
-# Generate docs without running all tests
-./gradlew test --tests ModularityTest -x test
+# The root test task avoids subproject test-filter mismatches
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 ```
 
 ## Dependency Management
@@ -564,8 +580,8 @@ git diff --staged
 | Connect DB | `psql -h localhost -p 5432 -U tempo -d tempo` |
 | View logs | `docker compose logs -f postgres`                           |
 | Clean build | `./gradlew clean build`                                     |
-| Run specific test | `./gradlew test --tests TestName`                           |
-| Module verification | `./gradlew test --tests ModularityTest`                     |
+| Run specific test | `./gradlew :test --tests TestName`                          |
+| Modulith docs | `./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest` |
 | Coverage report | `./gradlew test jacocoTestReport`                           |
 | Trigger NLP | `curl -X POST http://localhost:8082/api/nlp/process`        |
 

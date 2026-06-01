@@ -15,7 +15,8 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class UserOwnershipServiceImpl(
     private val userSourceHostRepository: UserSourceHostRepository,
-    private val springUserRepository: SpringUserRepository
+    private val springUserRepository: SpringUserRepository,
+    private val sourceHostService: SourceHostService
 ) : UserOwnershipService {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -72,6 +73,7 @@ class UserOwnershipServiceImpl(
         val assignment = UserSourceHost().apply {
             this.springUser = user
             this.sourceHost = sourceHost
+            this.sourceHostRef = sourceHostService.resolveOrCreate(sourceHost)
         }
         userSourceHostRepository.save(assignment)
         log.info("Assigned sourceHost '{}' to user {}", sourceHost, userId)

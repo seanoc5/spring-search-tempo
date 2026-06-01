@@ -3,15 +3,16 @@ package com.oconeco.spring_search_tempo.web.controller
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleGroup
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleOperation
+import com.oconeco.spring_search_tempo.base.service.ApplyDiscoveryMode
+import com.oconeco.spring_search_tempo.base.service.ApplyDiscoveryRequest
+import com.oconeco.spring_search_tempo.base.service.ClassifyFolderRequest
+import com.oconeco.spring_search_tempo.base.service.DiscoveryBranchRefreshRequest
+import com.oconeco.spring_search_tempo.base.service.DiscoveryRuleAdminService
+import com.oconeco.spring_search_tempo.base.service.DiscoveryRuleUpsertRequest
+import com.oconeco.spring_search_tempo.base.service.DiscoveryService
+import com.oconeco.spring_search_tempo.base.service.DiscoveryUserProfile
 import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
-import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryMode
-import com.oconeco.spring_search_tempo.web.service.ApplyDiscoveryRequest
-import com.oconeco.spring_search_tempo.web.service.ClassifyFolderRequest
-import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleAdminService
-import com.oconeco.spring_search_tempo.web.service.DiscoveryRuleUpsertRequest
-import com.oconeco.spring_search_tempo.web.service.DiscoveryUserProfile
-import com.oconeco.spring_search_tempo.web.service.DiscoveryService
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Controller
@@ -165,7 +166,7 @@ class DiscoveryController(
     @GetMapping("/{sessionId}/classify")
     fun classify(
         @PathVariable sessionId: Long,
-        @RequestParam(name = "maxDepth", defaultValue = "5") maxDepth: Int,
+        @RequestParam(name = "maxDepth", defaultValue = "3") maxDepth: Int,
         @RequestParam(name = "assignedStatus", required = false) assignedStatus: String?,
         @RequestParam(name = "listPage", defaultValue = "0") listPage: Int,
         @RequestParam(name = "listSize", defaultValue = "100") listSize: Int,
@@ -178,6 +179,7 @@ class DiscoveryController(
             log.debug(".... Retrieving classification UI for session {} with maxDepth {}", sessionId, maxDepth)
             val effectiveMaxDepth = maxDepth.coerceIn(0, 8)
             val discoverySession = discoveryService.getSessionForClassification(sessionId, effectiveMaxDepth)
+            val initialTree = discoveryService.getInitialFolderTree(sessionId, effectiveMaxDepth)
             val selectedAssignedStatus = parseAnalysisStatus(assignedStatus)
             val assignedFolders = selectedAssignedStatus?.let {
                 discoveryService.getAssignedFolders(
@@ -200,9 +202,9 @@ class DiscoveryController(
                 minOf(assignedTotal, (assignedPageNumber.toLong() + 1L) * assignedPageSize)
             }
 
-            // Build tree structure for display (limit depth for performance)
-            val rootFolders = discoverySession.folders.filter { it.depth == 0 }
-            val foldersByParent = discoverySession.folders
+            // Build initial tree structure for display. Remaining branches load on demand.
+            val rootFolders = initialTree.folders.filter { it.depth == 0 }
+            val foldersByParent = initialTree.folders
                 // Defensive guard for malformed rows where parentPath == path (self-cycle).
                 .filterNot { it.parentPath != null && it.parentPath == it.path }
                 .groupBy { it.parentPath }
@@ -211,8 +213,9 @@ class DiscoveryController(
             model.addAttribute("sessionId", discoverySession.id)
             model.addAttribute("rootFolders", rootFolders)
             model.addAttribute("foldersByParent", foldersByParent)
+            model.addAttribute("fullyLoadedParentPaths", initialTree.fullyLoadedParentPaths)
             model.addAttribute("maxDepth", effectiveMaxDepth)
-            model.addAttribute("visibleFolders", discoverySession.folders.size)
+            model.addAttribute("visibleFolders", initialTree.folders.size)
             model.addAttribute("selectedAssignedStatus", selectedAssignedStatus?.name)
             model.addAttribute("assignedFolders", assignedFolders?.folders.orEmpty())
             model.addAttribute("assignedFoldersTotal", assignedTotal)
@@ -232,6 +235,7 @@ class DiscoveryController(
             model.addAttribute("hostCrawlConfigs", discoveryService.getCrawlConfigCandidates(discoverySession.host))
             model.addAttribute("defaultNewConfigName", "DISCOVERY_${discoverySession.host}_${discoverySession.id}")
             model.addAttribute("defaultNewDisplayLabel", "Discovery ${discoverySession.host} (${discoverySession.id})")
+            log.debug("\t\trender template: classify.html...")
 
             return "discovery/classify"
         } catch (e: NotFoundException) {
@@ -248,13 +252,32 @@ class DiscoveryController(
     fun getChildren(
         @PathVariable sessionId: Long,
         @RequestParam parentPath: String,
+        @RequestParam depth: Int,
+        @RequestParam maxDepth: Int,
+        @RequestParam(name = "inheritedStatus", required = false) inheritedStatus: String?,
         model: Model
     ): String {
         val children = discoveryService.getChildFolders(sessionId, parentPath)
         log.debug(".... Retrieved {} children for session {} and parent {}", children.size, sessionId, parentPath)
         model.addAttribute("folders", children)
         model.addAttribute("sessionId", sessionId)
-        return "discovery/fragments :: folderChildren"
+        model.addAttribute("depth", depth)
+        model.addAttribute("maxDepth", maxDepth)
+        model.addAttribute("inheritedStatus", inheritedStatus)
+        return "discovery/fragments :: folderRows"
+    }
+
+    @PostMapping("/{sessionId}/branch-refresh")
+    fun refreshBranch(
+        @PathVariable sessionId: Long,
+        @RequestBody request: DiscoveryBranchRefreshRequest,
+        model: Model
+    ): String {
+        val folders = discoveryService.getFoldersByPaths(sessionId, request.paths)
+        model.addAttribute("folders", folders)
+        model.addAttribute("sessionId", sessionId)
+        model.addAttribute("maxDepth", request.maxDepth.coerceIn(0, 8))
+        return "discovery/fragments :: folderRowsByDepth"
     }
 
     /**
@@ -414,6 +437,28 @@ class DiscoveryController(
             log.error("Failed to apply discovery session {} to crawl config", sessionId, e)
             redirectAttributes.addFlashAttribute("error", "Apply failed: ${e.message}")
             "redirect:/discovery/$sessionId/classify"
+        }
+    }
+
+    @PostMapping("/{sessionId}/recompute-summary")
+    fun recomputeSummary(
+        @PathVariable sessionId: Long,
+        @RequestParam(name = "redirectTo", required = false) redirectTo: String?,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        return try {
+            val result = discoveryService.recomputeSessionSummary(sessionId)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Recomputed session ${result.sessionId}: classified=${result.classifiedFolders}, " +
+                    "skip=${result.skipCount}, locate=${result.locateCount}, index=${result.indexCount}, " +
+                    "analyze=${result.analyzeCount}, status=${result.status}"
+            )
+            safeRedirect(redirectTo, "/discovery/$sessionId/classify")
+        } catch (e: Exception) {
+            log.error("Failed to recompute discovery session summary {}", sessionId, e)
+            redirectAttributes.addFlashAttribute("error", "Recompute failed: ${e.message}")
+            safeRedirect(redirectTo, "/discovery/$sessionId/classify")
         }
     }
 

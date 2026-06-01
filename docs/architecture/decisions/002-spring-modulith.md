@@ -10,7 +10,7 @@ We needed an architecture pattern for Spring Search Tempo that:
 - Keeps codebase organized as it grows
 - Enables team collaboration with clear boundaries
 - Supports future evolution (potentially to microservices)
-- Enforces architectural constraints automatically
+- Supports architectural constraint enforcement where practical
 - Provides good developer experience
 
 Options considered:
@@ -21,7 +21,7 @@ Options considered:
 
 ## Decision
 
-Use Spring Modulith to structure the application as a modular monolith with enforced boundaries.
+Use Spring Modulith to structure the application as a modular monolith with explicit module definitions and verification support.
 
 ## Rationale
 
@@ -29,8 +29,8 @@ Use Spring Modulith to structure the application as a modular monolith with enfo
 
 1. **Verified Module Boundaries**
    - Automatic verification of dependencies
-   - Compile-time enforcement of architecture rules
-   - Prevents accidental coupling
+   - Test-time enforcement of architecture rules where enabled
+   - Reduces accidental coupling
    - Generates dependency documentation
 
 2. **Start Simple, Scale Incrementally**
@@ -191,7 +191,7 @@ class ModularityTest {
 ### Documentation Generation
 
 ```bash
-./gradlew test --tests ModularityTest
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 open build/spring-modulith-docs/index.html
 ```
 

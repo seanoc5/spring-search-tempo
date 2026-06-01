@@ -24,6 +24,8 @@ interface DatabaseCrawlConfigService {
 
     fun findDistinctSourceHosts(): List<String>
 
+    fun findBySourceHost(sourceHost: String, filter: String?, pageable: Pageable, includeAll: Boolean = false): Page<CrawlConfigDTO>
+
     // Ownership-filtered methods for multi-tenancy
     fun findAllForCurrentUser(filter: String?, pageable: Pageable): Page<CrawlConfigDTO>
 

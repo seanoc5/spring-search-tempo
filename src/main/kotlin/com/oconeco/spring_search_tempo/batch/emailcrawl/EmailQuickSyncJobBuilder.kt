@@ -13,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.model.EmailMessageDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
+import com.oconeco.spring_search_tempo.base.service.EmailAttachmentExtractionService
 import com.oconeco.spring_search_tempo.base.service.EmailTextExtractionService
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.EmbeddingService
@@ -67,6 +68,7 @@ class EmailQuickSyncJobBuilder(
     private val emailMessageService: EmailMessageService,
     private val emailFolderService: EmailFolderService,
     private val emailTextExtractionService: EmailTextExtractionService,
+    private val emailAttachmentExtractionService: EmailAttachmentExtractionService,
     private val chunkService: ContentChunkService,
     private val categorizationService: EmailCategorizationService,
     private val objectMapper: ObjectMapper,
@@ -371,6 +373,7 @@ class EmailQuickSyncJobBuilder(
             emailAccountService = emailAccountService,
             emailFolderService = emailFolderService,
             emailTextExtractionService = emailTextExtractionService,
+            emailAttachmentExtractionService = emailAttachmentExtractionService,
             objectMapper = objectMapper
         )
     }
@@ -381,12 +384,16 @@ class EmailQuickSyncJobBuilder(
             emailAccountService = emailAccountService,
             emailFolderService = emailFolderService,
             emailTextExtractionService = emailTextExtractionService,
+            emailAttachmentExtractionService = emailAttachmentExtractionService,
             objectMapper = objectMapper
         )
     }
 
     private fun createBodyEnrichmentWriter(): ItemWriter<BodyEnrichmentResult> {
-        return BodyEnrichmentWriter(emailMessageService = emailMessageService)
+        return BodyEnrichmentWriter(
+            emailMessageService = emailMessageService,
+            contentChunkService = chunkService
+        )
     }
 
     // ==================== PASS 3: CHUNKING ====================

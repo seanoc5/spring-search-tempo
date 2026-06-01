@@ -10,6 +10,10 @@ import com.oconeco.spring_search_tempo.base.service.SemanticSearchStats
 import com.oconeco.spring_search_tempo.base.service.HybridSearchResult
 import com.oconeco.spring_search_tempo.base.service.HybridSearchService
 import com.oconeco.spring_search_tempo.base.service.HybridSearchStats
+import com.oconeco.spring_search_tempo.base.service.SearchSuggestion
+import com.oconeco.spring_search_tempo.base.service.SearchSuggestionService
+import com.oconeco.spring_search_tempo.base.service.SearchStats
+import com.oconeco.spring_search_tempo.base.service.SearchStatsService
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -51,7 +55,9 @@ import org.springframework.web.bind.annotation.*
 class SearchResource(
     private val searchService: FullTextSearchService,
     private val semanticSearchService: SemanticSearchService,
-    private val hybridSearchService: HybridSearchService
+    private val hybridSearchService: HybridSearchService,
+    private val suggestionService: SearchSuggestionService,
+    private val statsService: SearchStatsService
 ) {
 
     /**
@@ -108,29 +114,48 @@ class SearchResource(
     }
 
     /**
-     * Get search term suggestions.
-     * Future implementation - currently returns empty list.
+     * Get search term suggestions using trigram similarity.
+     *
+     * Finds terms similar to the partial query from indexed titles, labels,
+     * authors, and keywords. Requires pg_trgm extension.
+     *
+     * @param q Partial query (minimum 2 characters)
+     * @param limit Maximum suggestions to return (default 10, max 50)
+     * @return List of suggestions with similarity scores
      */
     @GetMapping("/suggest", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun getSuggestions(
         @RequestParam q: String,
         @RequestParam(defaultValue = "10") limit: Int
-    ): ResponseEntity<List<String>> {
-        // TODO: Implement search suggestions using PostgreSQL pg_trgm or similar
-        return ResponseEntity.ok(emptyList())
+    ): ResponseEntity<List<SearchSuggestion>> {
+        val suggestions = suggestionService.suggest(q, limit)
+        return ResponseEntity.ok(suggestions)
     }
 
     /**
-     * Get search statistics.
-     * Future implementation - currently returns placeholder.
+     * Get search index statistics.
+     *
+     * Returns statistics about indexed content including:
+     * - Total and indexed file counts
+     * - Total and indexed chunk counts
+     * - Embedding coverage
+     * - Feature availability (suggestions, semantic search)
      */
     @GetMapping("/stats", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getStats(): ResponseEntity<Map<String, Any>> {
-        // TODO: Query the search_stats materialized view
-        return ResponseEntity.ok(mapOf(
-            "message" to "Search statistics not yet implemented",
-            "todo" to "Query search_stats materialized view"
-        ))
+    fun getStats(): ResponseEntity<SearchStats> {
+        val stats = statsService.getStats()
+        return ResponseEntity.ok(stats)
+    }
+
+    /**
+     * Refresh the search statistics materialized view.
+     *
+     * Call this after bulk indexing operations to update statistics.
+     */
+    @PostMapping("/stats/refresh", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun refreshStats(): ResponseEntity<Map<String, String>> {
+        statsService.refreshStats()
+        return ResponseEntity.ok(mapOf("status" to "refreshed"))
     }
 
     // ==================== SEMANTIC SEARCH (Vector Similarity) ====================

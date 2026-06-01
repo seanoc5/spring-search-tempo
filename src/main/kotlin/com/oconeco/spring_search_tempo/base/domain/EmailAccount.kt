@@ -66,9 +66,14 @@ class EmailAccount : SaveableObject() {
     @JoinColumn(name = "owner_user_id")
     var owner: SpringUser? = null
 
-    // Credential configuration: name of env var holding the password
+    // Credential configuration: name of env var holding the password (legacy fallback).
+    // New accounts should use encryptedPassword via EmailAccountService.setPassword().
     @Column(length = 100)
     var credentialEnvVar: String? = null
+
+    // Encrypted IMAP password (TokenEncryptionService envelope, v1: prefix). Preferred over credentialEnvVar.
+    @Column(columnDefinition = "text")
+    var encryptedPassword: String? = null
 
     @Column(columnDefinition = "text")
     var lastError: String? = null
@@ -82,6 +87,9 @@ class EmailAccount : SaveableObject() {
 
     @OneToMany(mappedBy = "emailAccount")
     var folders: MutableSet<EmailFolder> = mutableSetOf()
+
+    override fun toString(): String =
+        "EmailAccount(id=$id, email=$email, provider=$provider, encryptedPassword=${if (encryptedPassword != null) "[REDACTED]" else "null"})"
 
 }
 

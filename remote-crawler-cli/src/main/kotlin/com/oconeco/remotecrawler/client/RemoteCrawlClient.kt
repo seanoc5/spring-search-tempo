@@ -457,6 +457,7 @@ data class CrawlConfigAssignment(
     val followLinks: Boolean,
     val parallel: Boolean,
     val crawlMode: CrawlMode = CrawlMode.ENFORCE,
+    val freshnessHours: Int = 24,
     val discoveryKeeperMaxDepth: Int = 20,
     val discoverySkipMaxDepth: Int = 10,
     val discoveryFileSampleCap: Int = 50,
@@ -478,7 +479,8 @@ data class FolderSnapshotEntry(
     val path: String,
     val analysisStatus: AnalysisStatus,
     val crawlDepth: Int? = null,
-    val fsLastModified: java.time.OffsetDateTime? = null
+    val fsLastModified: java.time.OffsetDateTime? = null,
+    val lastCrawledAt: java.time.OffsetDateTime? = null
 )
 
 enum class CrawlMode {

@@ -1,16 +1,16 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
+import com.oconeco.spring_search_tempo.base.model.AvailableJobTypeDTO
+import com.oconeco.spring_search_tempo.base.model.BatchJobSummaryDTO
+import com.oconeco.spring_search_tempo.base.model.BatchOpsSnapshotDTO
+import com.oconeco.spring_search_tempo.base.model.ConfiguredJobDTO
+import com.oconeco.spring_search_tempo.base.model.JobExecutionDetailDTO
+import com.oconeco.spring_search_tempo.base.model.JobExecutionSummaryDTO
 import com.oconeco.spring_search_tempo.base.model.JobRunDTO
+import com.oconeco.spring_search_tempo.base.model.StepExecutionDTO
 import com.oconeco.spring_search_tempo.base.repos.JobRunRepository
-import com.oconeco.spring_search_tempo.web.model.AvailableJobTypeDTO
-import com.oconeco.spring_search_tempo.web.model.BatchJobSummaryDTO
-import com.oconeco.spring_search_tempo.web.model.BatchOpsSnapshotDTO
-import com.oconeco.spring_search_tempo.web.model.ConfiguredJobDTO
-import com.oconeco.spring_search_tempo.web.model.JobExecutionDetailDTO
-import com.oconeco.spring_search_tempo.web.model.JobExecutionSummaryDTO
-import com.oconeco.spring_search_tempo.web.model.StepExecutionDTO
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.ExitStatus

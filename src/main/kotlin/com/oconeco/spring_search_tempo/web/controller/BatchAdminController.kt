@@ -1,26 +1,14 @@
 package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.base.BrowserProfileService
-import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
-import com.oconeco.spring_search_tempo.base.model.BrowserProfileDTO
+import com.oconeco.spring_search_tempo.base.service.BatchAdminService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
-import com.oconeco.spring_search_tempo.batch.assignment.AnalysisAssignmentJobBuilder
-import com.oconeco.spring_search_tempo.batch.bookmarkcrawl.BookmarkImportJobBuilder
-import com.oconeco.spring_search_tempo.batch.discovery.DiscoveryJobBuilder
-import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
-import com.oconeco.spring_search_tempo.batch.embedding.EmbeddingJobLauncher
-import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlOrchestrator
-import com.oconeco.spring_search_tempo.batch.nlp.NLPJobLauncher
-import com.oconeco.spring_search_tempo.batch.onedrivesync.OneDriveSyncOrchestrator
-import com.oconeco.spring_search_tempo.batch.progressive.ProgressiveAnalysisJobBuilder
-import com.oconeco.spring_search_tempo.web.service.BatchAdminService
+import com.oconeco.spring_search_tempo.batch.ops.BatchAdminOperationsService
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.batch.core.JobExecution
-import org.springframework.batch.core.JobParametersBuilder
-import org.springframework.batch.core.launch.JobLauncher
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
 import org.springframework.http.HttpStatus
@@ -44,17 +32,8 @@ import java.nio.charset.StandardCharsets
 @RequestMapping("/batch")
 class BatchAdminController(
     private val batchAdminService: BatchAdminService,
-    private val nlpJobLauncher: NLPJobLauncher,
-    private val embeddingJobLauncher: EmbeddingJobLauncher,
-    private val crawlOrchestrator: CrawlOrchestrator,
-    private val emailCrawlOrchestrator: EmailCrawlOrchestrator,
-    private val oneDriveSyncOrchestrator: OneDriveSyncOrchestrator,
-    private val jobLauncher: JobLauncher,
+    private val batchAdminOperationsService: BatchAdminOperationsService,
     private val crawlConfigService: CrawlConfigService,
-    private val discoveryJobBuilder: DiscoveryJobBuilder,
-    private val analysisAssignmentJobBuilder: AnalysisAssignmentJobBuilder,
-    private val progressiveAnalysisJobBuilder: ProgressiveAnalysisJobBuilder,
-    private val bookmarkImportJobBuilder: BookmarkImportJobBuilder,
     private val browserProfileService: BrowserProfileService,
     @Value("\${app.monitoring.grafana-batch-dashboard-url:http://localhost:3000/d/tempo-batch-overview}")
     private val grafanaBatchDashboardUrl: String
@@ -435,13 +414,13 @@ class BatchAdminController(
             when {
                 // NLP Processing Job
                 jobName == "nlpProcessingJob" || jobName.startsWith("nlpProcessing") -> {
-                    val execution = nlpJobLauncher.launchNLPJob("batch-admin")
+                    val execution = batchAdminOperationsService.launchNlp("batch-admin")
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
                 // Embedding Processing Job
                 jobName == "embeddingProcessingJob" || jobName.startsWith("embeddingProcessing") -> {
-                    val execution = embeddingJobLauncher.launchEmbeddingJob("batch-admin")
+                    val execution = batchAdminOperationsService.launchEmbedding("batch-admin")
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
@@ -452,14 +431,14 @@ class BatchAdminController(
                         jobName.substringAfter("fsCrawlJob_")
                     } else {
                         // Run all enabled crawls
-                        val results = crawlOrchestrator.executeAllCrawls()
+                        val results = batchAdminOperationsService.executeAllCrawls()
                         val successful = results.values.count { !it.status.isUnsuccessful }
                         redirectAttributes.addFlashAttribute("message",
                             "Started ${results.size} crawl job(s), $successful successful")
                         return "redirect:/batch"
                     }
 
-                    val results = crawlOrchestrator.executeCrawlsByName(configName)
+                    val results = batchAdminOperationsService.executeCrawlsByName(configName)
                     if (results.isEmpty()) {
                         redirectAttributes.addFlashAttribute("error",
                             "Crawl config '$configName' not found. Use Crawl Configurations to run crawls.")
@@ -473,7 +452,7 @@ class BatchAdminController(
                     val accountId = jobName.substringAfter("emailQuickSync_").toLongOrNull()
                     if (accountId != null) {
                         try {
-                            val execution = emailCrawlOrchestrator.runQuickSyncForAccount(accountId)
+                            val execution = batchAdminOperationsService.launchEmailQuickSyncForAccount(accountId)
                             redirectAttributes.addFlashAttribute("message",
                                 "Email sync started for account $accountId (execution #${execution.id})")
                             return "redirect:/batch/${execution.id}"
@@ -484,7 +463,7 @@ class BatchAdminController(
                         }
                     } else {
                         // Run all enabled accounts
-                        val results = emailCrawlOrchestrator.runQuickSync()
+                        val results = batchAdminOperationsService.launchEmailQuickSyncAll()
                         redirectAttributes.addFlashAttribute("message",
                             "Email sync started for ${results.size} account(s)")
                         return "redirect:/batch"
@@ -493,7 +472,7 @@ class BatchAdminController(
 
                 // OneDrive sync for all enabled accounts
                 jobName == "oneDriveSyncJob" || jobName == "oneDriveSync" -> {
-                    val results = oneDriveSyncOrchestrator.runSyncExecutions()
+                    val results = batchAdminOperationsService.launchOneDriveSyncAll()
                     if (results.isEmpty()) {
                         redirectAttributes.addFlashAttribute("error",
                             "No enabled OneDrive accounts found or OneDrive integration is disabled.")
@@ -517,7 +496,7 @@ class BatchAdminController(
                             "Could not determine OneDrive account from job name: $jobName")
                         return "redirect:/batch"
                     }
-                    val execution = oneDriveSyncOrchestrator.runSyncExecutionForAccount(accountId)
+                    val execution = batchAdminOperationsService.launchOneDriveSyncForAccount(accountId)
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
@@ -529,7 +508,7 @@ class BatchAdminController(
                             "No enabled browser profiles found for bookmark import.")
                         return "redirect:/batch"
                     }
-                    enabledProfiles.forEach { launchBookmarkImportForProfile(it) }
+                    enabledProfiles.forEach { batchAdminOperationsService.launchBookmarkImportForProfile(it) }
                     redirectAttributes.addFlashAttribute("message",
                         "Started bookmark import for ${enabledProfiles.size} profile(s)")
                     return "redirect:/batch"
@@ -544,7 +523,7 @@ class BatchAdminController(
                         return "redirect:/batch"
                     }
                     val profile = browserProfileService.get(profileId)
-                    val execution = launchBookmarkImportForProfile(profile)
+                    val execution = batchAdminOperationsService.launchBookmarkImportForProfile(profile)
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
@@ -556,7 +535,7 @@ class BatchAdminController(
                             "No enabled crawl configs found for discovery.")
                         return "redirect:/batch"
                     }
-                    crawls.forEach { launchDiscoveryForCrawl(it) }
+                    crawls.forEach { batchAdminOperationsService.launchDiscoveryForCrawl(it) }
                     redirectAttributes.addFlashAttribute("message",
                         "Started discovery for ${crawls.size} crawl config(s)")
                     return "redirect:/batch"
@@ -571,13 +550,13 @@ class BatchAdminController(
                             "Discovery crawl config '$crawlName' not found.")
                         return "redirect:/batch"
                     }
-                    val execution = launchDiscoveryForCrawl(crawl)
+                    val execution = batchAdminOperationsService.launchDiscoveryForCrawl(crawl)
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
                 // Analysis assignment for all content
                 jobName == "analysisAssignmentJob" || jobName == "globalAssignmentJob" -> {
-                    val execution = launchGlobalAssignment()
+                    val execution = batchAdminOperationsService.launchGlobalAssignment()
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
@@ -594,13 +573,13 @@ class BatchAdminController(
                             "Assignment crawl config '$crawlName' not found.")
                         return "redirect:/batch"
                     }
-                    val execution = launchAssignmentForCrawl(crawl)
+                    val execution = batchAdminOperationsService.launchAssignmentForCrawl(crawl)
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
                 // Progressive analysis (global)
                 jobName == "progressiveAnalysisJob" || jobName.startsWith("progressiveAnalysisJob") -> {
-                    val execution = launchProgressiveAnalysis()
+                    val execution = batchAdminOperationsService.launchProgressiveAnalysis()
                     return redirectToExecution(jobName, execution, redirectAttributes)
                 }
 
@@ -628,53 +607,6 @@ class BatchAdminController(
             "Job '$jobName' started successfully (execution #${execution.id})"
         )
         return "redirect:/batch/${execution.id}"
-    }
-
-    private fun launchDiscoveryForCrawl(crawl: CrawlDefinition): JobExecution {
-        val job = discoveryJobBuilder.buildJob(crawl)
-        val params = JobParametersBuilder()
-            .addString("crawlName", crawl.name)
-            .addString("startPaths", crawl.startPaths.joinToString(","))
-            .addLong("timestamp", System.currentTimeMillis())
-            .toJobParameters()
-        return jobLauncher.run(job, params)
-    }
-
-    private fun launchAssignmentForCrawl(crawl: CrawlDefinition): JobExecution {
-        val job = analysisAssignmentJobBuilder.buildJob(crawl)
-        val params = JobParametersBuilder()
-            .addString("crawlName", crawl.name)
-            .addLong("timestamp", System.currentTimeMillis())
-            .toJobParameters()
-        return jobLauncher.run(job, params)
-    }
-
-    private fun launchGlobalAssignment(): JobExecution {
-        val job = analysisAssignmentJobBuilder.buildGlobalJob()
-        val params = JobParametersBuilder()
-            .addLong("timestamp", System.currentTimeMillis())
-            .addString("triggeredBy", "batch-admin")
-            .toJobParameters()
-        return jobLauncher.run(job, params)
-    }
-
-    private fun launchProgressiveAnalysis(): JobExecution {
-        val job = progressiveAnalysisJobBuilder.buildJob(processAll = true)
-        val params = JobParametersBuilder()
-            .addLong("timestamp", System.currentTimeMillis())
-            .addString("triggeredBy", "batch-admin")
-            .toJobParameters()
-        return jobLauncher.run(job, params)
-    }
-
-    private fun launchBookmarkImportForProfile(profile: BrowserProfileDTO): JobExecution {
-        val profileId = profile.id ?: throw IllegalArgumentException("Browser profile ID is required")
-        val job = bookmarkImportJobBuilder.buildJob(profile)
-        val params = JobParametersBuilder()
-            .addString("profileId", profileId.toString())
-            .addLong("timestamp", System.currentTimeMillis())
-            .toJobParameters()
-        return jobLauncher.run(job, params)
     }
 
     /**

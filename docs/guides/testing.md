@@ -25,16 +25,16 @@ The project uses a multi-layered testing approach:
 ./gradlew test
 
 # Run a specific test class
-./gradlew test --tests PatternMatchingServiceTest
+./gradlew :test --tests PatternMatchingServiceTest
 
 # Run tests with coverage report
 ./gradlew test jacocoTestReport
 
 # Force re-run all tests (skip cache)
-./gradlew cleanTest test
+./gradlew :cleanTest :test
 
-# Verify module boundaries
-./gradlew test --tests ModularityTest
+# Generate Modulith docs from the root project
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 ```
 
 ---

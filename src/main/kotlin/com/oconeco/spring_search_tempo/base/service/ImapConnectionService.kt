@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.config.EmailAccountConfig
 import com.oconeco.spring_search_tempo.base.config.EmailConfiguration
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
@@ -7,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import jakarta.mail.Session
 import jakarta.mail.Store
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import java.util.Properties
 
@@ -15,11 +17,13 @@ import java.util.Properties
  * Service for managing IMAP connections to email providers.
  *
  * Supports Gmail, Amazon WorkMail, and generic IMAP servers.
- * Credentials are loaded from environment variables for security.
+ * Credentials are loaded from the account's encrypted password column when set,
+ * falling back to environment variables (via `credentialEnvVar`) for legacy accounts.
  */
 @Service
 class ImapConnectionService(
-    private val emailConfiguration: EmailConfiguration
+    private val emailConfiguration: EmailConfiguration,
+    @Lazy private val emailAccountService: EmailAccountService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ImapConnectionService::class.java)
@@ -45,22 +49,26 @@ class ImapConnectionService(
         val settings = getImapSettings(account)
         val password = getCredential(account)
 
-        log.debug("\t\tConnecting to IMAP server: {}:{} for {}", settings.host, settings.port, account.email)
+        log.debug("\t\tConnecting to IMAP server: {}:{} ssl={} for {}",
+            settings.host, settings.port, settings.useSsl, account.email)
 
+        val protocol = if (settings.useSsl) "imaps" else "imap"
         val props = Properties().apply {
-            put("mail.store.protocol", "imaps")
-            put("mail.imaps.host", settings.host)
-            put("mail.imaps.port", settings.port.toString())
-            put("mail.imaps.ssl.enable", settings.useSsl.toString())
-            put("mail.imaps.connectiontimeout", "15000")
-            put("mail.imaps.timeout", "60000")
-            put("mail.imaps.ssl.trust", "*")  // Trust all certificates for now
+            put("mail.store.protocol", protocol)
+            put("mail.$protocol.host", settings.host)
+            put("mail.$protocol.port", settings.port.toString())
+            put("mail.$protocol.ssl.enable", settings.useSsl.toString())
+            put("mail.$protocol.connectiontimeout", "15000")
+            put("mail.$protocol.timeout", "60000")
+            if (settings.useSsl) {
+                put("mail.$protocol.ssl.trust", "*")  // Trust all certificates for now
+            }
             // Note: Don't set auth.mechanisms - let JavaMail auto-negotiate
             // XOAUTH2 requires OAuth2 tokens, not app passwords
         }
 
         val session = Session.getInstance(props)
-        val store = session.getStore("imaps")
+        val store = session.getStore(protocol)
 
         try {
             store.connect(settings.host, account.email, password)
@@ -93,23 +101,43 @@ class ImapConnectionService(
     }
 
     /**
-     * Get credential from environment variable.
+     * Resolve the IMAP password for an account.
      *
-     * Checks the account's own credentialEnvVar (from DB) first,
-     * then falls back to the YAML config lookup for backwards compatibility.
+     * Resolution order:
+     *  1. Encrypted password stored on the account (preferred).
+     *  2. `credentialEnvVar` on the account → environment variable lookup (legacy fallback).
+     *  3. `credentialEnvVar` from `application.yml` for the matching account (legacy fallback).
+     *
+     * Never logs the plaintext password.
      */
     private fun getCredential(account: EmailAccountDTO): String {
+        val id = account.id
+        if (id != null) {
+            // Only IllegalStateException ("key not configured") falls through to the env-var fallback —
+            // a real crypto failure (e.g. AEADBadTagException from a rotated key or tampered ciphertext)
+            // must propagate so the misconfiguration is loud, not silently masked by a stale env var.
+            val decrypted = try {
+                emailAccountService.getPassword(id)
+            } catch (e: IllegalStateException) {
+                log.warn("Encryption key not configured; will try env-var fallback for {}: {}", account.email, e.message)
+                null
+            }
+            if (!decrypted.isNullOrBlank()) {
+                return decrypted
+            }
+        }
+
         val envVar = account.credentialEnvVar?.takeIf { it.isNotBlank() }
             ?: findAccountConfig(account)?.credentialEnvVar
             ?: throw IllegalStateException(
-                "No credential env var configured for ${account.email}. " +
-                "Set it on the account edit page or in application.yml."
+                "No credential configured for ${account.email}. " +
+                "Either set a password on the account edit page or configure a credentialEnvVar in application.yml."
             )
 
         return System.getenv(envVar)
             ?: throw IllegalStateException(
                 "Environment variable '$envVar' not set for ${account.email}. " +
-                "Set it with: export $envVar=your_password"
+                "Set it with: export $envVar=your_password (or set the password via the account edit page)."
             )
     }
 

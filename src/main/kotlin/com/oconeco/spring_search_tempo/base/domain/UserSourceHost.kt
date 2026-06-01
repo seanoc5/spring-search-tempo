@@ -56,6 +56,10 @@ class UserSourceHost {
     @Column(name = "source_host", nullable = false, length = 50)
     var sourceHost: String? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_host_id")
+    var sourceHostRef: SourceHost? = null
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     var dateCreated: OffsetDateTime? = null

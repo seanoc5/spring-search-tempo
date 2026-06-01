@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.model
+package com.oconeco.spring_search_tempo.base.model
 
 /**
  * DTO for dashboard statistics.

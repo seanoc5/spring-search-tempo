@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryClassificationRule
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryRuleGroup

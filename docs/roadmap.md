@@ -414,12 +414,15 @@ dependencies {
 - [ ] Production deployment scripts with backup/restore procedures
 - [ ] **Status**: Current approach works well for RAD; revisit if needed for multi-environment deployments
 
-#### 4.2 Advanced Search UI
-- [ ] Faceted search (filter by author, date, type)
-- [ ] Search suggestions/autocomplete
-- [ ] Highlighted snippets
-- [ ] Result previews
-- [ ] **Effort**: 7 days
+#### 4.2 Advanced Search UI ✅ COMPLETE (100%)
+- [x] Search suggestions/autocomplete (pg_trgm trigram similarity)
+- [x] Search statistics endpoint (materialized view)
+- [x] Date range filtering (from/to date pickers)
+- [x] Author/sender filtering (case-insensitive)
+- [x] Highlighted snippets (existing ts_headline)
+- [x] Entity type facets (PERSON, ORGANIZATION, LOCATION, DATE, MONEY)
+- [x] Search history/recent queries (localStorage-based)
+- **Completed**: 2026-03-15
 
 #### 4.3 User Management & Permissions
 - [ ] User registration and profiles
@@ -427,12 +430,14 @@ dependencies {
 - [ ] Personal vs shared content
 - [ ] **Effort**: 5 days
 
-#### 4.4 Monitoring & Observability
-- [ ] Prometheus metrics export
-- [ ] Grafana dashboards
-- [ ] Application Performance Monitoring (APM)
-- [ ] Logging aggregation (ELK stack)
-- [ ] **Effort**: 5 days
+#### 4.4 Monitoring & Observability (IN PROGRESS - 80%)
+- [x] Prometheus metrics export (SearchMetricsBinder, SearchMetricsAspect)
+- [x] Health indicators (EmbeddingHealthIndicator for embedding service)
+- [x] Search operation timing (AOP-based latency metrics)
+- [x] Grafana dashboard (docs/monitoring/grafana-dashboard.json)
+- [x] Monitoring documentation (docs/monitoring/README.md)
+- [ ] Logging aggregation (ELK/Loki stack) - DEFERRED
+- [ ] **Effort**: 5 days (1 day remaining)
 
 #### 4.5 Scalability Improvements
 - [ ] Database connection pooling (HikariCP tuning)
@@ -732,12 +737,13 @@ Features are prioritized based on:
 
 | Date       | Change                  | Author |
 |------------|-------------------------|--------|
+| 2026-03-17 | Add Phase 4.4 monitoring infrastructure (metrics, health indicators) | Claude |
 | 2026-03-15 | Mark Phase 3 complete - hybrid search with RRF ranking | Claude |
 | 2025-12-11 | Updated Phase 2 status - NLP/Email infrastructure complete | Claude |
 | 2025-11-07 | Initial roadmap created | Sean   |
 
 ---
 
-**Last Updated**: 2026-03-15
-**Version**: 1.2
+**Last Updated**: 2026-03-17
+**Version**: 1.3
 **Status**: Living Document

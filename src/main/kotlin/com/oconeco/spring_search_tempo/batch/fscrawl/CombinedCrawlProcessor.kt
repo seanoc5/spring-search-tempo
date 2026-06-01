@@ -254,12 +254,13 @@ class CombinedCrawlProcessor(
 
         log.trace("Processing {} files with parent folder status: {}", files.size, parentFolderStatus)
 
-        // Batch lookup: get all existing files in this directory
-        // TODO: Optimize with single query using IN clause: findByUriIn(uris)
-        val fileUris = files.map { it.toString() }
-        fileUris.forEach { uri ->
-            if (!fileCache.containsKey(uri)) {
-                fileRepository.findByUri(uri)?.let { fileCache[uri] = it }
+        // Batch lookup: a single IN-clause query for every URI not already cached.
+        // ConcurrentHashMap rejects null values, so we only populate hits — misses stay
+        // absent from the cache and read as null in processFile, matching the old semantics.
+        val urisToFetch = files.map { it.toString() }.filter { !fileCache.containsKey(it) }
+        if (urisToFetch.isNotEmpty()) {
+            fileRepository.findByUriIn(urisToFetch).forEach { file ->
+                file.uri?.let { fileCache[it] = file }
             }
         }
 
@@ -383,7 +384,7 @@ class CombinedCrawlProcessor(
     private fun extractTextAndMetadata(file: Path, dto: FSFileDTO) {
         // Pre-read check: verify file is readable before attempting extraction
         if (!Files.isReadable(file)) {
-            log.warn("File not readable (permission denied), skipping extraction: {}", file)
+            log.info("File not readable (permission denied), skipping extraction: {}", file)
             dto.bodyText = "[Access denied: file not readable]"
             dto.accessDenied = true
             return

@@ -231,10 +231,10 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
 
     /**
      * Find compact folder snapshot rows for remote crawler bootstrap.
-     * Returns [uri, analysisStatus, crawlDepth, fsLastModified].
+     * Returns [uri, analysisStatus, crawlDepth, fsLastModified, lastCrawledAt].
      */
     @Query("""
-        SELECT f.uri, f.analysisStatus, f.crawlDepth, f.fsLastModified
+        SELECT f.uri, f.analysisStatus, f.crawlDepth, f.fsLastModified, f.lastCrawledAt
         FROM FSFolder f
         WHERE f.crawlConfigId = :crawlConfigId
         ORDER BY f.uri

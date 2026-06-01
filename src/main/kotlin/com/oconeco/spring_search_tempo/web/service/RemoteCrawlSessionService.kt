@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.service
+package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.JobRunService
@@ -13,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.model.JobRunDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlSchedulingService
+import com.oconeco.spring_search_tempo.base.service.SourceHostService
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -26,7 +27,9 @@ class RemoteCrawlSessionService(
     private val folderRepository: FSFolderRepository,
     private val fileRepository: FSFileRepository,
     private val crawlSchedulingService: CrawlSchedulingService,
-    private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService
+    private val crawlDiscoveryObservationService: CrawlDiscoveryObservationService,
+    private val sourceHostService: SourceHostService,
+    private val hostCrawlSessionService: HostCrawlSessionService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(RemoteCrawlSessionService::class.java)
@@ -36,11 +39,20 @@ class RemoteCrawlSessionService(
     fun start(request: RemoteSessionStartRequest): RemoteSessionStartResponse {
         val host = normalizeHost(request.host)
         val config = validateConfigForHost(host, request.crawlConfigId)
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
+            ?: throw IllegalArgumentException("source host is required")
 
         val jobName = "remoteFsIngest-$host-${request.crawlConfigId}"
         val jobRun = jobRunService.startJobRun(request.crawlConfigId, jobName)
         request.expectedTotal?.let { if (it >= 0) jobRunService.setExpectedTotal(jobRun.id!!, it) }
         jobRunService.setCurrentStep(jobRun.id!!, "Remote crawl session started")
+        hostCrawlSessionService.ensureSession(
+            sourceHost = sourceHostRef,
+            crawlConfigId = request.crawlConfigId,
+            jobRunId = jobRun.id!!,
+            crawlMode = config.crawlMode,
+            smartCrawlEnabled = config.smartCrawlEnabled
+        )
 
         if (config.crawlMode == CrawlMode.DISCOVERY) {
             crawlDiscoveryObservationService.startRun(
@@ -84,6 +96,7 @@ class RemoteCrawlSessionService(
     fun ingest(request: RemoteIngestRequest): RemoteIngestResponse {
         val host = normalizeHost(request.host)
         val config = validateConfigForHost(host, request.crawlConfigId)
+        val sourceHostRef = sourceHostService.resolveOrCreate(host)
         val jobRun = validateSession(request.sessionId, request.crawlConfigId, requireRunning = true)
         // Keep session alive before heavy writes; avoids self-deadlock later in this transaction.
         jobRunService.updateHeartbeat(jobRun.id!!)
@@ -135,6 +148,8 @@ class RemoteCrawlSessionService(
             entity.crawlConfigId = request.crawlConfigId
             entity.jobRunId = jobRun.id
             entity.sourceHost = host
+            entity.sourceHostRef = sourceHostRef
+            entity.lastCrawledAt = OffsetDateTime.now()
 
             if (status == AnalysisStatus.SKIP) {
                 foldersSkipped++
@@ -156,6 +171,12 @@ class RemoteCrawlSessionService(
         val fileUris = dedupFiles.map { toRemoteUri(host, it.path) }
         val existingFiles = if (fileUris.isEmpty()) emptyMap() else {
             fileRepository.findByUriIn(fileUris).associateBy { it.uri!! }
+        }
+        val existingFileStateByUri = existingFiles.mapValues { (_, file) ->
+            ExistingRemoteFileState(
+                fsLastModified = file.fsLastModified,
+                size = file.size
+            )
         }
 
         val parentUris = dedupFiles.mapNotNull { file ->
@@ -204,6 +225,7 @@ class RemoteCrawlSessionService(
             entity.crawlConfigId = request.crawlConfigId
             entity.jobRunId = jobRun.id
             entity.sourceHost = host
+            entity.sourceHostRef = sourceHostRef
 
             entity.bodyText = file.bodyText
             entity.bodySize = file.bodySize ?: file.bodyText?.length?.toLong()
@@ -258,7 +280,7 @@ class RemoteCrawlSessionService(
             host = host,
             crawlConfigId = request.crawlConfigId,
             filesToSave = filesToSave,
-            existingFiles = existingFiles,
+            existingFileStateByUri = existingFileStateByUri,
             persistedFolderByUri = persistedFolderByUri
         )
 
@@ -326,6 +348,7 @@ class RemoteCrawlSessionService(
             )
         }
         jobRunService.completeJobRun(jobRun.id!!, request.runStatus, request.errorMessage)
+        hostCrawlSessionService.complete(jobRun.id!!, request.runStatus, request.errorMessage)
 
         if (config.crawlMode == CrawlMode.DISCOVERY) {
             crawlDiscoveryObservationService.completeRun(jobRun.id!!, request.runStatus)
@@ -428,7 +451,7 @@ class RemoteCrawlSessionService(
         host: String, // Reserved for future per-host temperature thresholds
         crawlConfigId: Long,
         filesToSave: List<FSFile>,
-        existingFiles: Map<String, FSFile>,
+        existingFileStateByUri: Map<String, ExistingRemoteFileState>,
         persistedFolderByUri: Map<String, FSFolder>
     ) {
         // Check if smart crawl is enabled for this config
@@ -454,7 +477,7 @@ class RemoteCrawlSessionService(
 
         for (file in filesToSave) {
             val folderId = file.fsFolder?.id ?: continue
-            val existingFile = existingFiles[file.uri]
+            val existingFile = existingFileStateByUri[file.uri]
 
             // Detect change: new file or modified timestamp changed
             val isChanged = existingFile == null ||
@@ -510,6 +533,11 @@ class RemoteCrawlSessionService(
         )
     }
 }
+
+private data class ExistingRemoteFileState(
+    val fsLastModified: OffsetDateTime?,
+    val size: Long?
+)
 
 data class RemoteSessionStartRequest(
     val host: String,

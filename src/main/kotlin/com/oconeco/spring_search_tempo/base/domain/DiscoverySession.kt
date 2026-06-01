@@ -35,6 +35,10 @@ class DiscoverySession {
     @Column(nullable = false, length = 100)
     var host: String? = null
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_host_id")
+    var sourceHostRef: SourceHost? = null
+
     /** Operating system type: WINDOWS, LINUX, MACOS */
     @Column(nullable = false, length = 20)
     var osType: String? = null

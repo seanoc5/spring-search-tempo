@@ -337,7 +337,7 @@ if (fileSize > MAX_TEXT_EXTRACT_SIZE) {
 
 **Diagnosis**: Check generated docs
 ```bash
-./gradlew test --tests ModularityTest
+./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest
 open build/spring-modulith-docs/index.html
 ```
 

@@ -5,8 +5,8 @@ import com.oconeco.spring_search_tempo.base.DatabaseCrawlConfigService
 import com.oconeco.spring_search_tempo.base.config.BaseIT
 import com.oconeco.spring_search_tempo.base.domain.CrawlMode
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
-import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
-import com.oconeco.spring_search_tempo.web.service.RemoteDiscoveryFolderObsIngestItem
+import com.oconeco.spring_search_tempo.base.service.CrawlDiscoveryObservationService
+import com.oconeco.spring_search_tempo.base.service.RemoteDiscoveryFolderObsIngestItem
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
 import org.hamcrest.Matchers.containsString
@@ -125,6 +125,7 @@ class CrawlConfigIntegrationTest : BaseIT() {
             label = "Discovery MVC IT $suffix"
             description = "Integration test crawl config for discovery review page"
             this.sourceHost = sourceHost
+            enabled = true
             startPaths = listOf("/data")
             maxDepth = 20
             followLinks = false

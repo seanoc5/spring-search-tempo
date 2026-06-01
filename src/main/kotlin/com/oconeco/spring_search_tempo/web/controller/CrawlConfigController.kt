@@ -10,15 +10,16 @@ import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.UserOwnershipService
 import com.oconeco.spring_search_tempo.base.config.HostNameHolder
 import com.oconeco.spring_search_tempo.base.domain.DiscoveryManualOverride
+import com.oconeco.spring_search_tempo.base.model.BaselineCaptureRequestDTO
+import com.oconeco.spring_search_tempo.base.model.BaselineSamplingPolicy
+import com.oconeco.spring_search_tempo.base.model.ValidationFilterDTO
 import com.oconeco.spring_search_tempo.base.model.CrawlConfigDTO
+import com.oconeco.spring_search_tempo.base.service.CrawlDiscoveryObservationService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigConverter
 import com.oconeco.spring_search_tempo.base.service.CrawlDataCleanupService
+import com.oconeco.spring_search_tempo.base.service.CrawlConfigValidationService
 import com.oconeco.spring_search_tempo.base.service.SmartDeleteService
 import com.oconeco.spring_search_tempo.base.util.WebUtils
-import com.oconeco.spring_search_tempo.web.model.BaselineSamplingPolicy
-import com.oconeco.spring_search_tempo.web.model.ValidationFilterDTO
-import com.oconeco.spring_search_tempo.web.service.CrawlDiscoveryObservationService
-import com.oconeco.spring_search_tempo.web.service.CrawlConfigValidationService
 import jakarta.servlet.http.HttpServletRequest
 import com.oconeco.spring_search_tempo.batch.fscrawl.CrawlCleanupListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.FsCrawlJobBuilder
@@ -71,19 +72,68 @@ class CrawlConfigController(
     @GetMapping
     fun list(
         @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "sourceHost", required = false) sourceHost: String?,
         @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
-        @SortDefault(sort = ["id"]) @PageableDefault(size = 20) pageable: Pageable,
+        @SortDefault(sort = ["name"]) @PageableDefault(size = 50) pageable: Pageable,
+        model: Model,
+        request: HttpServletRequest
+    ): String {
+        val sourceHosts = crawlConfigService.findDistinctSourceHosts()
+        val isAdmin = userOwnershipService.isCurrentUserAdmin()
+
+        // Determine active tab: first tab or requested sourceHost
+        val activeHost = sourceHost ?: sourceHosts.firstOrNull()
+
+        model.addAttribute("sourceHosts", sourceHosts)
+        model.addAttribute("activeHost", activeHost)
+        model.addAttribute("showAll", showAll)
+        model.addAttribute("isAdmin", isAdmin)
+        model.addAttribute("filter", filter)
+
+        // If this is an HTMX request for the table fragment, return just the table
+        val isHtmxRequest = request.getHeader("HX-Request") == "true"
+        val htmxTarget = request.getHeader("HX-Target")
+
+        if (activeHost != null) {
+            populateConfigTableModel(model, activeHost, filter, pageable, showAll, isAdmin)
+        }
+
+        // Return fragment for HTMX table/tab requests
+        if (isHtmxRequest && (htmxTarget == "configTableContainer" || htmxTarget?.startsWith("tab-") == true)) {
+            return "crawlConfig/fragments/configTable :: configTable"
+        }
+
+        return "crawlConfig/list"
+    }
+
+    @GetMapping("/tab/{sourceHost}")
+    fun tabContent(
+        @PathVariable sourceHost: String,
+        @RequestParam(name = "filter", required = false) filter: String?,
+        @RequestParam(name = "showAll", required = false, defaultValue = "false") showAll: Boolean,
+        @SortDefault(sort = ["name"]) @PageableDefault(size = 50) pageable: Pageable,
         model: Model
     ): String {
         val isAdmin = userOwnershipService.isCurrentUserAdmin()
-        val crawlConfigs = if (showAll && isAdmin) {
-            crawlConfigService.findAll(filter, pageable)
-        } else {
-            crawlConfigService.findAllForCurrentUser(filter, pageable)
-        }
-
+        model.addAttribute("activeHost", sourceHost)
+        model.addAttribute("filter", filter)
         model.addAttribute("showAll", showAll)
         model.addAttribute("isAdmin", isAdmin)
+
+        populateConfigTableModel(model, sourceHost, filter, pageable, showAll, isAdmin)
+
+        return "crawlConfig/fragments/configTable :: configTable"
+    }
+
+    private fun populateConfigTableModel(
+        model: Model,
+        sourceHost: String,
+        filter: String?,
+        pageable: Pageable,
+        showAll: Boolean,
+        isAdmin: Boolean
+    ) {
+        val crawlConfigs = crawlConfigService.findBySourceHost(sourceHost, filter, pageable, showAll && isAdmin)
 
         // Build file count map for each config (excludes SKIP by default)
         val fileCountsMap = crawlConfigs.content.associate { config ->
@@ -112,9 +162,7 @@ class CrawlConfigController(
         model.addAttribute("searchableCounts", searchableCountsMap)
         model.addAttribute("nlpProcessedCounts", nlpProcessedCountsMap)
         model.addAttribute("embeddingCounts", embeddingCountsMap)
-        model.addAttribute("filter", filter)
         model.addAttribute("page", crawlConfigs)
-        return "crawlConfig/list"
     }
 
     @GetMapping("/add")
@@ -123,6 +171,7 @@ class CrawlConfigController(
             maxDepth = 50
             followLinks = false
             parallel = false
+            enabled = true
             sourceHost = HostNameHolder.currentHostName
         })
         model.addAttribute("startPathsText", "")
@@ -195,6 +244,7 @@ class CrawlConfigController(
                     this.maxDepth = preset.maxDepth
                     this.followLinks = followLinks || preset.forceFollowLinks
                     this.parallel = parallel && preset.parallelRecommended
+                    this.enabled = true
                     this.sourceHost = resolvedSourceHost
 
                     folderPatternsSkip = listToJson(preset.folderSkipPatterns)
@@ -525,7 +575,7 @@ class CrawlConfigController(
         crawlConfigValidationService.captureFolderBaseline(
             crawlConfigId = id,
             folderId = folderId,
-            request = com.oconeco.spring_search_tempo.web.model.BaselineCaptureRequestDTO(
+            request = BaselineCaptureRequestDTO(
                 maxSamples = maxSamples,
                 samplingPolicy = samplingPolicy,
                 seed = seed

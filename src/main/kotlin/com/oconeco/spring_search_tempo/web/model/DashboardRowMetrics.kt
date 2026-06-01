@@ -1,4 +1,4 @@
-package com.oconeco.spring_search_tempo.web.model
+package com.oconeco.spring_search_tempo.base.model
 
 data class CrawlConfigRowMetrics(
     val folderCount: Long = 0,
