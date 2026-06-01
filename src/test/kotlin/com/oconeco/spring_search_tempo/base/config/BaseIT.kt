@@ -4,7 +4,7 @@ import io.restassured.RestAssured
 import io.restassured.config.SessionConfig
 import jakarta.annotation.PostConstruct
 import java.nio.charset.StandardCharsets
-import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.jdbc.Sql
@@ -26,11 +26,22 @@ import org.testcontainers.containers.PostgreSQLContainer
 @SqlMergeMode(SqlMergeMode.MergeMode.MERGE)
 abstract class BaseIT {
 
-    @LocalServerPort
-    var serverPort = 0
+    // `@LocalServerPort` requires the `local.server.port` property to be set
+    // by Spring Boot's servlet container. In the default `MOCK` web
+    // environment that property is never registered, so a strict
+    // `@LocalServerPort` field would fail injection on every subclass that
+    // doesn't request `RANDOM_PORT`/`DEFINED_PORT`. Use `@Value` with a
+    // sentinel default so MOCK subclasses just see `-1` and the RestAssured
+    // wiring becomes a no-op for them.
+    @Value("\${local.server.port:-1}")
+    var serverPort: Int = -1
 
     @PostConstruct
     fun initRestAssured() {
+        // Skip RestAssured port wiring when running under MOCK web env
+        // (no real port). Subclasses that need RestAssured must declare
+        // `@SpringBootTest(webEnvironment = RANDOM_PORT)` themselves.
+        if (serverPort <= 0) return
         RestAssured.port = serverPort
         RestAssured.urlEncodingEnabled = false
         RestAssured.config =
