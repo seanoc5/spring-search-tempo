@@ -11,12 +11,16 @@ import javax.crypto.spec.SecretKeySpec
 
 
 /**
- * AES-256-GCM symmetric encryption service for securing OAuth2 refresh tokens at rest.
+ * AES-256-GCM symmetric encryption service for securing OAuth2 refresh tokens and
+ * IMAP passwords at rest.
  *
  * The encryption key is loaded from the `app.onedrive.token-encryption-key` property
  * (typically set via the ONEDRIVE_TOKEN_ENCRYPTION_KEY environment variable).
  *
- * Format: Base64(IV || ciphertext || GCM tag)
+ * Envelope: `v1:` + Base64(IV || ciphertext || GCM tag). The version prefix exists
+ * so future key rotation can introduce `v2:` etc. without re-encrypting at-rest data.
+ * Legacy (unprefixed) ciphertexts are still accepted by decrypt() for backward
+ * compatibility with OneDrive refresh tokens stored before the prefix was introduced.
  */
 @Service
 class TokenEncryptionService(
@@ -28,11 +32,12 @@ class TokenEncryptionService(
         private const val ALGORITHM = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_LENGTH = 128
+        const val V1_PREFIX = "v1:"
     }
 
     private val secretKey: SecretKeySpec? by lazy {
         if (keyBase64.isBlank()) {
-            log.warn("OneDrive token encryption key not configured. Token encryption/decryption will fail.")
+            log.warn("Token encryption key not configured. Token encryption/decryption will fail.")
             null
         } else {
             val keyBytes = Base64.getDecoder().decode(keyBase64)
@@ -41,14 +46,12 @@ class TokenEncryptionService(
     }
 
     /**
-     * Encrypt a plaintext string using AES-256-GCM.
+     * Encrypt a plaintext string using AES-256-GCM. Output is `v1:` + Base64(IV || ciphertext || tag).
      *
-     * @param plaintext The string to encrypt
-     * @return Base64-encoded ciphertext (IV + encrypted data + GCM tag)
      * @throws IllegalStateException if encryption key is not configured
      */
     fun encrypt(plaintext: String): String {
-        val key = secretKey ?: throw IllegalStateException("OneDrive token encryption key not configured")
+        val key = secretKey ?: throw IllegalStateException("Token encryption key not configured")
 
         val iv = ByteArray(GCM_IV_LENGTH)
         SecureRandom().nextBytes(iv)
@@ -58,25 +61,24 @@ class TokenEncryptionService(
 
         val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
 
-        // Concatenate IV + ciphertext
         val combined = ByteArray(iv.size + ciphertext.size)
         System.arraycopy(iv, 0, combined, 0, iv.size)
         System.arraycopy(ciphertext, 0, combined, iv.size, ciphertext.size)
 
-        return Base64.getEncoder().encodeToString(combined)
+        return V1_PREFIX + Base64.getEncoder().encodeToString(combined)
     }
 
     /**
-     * Decrypt a Base64-encoded ciphertext string using AES-256-GCM.
+     * Decrypt a ciphertext envelope. Accepts both `v1:`-prefixed values and legacy
+     * unprefixed Base64 (for OneDrive refresh tokens stored before the prefix existed).
      *
-     * @param ciphertext Base64-encoded string (IV + encrypted data + GCM tag)
-     * @return The decrypted plaintext string
      * @throws IllegalStateException if encryption key is not configured
      */
     fun decrypt(ciphertext: String): String {
-        val key = secretKey ?: throw IllegalStateException("OneDrive token encryption key not configured")
+        val key = secretKey ?: throw IllegalStateException("Token encryption key not configured")
 
-        val combined = Base64.getDecoder().decode(ciphertext)
+        val payload = if (ciphertext.startsWith(V1_PREFIX)) ciphertext.removePrefix(V1_PREFIX) else ciphertext
+        val combined = Base64.getDecoder().decode(payload)
 
         val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
         val encrypted = combined.copyOfRange(GCM_IV_LENGTH, combined.size)

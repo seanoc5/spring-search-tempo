@@ -50,6 +50,23 @@ interface EmailAccountService {
     fun clearError(id: Long)
 
     /**
+     * Encrypt and store an IMAP password for the account. Pass a blank string to clear the stored
+     * password (falling back to credentialEnvVar). The plaintext is never logged or persisted.
+     */
+    fun setPassword(id: Long, plaintext: String)
+
+    /**
+     * Decrypt and return the stored IMAP password, or `null` if no encrypted password has been set
+     * for this account. Never logs the plaintext.
+     */
+    fun getPassword(id: Long): String?
+
+    /**
+     * Whether the account has a stored encrypted password (does NOT decrypt).
+     */
+    fun hasPassword(id: Long): Boolean
+
+    /**
      * Find all accounts with summary info (folder/message counts, active job progress).
      */
     fun findAllWithSummary(): List<EmailAccountSummaryDTO>
