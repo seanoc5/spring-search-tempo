@@ -226,6 +226,12 @@ app:
     max-attachment-size: 26214400  # 25 MB
     attachment-extraction:
       enabled: true
+    # IMAP mirror job (issue #24, ADR-005). Per-config rate limiting and
+    # folder mappings live on the MirrorConfig entity itself.
+    mirror:
+      # Spring Batch chunk size for the mirrorStep. Smaller chunks tighten
+      # the checkpoint cadence; larger chunks reduce DB write overhead.
+      chunk-size: 25
     accounts:
       # Gmail account (requires App Password)
       # To enable:
