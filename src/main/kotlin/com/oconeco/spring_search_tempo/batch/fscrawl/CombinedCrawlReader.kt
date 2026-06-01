@@ -5,6 +5,8 @@ import com.oconeco.spring_search_tempo.base.service.RecentCrawlCheckResult
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.base.service.StartPathValidator
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.StepExecution
+import org.springframework.batch.core.StepExecutionListener
 import org.springframework.batch.item.ItemReader
 import java.io.IOException
 import java.nio.file.*
@@ -34,6 +36,18 @@ import kotlin.io.path.isRegularFile
  * of other configs) and were recently crawled by another config will be skipped entirely.
  * This prevents duplicate work when parent crawls encounter child crawl territories.
  *
+ * Deterministic walk order:
+ * Subdirectories and immediate files in each directory are sorted by URI so that the
+ * walk order is reproducible across JVM restarts. This is required for resume-from-
+ * checkpoint to work correctly — without sorting, a crashed crawl could re-process
+ * different items on restart because [Files.newDirectoryStream] does not guarantee
+ * order.
+ *
+ * Checkpoint resume:
+ * When [StepExecution] contains [RESUME_FROM_URI_KEY], the reader skips all items
+ * whose directory URI sorts at or before the resume URI. The crawl picks up at the
+ * directory immediately *after* the last successfully persisted one.
+ *
  * @param startPaths List of root directories to start crawling from (processed sequentially)
  * @param maxDepth Maximum directory depth to traverse
  * @param followLinks Whether to follow symbolic links
@@ -47,15 +61,19 @@ class CombinedCrawlReader(
     private val folderMatcher: ((Path) -> AnalysisStatus)? = null,
     private val recentCrawlChecker: RecentCrawlSkipChecker? = null,
     private val maxFilesPerBatch: Int = 500
-) : ItemReader<CombinedCrawlItem> {
+) : ItemReader<CombinedCrawlItem>, StepExecutionListener {
 
     companion object {
         private val log = LoggerFactory.getLogger(CombinedCrawlReader::class.java)
+
+        /** Key under which the resume URI is stored in the step/job execution context. */
+        const val RESUME_FROM_URI_KEY = "crawlResumeFromUri"
     }
 
     private var itemIterator: Iterator<CombinedCrawlItem>? = null
     private val items = ConcurrentLinkedQueue<CombinedCrawlItem>()
     private var walkCompleted = false
+    private var resumeFromUri: String? = null
 
     /** Valid paths after filtering invalid ones */
     private val validStartPaths: List<Path>
@@ -81,32 +99,74 @@ class CombinedCrawlReader(
             log.warn("Using {} of {} start paths ({} invalid/inaccessible)",
                 validStartPaths.size, startPaths.size, startPaths.size - validStartPaths.size)
         }
+    }
 
+    override fun beforeStep(stepExecution: StepExecution) {
+        // Pull resume marker from the job execution context (set by CrawlCheckpointListener)
+        // or from the step context (so callers can override directly in tests).
+        val jobCtx = stepExecution.jobExecution.executionContext
+        val stepCtx = stepExecution.executionContext
+        resumeFromUri = when {
+            stepCtx.containsKey(RESUME_FROM_URI_KEY) -> stepCtx.getString(RESUME_FROM_URI_KEY)
+            jobCtx.containsKey(RESUME_FROM_URI_KEY) -> jobCtx.getString(RESUME_FROM_URI_KEY)
+            else -> null
+        }
+        if (resumeFromUri != null) {
+            log.info("Resuming crawl from checkpoint URI: {}", resumeFromUri)
+        }
         initializeWalk()
     }
 
     /**
-     * Custom FileVisitor that collects directories and their immediate files together.
-     * This visitor gracefully handles access errors without terminating the crawl.
+     * Walk a single startPath using sorted directory listings so the order is
+     * reproducible across JVM restarts. Replaces [Files.walkFileTree] (whose
+     * order is implementation-defined) with an explicit depth-first traversal.
      */
-    private inner class CombinedFileVisitor : SimpleFileVisitor<Path>() {
-        private var directoriesProcessed = 0
-        private var filesCollected = 0
-        private var errorsEncountered = 0
-        private var skippedDirectories = 0
-        private var skippedByRecentCrawl = 0
+    private fun walkSorted(startPath: Path) {
+        var directoriesProcessed = 0
+        var filesCollected = 0
+        var errorsEncountered = 0
+        var skippedDirectories = 0
+        var skippedByRecentCrawl = 0
+        var skippedByCheckpoint = 0
 
-        override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+        // Depth-first stack of (directory, depthFromStart).
+        val stack = ArrayDeque<Pair<Path, Int>>()
+        stack.addLast(startPath to 0)
+
+        while (stack.isNotEmpty()) {
+            val (dir, depth) = stack.removeLast()
+            if (depth > maxDepth) {
+                continue
+            }
             directoriesProcessed++
 
             if (directoriesProcessed % 1000 == 0) {
-                log.debug("Progress: {} directories processed, {} files collected, {} skipped (pattern), {} skipped (recent crawl), {} errors handled",
-                    directoriesProcessed, filesCollected, skippedDirectories, skippedByRecentCrawl, errorsEncountered)
+                log.debug(
+                    "Progress: {} directories processed, {} files collected, {} skipped (pattern), {} skipped (recent crawl), {} skipped (checkpoint), {} errors handled",
+                    directoriesProcessed, filesCollected, skippedDirectories,
+                    skippedByRecentCrawl, skippedByCheckpoint, errorsEncountered
+                )
+            }
+
+            // Follow-links / cycle protection: skip directories that aren't directories anymore.
+            // BasicFileAttributes for symlink loop detection mirrors walkFileTree's default behavior.
+            val attrs: BasicFileAttributes? = try {
+                if (followLinks) Files.readAttributes(dir, BasicFileAttributes::class.java)
+                else Files.readAttributes(
+                    dir, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
+                )
+            } catch (e: IOException) {
+                errorsEncountered++
+                log.info("Cannot stat directory (skipping): {} - {}", dir, e.message)
+                null
+            }
+            if (attrs == null || !attrs.isDirectory) {
+                continue
             }
 
             try {
-                // Check if this folder was recently crawled by another config
-                // This only triggers for folders that are crawl config roots (startPaths of other configs)
+                // Recent-crawl skip check (only fires at crawl-config roots).
                 if (recentCrawlChecker != null) {
                     when (val result = recentCrawlChecker.shouldSkipFolder(dir)) {
                         is RecentCrawlCheckResult.SkipSubtree -> {
@@ -115,130 +175,132 @@ class CombinedCrawlReader(
                                 "Skipping subtree recently crawled by another config: {} (configId={}, status={}, crawledAt={})",
                                 dir, result.otherCrawlConfigId, result.otherAnalysisStatus, result.lastUpdated
                             )
-                            // Don't add to items - we're skipping entirely because another config handles this
-                            return FileVisitResult.SKIP_SUBTREE
+                            continue
                         }
-                        is RecentCrawlCheckResult.NotRecentlyCrawled -> {
-                            // Continue with normal processing
-                        }
+                        is RecentCrawlCheckResult.NotRecentlyCrawled -> Unit
                     }
                 }
 
-                // Check if this folder should be skipped (SKIP pattern match)
+                // SKIP-pattern check: collect folder metadata but do not enumerate children.
                 val shouldSkip = folderMatcher?.invoke(dir) == AnalysisStatus.SKIP
-
                 if (shouldSkip) {
                     skippedDirectories++
-                    // Add directory with empty file list (metadata will be persisted with SKIP status)
-                    items.add(CombinedCrawlItem(directory = dir, files = emptyList()))
+                    if (shouldEmit(dir)) {
+                        items.add(CombinedCrawlItem(directory = dir, files = emptyList()))
+                    } else {
+                        skippedByCheckpoint++
+                    }
                     log.debug("Directory matched SKIP pattern (children not enumerated): {}", dir)
-                    // Skip enumeration of this folder's children entirely
-                    return FileVisitResult.SKIP_SUBTREE
+                    continue
                 }
 
-                // List immediate files in this directory (not recursive)
-                // Use .use { } to ensure the DirectoryStream is closed (prevents "too many open files")
-                val immediateFiles = Files.list(dir).use { stream ->
-                    stream.filter { it.isRegularFile() }.toList()
+                // List immediate children in deterministic order.
+                val children = Files.list(dir).use { stream ->
+                    stream.toList()
+                }.sortedBy { it.toString() }
+
+                val immediateFiles = children.filter { it.isRegularFile() }
+                val immediateDirs = children.filter {
+                    try {
+                        val ca = if (followLinks) {
+                            Files.readAttributes(it, BasicFileAttributes::class.java)
+                        } else {
+                            Files.readAttributes(it, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+                        }
+                        ca.isDirectory
+                    } catch (e: IOException) {
+                        false
+                    }
                 }
 
                 filesCollected += immediateFiles.size
 
-                // Split large directories into batches of maxFilesPerBatch
-                if (immediateFiles.size <= maxFilesPerBatch) {
-                    // Small directory - single item
-                    items.add(CombinedCrawlItem(
-                        directory = dir,
-                        files = immediateFiles,
-                        isContinuation = false,
-                        totalFileCount = immediateFiles.size
-                    ))
-                    log.trace("Collected directory: {} with {} files", dir, immediateFiles.size)
-                } else {
-                    // Large directory - split into batches
-                    val batches = immediateFiles.chunked(maxFilesPerBatch)
-                    log.info("Splitting large directory ({} files) into {} batches: {}",
-                        immediateFiles.size, batches.size, dir)
-
-                    batches.forEachIndexed { index, batch ->
-                        items.add(CombinedCrawlItem(
-                            directory = dir,
-                            files = batch,
-                            isContinuation = index > 0,  // First batch processes folder
-                            totalFileCount = immediateFiles.size
-                        ))
+                // Emit the directory + files (possibly split into continuation batches).
+                if (shouldEmit(dir)) {
+                    if (immediateFiles.size <= maxFilesPerBatch) {
+                        items.add(
+                            CombinedCrawlItem(
+                                directory = dir,
+                                files = immediateFiles,
+                                isContinuation = false,
+                                totalFileCount = immediateFiles.size
+                            )
+                        )
+                        log.trace("Collected directory: {} with {} files", dir, immediateFiles.size)
+                    } else {
+                        val batches = immediateFiles.chunked(maxFilesPerBatch)
+                        log.info(
+                            "Splitting large directory ({} files) into {} batches: {}",
+                            immediateFiles.size, batches.size, dir
+                        )
+                        batches.forEachIndexed { index, batch ->
+                            items.add(
+                                CombinedCrawlItem(
+                                    directory = dir,
+                                    files = batch,
+                                    isContinuation = index > 0,
+                                    totalFileCount = immediateFiles.size
+                                )
+                            )
+                        }
                     }
+                } else {
+                    skippedByCheckpoint++
+                    log.trace("Resuming past directory (already processed): {}", dir)
+                }
+
+                // Push subdirectories in reverse-sorted order so popping yields sorted order.
+                for (childDir in immediateDirs.asReversed()) {
+                    stack.addLast(childDir to (depth + 1))
                 }
 
             } catch (e: AccessDeniedException) {
                 errorsEncountered++
                 log.info("Access denied to directory (skipping): {}", dir)
-                return FileVisitResult.SKIP_SUBTREE
             } catch (e: NoSuchFileException) {
                 errorsEncountered++
                 log.info("Directory disappeared during processing (skipping): {}", dir)
-                return FileVisitResult.SKIP_SUBTREE
-            } catch (e: Exception) {
+            } catch (e: IOException) {
+                errorsEncountered++
+                log.warn("IO error processing directory (skipping): {} - {}", dir, e.message)
+            } catch (e: RuntimeException) {
                 errorsEncountered++
                 log.warn("Error processing directory (skipping): {} - {}", dir, e.message)
-                return FileVisitResult.SKIP_SUBTREE
             }
-
-            return FileVisitResult.CONTINUE
         }
 
-        override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult {
-            errorsEncountered++
-            if (exc is AccessDeniedException) {
-                log.info("Access denied (skipping): {}", file)
-            } else {
-                log.warn("Unable to access path (skipping): {} - {}", file, exc.message)
-            }
-            return FileVisitResult.SKIP_SUBTREE
-        }
+        log.info(
+            "Directory walk completed for {}: {} directories processed, {} files collected, {} skipped (SKIP pattern), {} skipped (recent crawl), {} skipped (checkpoint), {} errors gracefully handled",
+            startPath, directoriesProcessed, filesCollected, skippedDirectories,
+            skippedByRecentCrawl, skippedByCheckpoint, errorsEncountered
+        )
+    }
 
-        override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
-            if (exc != null) {
-                errorsEncountered++
-                if (exc is AccessDeniedException) {
-                    log.info("Access denied after visiting directory (continuing): {}", dir)
-                } else {
-                    log.warn("Error after visiting directory (continuing): {} - {}", dir, exc.message)
-                }
-            }
-            return FileVisitResult.CONTINUE
-        }
-
-        fun logSummary() {
-            log.info("Directory walk completed: {} directories processed, {} files collected, {} skipped (SKIP pattern), {} skipped (recent crawl), {} errors gracefully handled",
-                directoriesProcessed, filesCollected, skippedDirectories, skippedByRecentCrawl, errorsEncountered)
-        }
+    /**
+     * Honor the checkpoint by suppressing items whose directory URI sorts at or before
+     * the resume marker. Walks are deterministic (sorted), so this corresponds to
+     * directories the previous run already persisted.
+     */
+    private fun shouldEmit(dir: Path): Boolean {
+        val marker = resumeFromUri ?: return true
+        return dir.toString() > marker
     }
 
     private fun initializeWalk() {
+        if (walkCompleted) {
+            log.debug("Walk already completed; skipping re-initialization")
+            return
+        }
         try {
-            val visitOptions = if (followLinks) {
-                setOf(FileVisitOption.FOLLOW_LINKS)
-            } else {
-                emptySet()
-            }
+            log.info(
+                "Starting combined directory+file walk from {} valid start paths (of {} total); resumeFromUri={}",
+                validStartPaths.size, startPaths.size, resumeFromUri
+            )
 
-            log.info("Starting combined directory+file walk from {} valid start paths (of {} total)",
-                validStartPaths.size, startPaths.size)
-
-            // Walk each valid start path sequentially, adding items to the same queue
             validStartPaths.forEachIndexed { index, startPath ->
                 log.info("Walking start path [{}/{}]: {}", index + 1, validStartPaths.size, startPath)
-
-                val visitor = CombinedFileVisitor()
                 try {
-                    Files.walkFileTree(
-                        startPath,
-                        visitOptions,
-                        maxDepth,
-                        visitor
-                    )
-                    visitor.logSummary()
+                    walkSorted(startPath)
                 } catch (e: Exception) {
                     log.error("Error walking start path: {} - {}", startPath, e.message)
                     // Continue with other paths rather than failing entirely
@@ -248,8 +310,10 @@ class CombinedCrawlReader(
             itemIterator = items.iterator()
             walkCompleted = true
 
-            log.info("Completed walking all {} valid start paths. Total items collected: {}",
-                validStartPaths.size, items.size)
+            log.info(
+                "Completed walking all {} valid start paths. Total items collected: {}",
+                validStartPaths.size, items.size
+            )
 
         } catch (e: Exception) {
             log.error("Critical error during combined walk initialization", e)
@@ -259,6 +323,10 @@ class CombinedCrawlReader(
 
     @Synchronized
     override fun read(): CombinedCrawlItem? {
+        if (itemIterator == null) {
+            // Reader may be used outside a Spring Batch step (e.g. unit tests).
+            initializeWalk()
+        }
         return try {
             if (itemIterator?.hasNext() == true) {
                 val item = itemIterator!!.next()
@@ -266,7 +334,6 @@ class CombinedCrawlReader(
                     item.directory, item.files.size)
                 item
             } else {
-                // End of iteration
                 if (walkCompleted) {
                     log.info("Finished reading all {} combined directory+file items", items.size)
                 }
