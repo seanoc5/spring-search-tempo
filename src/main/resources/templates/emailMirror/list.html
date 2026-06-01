@@ -1,0 +1,109 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Email Mirrors</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">Email Mirrors</h1>
+        <div class="d-flex align-items-center gap-2">
+            <a th:href="@{/emailMirrors/add}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-1"></i>Add Mirror
+            </a>
+        </div>
+    </div>
+
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${message}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${error}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <p class="text-muted">
+        Define source → destination IMAP account pairs and folder mapping rules.
+        Actual message copying is performed by a separate mirror job (see ADR-005).
+    </p>
+
+    <div th:if="${mirrors.empty}" class="alert alert-info">
+        No mirror configurations yet. <a th:href="@{/emailMirrors/add}">Add one now</a>.
+    </div>
+
+    <div th:unless="${mirrors.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Enabled</th>
+                <th>Last Run</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+                <tr th:each="mirror : ${mirrors}">
+                    <td>
+                        <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}">
+                            <i class="bi bi-arrow-left-right me-1"></i>[[${mirror.name}]]
+                        </a>
+                    </td>
+                    <td>
+                        <span th:if="${accountEmailById.get(mirror.sourceAccountId) != null}"
+                              th:text="${accountEmailById.get(mirror.sourceAccountId)}">source</span>
+                        <span th:if="${accountEmailById.get(mirror.sourceAccountId) == null}"
+                              class="text-muted" th:text="'#' + ${mirror.sourceAccountId}">?</span>
+                    </td>
+                    <td>
+                        <span th:if="${accountEmailById.get(mirror.destAccountId) != null}"
+                              th:text="${accountEmailById.get(mirror.destAccountId)}">dest</span>
+                        <span th:if="${accountEmailById.get(mirror.destAccountId) == null}"
+                              class="text-muted" th:text="'#' + ${mirror.destAccountId}">?</span>
+                    </td>
+                    <td>
+                        <span th:if="${mirror.enabled}" class="badge bg-success">Enabled</span>
+                        <span th:unless="${mirror.enabled}" class="badge bg-secondary">Disabled</span>
+                    </td>
+                    <td>
+                        <span th:if="${mirror.lastRunCompletedAt != null}"
+                              th:text="${#temporals.format(mirror.lastRunCompletedAt, 'yyyy-MM-dd HH:mm')}">never</span>
+                        <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt != null}"
+                              class="text-info">running…</span>
+                        <span th:if="${mirror.lastRunCompletedAt == null && mirror.lastRunStartedAt == null}"
+                              class="text-muted">never</span>
+                        <div th:if="${mirror.lastError}" class="text-danger small" th:title="${mirror.lastError}">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            [[${#strings.abbreviate(mirror.lastError, 40)}]]
+                        </div>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a th:href="@{/emailMirrors/{id}(id=${mirror.id})}"
+                               class="btn btn-outline-secondary" title="View">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a th:href="@{/emailMirrors/{id}/edit(id=${mirror.id})}"
+                               class="btn btn-outline-secondary" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form th:action="@{/emailMirrors/{id}/delete(id=${mirror.id})}"
+                                  method="post" class="d-inline"
+                                  onsubmit="return confirm('Delete this mirror configuration?');">
+                                <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

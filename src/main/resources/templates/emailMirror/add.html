@@ -1,0 +1,141 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Add Mirror</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/emailMirrors}">Email Mirrors</a></li>
+            <li class="breadcrumb-item active">Add Mirror</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-4"><i class="bi bi-arrow-left-right me-2"></i>Add Mirror</h1>
+
+    <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger">
+        <ul class="mb-0">
+            <li th:each="err : ${#fields.globalErrors()}" th:text="${err}"></li>
+        </ul>
+    </div>
+
+    <form th:action="@{/emailMirrors/add}" th:object="${mirror}" method="post">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="mb-0">Mirror Details</h5></div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="name" th:field="*{name}"
+                                   th:classappend="${#fields.hasErrors('name')} ? 'is-invalid'"
+                                   placeholder="e.g., oconeco.com migration" required>
+                            <div th:if="${#fields.hasErrors('name')}" class="invalid-feedback">
+                                <span th:errors="*{name}"></span>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="sourceAccountId" class="form-label">Source Account *</label>
+                                <select class="form-select" id="sourceAccountId" th:field="*{sourceAccountId}"
+                                        hx-get="/emailMirrors/folderSuggestions"
+                                        hx-trigger="change"
+                                        hx-target="#folderMappingsEditor"
+                                        hx-swap="outerHTML"
+                                        hx-include="[name='destAccountId']"
+                                        required>
+                                    <option value="">-- Select source --</option>
+                                    <option th:each="a : ${accounts}" th:value="${a.id}"
+                                            th:text="${a.email + (a.label != null ? ' (' + a.label + ')' : '')}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="destAccountId" class="form-label">Destination Account *</label>
+                                <select class="form-select" id="destAccountId" th:field="*{destAccountId}"
+                                        hx-get="/emailMirrors/folderSuggestions"
+                                        hx-trigger="change"
+                                        hx-target="#folderMappingsEditor"
+                                        hx-swap="outerHTML"
+                                        hx-include="[name='sourceAccountId']"
+                                        required>
+                                    <option value="">-- Select destination --</option>
+                                    <option th:each="a : ${accounts}" th:value="${a.id}"
+                                            th:text="${a.email + (a.label != null ? ' (' + a.label + ')' : '')}"></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="appendRateLimitPerSecond" class="form-label">APPEND Rate Limit (per second)</label>
+                                <input type="number" min="1" class="form-control" id="appendRateLimitPerSecond"
+                                       th:field="*{appendRateLimitPerSecond}">
+                                <div class="form-text">Leave blank to disable throttling. Default 10/s is conservative for Gmail.</div>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-center">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
+                                    <label class="form-check-label" for="enabled">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" th:field="*{description}" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Folder Mappings</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">
+                            Defaults to name-matching across enabled folders on the source account.
+                            Pick a source account above (and optionally a destination) to populate; any folder
+                            missing on the destination is flagged as a warning, not a blocker — it can sync in later.
+                        </p>
+                        <div id="folderMappingsEditor">
+                            <div class="text-muted small">Select a source account to populate folder mappings.</div>
+                            <textarea name="folderMappingsJson" id="folderMappingsJson" class="d-none">[]</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Create Mirror
+                    </button>
+                    <a th:href="@{/emailMirrors}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>About Mirrors</h5>
+                    </div>
+                    <div class="card-body small">
+                        <p>
+                            A mirror copies messages from a source IMAP account to a destination
+                            IMAP account via <code>APPEND</code>, keyed on <code>Message-ID</code>
+                            for idempotent re-runs.
+                        </p>
+                        <p>
+                            This page only configures the pair and folder rules. Actual copying
+                            is performed by a separate mirror job (issues #23 / #24).
+                        </p>
+                        <p class="mb-0 text-muted">See <a href="#" onclick="return false;">ADR-005</a>.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+</body>
+</html>
