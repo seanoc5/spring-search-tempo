@@ -16,9 +16,11 @@ import com.oconeco.spring_search_tempo.base.domain.RunStatus
 import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.model.FolderMapping
 import com.oconeco.spring_search_tempo.base.repos.EmailAccountRepository
+import com.oconeco.spring_search_tempo.base.domain.MirrorFolderProgress
 import com.oconeco.spring_search_tempo.base.repos.JobRunRepository
 import com.oconeco.spring_search_tempo.base.repos.MirrorConfigRepository
 import com.oconeco.spring_search_tempo.base.repos.MirrorErrorRepository
+import com.oconeco.spring_search_tempo.base.repos.MirrorFolderProgressRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import io.restassured.RestAssured
 import io.restassured.http.ContentType
@@ -84,6 +86,7 @@ class MirrorProgressViewIT : BaseIT() {
     @Autowired lateinit var mirrorConfigRepository: MirrorConfigRepository
     @Autowired lateinit var mirroredMessageRepository: MirroredMessageRepository
     @Autowired lateinit var mirrorErrorRepository: MirrorErrorRepository
+    @Autowired lateinit var mirrorFolderProgressRepository: MirrorFolderProgressRepository
     @Autowired lateinit var jobRunRepository: JobRunRepository
     @Autowired lateinit var emailAccountRepository: EmailAccountRepository
     @Autowired lateinit var emailAccountService: EmailAccountService
@@ -102,6 +105,7 @@ class MirrorProgressViewIT : BaseIT() {
         dstServer.setUser(DST_EMAIL, DST_EMAIL, MAIL_PASSWORD)
 
         mirrorErrorRepository.deleteAll()
+        mirrorFolderProgressRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
         jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
@@ -147,6 +151,7 @@ class MirrorProgressViewIT : BaseIT() {
     @AfterEach
     fun tearDown() {
         mirrorErrorRepository.deleteAll()
+        mirrorFolderProgressRepository.deleteAll()
         mirroredMessageRepository.deleteAll()
         jobRunRepository.deleteAll()
         mirrorConfigRepository.deleteAll()
@@ -159,6 +164,10 @@ class MirrorProgressViewIT : BaseIT() {
         seedMirrored("INBOX", 3)
         seedMirrored("Sent", 2)
         seedError("INBOX", uid = 99L, retryable = true, reason = "IMAP appended timed out")
+        // Reader has opened INBOX (totalConsidered=10) and finished it,
+        // and is currently mid-flight on Sent (totalConsidered=5).
+        seedFolderProgress("INBOX", "INBOX", totalConsidered = 10L, complete = true)
+        seedFolderProgress("Sent", "Sent", totalConsidered = 5L, complete = false)
 
         val body = RestAssured
             .given()
@@ -171,10 +180,49 @@ class MirrorProgressViewIT : BaseIT() {
 
         assertThat(body).contains("INBOX")
         assertThat(body).contains("Sent")
-        assertThat(body).containsPattern(Regex("""\d+ / \d+ messages""").toPattern())
+        // Per-folder denominators come from MirrorFolderProgress, not the
+        // misleading mirrored/(mirrored+failed) ratio.
+        assertThat(body).contains("3 / 10 messages")
+        assertThat(body).contains("2 / 5 messages")
+        // Status line: folders complete / folders total.
+        assertThat(body).contains("Folders: 1 / 2 complete")
+        assertThat(body).contains("1 in flight")
+        // Status badge per folder.
+        assertThat(body).contains("complete")
+        assertThat(body).contains("in flight")
+        // The misleading "% complete" column is gone.
+        assertThat(body).doesNotContain("% complete")
         assertThat(body).contains("hx-trigger=\"every 5s\"")
         // Error log row visible.
         assertThat(body).contains("IMAP appended timed out")
+    }
+
+    @Test
+    @DisplayName("folder without a progress row renders count-only, not a fake denominator")
+    fun folderWithoutProgressRowOmitsDenominator() {
+        // No MirrorFolderProgress rows seeded — i.e. the reader hasn't
+        // opened either folder yet. The dashboard must NOT fabricate a
+        // denominator from mirrored + failed (the issue #33 regression).
+        seedMirrored("INBOX", 4)
+        seedError("INBOX", uid = 99L, retryable = true, reason = "transient")
+
+        val body = RestAssured
+            .given()
+            .accept(ContentType.HTML)
+            .`when`()
+            .get("/emailMirrors/$configId/runs/$jobRunId")
+            .then()
+            .statusCode(200)
+            .extract().asString()
+
+        // Count-only rendering when no denominator is available.
+        assertThat(body).contains("4 messages")
+        // Specifically: do NOT show "4 / 5 messages" (the old behaviour
+        // that lied during the run by treating mirrored+failed as total).
+        assertThat(body).doesNotContain("4 / 5 messages")
+        // Both folders are still queued (no open recorded).
+        assertThat(body).contains("Folders: 0 / 2 complete")
+        assertThat(body).contains("queued")
     }
 
     @Test
@@ -299,6 +347,25 @@ class MirrorProgressViewIT : BaseIT() {
                 }
             )
         }
+    }
+
+    private fun seedFolderProgress(
+        source: String,
+        dest: String,
+        totalConsidered: Long,
+        complete: Boolean
+    ) {
+        mirrorFolderProgressRepository.save(
+            MirrorFolderProgress().apply {
+                this.mirrorConfigId = this@MirrorProgressViewIT.configId
+                this.jobRunId = this@MirrorProgressViewIT.jobRunId
+                this.sourceFolder = source
+                this.destFolder = dest
+                this.totalConsidered = totalConsidered
+                this.openedAt = OffsetDateTime.now()
+                this.completedAt = if (complete) OffsetDateTime.now() else null
+            }
+        )
     }
 
     private fun seedError(folder: String, uid: Long, retryable: Boolean, reason: String) {
