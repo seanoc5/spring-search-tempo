@@ -124,6 +124,10 @@ app:
     remember-me-always: ${REMEMBER_ME_ALWAYS:true}
     # true = DB-backed persistent tokens, false = stateless signed cookie.
     remember-me-persistent: ${REMEMBER_ME_PERSISTENT:true}
+    # AES-256-GCM key (base64, 32 bytes) used for at-rest encryption of OAuth2 refresh
+    # tokens AND IMAP passwords. Single shared key — formerly named app.onedrive.token-encryption-key
+    # / ONEDRIVE_TOKEN_ENCRYPTION_KEY; the old name still works but logs a deprecation warning.
+    encryption-key: "${APP_ENCRYPTION_KEY:}"
   crawl:
     # Global defaults that all crawls inherit
     defaults:
@@ -303,6 +307,8 @@ app:
       - "Files.Read"
       - "offline_access"
       - "User.Read"
+    # DEPRECATED: rename to app.security.encryption-key (env APP_ENCRYPTION_KEY).
+    # Still honored as a fallback so existing deployments keep working; remove once migrated.
     token-encryption-key: "${ONEDRIVE_TOKEN_ENCRYPTION_KEY:}"
     download-temp-dir: "/tmp/onedrive-downloads"
     max-download-size-mb: 100

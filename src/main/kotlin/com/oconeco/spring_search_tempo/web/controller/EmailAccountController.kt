@@ -83,6 +83,7 @@ class EmailAccountController(
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
         model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
+        model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/view"
     }
 
@@ -168,8 +169,8 @@ class EmailAccountController(
                 log.warn("Failed to store encrypted password for account id={}: {}", id, e.message)
                 redirectAttributes.addFlashAttribute(
                     "error",
-                    "Cannot store encrypted password: server-side `app.onedrive.token-encryption-key` " +
-                        "(env `ONEDRIVE_TOKEN_ENCRYPTION_KEY`) is not configured. " +
+                    "Cannot store encrypted password: server-side `app.security.encryption-key` " +
+                        "(env `APP_ENCRYPTION_KEY`) is not configured. " +
                         "Set it and restart the app, then try again."
                 )
             }
