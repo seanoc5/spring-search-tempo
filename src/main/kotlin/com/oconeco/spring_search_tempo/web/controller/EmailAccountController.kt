@@ -329,7 +329,7 @@ class EmailAccountController(
         @RequestParam(required = false) imapHost: String?,
         @RequestParam(required = false) imapPort: Int?,
         @RequestParam(required = false) email: String?,
-        @RequestParam(required = false) password: String?,
+        @RequestParam(required = false) validationPassword: String?,
         @RequestParam(required = false, defaultValue = "true") useSsl: Boolean,
         @RequestHeader(value = "HX-Request", required = false) hxRequest: String?,
         model: Model
@@ -338,7 +338,7 @@ class EmailAccountController(
             host = imapHost,
             port = imapPort,
             username = email,
-            password = password,
+            password = validationPassword,
             useSsl = useSsl
         )
         val result = validationService.validate(form)
