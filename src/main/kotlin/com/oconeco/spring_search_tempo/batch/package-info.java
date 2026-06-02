@@ -5,7 +5,8 @@
                 "base::model",
                 "base::domain",
                 "base::repos",
-                "base::util"
+                "base::util",
+                "base::events"
         }
 )
 package com.oconeco.spring_search_tempo.batch;

@@ -2,6 +2,11 @@ app:
   onedrive:
     # 32-byte AES key (Base64) — deterministic for tests only; rotate in prod.
     token-encryption-key: "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+  mirror:
+    # Disabled by default in tests so MirrorJobIT and friends don't
+    # incidentally launch the destination-account email quick-sync. The
+    # dedicated MirrorAutoIndexIT enables this with @TestPropertySource.
+    auto-index: false
 
 spring:
   sql:

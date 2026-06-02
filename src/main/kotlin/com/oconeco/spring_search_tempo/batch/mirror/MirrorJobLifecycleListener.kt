@@ -2,12 +2,14 @@ package com.oconeco.spring_search_tempo.batch.mirror
 
 import com.oconeco.spring_search_tempo.base.JobRunService
 import com.oconeco.spring_search_tempo.base.domain.RunStatus
+import com.oconeco.spring_search_tempo.base.events.MirrorJobCompletedEvent
 import com.oconeco.spring_search_tempo.base.repos.MirrorConfigRepository
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.BatchStatus
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobExecutionListener
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
@@ -30,7 +32,8 @@ import java.time.OffsetDateTime
 class MirrorJobLifecycleListener(
     private val checkpointService: MirrorCheckpointService,
     private val mirrorConfigRepository: MirrorConfigRepository,
-    private val jobRunService: JobRunService
+    private val jobRunService: JobRunService,
+    private val eventPublisher: ApplicationEventPublisher
 ) : JobExecutionListener {
 
     companion object {
@@ -72,13 +75,18 @@ class MirrorJobLifecycleListener(
         when (jobExecution.status) {
             BatchStatus.COMPLETED -> {
                 checkpointService.clear(mirrorConfigId)
-                mirrorConfigRepository.findById(mirrorConfigId).ifPresent { entity ->
-                    entity.lastRunCompletedAt = OffsetDateTime.now()
-                    entity.lastError = null
-                    mirrorConfigRepository.save(entity)
-                }
+                val completedAt = OffsetDateTime.now()
+                val destAccountId = mirrorConfigRepository.findById(mirrorConfigId)
+                    .map { entity ->
+                        entity.lastRunCompletedAt = completedAt
+                        entity.lastError = null
+                        mirrorConfigRepository.save(entity)
+                        entity.destAccountId
+                    }
+                    .orElse(null)
                 completeJobRun(jobExecution, RunStatus.COMPLETED, errorMessage = null)
                 log.info("MirrorJob completed: mirrorConfigId={}", mirrorConfigId)
+                publishCompletedEvent(jobExecution, mirrorConfigId, destAccountId, completedAt)
             }
             else -> {
                 val errorMessage = jobExecution.allFailureExceptions
@@ -108,6 +116,33 @@ class MirrorJobLifecycleListener(
             jobRunService.completeJobRun(jobRunId, runStatus, errorMessage)
         } catch (e: Exception) {
             log.error("Failed to finalize JobRun {} (status={})", jobRunId, runStatus, e)
+        }
+    }
+
+    private fun publishCompletedEvent(
+        jobExecution: JobExecution,
+        mirrorConfigId: Long,
+        destAccountId: Long?,
+        completedAt: OffsetDateTime
+    ) {
+        val jobRunId = jobExecution.executionContext.getLong(JOB_RUN_ID_KEY, -1L).takeIf { it > 0 }
+        val messagesMirrored = jobExecution.stepExecutions.sumOf { it.writeCount }
+        try {
+            eventPublisher.publishEvent(
+                MirrorJobCompletedEvent(
+                    mirrorConfigId = mirrorConfigId,
+                    jobRunId = jobRunId,
+                    destAccountId = destAccountId,
+                    completedAt = completedAt,
+                    messagesMirrored = messagesMirrored
+                )
+            )
+            log.info(
+                "Published MirrorJobCompletedEvent: mirrorConfigId={} jobRunId={} destAccountId={} messagesMirrored={}",
+                mirrorConfigId, jobRunId, destAccountId, messagesMirrored
+            )
+        } catch (e: Exception) {
+            log.error("Failed to publish MirrorJobCompletedEvent for mirrorConfigId={}", mirrorConfigId, e)
         }
     }
 }
