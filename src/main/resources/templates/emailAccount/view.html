@@ -72,12 +72,15 @@
 
                         <dt class="col-sm-4">Credential:</dt>
                         <dd class="col-sm-8">
-                            <span th:if="${emailAccount.credentialEnvVar}">
+                            <span th:if="${hasEncryptedPassword}" class="badge bg-success">
+                                <i class="bi bi-lock-fill me-1"></i>Encrypted password stored
+                            </span>
+                            <span th:if="${!hasEncryptedPassword && emailAccount.credentialEnvVar}">
                                 <code>[[${emailAccount.credentialEnvVar}]]</code>
                                 <span th:if="${credentialEnvVarSet}" class="badge bg-success ms-1">Set</span>
                                 <span th:unless="${credentialEnvVarSet}" class="badge bg-warning text-dark ms-1">Not Set</span>
                             </span>
-                            <span th:unless="${emailAccount.credentialEnvVar}" class="text-muted">Not configured</span>
+                            <span th:if="${!hasEncryptedPassword && !emailAccount.credentialEnvVar}" class="text-muted">Not configured</span>
                         </dd>
 
                         <dt class="col-sm-4">Status:</dt>
