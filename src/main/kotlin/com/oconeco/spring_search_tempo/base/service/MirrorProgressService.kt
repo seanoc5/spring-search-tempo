@@ -66,6 +66,20 @@ class MirrorProgressService(
                 .countByMirrorConfigIdAndJobRunIdAndSourceFolder(mirrorConfigId, jobRunId, fm.source)
             val currentUid = if (checkpoint?.currentFolder == fm.source) checkpoint.lastSourceUidProcessed else null
             val fp = folderProgressByFolder[fm.source]
+            // Per-folder isolation (issue #39): derive OK / FAILED /
+            // PARTIAL / IN_FLIGHT / QUEUED. PARTIAL = folder ended
+            // FAILED but some messages did get mirrored before the
+            // failure. Fall back to the legacy "completedAt is set" cue
+            // for rows persisted before V5 stamped `status` directly.
+            val derivedStatus = when {
+                fp == null -> "QUEUED"
+                fp.status == "FAILED" && mirrored > 0L -> "PARTIAL"
+                fp.status == "FAILED" -> "FAILED"
+                fp.status == "COMPLETED" -> "COMPLETED"
+                fp.completedAt != null -> "COMPLETED"
+                fp.openedAt != null -> "IN_FLIGHT"
+                else -> "QUEUED"
+            }
             FolderProgress(
                 source = fm.source,
                 dest = fm.dest,
@@ -74,14 +88,18 @@ class MirrorProgressService(
                 failedThisRun = failedThisRun,
                 currentUid = currentUid,
                 totalConsidered = fp?.totalConsidered,
-                folderComplete = fp?.completedAt != null,
-                folderOpened = fp?.openedAt != null
+                folderComplete = derivedStatus == "COMPLETED",
+                folderOpened = fp?.openedAt != null,
+                status = derivedStatus
             )
         }
 
         val foldersTotal = folders.count { it.enabled }
         val foldersComplete = folders.count { it.enabled && it.folderComplete }
-        val foldersInFlight = folders.count { it.enabled && it.folderOpened && !it.folderComplete }
+        val foldersFailed = folders.count { it.enabled && (it.status == "FAILED" || it.status == "PARTIAL") }
+        val foldersInFlight = folders.count {
+            it.enabled && it.folderOpened && !it.folderComplete && it.status == "IN_FLIGHT"
+        }
 
         val totalFailedThisRun = mirrorErrorRepository.countByMirrorConfigIdAndJobRunId(mirrorConfigId, jobRunId)
         val totalRetryableFailedThisRun = mirrorErrorRepository
@@ -107,6 +125,7 @@ class MirrorProgressService(
             foldersTotal = foldersTotal,
             foldersComplete = foldersComplete,
             foldersInFlight = foldersInFlight,
+            foldersFailed = foldersFailed,
             processedCount = processed,
             expectedTotal = expected,
             totalMirroredAllTime = totalMirroredAllTime,
@@ -134,6 +153,8 @@ data class MirrorProgressView(
     val foldersComplete: Int,
     /** Folders that have been opened this run but not yet completed. */
     val foldersInFlight: Int,
+    /** Folders that failed (FAILED or PARTIAL) — for the lifecycle summary line. */
+    val foldersFailed: Int,
     val processedCount: Long,
     val expectedTotal: Long,
     val totalMirroredAllTime: Long,
@@ -156,5 +177,12 @@ data class FolderProgress(
      */
     val totalConsidered: Long?,
     val folderComplete: Boolean,
-    val folderOpened: Boolean
+    val folderOpened: Boolean,
+    /**
+     * Derived dashboard status (issue #39): one of `'QUEUED'`,
+     * `'IN_FLIGHT'`, `'COMPLETED'`, `'FAILED'`, `'PARTIAL'`. Computed
+     * here (not in the template) per the project's "no logic in
+     * Thymeleaf" rule.
+     */
+    val status: String
 )

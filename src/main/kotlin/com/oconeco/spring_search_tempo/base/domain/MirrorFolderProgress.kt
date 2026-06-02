@@ -89,6 +89,18 @@ class MirrorFolderProgress {
     @Column(name = "completed_at")
     var completedAt: OffsetDateTime? = null
 
+    /**
+     * Lifecycle marker (issue #39): `'IN_FLIGHT'` while the reader is
+     * walking the folder, `'COMPLETED'` once it advances past, and
+     * `'FAILED'` if a folder-level exception (e.g. connection failure on
+     * open) aborted the folder pass. Distinguishes a clean finish from
+     * an abandoned one — `completedAt` is stamped in both cases so the
+     * dashboard's "folders complete" count keeps moving even when a
+     * folder failed.
+     */
+    @Column(nullable = false, columnDefinition = "text")
+    var status: String = "IN_FLIGHT"
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: OffsetDateTime? = null

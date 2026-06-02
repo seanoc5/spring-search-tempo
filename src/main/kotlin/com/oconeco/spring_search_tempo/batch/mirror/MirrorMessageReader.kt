@@ -2,10 +2,13 @@ package com.oconeco.spring_search_tempo.batch.mirror
 
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.MirrorConfigService
+import com.oconeco.spring_search_tempo.base.domain.MirrorError
 import com.oconeco.spring_search_tempo.base.model.FolderMapping
+import com.oconeco.spring_search_tempo.base.repos.MirrorErrorRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
+import com.oconeco.spring_search_tempo.base.service.MirrorFolderCheckpointService
 import com.oconeco.spring_search_tempo.base.service.MirrorFolderProgressService
 import com.oconeco.spring_search_tempo.batch.mirror.MirrorJobLifecycleListener.Companion.JOB_RUN_ID_KEY
 import com.sun.mail.imap.IMAPFolder
@@ -14,9 +17,11 @@ import jakarta.mail.Folder
 import jakarta.mail.Store
 import jakarta.mail.UIDFolder
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.ExitStatus
 import org.springframework.batch.core.StepExecution
 import org.springframework.batch.core.StepExecutionListener
 import org.springframework.batch.item.ItemReader
+import java.time.OffsetDateTime
 import java.util.ArrayDeque
 
 /**
@@ -24,30 +29,19 @@ import java.util.ArrayDeque
  * `MirrorConfig`, enumerating source UIDs in ascending order and emitting
  * one `MirrorTask` per UID that still needs copying.
  *
- * Lifecycle:
- *  - [open] connects once to the source IMAP store, applies the
- *    [MirrorCheckpoint] resume marker (if present) to determine the
- *    starting folder + UID, and loads the list of folder mappings.
- *  - [read] returns the next pending [MirrorTask], advancing across
- *    folders as each one is exhausted.
- *  - [close] closes the source store.
+ * Per-folder error isolation (issue #39): each folder's open / fetch
+ * pass is wrapped in its own try/catch. A failure on folder B logs a
+ * folder-scope [MirrorError] row, stamps the folder as FAILED on the
+ * progress dashboard, and advances to the next folder rather than
+ * aborting the step. The step's exit status is decided in [afterStep]:
+ * COMPLETED if at least one folder succeeded, FAILED only when every
+ * folder failed.
  *
- * Per-folder pipeline:
- *  1. Open source folder read-only, list all UIDs.
- *  2. Filter to UIDs greater than the resume marker (only on the resume
- *     folder; subsequent folders start from the beginning).
- *  3. Batched FETCH of the `Message-ID` header for each remaining UID
- *     (single IMAP round-trip per batch).
- *  4. Skip any UID whose Message-ID already has a `MirroredMessage` row
- *     for this `mirrorConfigId`. This is an *efficiency* optimization;
- *     `ImapMirrorService.mirrorMessage(...)` is still the correctness
- *     boundary (it re-checks dedup inside its own transaction).
- *  5. Buffer the survivors and return them one at a time.
- *
- * Source connection is opened once and reused across folders, per the
- * acceptance criteria. The destination connection is *not* managed here —
- * `ImapMirrorService.mirrorMessage(...)` opens its own (one per call) and
- * that constraint is documented in the `## Decision` log for issue #24.
+ * Per-folder resume markers (issue #39): each `(mirrorConfigId,
+ * sourceFolder)` pair has its own [MirrorFolderCheckpoint] watermark,
+ * so a retry resumes every folder from its own last good UID
+ * independently. The legacy single-row [MirrorCheckpoint] is still
+ * consulted as a fallback for back-compat.
  */
 class MirrorMessageReader(
     mirrorConfigId: Long,
@@ -56,7 +50,9 @@ class MirrorMessageReader(
     private val imapConnectionService: ImapConnectionService,
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val checkpointService: MirrorCheckpointService,
+    private val folderCheckpointService: MirrorFolderCheckpointService,
     private val folderProgressService: MirrorFolderProgressService? = null,
+    private val mirrorErrorRepository: MirrorErrorRepository? = null,
     private val messageIdFetchBatchSize: Int = 500
 ) : ItemReader<MirrorTask>, StepExecutionListener {
 
@@ -78,10 +74,18 @@ class MirrorMessageReader(
     private var currentFolderName: String? = null
     private var currentDestFolder: String? = null
     private val pending: ArrayDeque<Long> = ArrayDeque()
-    private var resumeFromUid: Long = 0L
-    private var resumeFolder: String? = null
-    private var resumeApplied: Boolean = false
+    private var perFolderResumeUids: Map<String, Long> = emptyMap()
+    private var legacyResumeFromUid: Long = 0L
+    private var legacyResumeFolder: String? = null
+    private var legacyResumeApplied: Boolean = false
     private var opened: Boolean = false
+
+    // Aggregates for afterStep — drive the COMPLETED-if-any-succeeded
+    // decision and the lifecycle summary log.
+    private var foldersAttempted: Int = 0
+    private var foldersSucceeded: Int = 0
+    private var foldersFailed: Int = 0
+    private val foldersFailedNames: MutableList<String> = mutableListOf()
 
     /**
      * Pulled from [JobExecution.executionContext] in [beforeStep]; the
@@ -113,27 +117,23 @@ class MirrorMessageReader(
         val sourceAccount = emailAccountService.get(sourceAccountId)
         sourceStore = imapConnectionService.connect(sourceAccount)
 
-        checkpointService.find(mirrorConfigId)?.let { cp ->
-            resumeFolder = cp.currentFolder
-            resumeFromUid = cp.lastSourceUidProcessed ?: 0L
-            log.info(
-                "Resuming MirrorJob: mirrorConfigId={} resumeFolder={} resumeFromUid={}",
-                mirrorConfigId, resumeFolder, resumeFromUid
-            )
-            // Skip mappings whose source folder precedes the resume folder.
-            val idx = mappings.indexOfFirst { it.source == resumeFolder }
-            if (idx > 0) {
-                mappingIndex = idx
-            } else if (idx < 0) {
-                // Checkpoint refers to a folder no longer in the mapping —
-                // treat as a stale checkpoint and start from scratch.
-                log.warn(
-                    "Checkpoint folder '{}' not in current mappings for mirrorConfigId={}; ignoring resume marker",
-                    resumeFolder, mirrorConfigId
-                )
-                resumeFolder = null
-                resumeFromUid = 0L
+        perFolderResumeUids = folderCheckpointService.findAll(mirrorConfigId)
+            .mapNotNull { fc ->
+                val folder = fc.sourceFolder ?: return@mapNotNull null
+                folder to fc.lastSourceUid
             }
+            .toMap()
+
+        checkpointService.find(mirrorConfigId)?.let { cp ->
+            legacyResumeFolder = cp.currentFolder
+            legacyResumeFromUid = cp.lastSourceUidProcessed ?: 0L
+        }
+
+        if (perFolderResumeUids.isNotEmpty() || legacyResumeFolder != null) {
+            log.info(
+                "Resuming MirrorJob: mirrorConfigId={} perFolderWatermarks={} legacyResumeFolder={} legacyResumeFromUid={}",
+                mirrorConfigId, perFolderResumeUids, legacyResumeFolder, legacyResumeFromUid
+            )
         }
     }
 
@@ -197,33 +197,137 @@ class MirrorMessageReader(
         }
     }
 
+    private fun recordFolderFailedSafely(sourceFolder: String, destFolder: String) {
+        val svc = folderProgressService ?: return
+        val runId = jobRunId ?: return
+        try {
+            svc.recordFolderFailed(
+                mirrorConfigId = mirrorConfigId,
+                jobRunId = runId,
+                sourceFolder = sourceFolder,
+                destFolder = destFolder
+            )
+        } catch (e: Exception) {
+            log.warn(
+                "Failed to record folder-failed progress (jobRunId={}, folder='{}'): {}",
+                runId, sourceFolder, e.message
+            )
+        }
+    }
+
+    /**
+     * Persist a folder-scope `MirrorError` row so the dashboard can
+     * surface that the whole folder failed (as opposed to a single
+     * message). Tagged `retryable=true` because a connection / quota /
+     * auth blip is exactly the kind of transient failure the operator
+     * may want to manually re-run after fixing the underlying cause.
+     */
+    private fun recordFolderError(mapping: FolderMapping, ex: Throwable) {
+        val repo = mirrorErrorRepository ?: return
+        try {
+            repo.save(
+                MirrorError().apply {
+                    this.mirrorConfigId = this@MirrorMessageReader.mirrorConfigId
+                    this.jobRunId = this@MirrorMessageReader.jobRunId
+                    this.sourceFolder = mapping.source
+                    this.sourceUid = 0L
+                    this.messageId = null
+                    this.destFolder = mapping.dest
+                    this.reason = "Folder enumeration failed: ${ex.message ?: ex.javaClass.simpleName}"
+                    this.retryable = true
+                    this.errorScope = "FOLDER"
+                    this.occurredAt = OffsetDateTime.now()
+                }
+            )
+        } catch (e: Exception) {
+            log.error(
+                "Could not persist folder-scope MirrorError for mirrorConfigId={} folder='{}'",
+                mirrorConfigId, mapping.source, e
+            )
+        }
+    }
+
     private fun advanceToNextFolder() {
         val mapping = mappings[mappingIndex]
         mappingIndex++
+        foldersAttempted++
 
         currentFolderName = mapping.source
         currentDestFolder = mapping.dest
         pending.clear()
 
-        val store = sourceStore ?: return
+        val store = sourceStore
+        if (store == null) {
+            // No source store means ensureOpen short-circuited (no
+            // enabled mappings) — nothing to enumerate.
+            foldersFailed++
+            foldersFailedNames += mapping.source
+            return
+        }
+
+        try {
+            enumerateFolder(store, mapping)
+            foldersSucceeded++
+        } catch (e: Exception) {
+            // Per-folder isolation (issue #39): a connection blip, quota
+            // error, or auth failure on this folder must NOT abort the
+            // step. Log the failure as a folder-scope error, mark the
+            // folder failed on the dashboard, and let `read()` advance
+            // to the next mapping.
+            log.warn(
+                "MirrorJob folder enumeration failed: mirrorConfigId={} folder='{}' — continuing to next folder: {}",
+                mirrorConfigId, mapping.source, e.message, e
+            )
+            recordFolderError(mapping, e)
+            recordFolderFailedSafely(mapping.source, mapping.dest)
+            // Drop any partially-built pending buffer; the reader will
+            // resume this folder from its watermark on a future retry.
+            pending.clear()
+            foldersFailed++
+            foldersFailedNames += mapping.source
+        }
+    }
+
+    /**
+     * Open one folder, list its UIDs, apply the resume watermark + the
+     * MirroredMessage pre-filter, and stage the survivors in [pending].
+     * Throws on IMAP-level failure so [advanceToNextFolder] can decide
+     * how to recover.
+     */
+    private fun enumerateFolder(store: Store, mapping: FolderMapping) {
         val folder = store.getFolder(mapping.source) as? IMAPFolder
         if (folder == null || !folder.exists() || (folder.type and Folder.HOLDS_MESSAGES) == 0) {
             log.warn("Source folder '{}' is missing or holds no messages; skipping", mapping.source)
             recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered = 0L)
             return
         }
+        val resumeUid = resumeUidFor(mapping.source)
         folder.open(Folder.READ_ONLY)
         try {
-            val messages = folder.messages
+            // When a watermark is present (retry of a previously-touched
+            // folder), ask IMAP for the UID-range *above* the watermark
+            // rather than the full mailbox. Avoids the regression
+            // surfaced in PR review: a previously-completed folder
+            // would otherwise pay a full `folder.messages` + batched
+            // UID/Message-ID fetch on every retry before filtering
+            // everything out. `getMessagesByUID(start, LASTUID)`
+            // collapses that to one IMAP UID-range request.
+            val messages = if (resumeUid > 0L) {
+                folder.getMessagesByUID(resumeUid + 1L, UIDFolder.LASTUID)
+            } else {
+                folder.messages
+            }
             if (messages.isEmpty()) {
                 recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered = 0L)
                 return
             }
 
             var totalConsidered = 0
-            val applyResume = isResumeFolder(mapping.source)
             // Batched FETCH of UID + Message-ID to cap memory on large folders.
-            messages.toList().chunked(messageIdFetchBatchSize).forEach { batch ->
+            // `getMessagesByUID` can return `null` slots for UIDs that
+            // dropped out of the mailbox between query and read — filter
+            // them out before fetching.
+            messages.filterNotNull().toList().chunked(messageIdFetchBatchSize).forEach { batch ->
                 val batchArray = batch.toTypedArray()
                 folder.fetch(batchArray, FetchProfile().apply {
                     add(UIDFolder.FetchProfileItem.UID)
@@ -233,7 +337,7 @@ class MirrorMessageReader(
                 val rows = batchArray.mapNotNull { msg ->
                     val uid = folder.getUID(msg)
                     if (uid <= 0) return@mapNotNull null
-                    if (applyResume && uid <= resumeFromUid) return@mapNotNull null
+                    if (uid <= resumeUid) return@mapNotNull null
                     val mid = try {
                         msg.getHeader("Message-ID")?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
                     } catch (e: Exception) {
@@ -259,21 +363,31 @@ class MirrorMessageReader(
             }
 
             log.info(
-                "MirrorJob folder '{}': {} UIDs considered, {} pending after pre-filter (mirrorConfigId={})",
-                mapping.source, totalConsidered, pending.size, mirrorConfigId
+                "MirrorJob folder '{}': {} UIDs considered, {} pending after pre-filter (mirrorConfigId={}, resumeUid={})",
+                mapping.source, totalConsidered, pending.size, mirrorConfigId, resumeUid
             )
             recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered.toLong())
         } finally {
             try { folder.close(false) } catch (_: Exception) {}
-            // Resume marker only applies the *first* time we land on the resume folder.
-            if (isResumeFolder(mapping.source)) {
-                resumeApplied = true
+            // Legacy resume marker only applies once.
+            if (mapping.source == legacyResumeFolder) {
+                legacyResumeApplied = true
             }
         }
     }
 
-    private fun isResumeFolder(folderName: String): Boolean =
-        !resumeApplied && resumeFolder != null && folderName == resumeFolder
+    /**
+     * Per-folder watermark for [folderName]. Prefers the new sibling
+     * table; falls back to the legacy `MirrorCheckpoint` row the first
+     * time we land on its `currentFolder`.
+     */
+    private fun resumeUidFor(folderName: String): Long {
+        perFolderResumeUids[folderName]?.let { return it }
+        if (!legacyResumeApplied && legacyResumeFolder == folderName) {
+            return legacyResumeFromUid
+        }
+        return 0L
+    }
 
     private fun syntheticMessageId(mirrorConfigId: Long, sourceFolder: String, sourceUid: Long): String =
         "synthetic:$mirrorConfigId:$sourceFolder:$sourceUid"
@@ -308,10 +422,43 @@ class MirrorMessageReader(
         currentFolderName = null
         currentDestFolder = null
         pending.clear()
-        resumeFromUid = 0L
-        resumeFolder = null
-        resumeApplied = false
+        perFolderResumeUids = emptyMap()
+        legacyResumeFromUid = 0L
+        legacyResumeFolder = null
+        legacyResumeApplied = false
+        foldersAttempted = 0
+        foldersSucceeded = 0
+        foldersFailed = 0
+        foldersFailedNames.clear()
         try { sourceStore?.close() } catch (_: Exception) {}
         sourceStore = null
+    }
+
+    /**
+     * Decide the step's exit status from the per-folder tally (issue #39):
+     * — at least one folder succeeded → COMPLETED (lets Spring Batch
+     *   move on, the dashboard render the partial success, and the
+     *   lifecycle listener clear the global checkpoint).
+     * — every folder failed → FAILED (the run accomplished nothing;
+     *   per-folder watermarks stay put so a retry replays everything).
+     * — no folders attempted (no enabled mappings) → COMPLETED (the
+     *   empty case isn't a failure).
+     *
+     * Also stamps a one-line summary in the lifecycle log per acceptance
+     * criterion 4.
+     */
+    override fun afterStep(stepExecution: StepExecution): ExitStatus? {
+        log.info(
+            "MirrorJob step summary: mirrorConfigId={} foldersAttempted={} foldersSucceeded={} foldersFailed={}{}",
+            mirrorConfigId, foldersAttempted, foldersSucceeded, foldersFailed,
+            if (foldersFailedNames.isNotEmpty()) " failed=$foldersFailedNames" else ""
+        )
+        return when {
+            foldersAttempted == 0 -> null
+            foldersSucceeded == 0 -> ExitStatus.FAILED.addExitDescription(
+                "All $foldersAttempted folder(s) failed: $foldersFailedNames"
+            )
+            else -> null
+        }
     }
 }
