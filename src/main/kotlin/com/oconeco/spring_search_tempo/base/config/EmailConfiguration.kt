@@ -7,6 +7,10 @@ import org.springframework.context.annotation.Configuration
 /**
  * Configuration properties for email crawling.
  *
+ * The YAML `accounts:` block carries default host/port/region info for accounts the app
+ * should know about at startup. Credentials are NOT read from configuration — they live
+ * exclusively in the DB (encrypted, set via the account edit page). See issue #55.
+ *
  * Example configuration:
  * ```yaml
  * app:
@@ -17,7 +21,6 @@ import org.springframework.context.annotation.Configuration
  *       - name: "personal-gmail"
  *         email: "you@gmail.com"
  *         provider: GMAIL
- *         credential-env-var: "GMAIL_APP_PASSWORD"
  * ```
  */
 @Configuration
@@ -31,7 +34,11 @@ data class EmailConfiguration(
 /**
  * Individual email account configuration.
  *
- * Credentials are loaded from environment variables for security.
+ * Provides defaults for IMAP host/port/provider/region. Credentials are set in the UI
+ * (stored DB-encrypted) — not in this configuration object.
+ *
+ * `credentialEnvVar` is retained as a no-op binding target so deployments with the
+ * legacy YAML key don't fail to start; the value is ignored. Slated for removal.
  */
 data class EmailAccountConfig(
     var name: String = "",
@@ -40,7 +47,8 @@ data class EmailAccountConfig(
     var imapHost: String? = null,
     var imapPort: Int = 993,
     var useSsl: Boolean = true,
-    var credentialEnvVar: String? = null,  // e.g., "GMAIL_APP_PASSWORD"
+    /** @deprecated env-var credential fallback removed in issue #55; ignored at runtime. */
+    var credentialEnvVar: String? = null,
     var enabled: Boolean = true,
     var region: String = "us-east-1"  // For WorkMail
 )

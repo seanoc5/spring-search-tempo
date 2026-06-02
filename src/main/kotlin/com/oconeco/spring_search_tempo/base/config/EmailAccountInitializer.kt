@@ -64,18 +64,14 @@ class EmailAccountInitializer(
                 }
 
                 if (existingAccount != null) {
-                    // Backfill credentialEnvVar if missing in DB but present in YAML
-                    if (existingAccount.credentialEnvVar.isNullOrBlank() && !config.credentialEnvVar.isNullOrBlank()) {
-                        existingAccount.credentialEnvVar = config.credentialEnvVar
-                        emailAccountService.update(existingAccount.id!!, existingAccount)
-                        log.info("Updated credentialEnvVar for '{}' from YAML config", config.email)
-                    }
                     log.debug("Account '{}' already exists (id={})", config.email, existingAccount.id)
                     existing++
                     return@forEach
                 }
 
-                // Create new account
+                // Create new account. credentialEnvVar is deliberately not set here —
+                // env-var credentials were removed in issue #55; users set passwords
+                // via the account edit page after first start-up.
                 val dto = EmailAccountDTO().apply {
                     email = config.email
                     label = config.name
@@ -83,7 +79,6 @@ class EmailAccountInitializer(
                     imapHost = config.imapHost
                     imapPort = config.imapPort
                     useSsl = config.useSsl
-                    credentialEnvVar = config.credentialEnvVar
                     enabled = config.enabled
                     uri = "email://${config.email}"
                     version = 1L

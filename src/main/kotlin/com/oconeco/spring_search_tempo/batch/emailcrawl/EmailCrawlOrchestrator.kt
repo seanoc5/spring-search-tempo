@@ -87,6 +87,14 @@ class EmailCrawlOrchestrator(
         val accounts = getOrCreateAccounts()
 
         accounts.filter { it.enabled == true }.forEach { account ->
+            // Pre-flight password guard (issue #55) — skip accounts without a DB-encrypted
+            // password so we don't dispatch a job guaranteed to fail at credential resolution.
+            val accountId = account.id
+            if (accountId == null || !emailAccountService.hasPassword(accountId)) {
+                log.info("Skipping {} — no password set; edit the account to add one", account.email)
+                results[account.email ?: "id=${account.id}"] = "SKIPPED (no password set)"
+                return@forEach
+            }
             val folders = resolveFolders(account)
             try {
                 log.info("Launching {} for account: {} with folders: {} ({})",
@@ -334,10 +342,35 @@ class EmailCrawlOrchestrator(
             return emptyList()
         }
 
+        // Pre-flight password guard (issue #55): drop accounts with no DB-encrypted
+        // password before evaluating cron boundaries. Without this, the scheduler
+        // would dispatch a job per tick for each unconfigured account and the
+        // credential-resolution layer would throw — recorded as a per-account
+        // ERROR log entry every minute (the symptom that motivated #55).
+        val (eligible, noPassword) = accounts.partition { acc ->
+            acc.id != null && emailAccountService.hasPassword(acc.id!!)
+        }
+        if (noPassword.isNotEmpty()) {
+            log.info(
+                "Skipping {} enabled email account(s) with no password set: {} — set via the account edit page",
+                noPassword.size,
+                noPassword.joinToString(", ") { it.email ?: "id=${it.id}" }
+            )
+        }
+
         val zone = ZoneId.systemDefault()
         val results = mutableListOf<AccountDispatchResult>()
 
-        for (account in accounts) {
+        // Surface the no-password skips in the result list so callers (tests, UI) can see them.
+        for (account in noPassword) {
+            val accountId = account.id ?: continue
+            results += AccountDispatchResult(
+                accountId, account.email, DispatchOutcome.NO_PASSWORD,
+                "no DB-encrypted password — set via the account edit page"
+            )
+        }
+
+        for (account in eligible) {
             val accountId = account.id ?: continue
             try {
                 val cron = try {
@@ -428,6 +461,8 @@ enum class DispatchOutcome {
     NOT_DUE,
     /** Account's cronSchedule string is invalid; recorded as account error. */
     INVALID_CRON,
+    /** Account has no DB-encrypted password set; pre-flight skip (issue #55). */
+    NO_PASSWORD,
     /** Exception during dispatch; the loop continues for sibling accounts. */
     ERROR
 }

@@ -104,6 +104,10 @@ app:
 
 ### Email Configuration
 
+The `accounts:` block carries default host/port/region info only — IMAP credentials are
+stored DB-encrypted (set via the account edit page in the UI, never in YAML). The legacy
+`credential-env-var:` key was removed in issue #55.
+
 ```yaml
 app:
   email:
@@ -115,23 +119,27 @@ app:
       - name: "personal-gmail"
         email: "${GMAIL_EMAIL:}"
         provider: "GMAIL"           # GMAIL, WORKMAIL, or GENERIC_IMAP
-        credential-env-var: "GMAIL_APP_PASSWORD"
         enabled: true
       - name: "work-email"
         email: "${WORKMAIL_EMAIL:}"
         provider: "WORKMAIL"
         imap-host: "imap.mail.us-east-1.awsapps.com"
         imap-port: 993
-        credential-env-var: "WORKMAIL_PASSWORD"
         enabled: true
 ```
 
-**Environment variables for email:**
+**Setting IMAP passwords** (one-time, per account):
+
+1. Start the app — accounts are created in the DB from the YAML block above.
+2. Open `/emailAccounts/{id}/edit` for the account.
+3. Paste the IMAP / app-specific password into the "IMAP / App password" field and save.
+   The password is encrypted at rest with `APP_ENCRYPTION_KEY` (see Security below).
+
+**Environment variables for email** (identity only — passwords live in the DB):
 ```bash
 GMAIL_EMAIL=your.email@gmail.com
-GMAIL_APP_PASSWORD=your-app-password
 WORKMAIL_EMAIL=your.email@company.com
-WORKMAIL_PASSWORD=your-password
+APP_ENCRYPTION_KEY=<base64 32-byte key>   # required to encrypt/decrypt stored passwords
 ```
 
 ### Security

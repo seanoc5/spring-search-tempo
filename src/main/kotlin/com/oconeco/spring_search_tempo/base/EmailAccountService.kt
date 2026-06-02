@@ -58,7 +58,8 @@ interface EmailAccountService {
 
     /**
      * Encrypt and store an IMAP password for the account. Pass a blank string to clear the stored
-     * password (falling back to credentialEnvVar). The plaintext is never logged or persisted.
+     * password (after which the account has no credential and is skipped by the scheduler until
+     * a new password is set). The plaintext is never logged or persisted.
      */
     fun setPassword(id: Long, plaintext: String)
 

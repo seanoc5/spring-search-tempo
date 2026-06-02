@@ -240,31 +240,35 @@ app:
       # Spring Batch chunk size for the mirrorStep. Smaller chunks tighten
       # the checkpoint cadence; larger chunks reduce DB write overhead.
       chunk-size: 25
+    # Credentials are stored DB-encrypted (issue #55). The `accounts:` block below carries
+    # default host/port/region info only — set the IMAP password by editing the account in
+    # the UI (/emailAccounts/{id}/edit → IMAP Password). The legacy `credential-env-var:`
+    # key is no longer read at runtime.
     accounts:
       # Gmail account (requires App Password)
       # To enable:
       # 1. Go to https://myaccount.google.com/apppasswords
       # 2. Generate an app password for "Mail"
-      # 3. Export GMAIL_APP_PASSWORD=<your-app-password>
-      # 4. Export GMAIL_EMAIL=<your-gmail-address>
+      # 3. Export GMAIL_EMAIL=<your-gmail-address>
+      # 4. Start the app, open this account in the UI, and paste the password into the
+      #    "IMAP / App password" field on the edit page.
       - name: "personal-gmail"
         email: "${GMAIL_EMAIL:sean.oconnor@stvfd.org}"
         provider: "GMAIL"
-        credential-env-var: "GMAIL_APP_PASSWORD"
         enabled: true
 
       # Amazon WorkMail account
       # To enable:
       # 1. Get your WorkMail username (usually email address)
       # 2. Export WORKMAIL_EMAIL=<your-workmail-email>
-      # 3. Export WORKMAIL_PASSWORD=<your-workmail-password>
+      # 3. Start the app, open this account in the UI, and paste the WorkMail password
+      #    into the "IMAP / App password" field on the edit page.
       - name: "work-email"
         email: "${WORKMAIL_EMAIL:sean@oconeco.com}"
         provider: "WORKMAIL"
         imap-host: "imap.mail.us-east-1.awsapps.com"
         imap-port: 993
         region: "us-east-1"
-        credential-env-var: "WORKMAIL_PASSWORD"
         enabled: true
 
   # IMAP mirror autotrigger (issue #35). When true, a completed mirror run
@@ -319,5 +323,5 @@ app:
       #   provider: "GENERIC_IMAP"
       #   imap-host: "imap.example.com"
       #   imap-port: 993
-      #   credential-env-var: "CUSTOM_IMAP_PASSWORD"
       #   enabled: false
+      # (password is set via /emailAccounts/{id}/edit in the UI, not in YAML)

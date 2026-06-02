@@ -17,8 +17,8 @@ import java.util.Properties
  * Service for managing IMAP connections to email providers.
  *
  * Supports Gmail, Amazon WorkMail, and generic IMAP servers.
- * Credentials are loaded from the account's encrypted password column when set,
- * falling back to environment variables (via `credentialEnvVar`) for legacy accounts.
+ * Credentials are loaded exclusively from the account's encrypted password column;
+ * the legacy env-var fallback was removed in issue #55.
  */
 @Service
 class ImapConnectionService(
@@ -103,42 +103,25 @@ class ImapConnectionService(
     /**
      * Resolve the IMAP password for an account.
      *
-     * Resolution order:
-     *  1. Encrypted password stored on the account (preferred).
-     *  2. `credentialEnvVar` on the account → environment variable lookup (legacy fallback).
-     *  3. `credentialEnvVar` from `application.yml` for the matching account (legacy fallback).
+     * DB-encrypted password is the only supported credential path (issue #55).
+     * Throws [IllegalStateException] with an actionable message if no password
+     * is stored, or if the encryption key is not configured (propagated from
+     * [EmailAccountService.getPassword]).
      *
      * Never logs the plaintext password.
      */
     private fun getCredential(account: EmailAccountDTO): String {
-        val id = account.id
-        if (id != null) {
-            // Only IllegalStateException ("key not configured") falls through to the env-var fallback —
-            // a real crypto failure (e.g. AEADBadTagException from a rotated key or tampered ciphertext)
-            // must propagate so the misconfiguration is loud, not silently masked by a stale env var.
-            val decrypted = try {
-                emailAccountService.getPassword(id)
-            } catch (e: IllegalStateException) {
-                log.warn("Encryption key not configured; will try env-var fallback for {}: {}", account.email, e.message)
-                null
-            }
-            if (!decrypted.isNullOrBlank()) {
-                return decrypted
-            }
+        val id = account.id ?: throw IllegalStateException(
+            "Email account has no id — cannot resolve credential"
+        )
+        val decrypted = emailAccountService.getPassword(id)
+        if (decrypted.isNullOrBlank()) {
+            throw IllegalStateException(
+                "No password configured for ${account.email}. " +
+                "Open the account page and click Edit to set an IMAP password."
+            )
         }
-
-        val envVar = account.credentialEnvVar?.takeIf { it.isNotBlank() }
-            ?: findAccountConfig(account)?.credentialEnvVar
-            ?: throw IllegalStateException(
-                "No credential configured for ${account.email}. " +
-                "Either set a password on the account edit page or configure a credentialEnvVar in application.yml."
-            )
-
-        return System.getenv(envVar)
-            ?: throw IllegalStateException(
-                "Environment variable '$envVar' not set for ${account.email}. " +
-                "Set it with: export $envVar=your_password (or set the password via the account edit page)."
-            )
+        return decrypted
     }
 
     /**
