@@ -170,23 +170,33 @@
                             Paste the IMAP or app-specific password issued by your provider (e.g. Gmail App Password).
                             Stored encrypted at rest; submitting a new value replaces the prior one.
                         </p>
-                        <form th:action="@{/emailAccounts/{id}/password(id=${emailAccount.id})}" method="post" autocomplete="off">
-                            <div class="mb-2">
-                                <label for="imapPassword" class="form-label">IMAP / App password</label>
-                                <input type="password" class="form-control form-control-sm" id="imapPassword"
-                                       name="password" autocomplete="new-password" value="">
-                            </div>
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-key me-1"></i>Save Password
-                                </button>
-                                <button type="submit" name="clear" value="true" class="btn btn-sm btn-outline-danger"
-                                        th:if="${hasEncryptedPassword}"
-                                        formnovalidate>
-                                    <i class="bi bi-trash me-1"></i>Clear
-                                </button>
-                            </div>
-                        </form>
+                        <!--
+                          NOTE: this is NOT wrapped in its own <form> because nesting
+                          forms is invalid HTML — browsers ignore the inner <form>
+                          tag and absorb its inputs into the outer <form> at line 19,
+                          which made the save button submit to /edit (ignoring the
+                          password field) instead of /password. Each submit button
+                          uses `formaction` to route to /password directly while
+                          still being part of the outer form's DOM.
+                        -->
+                        <div class="mb-2">
+                            <label for="imapPassword" class="form-label">IMAP / App password</label>
+                            <input type="password" class="form-control form-control-sm" id="imapPassword"
+                                   name="newPassword" autocomplete="new-password" value="">
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                    th:formaction="@{/emailAccounts/{id}/password(id=${emailAccount.id})}"
+                                    formmethod="post" formnovalidate>
+                                <i class="bi bi-key me-1"></i>Save Password
+                            </button>
+                            <button type="submit" name="clear" value="true" class="btn btn-sm btn-outline-danger"
+                                    th:if="${hasEncryptedPassword}"
+                                    th:formaction="@{/emailAccounts/{id}/password(id=${emailAccount.id})}"
+                                    formmethod="post" formnovalidate>
+                                <i class="bi bi-trash me-1"></i>Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
 

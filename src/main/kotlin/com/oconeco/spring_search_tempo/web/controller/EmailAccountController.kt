@@ -150,7 +150,7 @@ class EmailAccountController(
     @PostMapping("/{id}/password")
     fun setPassword(
         @PathVariable id: Long,
-        @RequestParam("password") password: String,
+        @RequestParam("newPassword") password: String,
         @RequestParam(name = "clear", required = false, defaultValue = "false") clear: Boolean,
         redirectAttributes: RedirectAttributes
     ): String {

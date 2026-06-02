@@ -55,7 +55,7 @@ class EmailAccountPasswordControllerIT : BaseIT() {
 
         mockMvc.perform(
             post("/emailAccounts/{id}/password", accountId)
-                .param("password", "would-be-encrypted")
+                .param("newPassword", "would-be-encrypted")
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().is3xxRedirection)
