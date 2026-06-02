@@ -248,6 +248,46 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun countNlpPending(): Long
 
     /**
+     * Count chunks whose parent (FSFile, EmailMessage, BrowserBookmark, or OneDriveItem)
+     * is at the given analysis status. Used by the NLP coverage admin page to break out
+     * counts by INDEX vs ANALYZE.
+     */
+    @Query("""
+        SELECT COUNT(c) FROM ContentChunk c
+        WHERE
+            (c.concept IS NOT NULL AND c.concept.analysisStatus = :status)
+            OR
+            (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus = :status)
+            OR
+            (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus = :status)
+            OR
+            (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus = :status)
+    """)
+    fun countByParentAnalysisStatus(@Param("status") status: AnalysisStatus): Long
+
+    /**
+     * Count chunks at ANALYZE-eligible levels that are still pending NLP
+     * (i.e., parent is ANALYZE or SEMANTIC, text is present, nlpProcessedAt is null).
+     */
+    @Query("""
+        SELECT COUNT(c) FROM ContentChunk c
+        WHERE c.nlpProcessedAt IS NULL
+          AND c.text IS NOT NULL
+          AND (
+              (c.concept IS NOT NULL AND c.concept.analysisStatus IN :statuses)
+              OR
+              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :statuses)
+              OR
+              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :statuses)
+              OR
+              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :statuses)
+          )
+    """)
+    fun countNlpPendingAtAnalyzeLevel(
+        @Param("statuses") statuses: List<AnalysisStatus>
+    ): Long
+
+    /**
      * Count chunks by processing status.
      * Note: ContentChunk.status is a String field, not an enum.
      */

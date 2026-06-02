@@ -240,6 +240,11 @@
                         <span class="badge bg-success" th:title="|NLP - Named entities, sentiment, etc.|">NLP: [[${stats.chunksLevelNlp}]]</span>
                         <span class="badge bg-warning text-dark" th:title="|EMBED - Vector embeddings|">EMBED: [[${stats.chunksLevelEmbed}]]</span>
                     </div>
+                    <div class="mt-2">
+                        <a th:href="@{/nlp/status}" class="small">
+                            <i class="bi bi-arrow-right-circle me-1"></i>View NLP coverage details
+                        </a>
+                    </div>
                 </div>
             </div>
 
