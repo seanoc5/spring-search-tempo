@@ -33,6 +33,10 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
     locations: classpath:db/migration
+    # Allow lower-numbered migrations to apply after higher-numbered ones.
+    # Required for the swarm workflow: parallel feature branches each claim
+    # the next free V-number, and PRs can land in any order.
+    out-of-order: true
   jpa:
     hibernate:
       ddl-auto: validate
