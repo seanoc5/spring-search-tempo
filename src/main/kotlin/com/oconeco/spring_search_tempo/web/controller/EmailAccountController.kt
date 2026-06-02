@@ -83,6 +83,7 @@ class EmailAccountController(
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
         model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
+        model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/view"
     }
 
