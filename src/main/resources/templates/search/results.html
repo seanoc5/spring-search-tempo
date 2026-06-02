@@ -39,6 +39,14 @@
                 font-size: 0.75rem;
                 color: #6c757d;
             }
+            .entity-badge { font-size: 0.75em; text-decoration: none; }
+            .entity-badge:hover { filter: brightness(1.15); }
+            .entity-PERSON { background-color: #0d6efd !important; color: #fff; }
+            .entity-ORGANIZATION { background-color: #6f42c1 !important; color: #fff; }
+            .entity-LOCATION { background-color: #198754 !important; color: #fff; }
+            .entity-DATE { background-color: #fd7e14 !important; color: #fff; }
+            .entity-MONEY { background-color: #20c997 !important; color: #fff; }
+            .entity-MISC { background-color: #6c757d !important; color: #fff; }
         </style>
     </head>
     <body>
@@ -317,9 +325,29 @@
                                     </a>
                                 </h5>
                                 <p class="mb-1 text-muted small text-break" th:text="${result.uri}">file:///path/to/file</p>
+                                <!-- Sentiment badge (chunks only) -->
+                                <div th:if="${result.sentiment != null}" class="mb-1">
+                                    <span class="badge"
+                                          th:classappend="${result.sentiment == 'POSITIVE' ? 'bg-success' : (result.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}">
+                                        <i class="bi bi-emoji-smile me-1" th:if="${result.sentiment == 'POSITIVE'}"></i>
+                                        <i class="bi bi-emoji-frown me-1" th:if="${result.sentiment == 'NEGATIVE'}"></i>
+                                        <i class="bi bi-emoji-neutral me-1" th:if="${result.sentiment == 'NEUTRAL'}"></i>
+                                        [[${result.sentiment}]]
+                                    </span>
+                                    <span th:if="${result.sentimentScore != null}" class="ms-1 small text-muted">
+                                        Score: [[${#numbers.formatDecimal(result.sentimentScore, 1, 2)}]]
+                                    </span>
+                                </div>
                                 <p class="mb-1" th:utext="${result.snippet}">
                                     Highlighted snippet with <b>matching</b> terms...
                                 </p>
+                                <!-- Named entity chips (chunks only) -->
+                                <div th:if="${result.namedEntities != null && result.namedEntities != ''}" class="mt-2">
+                                    <small>
+                                        <i class="bi bi-tags me-1 text-muted"></i>
+                                        <span class="entities-container" th:data-entities="${result.namedEntities}"></span>
+                                    </small>
+                                </div>
                             </div>
                             <div class="ms-3 text-end">
                                 <span class="badge bg-warning text-dark" th:text="${#numbers.formatDecimal(result.rank, 1, 3)}">0.500</span>
@@ -416,6 +444,49 @@
 
         <script th:inline="javascript">
             document.addEventListener('DOMContentLoaded', function() {
+                // -- Named-entity badge rendering (matches search/chunk-results.html) --
+                const typeColors = {
+                    'PERSON': 'entity-PERSON',
+                    'ORGANIZATION': 'entity-ORGANIZATION',
+                    'LOCATION': 'entity-LOCATION',
+                    'DATE': 'entity-DATE',
+                    'MONEY': 'entity-MONEY'
+                };
+
+                function escapeAttr(s) {
+                    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+
+                document.querySelectorAll('.entities-container').forEach(container => {
+                    const entitiesJson = container.dataset.entities;
+                    if (!entitiesJson) return;
+                    try {
+                        const entities = JSON.parse(entitiesJson);
+                        if (!entities.length) return;
+                        const byType = {};
+                        entities.forEach(e => {
+                            if (!byType[e.type]) byType[e.type] = new Set();
+                            byType[e.type].add(e.text);
+                        });
+                        let html = '';
+                        Object.keys(byType).sort().forEach(type => {
+                            const colorClass = typeColors[type] || 'entity-MISC';
+                            byType[type].forEach(text => {
+                                const href = '/search?q=' + encodeURIComponent(text) +
+                                             '&types=CHUNK&entityTypes=' + encodeURIComponent(type);
+                                html += `<a class="badge ${colorClass} entity-badge me-1 entity-chip" ` +
+                                        `href="${escapeAttr(href)}" ` +
+                                        `title="Filter for ${escapeAttr(type)}: ${escapeAttr(text)}">` +
+                                        `${escapeAttr(text)}</a>`;
+                            });
+                        });
+                        container.innerHTML = html;
+                    } catch (e) {
+                        container.textContent = entitiesJson;
+                    }
+                });
+
                 const searchInput = document.getElementById('searchInput');
                 const dropdown = document.getElementById('autocompleteDropdown');
                 const searchForm = document.getElementById('searchForm');
