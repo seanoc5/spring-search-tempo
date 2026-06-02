@@ -23,13 +23,17 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 /**
  * Controller-level recovery for the missing-encryption-key path (issue #45).
  *
- * Overrides `app.onedrive.token-encryption-key` to blank so `TokenEncryptionService.encrypt()`
- * throws `IllegalStateException`. The controller must catch it, surface a flash error naming
- * the property, redirect back to the edit page, and leave `encrypted_password` NULL.
+ * Overrides both `app.security.encryption-key` and the legacy `app.onedrive.token-encryption-key`
+ * to blank so `EncryptionService.encrypt()` throws `IllegalStateException`. The controller must
+ * catch it, surface a flash error naming the property, redirect back to the edit page, and leave
+ * `encrypted_password` NULL.
  */
 @SpringBootTest(
     classes = [SpringSearchTempoApplication::class],
-    properties = ["app.onedrive.token-encryption-key="]
+    properties = [
+        "app.security.encryption-key=",
+        "app.onedrive.token-encryption-key="
+    ]
 )
 @AutoConfigureMockMvc
 @DisplayName("EmailAccountController setPassword — missing encryption key")
@@ -57,8 +61,8 @@ class EmailAccountPasswordControllerIT : BaseIT() {
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/emailAccounts/$accountId/edit"))
             .andExpect(flash().attributeExists("error"))
-            .andExpect(flash().attribute("error", containsString("app.onedrive.token-encryption-key")))
-            .andExpect(flash().attribute("error", containsString("ONEDRIVE_TOKEN_ENCRYPTION_KEY")))
+            .andExpect(flash().attribute("error", containsString("app.security.encryption-key")))
+            .andExpect(flash().attribute("error", containsString("APP_ENCRYPTION_KEY")))
 
         val raw = jdbcTemplate.queryForObject(
             "SELECT encrypted_password FROM email_account WHERE id = ?",

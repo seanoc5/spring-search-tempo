@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Configuration
  *     client-id: "${ONEDRIVE_CLIENT_ID:}"
  *     redirect-uri: "http://localhost:8089/oneDriveAccounts/callback"
  *     scopes: [Files.Read, offline_access, User.Read]
+ *     # DEPRECATED: rename to app.security.encryption-key (env APP_ENCRYPTION_KEY).
+ *     # Still honored as a fallback for backward compatibility.
  *     token-encryption-key: "${ONEDRIVE_TOKEN_ENCRYPTION_KEY:}"
  *     download-temp-dir: "/tmp/onedrive-downloads"
  *     max-download-size-mb: 100

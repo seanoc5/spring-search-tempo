@@ -30,7 +30,7 @@ class EmailAccountServiceImpl(
     private val jobRunRepository: JobRunRepository,
     private val userOwnershipService: UserOwnershipService,
     private val smartDeleteService: SmartDeleteService,
-    private val tokenEncryptionService: TokenEncryptionService
+    private val encryptionService: EncryptionService
 ) : EmailAccountService {
 
     companion object {
@@ -152,7 +152,7 @@ class EmailAccountServiceImpl(
             return
         }
 
-        emailAccount.encryptedPassword = tokenEncryptionService.encrypt(plaintext)
+        emailAccount.encryptedPassword = encryptionService.encrypt(plaintext)
         emailAccountRepository.save(emailAccount)
         log.info("Stored encrypted password for email account id={}", id)
     }
@@ -162,7 +162,7 @@ class EmailAccountServiceImpl(
         val emailAccount = emailAccountRepository.findById(id)
             .orElseThrow { NotFoundException() }
         val encrypted = emailAccount.encryptedPassword ?: return null
-        return tokenEncryptionService.decrypt(encrypted)
+        return encryptionService.decrypt(encrypted)
     }
 
     @Transactional(readOnly = true)
