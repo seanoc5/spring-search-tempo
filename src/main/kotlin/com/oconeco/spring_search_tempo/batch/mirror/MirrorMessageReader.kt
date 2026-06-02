@@ -304,7 +304,19 @@ class MirrorMessageReader(
         val resumeUid = resumeUidFor(mapping.source)
         folder.open(Folder.READ_ONLY)
         try {
-            val messages = folder.messages
+            // When a watermark is present (retry of a previously-touched
+            // folder), ask IMAP for the UID-range *above* the watermark
+            // rather than the full mailbox. Avoids the regression
+            // surfaced in PR review: a previously-completed folder
+            // would otherwise pay a full `folder.messages` + batched
+            // UID/Message-ID fetch on every retry before filtering
+            // everything out. `getMessagesByUID(start, LASTUID)`
+            // collapses that to one IMAP UID-range request.
+            val messages = if (resumeUid > 0L) {
+                folder.getMessagesByUID(resumeUid + 1L, UIDFolder.LASTUID)
+            } else {
+                folder.messages
+            }
             if (messages.isEmpty()) {
                 recordFolderOpenedSafely(mapping.source, mapping.dest, totalConsidered = 0L)
                 return
@@ -312,7 +324,10 @@ class MirrorMessageReader(
 
             var totalConsidered = 0
             // Batched FETCH of UID + Message-ID to cap memory on large folders.
-            messages.toList().chunked(messageIdFetchBatchSize).forEach { batch ->
+            // `getMessagesByUID` can return `null` slots for UIDs that
+            // dropped out of the mailbox between query and read — filter
+            // them out before fetching.
+            messages.filterNotNull().toList().chunked(messageIdFetchBatchSize).forEach { batch ->
                 val batchArray = batch.toTypedArray()
                 folder.fetch(batchArray, FetchProfile().apply {
                     add(UIDFolder.FetchProfileItem.UID)
