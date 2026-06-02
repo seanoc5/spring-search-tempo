@@ -4,8 +4,9 @@ import com.oconeco.spring_search_tempo.base.events.MirrorJobCompletedEvent
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Component
+import org.springframework.transaction.event.TransactionPhase
+import org.springframework.transaction.event.TransactionalEventListener
 
 /**
  * Listens for `MirrorJobCompletedEvent` and launches an email quick-sync
@@ -27,7 +28,16 @@ class MirrorIndexingTriggerListener(
         private val log = LoggerFactory.getLogger(MirrorIndexingTriggerListener::class.java)
     }
 
-    @EventListener
+    /**
+     * Runs AFTER_COMMIT (and FALLBACK so non-transactional publishers in
+     * tests still see it) so the mirror job's COMPLETED state is durable
+     * before the email quick-sync launches — we don't want a rollback
+     * after the trigger has already started a downstream batch run.
+     */
+    @TransactionalEventListener(
+        phase = TransactionPhase.AFTER_COMMIT,
+        fallbackExecution = true
+    )
     fun onMirrorCompleted(event: MirrorJobCompletedEvent) {
         if (!autoIndexEnabled) {
             log.info(
