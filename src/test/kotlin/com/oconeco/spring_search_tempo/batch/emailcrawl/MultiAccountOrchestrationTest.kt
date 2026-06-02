@@ -181,6 +181,7 @@ class MultiAccountOrchestrationTest {
             lastDispatched = OffsetDateTime.ofInstant(now, zone))  // just dispatched
 
         `when`(emailAccountService.findEnabled()).thenReturn(listOf(notDueYet))
+        `when`(emailAccountService.hasPassword(eq(20L))).thenReturn(true)
 
         val results = orchestrator.runDueAccounts(now)
 
@@ -196,6 +197,7 @@ class MultiAccountOrchestrationTest {
             cron = "not a real cron", lastDispatched = null)
 
         `when`(emailAccountService.findEnabled()).thenReturn(listOf(bad))
+        `when`(emailAccountService.hasPassword(eq(30L))).thenReturn(true)
 
         val results = orchestrator.runDueAccounts(now)
 
@@ -247,6 +249,10 @@ class MultiAccountOrchestrationTest {
 
     private fun stubAccountGet(dto: EmailAccountDTO) {
         `when`(emailAccountService.get(eq(dto.id!!))).thenReturn(dto)
+        // Default tests to "password is set" so the issue #55 pre-flight skip
+        // doesn't take effect — tests that exercise the NO_PASSWORD path do so
+        // explicitly via [EmailCrawlOrchestratorNoPasswordIT].
+        `when`(emailAccountService.hasPassword(eq(dto.id!!))).thenReturn(true)
     }
 
     private fun stubJobBuild() {

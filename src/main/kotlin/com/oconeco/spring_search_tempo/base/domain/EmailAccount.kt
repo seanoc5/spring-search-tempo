@@ -78,12 +78,16 @@ class EmailAccount : SaveableObject() {
     @JoinColumn(name = "owner_user_id")
     var owner: SpringUser? = null
 
-    // Credential configuration: name of env var holding the password (legacy fallback).
-    // New accounts should use encryptedPassword via EmailAccountService.setPassword().
+    // DEPRECATED (issue #55): env-var credential fallback was removed. The column is
+    // kept for one release so we don't break deployments mid-flight; it's no longer
+    // read by ImapConnectionService and is hidden from the UI. Follow-up migration
+    // drops the column once soak time has elapsed.
+    // (Not annotated with @Deprecated to avoid deprecation warnings cascading through
+    // the MapStruct-generated EmailAccountMapper while the column is still mapped.)
     @Column(length = 100)
     var credentialEnvVar: String? = null
 
-    // Encrypted IMAP password (EncryptionService envelope, v1: prefix). Preferred over credentialEnvVar.
+    // Encrypted IMAP password (EncryptionService envelope, v1: prefix). Sole credential path.
     @Column(columnDefinition = "text")
     var encryptedPassword: String? = null
 

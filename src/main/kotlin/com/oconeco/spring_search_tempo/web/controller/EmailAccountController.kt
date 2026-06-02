@@ -82,7 +82,6 @@ class EmailAccountController(
     fun view(@PathVariable id: Long, model: Model): String {
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
-        model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
         model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/view"
     }
@@ -137,7 +136,6 @@ class EmailAccountController(
     fun edit(@PathVariable id: Long, model: Model): String {
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
-        model.addAttribute("credentialEnvVarSet", isEnvVarSet(account.credentialEnvVar))
         model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/edit"
     }
@@ -146,7 +144,8 @@ class EmailAccountController(
      * Set or clear the IMAP password for an account.
      *
      * The form field is write-only: GETs never echo the stored value. Submitting an empty value
-     * clears the stored password (falling back to credentialEnvVar). Plaintext is never logged.
+     * clears the stored password (after which the account has no credential and will be skipped
+     * by the scheduler until set again). Plaintext is never logged.
      */
     @PostMapping("/{id}/password")
     fun setPassword(
@@ -229,6 +228,17 @@ class EmailAccountController(
         val account = emailAccountService.get(id)
         val syncType = if (forceFullSync) "full sync" else "quick sync"
         val parallelConfig = normalizeParallelConfig(stepThreads, itemAsync, asyncThreads, chunkSize)
+
+        // Pre-flight password guard (issue #55): refuse before dispatching a job
+        // that's guaranteed to fail at credential resolution.
+        if (!emailAccountService.hasPassword(id)) {
+            log.info("Refusing {} for {} — no password set", syncType, account.email)
+            redirectAttributes.addFlashAttribute(
+                "error",
+                "Set a password before syncing — Edit the account first."
+            )
+            return "redirect:/emailAccounts/$id"
+        }
 
         try {
             log.info("Starting {} for account: {} ({})", syncType, account.email, parallelConfig)
@@ -374,11 +384,6 @@ class EmailAccountController(
             heading = "Server rejected login",
             message = result.serverMessage
         )
-    }
-
-    private fun isEnvVarSet(envVarName: String?): Boolean {
-        if (envVarName.isNullOrBlank()) return false
-        return System.getenv(envVarName) != null
     }
 
     private fun normalizeParallelConfig(

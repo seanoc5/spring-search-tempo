@@ -6,8 +6,6 @@ import com.oconeco.spring_search_tempo.base.domain.EmailAccount
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.repos.EmailAccountRepository
 import org.assertj.core.api.Assertions.assertThat
-import org.hamcrest.Matchers.containsString
-import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -16,23 +14,22 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 
 /**
- * Regression coverage for issue #53: view + edit templates crashed with
- * `IllegalArgumentException: Invalid boolean value '...'` when a String
- * field (`credentialEnvVar`) was used directly as a SpEL boolean condition.
+ * Render coverage for the EmailAccount view + edit templates after issue #55 removed
+ * the env-var credential fallback.
  *
- * Exercises all four state combinations of
- *   (encryptedPassword set | null) × (credentialEnvVar set | null)
- * to ensure every conditional branch in both templates renders without
- * a TemplateInputException.
+ * The original (issue #53) version of this test asserted the env-var fallback UI
+ * panels rendered correctly across `(encryptedPassword × credentialEnvVar)` state
+ * combinations. With #55, those panels are gone — the only credential state visible
+ * to the user is "encrypted password set" vs "not set", and the env-var label /
+ * code blocks must NOT appear anywhere on the page.
  */
 @SpringBootTest(classes = [SpringSearchTempoApplication::class])
 @AutoConfigureMockMvc
-@DisplayName("EmailAccount view + edit templates render across credential-state combinations (issue #53)")
+@DisplayName("EmailAccount view + edit templates render without env-var fallback markers (issue #55)")
 class EmailAccountViewRenderIT : BaseIT() {
 
     @Autowired
@@ -42,140 +39,63 @@ class EmailAccountViewRenderIT : BaseIT() {
     lateinit var emailAccountRepository: EmailAccountRepository
 
     @Test
-    @DisplayName("GET /emailAccounts/{id} — envVar set, no encrypted password (the PR #50 crash case)")
-    fun viewRendersWithEnvVarOnly() {
-        val id = saveAccount(
-            email = "envvar-only@example.com",
-            credentialEnvVar = "GMAIL_APP_PASSWORD",
-            encryptedPassword = null
-        )
+    @DisplayName("GET /emailAccounts/{id} — no encrypted password → 'Not set' + Edit link, no env-var markers")
+    fun viewRendersWithoutPassword() {
+        val id = saveAccount(email = "no-pwd-view@example.com", encryptedPassword = null)
 
-        mockMvc.perform(
+        val body = mockMvc.perform(
             get("/emailAccounts/{id}", id)
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
             .andExpect(view().name("emailAccount/view"))
-            .andExpect(content().string(containsString("<code>GMAIL_APP_PASSWORD</code>")))
-            .andExpect(content().string(not(containsString("Not configured"))))
-            .andExpect(content().string(not(containsString("Encrypted password stored"))))
+            .andReturn().response.contentAsString
+
+        assertThat(body).contains("Edit to set an IMAP password")
+        assertNoEnvVarMarkers(body)
     }
 
     @Test
-    @DisplayName("GET /emailAccounts/{id}/edit — envVar set, no encrypted password (the PR #50 crash case)")
-    fun editRendersWithEnvVarOnly() {
+    @DisplayName("GET /emailAccounts/{id} — encrypted password set → 'Encrypted password stored', no env-var markers")
+    fun viewRendersWithEncryptedPassword() {
         val id = saveAccount(
-            email = "envvar-only-edit@example.com",
-            credentialEnvVar = "GMAIL_APP_PASSWORD",
-            encryptedPassword = null
+            email = "pwd-set-view@example.com",
+            encryptedPassword = "v1:fake-ciphertext-for-render-test"
         )
 
-        mockMvc.perform(
+        val body = mockMvc.perform(
+            get("/emailAccounts/{id}", id)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        assertThat(body).contains("Encrypted password stored")
+        assertNoEnvVarMarkers(body)
+    }
+
+    @Test
+    @DisplayName("GET /emailAccounts/{id}/edit — no encrypted password → 'Not Set' badge, no env-var card")
+    fun editRendersWithoutPassword() {
+        val id = saveAccount(email = "no-pwd-edit@example.com", encryptedPassword = null)
+
+        val body = mockMvc.perform(
             get("/emailAccounts/{id}/edit", id)
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
             .andExpect(view().name("emailAccount/edit"))
-            .andExpect(content().string(containsString("Env Var Fallback")))
-            .andExpect(content().string(containsString("<code>GMAIL_APP_PASSWORD</code>")))
-    }
-
-    @Test
-    @DisplayName("GET /emailAccounts/{id} — encrypted password set, no envVar")
-    fun viewRendersWithEncryptedPasswordOnly() {
-        val id = saveAccount(
-            email = "encrypted-only@example.com",
-            credentialEnvVar = null,
-            encryptedPassword = "v1:fake-ciphertext-for-render-test"
-        )
-
-        mockMvc.perform(
-            get("/emailAccounts/{id}", id)
-                .with(user(BaseIT.LOGIN).roles("USER"))
-        )
-            .andExpect(status().isOk)
-            .andExpect(content().string(containsString("Encrypted password stored")))
-            .andExpect(content().string(not(containsString("Not configured"))))
-    }
-
-    @Test
-    @DisplayName("GET /emailAccounts/{id}/edit — encrypted password set, no envVar")
-    fun editRendersWithEncryptedPasswordOnly() {
-        val id = saveAccount(
-            email = "encrypted-only-edit@example.com",
-            credentialEnvVar = null,
-            encryptedPassword = "v1:fake-ciphertext-for-render-test"
-        )
-
-        mockMvc.perform(
-            get("/emailAccounts/{id}/edit", id)
-                .with(user(BaseIT.LOGIN).roles("USER"))
-        )
-            .andExpect(status().isOk)
-            .andExpect(content().string(not(containsString("Env Var Fallback"))))
-    }
-
-    @Test
-    @DisplayName("GET /emailAccounts/{id} — neither encrypted password nor envVar configured")
-    fun viewRendersWithNeitherCredential() {
-        val id = saveAccount(
-            email = "neither@example.com",
-            credentialEnvVar = null,
-            encryptedPassword = null
-        )
-
-        mockMvc.perform(
-            get("/emailAccounts/{id}", id)
-                .with(user(BaseIT.LOGIN).roles("USER"))
-        )
-            .andExpect(status().isOk)
-            .andExpect(content().string(containsString("Not configured")))
-    }
-
-    @Test
-    @DisplayName("GET /emailAccounts/{id}/edit — neither encrypted password nor envVar configured")
-    fun editRendersWithNeitherCredential() {
-        val id = saveAccount(
-            email = "neither-edit@example.com",
-            credentialEnvVar = null,
-            encryptedPassword = null
-        )
-
-        mockMvc.perform(
-            get("/emailAccounts/{id}/edit", id)
-                .with(user(BaseIT.LOGIN).roles("USER"))
-        )
-            .andExpect(status().isOk)
-            .andExpect(content().string(not(containsString("Env Var Fallback"))))
-    }
-
-    @Test
-    @DisplayName("GET /emailAccounts/{id} — both credentials set (encrypted wins, envVar still surfaced as unused)")
-    fun viewRendersWithBothCredentials() {
-        val id = saveAccount(
-            email = "both@example.com",
-            credentialEnvVar = "GMAIL_APP_PASSWORD",
-            encryptedPassword = "v1:fake-ciphertext-for-render-test"
-        )
-
-        val body = mockMvc.perform(
-            get("/emailAccounts/{id}", id)
-                .with(user(BaseIT.LOGIN).roles("USER"))
-        )
-            .andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        // Encrypted-password badge wins; the standalone "envVar only" branch must not render.
-        assertThat(body).contains("Encrypted password stored")
-        assertThat(body).doesNotContain("Not configured")
+        assertThat(body).contains("Not Set")
+        assertNoEnvVarMarkers(body)
     }
 
     @Test
-    @DisplayName("GET /emailAccounts/{id}/edit — both credentials set, env-var card still shown with 'unused' note")
-    fun editRendersWithBothCredentials() {
+    @DisplayName("GET /emailAccounts/{id}/edit — encrypted password set → 'Stored (encrypted)', no env-var card")
+    fun editRendersWithEncryptedPassword() {
         val id = saveAccount(
-            email = "both-edit@example.com",
-            credentialEnvVar = "GMAIL_APP_PASSWORD",
+            email = "pwd-set-edit@example.com",
             encryptedPassword = "v1:fake-ciphertext-for-render-test"
         )
 
@@ -186,16 +106,23 @@ class EmailAccountViewRenderIT : BaseIT() {
             .andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        assertThat(body).contains("Env Var Fallback")
-        assertThat(body).contains("<code>GMAIL_APP_PASSWORD</code>")
-        assertThat(body).contains("env var is unused")
+        assertThat(body).contains("Stored (encrypted)")
+        assertNoEnvVarMarkers(body)
     }
 
-    private fun saveAccount(
-        email: String,
-        credentialEnvVar: String?,
-        encryptedPassword: String?
-    ): Long {
+    /**
+     * After issue #55 the templates must never surface env-var fallback strings.
+     * Centralised so accidental reintroduction in either template trips every
+     * test in this class.
+     */
+    private fun assertNoEnvVarMarkers(body: String) {
+        assertThat(body).doesNotContain("Env Var Fallback")
+        assertThat(body).doesNotContain("Credential Env Var")
+        assertThat(body).doesNotContain("GMAIL_APP_PASSWORD")
+        assertThat(body).doesNotContain("credentialEnvVar")
+    }
+
+    private fun saveAccount(email: String, encryptedPassword: String?): Long {
         val account = EmailAccount().apply {
             this.email = email
             this.uri = "email://$email"
@@ -205,7 +132,6 @@ class EmailAccountViewRenderIT : BaseIT() {
             this.useSsl = true
             this.enabled = true
             this.version = 1L
-            this.credentialEnvVar = credentialEnvVar
             this.encryptedPassword = encryptedPassword
         }
         return emailAccountRepository.save(account).id!!

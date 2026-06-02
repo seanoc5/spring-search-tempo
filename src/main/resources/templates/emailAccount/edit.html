@@ -77,15 +77,6 @@
                             <label class="form-check-label" for="useSsl">Use SSL/TLS</label>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="credentialEnvVar" class="form-label">Credential Env Var <span class="text-muted small">(legacy fallback)</span></label>
-                            <input type="text" class="form-control" id="credentialEnvVar" th:field="*{credentialEnvVar}"
-                                   placeholder="e.g., GMAIL_APP_PASSWORD">
-                            <div class="form-text">
-                                Name of an environment variable holding the IMAP password. Used only if no encrypted password is set on this account.
-                            </div>
-                        </div>
-
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="enabled" th:field="*{enabled}">
                             <label class="form-check-label" for="enabled">Enabled</label>
@@ -196,26 +187,6 @@
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-
-                <div th:if="${emailAccount.credentialEnvVar != null}" class="card mb-3">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-key me-2"></i>Env Var Fallback</h6>
-                    </div>
-                    <div class="card-body">
-                        <dl class="row mb-0 small">
-                            <dt class="col-5">Env Var:</dt>
-                            <dd class="col-7"><code>[[${emailAccount.credentialEnvVar}]]</code></dd>
-                            <dt class="col-5">Status:</dt>
-                            <dd class="col-7">
-                                <span th:if="${credentialEnvVarSet}" class="badge bg-success">Set</span>
-                                <span th:unless="${credentialEnvVarSet}" class="badge bg-warning text-dark">Not Set</span>
-                            </dd>
-                        </dl>
-                        <p class="form-text mb-0 mt-2" th:if="${hasEncryptedPassword}">
-                            Encrypted password is set — env var is unused.
-                        </p>
                     </div>
                 </div>
 
