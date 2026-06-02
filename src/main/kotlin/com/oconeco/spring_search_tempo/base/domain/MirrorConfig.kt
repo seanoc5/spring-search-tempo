@@ -54,4 +54,21 @@ class MirrorConfig : SaveableObject() {
 
     @Column(columnDefinition = "text")
     var lastError: String? = null
+
+    /**
+     * Spring 6-field cron expression (sec min hr dom mon dow) for autonomous
+     * dispatch by `MirrorScheduler` (issue #38). Null = no schedule; mirrors
+     * only fire via the manual `MirrorJobLauncher.launch(...)` entrypoint.
+     */
+    @Column(columnDefinition = "text")
+    var cronSchedule: String? = null
+
+    /**
+     * When this mirror was last dispatched by `MirrorScheduler`. Used to
+     * compute the next cron boundary so we don't re-dispatch within the
+     * same boundary, and to enable startup catch-up. Null = never dispatched
+     * via the scheduler.
+     */
+    @Column
+    var lastDispatchedAt: OffsetDateTime? = null
 }

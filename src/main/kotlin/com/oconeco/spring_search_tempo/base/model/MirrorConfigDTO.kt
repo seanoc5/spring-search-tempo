@@ -50,6 +50,15 @@ class MirrorConfigDTO {
 
     var lastError: String? = null
 
+    /**
+     * Spring 6-field cron expression. Null/blank = scheduler skips this mirror;
+     * manual launches still work. Validated via `CronExpression.parse()` at
+     * the service boundary.
+     */
+    var cronSchedule: String? = null
+
+    var lastDispatchedAt: OffsetDateTime? = null
+
     var dateCreated: OffsetDateTime? = null
 
     var lastUpdated: OffsetDateTime? = null

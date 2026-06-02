@@ -83,6 +83,19 @@
                             </div>
                         </div>
 
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <label for="cronSchedule" class="form-label">Cron Schedule</label>
+                                <input type="text" class="form-control" id="cronSchedule"
+                                       th:field="*{cronSchedule}"
+                                       placeholder="e.g. 0 0 2 * * * (daily at 02:00)">
+                                <div class="form-text">
+                                    Spring 6-field cron: <code>sec min hr dom mon dow</code>. Leave blank to
+                                    disable scheduled dispatch (manual launches still work).
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="description" class="form-label">Description</label>
                             <textarea class="form-control" id="description" th:field="*{description}" rows="2"></textarea>

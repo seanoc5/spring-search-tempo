@@ -53,6 +53,17 @@
                                   th:text="${mirror.appendRateLimitPerSecond + '/s'}"></span>
                             <span th:if="${mirror.appendRateLimitPerSecond == null}" class="text-muted">unthrottled</span>
                         </dd>
+                        <dt class="col-sm-3">Cron Schedule</dt>
+                        <dd class="col-sm-9">
+                            <code th:if="${mirror.cronSchedule}" th:text="${mirror.cronSchedule}"></code>
+                            <span th:unless="${mirror.cronSchedule}" class="text-muted">none (manual only)</span>
+                        </dd>
+                        <dt class="col-sm-3">Last Dispatched</dt>
+                        <dd class="col-sm-9">
+                            <span th:if="${mirror.lastDispatchedAt != null}"
+                                  th:text="${#temporals.format(mirror.lastDispatchedAt, 'yyyy-MM-dd HH:mm:ss')}"></span>
+                            <span th:if="${mirror.lastDispatchedAt == null}" class="text-muted">never</span>
+                        </dd>
                         <dt class="col-sm-3" th:if="${mirror.description}">Description</dt>
                         <dd class="col-sm-9" th:if="${mirror.description}" th:text="${mirror.description}"></dd>
                     </dl>

@@ -267,6 +267,14 @@ app:
   # the autotrigger; manual MirrorJobLauncher.launch is unaffected.
   mirror:
     auto-index: true
+    # Per-MirrorConfig cron scheduler (issue #38). Iterates enabled
+    # MirrorConfig rows that have a cronSchedule set and dispatches due
+    # mirrors via MirrorJobLauncher. Manual launches still work
+    # independently. Set enabled=false to suppress the scheduler tick
+    # (e.g. tests that don't exercise scheduling).
+    scheduler:
+      enabled: true
+      tick-millis: 60000
 
   # Browser history sync (Firefox places.sqlite -> BrowserBookmark[sourceType=HISTORY])
   browser:
