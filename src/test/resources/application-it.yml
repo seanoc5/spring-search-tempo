@@ -25,7 +25,17 @@ spring:
     enabled: false
   jpa:
     hibernate:
-      ddl-auto: create-drop  # Auto-create schema for tests
+      # Use `update` (not `create-drop`) so that Hibernate never drops a
+      # table on context shutdown (issue #46). The Testcontainers PostgreSQL
+      # container is `withReuse(true)` and is shared by every cached Spring
+      # test context in the suite. With `create-drop`, one context shutting
+      # down would drop the tables out from under any sibling cached
+      # context still bound to the same database — manifesting as random
+      # `relation "..." does not exist` failures whose pattern depends on
+      # the order JUnit happens to execute classes. `update` keeps every
+      # entity-mapped table present for the lifetime of the container; the
+      # `@Sql` cleanup script in `BaseIT` resets row state between tests.
+      ddl-auto: update
     show-sql: false
   batch:
     job:
