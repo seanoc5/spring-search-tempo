@@ -45,4 +45,12 @@ interface MirrorConfigService {
     fun update(id: Long, dto: MirrorConfigDTO)
 
     fun delete(id: Long)
+
+    /**
+     * Record that the scheduler successfully launched a mirror job for this
+     * config. Used by `MirrorScheduler` to compute the next cron boundary
+     * (so we don't re-dispatch within the same boundary) and surfaced in the
+     * UI as "last dispatched".
+     */
+    fun recordDispatched(id: Long, dispatchedAt: java.time.OffsetDateTime)
 }

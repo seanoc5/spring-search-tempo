@@ -11,8 +11,10 @@ import com.oconeco.spring_search_tempo.base.repos.MirrorConfigRepository
 import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Sort
+import org.springframework.scheduling.support.CronExpression
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.OffsetDateTime
 
 
 @Service
@@ -94,6 +96,13 @@ class MirrorConfigServiceImpl(
         mirrorConfigRepository.deleteById(id)
     }
 
+    @Transactional
+    override fun recordDispatched(id: Long, dispatchedAt: OffsetDateTime) {
+        val entity = mirrorConfigRepository.findById(id).orElseThrow { NotFoundException() }
+        entity.lastDispatchedAt = dispatchedAt
+        mirrorConfigRepository.save(entity)
+    }
+
     // ------- internals -------
 
     private fun validate(dto: MirrorConfigDTO) {
@@ -112,6 +121,15 @@ class MirrorConfigServiceImpl(
         }
         require(srcAccount.enabled) { "source account $src is disabled" }
         require(dstAccount.enabled) { "destination account $dst is disabled" }
+
+        val cron = dto.cronSchedule?.trim()
+        if (!cron.isNullOrBlank()) {
+            try {
+                CronExpression.parse(cron)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid cronSchedule '$cron': ${e.message}")
+            }
+        }
     }
 
     private fun applyFrom(entity: MirrorConfig, dto: MirrorConfigDTO) {
@@ -121,6 +139,7 @@ class MirrorConfigServiceImpl(
         entity.enabled = dto.enabled
         entity.appendRateLimitPerSecond = dto.appendRateLimitPerSecond
         entity.folderMappings = objectMapper.writeValueAsString(dto.folderMappings)
+        entity.cronSchedule = dto.cronSchedule?.trim()?.takeIf { it.isNotBlank() }
         entity.label = dto.label
         entity.description = dto.description
         if (!dto.uri.isNullOrBlank()) entity.uri = dto.uri
@@ -146,6 +165,8 @@ class MirrorConfigServiceImpl(
         lastRunStartedAt = entity.lastRunStartedAt
         lastRunCompletedAt = entity.lastRunCompletedAt
         lastError = entity.lastError
+        cronSchedule = entity.cronSchedule
+        lastDispatchedAt = entity.lastDispatchedAt
         dateCreated = entity.dateCreated
         lastUpdated = entity.lastUpdated
         folderMappings = parseFolderMappings(entity.folderMappings)

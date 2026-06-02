@@ -7,6 +7,11 @@ app:
     # incidentally launch the destination-account email quick-sync. The
     # dedicated MirrorAutoIndexIT enables this with @TestPropertySource.
     auto-index: false
+    # Disable the per-MirrorConfig cron scheduler (issue #38) by default in
+    # tests so unrelated ITs don't see surprise mirror dispatches. Tests
+    # that exercise scheduling should enable it via @TestPropertySource.
+    scheduler:
+      enabled: false
 
 spring:
   sql:
