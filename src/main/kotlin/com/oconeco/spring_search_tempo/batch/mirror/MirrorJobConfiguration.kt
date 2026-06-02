@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.repos.MirrorErrorRepository
 import com.oconeco.spring_search_tempo.base.repos.MirroredMessageRepository
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
+import com.oconeco.spring_search_tempo.base.service.MirrorFolderCheckpointService
 import com.oconeco.spring_search_tempo.base.service.MirrorFolderProgressService
 import com.oconeco.spring_search_tempo.base.service.mirror.ImapMirrorService
 import org.springframework.batch.core.Job
@@ -43,6 +44,7 @@ class MirrorJobConfiguration(
     private val imapConnectionService: ImapConnectionService,
     private val mirroredMessageRepository: MirroredMessageRepository,
     private val checkpointService: MirrorCheckpointService,
+    private val folderCheckpointService: MirrorFolderCheckpointService,
     private val folderProgressService: MirrorFolderProgressService,
     private val imapMirrorService: ImapMirrorService,
     private val mirrorErrorRepository: MirrorErrorRepository,
@@ -70,14 +72,16 @@ class MirrorJobConfiguration(
             imapConnectionService = imapConnectionService,
             mirroredMessageRepository = mirroredMessageRepository,
             checkpointService = checkpointService,
-            folderProgressService = folderProgressService
+            folderCheckpointService = folderCheckpointService,
+            folderProgressService = folderProgressService,
+            mirrorErrorRepository = mirrorErrorRepository
         )
         val processor = MirrorMessageProcessor(
             imapMirrorService = imapMirrorService,
             mirrorErrorRepository = mirrorErrorRepository,
             jobRunService = jobRunService
         )
-        val writer = MirrorCheckpointWriter(checkpointService)
+        val writer = MirrorCheckpointWriter(checkpointService, folderCheckpointService)
 
         return StepBuilder("mirrorStep", jobRepository)
             .chunk<MirrorTask, MirrorTask>(properties.chunkSize, transactionManager)

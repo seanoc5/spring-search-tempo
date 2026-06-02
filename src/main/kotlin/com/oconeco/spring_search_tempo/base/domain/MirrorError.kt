@@ -75,6 +75,17 @@ class MirrorError {
     @Column(nullable = false)
     var retryable: Boolean = false
 
+    /**
+     * Scope of the failure: `'MESSAGE'` (default — one source UID failed
+     * to copy) or `'FOLDER'` (issue #39 — the whole folder couldn't be
+     * enumerated, e.g. connection failure on open, quota error, auth
+     * blip). Folder-scoped rows have `sourceUid = 0` since no specific
+     * UID is in play. The dashboard uses this to distinguish a single
+     * bad message from a sibling-poisoning failure.
+     */
+    @Column(name = "error_scope", nullable = false, columnDefinition = "text")
+    var errorScope: String = "MESSAGE"
+
     @Column(name = "occurred_at", nullable = false)
     var occurredAt: OffsetDateTime? = null
 }

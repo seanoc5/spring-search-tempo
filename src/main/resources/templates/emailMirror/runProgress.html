@@ -30,9 +30,12 @@
                 <span th:if="${progress.foldersInFlight > 0}" class="text-muted">
                     · [[${progress.foldersInFlight}]] in flight
                 </span>
+                <span th:if="${progress.foldersFailed > 0}" class="text-danger">
+                    · [[${progress.foldersFailed}]] failed
+                </span>
                 · [[${progress.processedCount}]] messages mirrored this run
                 <span th:if="${progress.totalFailedThisRun > 0}" class="text-danger">
-                    · [[${progress.totalFailedThisRun}]] failed
+                    · [[${progress.totalFailedThisRun}]] message failures
                 </span>
                 <span class="text-muted">
                     ([[${progress.totalMirroredAllTime}]] mirrored under this config all-time)
@@ -87,10 +90,13 @@
                             <span th:if="${f.currentUid != null}" th:text="${f.currentUid}">0</span>
                             <span th:if="${f.currentUid == null}" class="text-muted">–</span>
                         </td>
-                        <td>
-                            <span th:if="${f.folderComplete}" class="badge bg-success">complete</span>
-                            <span th:if="${!f.folderComplete && f.folderOpened}" class="badge bg-primary">in flight</span>
-                            <span th:if="${!f.folderOpened}" class="badge bg-light text-dark">queued</span>
+                        <td th:switch="${f.status}">
+                            <span th:case="'COMPLETED'" class="badge bg-success">OK</span>
+                            <span th:case="'IN_FLIGHT'" class="badge bg-primary">in flight</span>
+                            <span th:case="'FAILED'" class="badge bg-danger" title="Folder enumeration failed">FAILED</span>
+                            <span th:case="'PARTIAL'" class="badge bg-warning text-dark"
+                                  title="Folder failed mid-pass; some messages mirrored before the failure">PARTIAL</span>
+                            <span th:case="*" class="badge bg-light text-dark">queued</span>
                         </td>
                     </tr>
                 </tbody>
@@ -121,8 +127,16 @@
                             <small th:if="${err.occurredAt != null}"
                                    th:text="${#temporals.format(err.occurredAt, 'HH:mm:ss')}">00:00:00</small>
                         </td>
-                        <td><code th:text="${err.sourceFolder}">INBOX</code></td>
-                        <td th:text="${err.sourceUid}">0</td>
+                        <td>
+                            <code th:text="${err.sourceFolder}">INBOX</code>
+                            <span th:if="${err.errorScope == 'FOLDER'}"
+                                  class="badge bg-danger ms-1"
+                                  title="Whole folder failed to enumerate">folder</span>
+                        </td>
+                        <td>
+                            <span th:if="${err.errorScope == 'FOLDER'}" class="text-muted">–</span>
+                            <span th:unless="${err.errorScope == 'FOLDER'}" th:text="${err.sourceUid}">0</span>
+                        </td>
                         <td>
                             <small th:if="${err.messageId != null}" class="text-muted" th:text="${err.messageId}"></small>
                         </td>

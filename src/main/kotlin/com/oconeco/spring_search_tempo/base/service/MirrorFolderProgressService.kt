@@ -48,6 +48,7 @@ class MirrorFolderProgressService(
             row.openedAt = OffsetDateTime.now()
         }
         row.completedAt = null
+        row.status = "IN_FLIGHT"
         return repository.save(row)
     }
 
@@ -55,6 +56,39 @@ class MirrorFolderProgressService(
     fun recordFolderCompleted(jobRunId: Long, sourceFolder: String) {
         val row = repository.findByJobRunIdAndSourceFolder(jobRunId, sourceFolder) ?: return
         row.completedAt = OffsetDateTime.now()
+        // Don't overwrite a FAILED status — a folder that completed its
+        // partial pass after a recoverable error still ends FAILED.
+        if (row.status == "IN_FLIGHT") {
+            row.status = "COMPLETED"
+        }
         repository.save(row)
+    }
+
+    /**
+     * Stamp a folder as failed (issue #39): the reader couldn't open or
+     * enumerate the folder, so it logged a folder-scope `MirrorError`
+     * and moved on. We still stamp `completedAt` so the "folders
+     * complete" count includes failed folders — the run is finished
+     * with that folder either way.
+     */
+    @Transactional
+    fun recordFolderFailed(
+        mirrorConfigId: Long,
+        jobRunId: Long,
+        sourceFolder: String,
+        destFolder: String?
+    ): MirrorFolderProgress {
+        val row = repository.findByJobRunIdAndSourceFolder(jobRunId, sourceFolder)
+            ?: MirrorFolderProgress().apply {
+                this.mirrorConfigId = mirrorConfigId
+                this.jobRunId = jobRunId
+                this.sourceFolder = sourceFolder
+                this.destFolder = destFolder
+                this.openedAt = OffsetDateTime.now()
+            }
+        if (row.destFolder == null) row.destFolder = destFolder
+        row.status = "FAILED"
+        row.completedAt = OffsetDateTime.now()
+        return repository.save(row)
     }
 }

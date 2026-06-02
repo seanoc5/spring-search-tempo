@@ -1,30 +1,37 @@
 package com.oconeco.spring_search_tempo.batch.mirror
 
 import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
+import com.oconeco.spring_search_tempo.base.service.MirrorFolderCheckpointService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.Chunk
 import org.springframework.batch.item.ItemWriter
 
 /**
- * Persists a `MirrorCheckpoint` at the end of each successfully-mirrored
- * chunk. The "writer" doesn't actually write the source/dest IMAP traffic —
- * that already happened in [MirrorMessageProcessor] via `ImapMirrorService`,
- * which has its own audit-row commit per message. What we write here is the
- * *resume marker*: the `(currentFolder, lastSourceUidProcessed)` pair so the
- * next run can pick up mid-folder.
+ * Persists a per-folder watermark + the legacy `MirrorCheckpoint` at the
+ * end of each successfully-mirrored chunk. The "writer" doesn't actually
+ * write the source/dest IMAP traffic — that already happened in
+ * [MirrorMessageProcessor] via `ImapMirrorService`, which has its own
+ * audit-row commit per message. What we write here is the *resume
+ * marker*: the per-folder `lastSourceUid` (issue #39) so the next run
+ * can pick up each folder mid-pass independently, plus the legacy
+ * `MirrorCheckpoint` row used by the existing dashboard's "current
+ * UID" cell.
  *
- * Checkpoint write strategy: end of each chunk, advancing to the highest
- * sourceUid in the chunk. If a chunk crosses a folder boundary (rare — the
- * reader emits all of folder A before any of folder B), the checkpoint is
- * written per-folder so neither folder's resume marker overwrites the other.
+ * Checkpoint write strategy: end of each chunk, advancing each
+ * `(mirrorConfigId, sourceFolder)` pair to the highest sourceUid seen.
+ * If a chunk crosses a folder boundary (rare — the reader emits all of
+ * folder A before any of folder B), each folder gets its own
+ * `advance(...)` so a sibling's higher UID doesn't bleed into another
+ * folder's watermark.
  *
  * Failure tolerance: if a chunk fails mid-way, `ImapMirrorService` has
  * already committed audit rows for the messages that completed, so the
- * next run's reader pre-filter skips them. The checkpoint advances on the
- * next successful chunk.
+ * next run's reader pre-filter skips them. The watermark advances on
+ * the next successful chunk.
  */
 class MirrorCheckpointWriter(
-    private val checkpointService: MirrorCheckpointService
+    private val checkpointService: MirrorCheckpointService,
+    private val folderCheckpointService: MirrorFolderCheckpointService
 ) : ItemWriter<MirrorTask> {
 
     companion object {
@@ -33,13 +40,18 @@ class MirrorCheckpointWriter(
 
     override fun write(chunk: Chunk<out MirrorTask>) {
         if (chunk.isEmpty) return
-        // The reader emits one folder at a time; in the rare case a chunk
-        // straddles a folder boundary, persist the highest UID per folder.
         chunk.items
             .groupBy { it.mirrorConfigId to it.sourceFolder }
             .forEach { (key, items) ->
                 val (mirrorConfigId, folder) = key
                 val maxUid = items.maxOf { it.sourceUid }
+                folderCheckpointService.advance(
+                    mirrorConfigId = mirrorConfigId,
+                    sourceFolder = folder,
+                    lastSourceUid = maxUid
+                )
+                // Legacy single-row checkpoint kept for back-compat with
+                // the existing dashboard's "current UID" cell.
                 checkpointService.upsert(
                     mirrorConfigId = mirrorConfigId,
                     currentFolder = folder,
