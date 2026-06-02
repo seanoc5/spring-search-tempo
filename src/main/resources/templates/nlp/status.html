@@ -1,0 +1,257 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>NLP Coverage</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">NLP Coverage</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1">
+            <i class="bi bi-magic me-2"></i>NLP Coverage
+        </h1>
+        <div class="d-flex gap-2">
+            <form th:action="@{/nlp/process}" method="post" class="d-inline">
+                <input type="hidden" name="redirectTo" value="/nlp/status" />
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-play-fill me-1"></i>Run NLP now
+                </button>
+            </form>
+            <a th:href="@{/api/nlp/status}" class="btn btn-outline-secondary" target="_blank" rel="noopener">
+                <i class="bi bi-braces me-1"></i>JSON
+            </a>
+        </div>
+    </div>
+
+    <!-- Coverage card -->
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center">
+            <h5 class="mb-0 flex-grow-1">Chunk coverage</h5>
+            <span th:if="${nlpStatus.autoTriggerEnabled}" class="badge bg-success">
+                Auto-trigger: ON
+            </span>
+            <span th:unless="${nlpStatus.autoTriggerEnabled}" class="badge bg-secondary">
+                Auto-trigger: OFF
+            </span>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">
+                <strong>NLP processed: [[${nlpStatus.nlpProcessedCount}]] / [[${nlpStatus.totalChunks}]] chunks</strong>
+                <span class="text-muted">
+                    ([[${nlpStatus.coveragePercent}]]% of all chunks)
+                </span>
+            </p>
+
+            <div class="progress mb-3" role="progressbar"
+                 th:attr="aria-valuenow=${nlpStatus.coveragePercent},aria-valuemin=0,aria-valuemax=100"
+                 style="height: 1.5rem;">
+                <div class="progress-bar bg-success"
+                     th:style="|width: ${nlpStatus.coveragePercent}%|"
+                     th:text="|${nlpStatus.coveragePercent}%|">0%</div>
+            </div>
+
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Chunks at INDEX level</dt>
+                <dd class="col-sm-2" th:text="${nlpStatus.chunksAtIndexLevel}">0</dd>
+                <dd class="col-sm-6 text-muted">
+                    <small>Text extracted, not eligible for NLP.</small>
+                </dd>
+
+                <dt class="col-sm-4">Chunks at ANALYZE level</dt>
+                <dd class="col-sm-2" th:text="${nlpStatus.chunksAtAnalyzeLevel}">0</dd>
+                <dd class="col-sm-6 text-muted">
+                    <small>Eligible for full NLP (NER, POS, sentiment).</small>
+                </dd>
+
+                <dt class="col-sm-4">Pending NLP at ANALYZE level</dt>
+                <dd class="col-sm-2">
+                    <span th:if="${nlpStatus.nlpPendingAtAnalyzeLevel > 0}" class="badge bg-warning text-dark"
+                          th:text="${nlpStatus.nlpPendingAtAnalyzeLevel}">0</span>
+                    <span th:unless="${nlpStatus.nlpPendingAtAnalyzeLevel > 0}" class="badge bg-success">0</span>
+                </dd>
+                <dd class="col-sm-6 text-muted">
+                    <small>Will be picked up by the next NLP job run.</small>
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Last job summary -->
+    <div class="card mb-4">
+        <div class="card-header"><h5 class="mb-0">Last NLP job</h5></div>
+        <div class="card-body">
+            <div th:if="${nlpStatus.lastJob == null}" class="text-muted">
+                No NLP job has run yet.
+            </div>
+            <dl class="row mb-0" th:if="${nlpStatus.lastJob != null}" th:with="job=${nlpStatus.lastJob}">
+                <dt class="col-sm-3">Status</dt>
+                <dd class="col-sm-9">
+                    <span th:switch="${job.status}">
+                        <span th:case="'COMPLETED'" class="badge bg-success">COMPLETED</span>
+                        <span th:case="'STARTED'" class="badge bg-primary">RUNNING</span>
+                        <span th:case="'STARTING'" class="badge bg-primary">STARTING</span>
+                        <span th:case="'FAILED'" class="badge bg-danger">FAILED</span>
+                        <span th:case="'STOPPED'" class="badge bg-warning text-dark">STOPPED</span>
+                        <span th:case="*" class="badge bg-secondary" th:text="${job.status}">UNKNOWN</span>
+                    </span>
+                    <code class="ms-2 small text-muted" th:if="${job.exitCode != null}" th:text="${job.exitCode}"></code>
+                </dd>
+
+                <dt class="col-sm-3">Execution ID</dt>
+                <dd class="col-sm-9">
+                    <a th:if="${job.executionId != null}"
+                       th:href="@{/batch/executions/{id}(id=${job.executionId})}"
+                       th:text="${job.executionId}">0</a>
+                    <span th:if="${job.executionId == null}" class="text-muted">–</span>
+                </dd>
+
+                <dt class="col-sm-3">Started</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${job.startTime != null}"
+                          th:text="${#temporals.format(job.startTime, 'yyyy-MM-dd HH:mm:ss')}"></span>
+                    <span th:if="${job.startTime == null}" class="text-muted">–</span>
+                </dd>
+
+                <dt class="col-sm-3">Ended</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${job.endTime != null}"
+                          th:text="${#temporals.format(job.endTime, 'yyyy-MM-dd HH:mm:ss')}"></span>
+                    <span th:if="${job.endTime == null}" class="text-muted">still running</span>
+                </dd>
+
+                <dt class="col-sm-3">Duration</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${job.durationSeconds != null}" th:text="|${job.durationSeconds}s|">0s</span>
+                    <span th:if="${job.durationSeconds == null}" class="text-muted">–</span>
+                </dd>
+
+                <dt class="col-sm-3">Items</dt>
+                <dd class="col-sm-9">
+                    read [[${job.readCount}]] · written [[${job.writeCount}]] ·
+                    <span th:if="${job.skipCount > 0}" class="text-warning">skipped [[${job.skipCount}]]</span>
+                    <span th:if="${job.skipCount == 0}">skipped 0</span>
+                </dd>
+
+                <dt class="col-sm-3">Triggered by</dt>
+                <dd class="col-sm-9">
+                    <code th:if="${job.triggeredBy != null}" th:text="${job.triggeredBy}">manual</code>
+                    <span th:if="${job.triggeredBy == null}" class="text-muted">–</span>
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Recent jobs -->
+    <div class="card mb-4">
+        <div class="card-header"><h5 class="mb-0">Recent NLP jobs</h5></div>
+        <div class="card-body">
+            <div th:if="${nlpStatus.recentJobs.empty}" class="text-muted">
+                No NLP job history.
+            </div>
+            <table class="table table-sm align-middle" th:unless="${nlpStatus.recentJobs.empty}">
+                <thead>
+                    <tr>
+                        <th>Execution</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Read</th>
+                        <th>Written</th>
+                        <th>Skipped</th>
+                        <th>Trigger</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="job : ${nlpStatus.recentJobs}">
+                        <td>
+                            <a th:if="${job.executionId != null}"
+                               th:href="@{/batch/executions/{id}(id=${job.executionId})}"
+                               th:text="${job.executionId}">0</a>
+                        </td>
+                        <td>
+                            <span th:switch="${job.status}">
+                                <span th:case="'COMPLETED'" class="badge bg-success">COMPLETED</span>
+                                <span th:case="'STARTED'" class="badge bg-primary">RUNNING</span>
+                                <span th:case="'STARTING'" class="badge bg-primary">STARTING</span>
+                                <span th:case="'FAILED'" class="badge bg-danger">FAILED</span>
+                                <span th:case="'STOPPED'" class="badge bg-warning text-dark">STOPPED</span>
+                                <span th:case="*" class="badge bg-secondary" th:text="${job.status}">?</span>
+                            </span>
+                        </td>
+                        <td>
+                            <small th:if="${job.startTime != null}"
+                                   th:text="${#temporals.format(job.startTime, 'yyyy-MM-dd HH:mm:ss')}">–</small>
+                            <small th:if="${job.startTime == null}" class="text-muted">–</small>
+                        </td>
+                        <td>
+                            <span th:if="${job.durationSeconds != null}" th:text="|${job.durationSeconds}s|">0s</span>
+                            <span th:if="${job.durationSeconds == null}" class="text-muted">–</span>
+                        </td>
+                        <td th:text="${job.readCount}">0</td>
+                        <td th:text="${job.writeCount}">0</td>
+                        <td>
+                            <span th:if="${job.skipCount > 0}" class="text-warning" th:text="${job.skipCount}">0</span>
+                            <span th:unless="${job.skipCount > 0}" class="text-muted">0</span>
+                        </td>
+                        <td>
+                            <code th:if="${job.triggeredBy != null}" class="small" th:text="${job.triggeredBy}">–</code>
+                            <span th:if="${job.triggeredBy == null}" class="text-muted">–</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Re-process single chunk -->
+    <div class="card mb-4">
+        <div class="card-header"><h5 class="mb-0">Re-process a single chunk</h5></div>
+        <div class="card-body">
+            <p class="text-muted small mb-2">
+                Force NLP analysis to run again for a single chunk by ID. Useful for
+                spot-checking after model updates or fixing one bad row.
+            </p>
+            <form th:action="@{/nlp/process/chunk/0}" method="post" id="reprocess-chunk-form"
+                  class="d-flex align-items-center gap-2">
+                <label for="reprocess-chunk-id" class="form-label mb-0">Chunk ID</label>
+                <input type="number" min="1" required class="form-control"
+                       style="max-width: 12rem;"
+                       id="reprocess-chunk-id" name="chunkId" placeholder="e.g. 12345" />
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Re-process
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!--
+      The form action is rewritten from the chunkId input on submit, because Spring
+      MVC's @PathVariable wants the ID in the URL. We avoid `th:onclick` strings here
+      (XSS guardrail in CLAUDE.md) and rely on a delegated submit handler.
+    -->
+    <script th:inline="javascript">
+        (function () {
+            const form = document.getElementById('reprocess-chunk-form');
+            if (!form) return;
+            form.addEventListener('submit', function (e) {
+                const idInput = document.getElementById('reprocess-chunk-id');
+                const id = (idInput && idInput.value || '').trim();
+                if (!id || !/^\d+$/.test(id)) {
+                    e.preventDefault();
+                    alert('Enter a positive chunk ID.');
+                    return;
+                }
+                form.setAttribute('action', '/nlp/process/chunk/' + encodeURIComponent(id));
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
