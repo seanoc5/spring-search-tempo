@@ -44,7 +44,7 @@ data class MicrosoftProfile(
 class OneDriveConnectionService(
     private val config: OneDriveConfiguration,
     private val oneDriveAccountService: OneDriveAccountService,
-    private val tokenEncryptionService: TokenEncryptionService
+    private val encryptionService: EncryptionService
 ) {
 
     companion object {
@@ -136,7 +136,7 @@ class OneDriveConnectionService(
         val profile = fetchUserProfile(accessToken)
 
         // Encrypt and store refresh token
-        val encryptedRefreshToken = tokenEncryptionService.encrypt(refreshToken)
+        val encryptedRefreshToken = encryptionService.encrypt(refreshToken)
 
         return Pair(accessToken, profile)
 
@@ -178,7 +178,7 @@ class OneDriveConnectionService(
         val refreshToken = json["refresh_token"] ?: throw RuntimeException("No refresh_token in response")
 
         val profile = fetchUserProfile(accessToken)
-        val encryptedRefreshToken = tokenEncryptionService.encrypt(refreshToken)
+        val encryptedRefreshToken = encryptionService.encrypt(refreshToken)
 
         return Triple(accessToken, encryptedRefreshToken, profile)
     }
@@ -221,7 +221,7 @@ class OneDriveConnectionService(
 
         // Refresh tokens rotate - store the new one if provided
         if (newRefreshToken != null) {
-            val encrypted = tokenEncryptionService.encrypt(newRefreshToken)
+            val encrypted = encryptionService.encrypt(newRefreshToken)
             oneDriveAccountService.storeTokens(accountId, encrypted)
         }
 

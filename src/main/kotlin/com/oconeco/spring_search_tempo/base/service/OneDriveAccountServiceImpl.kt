@@ -24,7 +24,7 @@ class OneDriveAccountServiceImpl(
     private val oneDriveItemRepository: OneDriveItemRepository,
     private val contentChunkRepository: ContentChunkRepository,
     private val jobRunRepository: JobRunRepository,
-    private val tokenEncryptionService: TokenEncryptionService
+    private val encryptionService: EncryptionService
 ) : OneDriveAccountService {
 
     companion object {
@@ -94,7 +94,7 @@ class OneDriveAccountServiceImpl(
         val account = oneDriveAccountRepository.findById(id)
             .orElseThrow { NotFoundException() }
         val encrypted = account.encryptedRefreshToken ?: return null
-        return tokenEncryptionService.decrypt(encrypted)
+        return encryptionService.decrypt(encrypted)
     }
 
     override fun updateDeltaToken(id: Long, deltaToken: String?) {

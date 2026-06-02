@@ -83,7 +83,7 @@ class EmailAccount : SaveableObject() {
     @Column(length = 100)
     var credentialEnvVar: String? = null
 
-    // Encrypted IMAP password (TokenEncryptionService envelope, v1: prefix). Preferred over credentialEnvVar.
+    // Encrypted IMAP password (EncryptionService envelope, v1: prefix). Preferred over credentialEnvVar.
     @Column(columnDefinition = "text")
     var encryptedPassword: String? = null
 
