@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.jdbc.Sql
+import org.springframework.test.context.jdbc.SqlConfig
 import org.springframework.test.context.jdbc.SqlMergeMode
 import org.springframework.util.StreamUtils
 import org.testcontainers.containers.PostgreSQLContainer
@@ -17,12 +18,17 @@ import org.testcontainers.containers.PostgreSQLContainer
  * Abstract base class to be extended by every IT test. Starts the Spring Boot context with a
  * Datasource connected to the Testcontainers Docker instance. The instance is reused for all tests,
  * with all data wiped out before each test.
+ *
+ * `clearAll.sql` is a PL/pgSQL DO block (issue #46) that discovers user tables from `pg_tables`
+ * and TRUNCATE-CASCADE-s them. PL/pgSQL relies on `;` internally and Spring 6.2's `ScriptUtils`
+ * splitter is not dollar-quote aware, so we configure the EOF-sentinel separator; each script
+ * is forwarded to the JDBC driver as one string and PostgreSQL parses the `$$` boundary itself.
  */
 @ActiveProfiles("it")
-@Sql(value = [
-    "/data/clearAll.sql",
-    "/data/springUserData.sql"
-])
+@Sql(
+    scripts = ["/data/clearAll.sql", "/data/springUserData.sql"],
+    config = SqlConfig(separator = "^^^ END OF SCRIPT ^^^")
+)
 @SqlMergeMode(SqlMergeMode.MergeMode.MERGE)
 abstract class BaseIT {
 
