@@ -161,8 +161,18 @@ class EmailAccountController(
         } else if (password.isBlank()) {
             redirectAttributes.addFlashAttribute("error", "Password cannot be blank — use the clear action to remove the stored password")
         } else {
-            emailAccountService.setPassword(id, password)
-            redirectAttributes.addFlashAttribute("message", "Encrypted password updated for ${account.email}")
+            try {
+                emailAccountService.setPassword(id, password)
+                redirectAttributes.addFlashAttribute("message", "Encrypted password updated for ${account.email}")
+            } catch (e: IllegalStateException) {
+                log.warn("Failed to store encrypted password for account id={}: {}", id, e.message)
+                redirectAttributes.addFlashAttribute(
+                    "error",
+                    "Cannot store encrypted password: server-side `app.onedrive.token-encryption-key` " +
+                        "(env `ONEDRIVE_TOKEN_ENCRYPTION_KEY`) is not configured. " +
+                        "Set it and restart the app, then try again."
+                )
+            }
         }
         return "redirect:/emailAccounts/$id/edit"
     }

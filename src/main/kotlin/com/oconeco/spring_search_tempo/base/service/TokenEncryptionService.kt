@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -42,6 +43,20 @@ class TokenEncryptionService(
         } else {
             val keyBytes = Base64.getDecoder().decode(keyBase64)
             SecretKeySpec(keyBytes, "AES")
+        }
+    }
+
+    @PostConstruct
+    fun warnIfUnconfigured() {
+        if (keyBase64.isBlank()) {
+            log.warn(
+                "app.onedrive.token-encryption-key is not configured " +
+                    "(env ONEDRIVE_TOKEN_ENCRYPTION_KEY). " +
+                    "At-rest encryption is disabled; the following features will fail when used: " +
+                    "IMAP password storage (EmailAccount.encryptedPassword), " +
+                    "OneDrive refresh token storage. " +
+                    "Set the property and restart to enable encryption."
+            )
         }
     }
 
