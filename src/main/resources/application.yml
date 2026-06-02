@@ -259,6 +259,15 @@ app:
         credential-env-var: "WORKMAIL_PASSWORD"
         enabled: true
 
+  # IMAP mirror autotrigger (issue #35). When true, a completed mirror run
+  # publishes MirrorJobCompletedEvent and MirrorIndexingTriggerListener
+  # launches an email quick-sync (headers→body→chunks→NLP→categorization→
+  # embedding) against the destination account so the mirrored messages
+  # become searchable without manual intervention. Set false to suppress
+  # the autotrigger; manual MirrorJobLauncher.launch is unaffected.
+  mirror:
+    auto-index: true
+
   # Browser history sync (Firefox places.sqlite -> BrowserBookmark[sourceType=HISTORY])
   browser:
     history:
