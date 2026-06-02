@@ -79,7 +79,10 @@ data class SearchResult(
     val uri: String,
     val label: String,
     val snippet: String,
-    val rank: Float
+    val rank: Float,
+    val sentiment: String? = null,
+    val sentimentScore: Double? = null,
+    val namedEntities: String? = null
 )
 
 /**
@@ -485,7 +488,10 @@ class FullTextSearchServiceImpl(
                     uri = cols[2] as String,
                     label = cols[3] as String,
                     snippet = cols[4] as String,
-                    rank = (cols[5] as Number).toFloat()
+                    rank = (cols[5] as Number).toFloat(),
+                    sentiment = cols[6] as String?,
+                    sentimentScore = (cols[7] as Number?)?.toDouble(),
+                    namedEntities = cols[8] as String?
                 )
             }
 
@@ -546,7 +552,10 @@ class FullTextSearchServiceImpl(
                 ts_headline('english', COALESCE(f.body_text, f.label),
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
-                ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank
+                ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank,
+                NULL::text as sentiment,
+                NULL::double precision as sentiment_score,
+                NULL::text as named_entities
             FROM fsfile f
             WHERE f.fts_vector @@ to_tsquery('english', :query)
             $extraConditions
@@ -579,7 +588,10 @@ class FullTextSearchServiceImpl(
                 ts_headline('english', COALESCE(e.body_text, e.subject),
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
-                ts_rank(e.fts_vector, to_tsquery('english', :query)) as rank
+                ts_rank(e.fts_vector, to_tsquery('english', :query)) as rank,
+                NULL::text as sentiment,
+                NULL::double precision as sentiment_score,
+                NULL::text as named_entities
             FROM email_message e
             WHERE e.fts_vector @@ to_tsquery('english', :query)
             $extraConditions
@@ -612,7 +624,10 @@ class FullTextSearchServiceImpl(
                 ts_headline('english', COALESCE(odi.body_text, odi.item_name),
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
-                ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank
+                ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank,
+                NULL::text as sentiment,
+                NULL::double precision as sentiment_score,
+                NULL::text as named_entities
             FROM one_drive_item odi
             WHERE odi.fts_vector @@ to_tsquery('english', :query)
               AND odi.is_deleted = false
@@ -648,7 +663,10 @@ class FullTextSearchServiceImpl(
                 ts_headline('english', COALESCE(c.text, ''),
                            to_tsquery('english', :query),
                            'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
-                ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank
+                ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank,
+                c.sentiment,
+                c.sentiment_score,
+                c.named_entities
             FROM content_chunks c
             LEFT JOIN fsfile f ON c.concept_id = f.id
             LEFT JOIN email_message em ON c.email_message_id = em.id
@@ -695,7 +713,10 @@ class FullTextSearchServiceImpl(
                 COALESCE(b.url, '') as uri,
                 COALESCE(b.title, b.url, 'Bookmark #' || b.id) as label,
                 $snippetExpr as snippet,
-                $rankExpr as rank
+                $rankExpr as rank,
+                NULL::text as sentiment,
+                NULL::double precision as sentiment_score,
+                NULL::text as named_entities
             FROM browser_bookmark b
             $whereClause
         """.trimIndent()
