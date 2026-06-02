@@ -95,7 +95,7 @@
                             <a th:href="@{/emailAccounts/{id}(id=${account.id})}">
                                 <i class="bi bi-envelope me-1"></i>[[${account.email}]]
                             </a>
-                            <span th:if="${account.label}" class="text-muted small ms-2">([[${account.label}]])</span>
+                            <span th:if="${account.label != null}" class="text-muted small ms-2">([[${account.label}]])</span>
                         </td>
                         <td>
                             <span class="badge bg-secondary">[[${account.provider}]]</span>
@@ -129,7 +129,7 @@
                                     <span th:if="${account.activeJobRun.processedCount != null && account.activeJobRun.expectedTotal != null}">
                                         [[${account.activeJobRun.processedCount}]] of [[${account.activeJobRun.expectedTotal}]]
                                     </span>
-                                    <span th:if="${account.activeJobRun.currentStepName}">
+                                    <span th:if="${account.activeJobRun.currentStepName != null}">
                                         - [[${account.activeJobRun.currentStepName}]]
                                     </span>
                                 </small>
