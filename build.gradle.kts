@@ -73,7 +73,6 @@ dependencies {
     implementation("org.webjars:bootstrap:5.3.8")
     implementation("org.webjars.npm:bootstrap-icons:1.11.3")
     implementation("org.webjars.npm:htmx.org:2.0.7")
-    implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
 
     implementation("org.mapstruct:mapstruct:1.6.3")
 

@@ -220,6 +220,15 @@ app:
       run-missed-on-startup: true
       startup-grace-minutes: 5
       trigger-after-crawl: false  # Chain email sync after file crawl
+      # MultiAccountEmailScheduler: how often to wake and check which accounts
+      # are due per their per-row cronSchedule. Default 5 min matches Apple
+      # Mail's idle-fallback cadence; Thunderbird default is 10 min. The cron
+      # boundary in each account row is the *actual* dispatch gate — this tick
+      # only adds wake-up latency. Index freshness for search doesn't need
+      # real-time, so 60s ticking was wasteful (~1440 wakes/day to dispatch
+      # maybe once for a daily-cron account).
+      multi-account:
+        tick-millis: 300000
 
   # Email crawling configuration
   email:
