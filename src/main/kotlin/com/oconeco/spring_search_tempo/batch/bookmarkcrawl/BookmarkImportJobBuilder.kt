@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.repos.BrowserBookmarkRepository
 import com.oconeco.spring_search_tempo.base.repos.BrowserProfileRepository
 import com.oconeco.spring_search_tempo.base.service.BrowserBookmarkMapper
 import com.oconeco.spring_search_tempo.base.service.FirefoxPlacesService
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.historycrawl.HistoryAutoTriggerListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -37,7 +38,8 @@ class BookmarkImportJobBuilder(
     private val browserBookmarkRepository: BrowserBookmarkRepository,
     private val browserProfileRepository: BrowserProfileRepository,
     private val browserBookmarkMapper: BrowserBookmarkMapper,
-    private val historyAutoTriggerListener: HistoryAutoTriggerListener
+    private val historyAutoTriggerListener: HistoryAutoTriggerListener,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener
 ) {
 
     companion object {
@@ -61,6 +63,7 @@ class BookmarkImportJobBuilder(
 
         return JobBuilder("bookmarkImportJob_${profileId}", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(BookmarkImportJobListener(browserProfileService, profileId))
             .listener(historyAutoTriggerListener)
             .start(buildImportStep(profileId, Path.of(placesDbPath)))

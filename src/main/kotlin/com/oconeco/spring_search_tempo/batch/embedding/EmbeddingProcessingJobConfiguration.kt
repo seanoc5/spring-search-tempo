@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.service.ContentChunkMapper
 import com.oconeco.spring_search_tempo.base.service.EmbeddingService
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -51,8 +52,9 @@ class EmbeddingProcessingJobConfiguration(
     }
 
     @Bean
-    fun embeddingProcessingJob(): Job {
+    fun embeddingProcessingJob(advisoryLockListener: JobExecutionAdvisoryLockListener): Job {
         return JobBuilder("embeddingProcessingJob", jobRepository)
+            .listener(advisoryLockListener)
             .start(embeddingProcessingStep())
             .build()
     }

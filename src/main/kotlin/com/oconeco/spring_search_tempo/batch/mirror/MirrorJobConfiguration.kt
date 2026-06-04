@@ -10,6 +10,7 @@ import com.oconeco.spring_search_tempo.base.service.MirrorCheckpointService
 import com.oconeco.spring_search_tempo.base.service.MirrorFolderCheckpointService
 import com.oconeco.spring_search_tempo.base.service.MirrorFolderProgressService
 import com.oconeco.spring_search_tempo.base.service.mirror.ImapMirrorService
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
 import org.springframework.batch.core.configuration.annotation.JobScope
@@ -54,8 +55,9 @@ class MirrorJobConfiguration(
 ) {
 
     @Bean
-    fun mirrorJob(mirrorStep: Step): Job =
+    fun mirrorJob(mirrorStep: Step, advisoryLockListener: JobExecutionAdvisoryLockListener): Job =
         JobBuilder("mirrorJob", jobRepository)
+            .listener(advisoryLockListener)
             .listener(mirrorJobLifecycleListener)
             .start(mirrorStep)
             .build()

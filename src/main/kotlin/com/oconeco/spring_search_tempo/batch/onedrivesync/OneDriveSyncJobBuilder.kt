@@ -11,6 +11,7 @@ import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.ProgressTrackingItemWriteListener
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -45,6 +46,7 @@ class OneDriveSyncJobBuilder(
     private val jobRunTrackingListener: OneDriveJobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val progressTrackingItemWriteListener: ProgressTrackingItemWriteListener<Any>,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -67,6 +69,7 @@ class OneDriveSyncJobBuilder(
 
         return JobBuilder(jobName, jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(buildDeltaSyncStep(accountId, forceFullSync))
             .next(buildContentDownloadStep(accountId))

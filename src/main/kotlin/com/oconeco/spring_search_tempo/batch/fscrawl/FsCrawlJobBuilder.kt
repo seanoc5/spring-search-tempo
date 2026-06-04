@@ -15,6 +15,7 @@ import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.chunking.ChunkingStrategySelector
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -59,6 +60,7 @@ class FsCrawlJobBuilder(
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val jobRunService: JobRunService,
     private val chunkingStrategySelector: ChunkingStrategySelector,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -102,6 +104,7 @@ class FsCrawlJobBuilder(
 
         return JobBuilder("fsCrawlJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)  // Hard-evidence liveness lock (issue #64)
             .listener(crawlCleanupListener)  // Cleanup listener runs first (beforeJob order)
             .listener(jobRunTrackingListener)  // Creates JobRun record
             .listener(pathValidationListener)  // Validates paths and records warnings (needs jobRunId)

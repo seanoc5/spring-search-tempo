@@ -10,6 +10,7 @@ import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.chunking.ChunkingStrategySelector
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.ChunkProcessor
 import com.oconeco.spring_search_tempo.batch.fscrawl.ChunkReader
 import com.oconeco.spring_search_tempo.batch.fscrawl.ChunkWriter
@@ -57,6 +58,7 @@ class ProgressiveAnalysisJobBuilder(
     private val chunkingStrategySelector: ChunkingStrategySelector,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("nlpProcessingStep") private val nlpProcessingStep: Step,
     @Qualifier("embeddingProcessingStep") private val embeddingProcessingStep: Step,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
@@ -78,6 +80,7 @@ class ProgressiveAnalysisJobBuilder(
 
         return JobBuilder("progressiveAnalysisJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(buildIndexingStep())
             .next(buildChunkingStep(processAll))
@@ -95,6 +98,7 @@ class ProgressiveAnalysisJobBuilder(
 
         return JobBuilder("indexingOnlyJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(buildIndexingStep())
             .next(buildChunkingStep(processAll))
@@ -110,6 +114,7 @@ class ProgressiveAnalysisJobBuilder(
 
         return JobBuilder("semanticOnlyJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(nlpProcessingStep)
             .next(embeddingProcessingStep)
