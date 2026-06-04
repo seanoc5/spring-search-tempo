@@ -2,6 +2,9 @@ package com.oconeco.spring_search_tempo.web.controller
 
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.config.BaseIT
+import com.oconeco.spring_search_tempo.base.domain.EmailAccount
+import com.oconeco.spring_search_tempo.base.domain.EmailProvider
+import com.oconeco.spring_search_tempo.base.repos.EmailAccountRepository
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -50,6 +53,9 @@ class EmailAccountValidateControllerIT : BaseIT() {
     @Autowired
     lateinit var mockMvc: MockMvc
 
+    @Autowired
+    lateinit var emailAccountRepository: EmailAccountRepository
+
     @Test
     @DisplayName("validationPassword form param is the one read — host=refused yields UNREACHABLE, NOT missing-password")
     fun validationPasswordIsRead() {
@@ -94,6 +100,79 @@ class EmailAccountValidateControllerIT : BaseIT() {
             .andExpect(status().isOk)
             .andExpect(content().string(org.hamcrest.Matchers.containsString("LOGIN_REJECTED")))
             .andExpect(content().string(org.hamcrest.Matchers.containsString("Missing required fields")))
+    }
+
+    @Test
+    @DisplayName("Saved-password fallback: blank validationPassword + accountId with stored password → use stored (reaches TCP probe)")
+    fun savedPasswordFallback_whenInputBlankAndAccountHasStored() {
+        // Create an account and seed an encrypted password via the controller endpoint so the
+        // ciphertext is in the exact format the app produces.
+        val id = createAccount("validate-fallback@example.com")
+        mockMvc.perform(
+            post("/emailAccounts/{id}/password", id)
+                .param("newPassword", "stored-app-password-xyz")
+                .with(user(BaseIT.LOGIN).roles("USER"))
+                .with(csrf())
+        ).andExpect(status().is3xxRedirection)
+
+        // Now POST /validate WITHOUT a validationPassword — but with accountId set. The controller
+        // must decrypt the saved password and use it for the probe. Refused host → UNREACHABLE
+        // (NOT "Missing required fields", which would mean the fallback didn't fire).
+        mockMvc.perform(
+            post("/emailAccounts/validate")
+                .header("HX-Request", "true")
+                .param("email", "validate-fallback@example.com")
+                .param("imapHost", "127.0.0.1")
+                .param("imapPort", "1")
+                .param("useSsl", "false")
+                .param("accountId", id.toString())
+                // Intentionally no validationPassword param
+                .with(user(BaseIT.LOGIN).roles("USER"))
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("UNREACHABLE")))
+            .andExpect(
+                content().string(
+                    org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Missing required fields"))
+                )
+            )
+    }
+
+    @Test
+    @DisplayName("Saved-password fallback: blank validationPassword + accountId with NO stored password → LOGIN_REJECTED")
+    fun savedPasswordFallback_whenInputBlankAndAccountHasNoStored() {
+        val id = createAccount("validate-no-saved@example.com")
+        // No password seeded — this account has nothing to fall back to.
+
+        mockMvc.perform(
+            post("/emailAccounts/validate")
+                .header("HX-Request", "true")
+                .param("email", "validate-no-saved@example.com")
+                .param("imapHost", "127.0.0.1")
+                .param("imapPort", "1")
+                .param("useSsl", "false")
+                .param("accountId", id.toString())
+                .with(user(BaseIT.LOGIN).roles("USER"))
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("LOGIN_REJECTED")))
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("Missing required fields")))
+    }
+
+    private fun createAccount(email: String): Long {
+        val account = EmailAccount().apply {
+            this.email = email
+            this.uri = "email://$email"
+            this.provider = EmailProvider.GENERIC_IMAP
+            this.imapHost = "imap.example.com"
+            this.imapPort = 993
+            this.useSsl = true
+            this.enabled = true
+            this.version = 1L
+        }
+        return emailAccountRepository.save(account).id!!
     }
 
     @Test

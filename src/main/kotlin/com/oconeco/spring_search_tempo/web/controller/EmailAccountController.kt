@@ -185,6 +185,7 @@ class EmailAccountController(
         @PathVariable id: Long,
         @Valid @ModelAttribute("emailAccount") emailAccountDTO: EmailAccountDTO,
         bindingResult: BindingResult,
+        @RequestParam(name = "newPassword", required = false) newPassword: String?,
         redirectAttributes: RedirectAttributes
     ): String {
         if (bindingResult.hasErrors()) {
@@ -192,6 +193,23 @@ class EmailAccountController(
         }
 
         emailAccountService.update(id, emailAccountDTO)
+
+        // Thunderbird semantics: blank password input = no change; non-blank = replace stored.
+        // Clearing is a separate explicit action (POST /password with clearPassword=true).
+        if (!newPassword.isNullOrBlank()) {
+            try {
+                emailAccountService.setPassword(id, newPassword)
+            } catch (e: IllegalStateException) {
+                log.warn("Failed to store encrypted password during account update id={}: {}", id, e.message)
+                redirectAttributes.addFlashAttribute(
+                    "error",
+                    "Account fields saved, but password could not be encrypted: server-side `app.security.encryption-key` " +
+                        "(env `APP_ENCRYPTION_KEY`) is not configured. Set it and try again."
+                )
+                return "redirect:/emailAccounts/$id/edit"
+            }
+        }
+
         redirectAttributes.addFlashAttribute("message", "Email account updated successfully")
         return "redirect:/emailAccounts/$id"
     }
@@ -330,15 +348,22 @@ class EmailAccountController(
         @RequestParam(required = false) imapPort: Int?,
         @RequestParam(required = false) email: String?,
         @RequestParam(required = false) validationPassword: String?,
+        @RequestParam(required = false) accountId: Long?,
         @RequestParam(required = false, defaultValue = "true") useSsl: Boolean,
         @RequestHeader(value = "HX-Request", required = false) hxRequest: String?,
         model: Model
     ): String {
+        // Thunderbird semantics: if the user left the password field blank AND this is an existing
+        // account with a stored encrypted password, test the stored one. They came to edit a saved
+        // account, so the saved credential is the source of truth.
+        val effectivePassword = validationPassword?.takeIf { it.isNotBlank() }
+            ?: accountId?.let { runCatching { emailAccountService.getPassword(it) }.getOrNull() }
+
         val form = EmailAccountForm(
             host = imapHost,
             port = imapPort,
             username = email,
-            password = validationPassword,
+            password = effectivePassword,
             useSsl = useSsl
         )
         val result = validationService.validate(form)
