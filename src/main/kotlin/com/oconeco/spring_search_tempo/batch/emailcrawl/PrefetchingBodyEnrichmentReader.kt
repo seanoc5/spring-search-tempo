@@ -37,8 +37,12 @@ import org.springframework.data.domain.Sort
  *  3. When a folder is exhausted, close it before opening the next.
  *  4. [afterStep] closes any still-open IMAP resources.
  *
- * Memory: only [prefetchBatchSize] messages are held at once per folder, so a
- * 20K backlog stays bounded regardless of total size.
+ * Memory: at most [prefetchBatchSize] fully-fetched IMAP `Message` bodies
+ * are resident per folder window — the dominant cost. The DTO list itself
+ * is loaded up front (O(N) small objects, ~200B each); at 20K backlog this
+ * is a few MB and the message-body window dwarfs it. If multi-million
+ * backlogs become realistic the DTO load can be made streaming, but for
+ * the issue #58 target shape the bottleneck is IMAP latency, not heap.
  */
 class PrefetchingBodyEnrichmentReader(
     private val imapConnectionService: ImapConnectionService,
