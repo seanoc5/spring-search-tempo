@@ -23,6 +23,7 @@ import org.springframework.batch.core.Job
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobInstance
 import org.springframework.batch.core.JobParameters
+import org.springframework.batch.core.explore.JobExplorer
 import org.springframework.batch.core.launch.JobLauncher
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -55,6 +56,7 @@ class MultiAccountOrchestrationTest {
     private lateinit var emailQuickSyncJobBuilder: EmailQuickSyncJobBuilder
     private lateinit var jobLauncher: JobLauncher
     private lateinit var imapConnectionService: ImapConnectionService
+    private lateinit var jobExplorer: JobExplorer
 
     private lateinit var orchestrator: EmailCrawlOrchestrator
 
@@ -76,6 +78,10 @@ class MultiAccountOrchestrationTest {
         // returns 0L, so the default mock (returns 0L for Long via Mockito's
         // primitive defaults) is fine here — no stubbing needed.
         imapConnectionService = mock(ImapConnectionService::class.java)
+        jobExplorer = mock(JobExplorer::class.java)
+        // Default: no in-flight quick sync for any account. Tests that exercise
+        // the issue #57 in-flight skip path stub this explicitly.
+        `when`(jobExplorer.findRunningJobExecutions(anyString())).thenReturn(emptySet())
 
         orchestrator = EmailCrawlOrchestrator(
             emailConfiguration = emailConfiguration,
@@ -84,7 +90,8 @@ class MultiAccountOrchestrationTest {
             emailFolderSyncService = emailFolderSyncService,
             emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
             jobLauncher = jobLauncher,
-            imapConnectionService = imapConnectionService
+            imapConnectionService = imapConnectionService,
+            jobExplorer = jobExplorer
         )
     }
 
@@ -208,6 +215,77 @@ class MultiAccountOrchestrationTest {
     }
 
     @Test
+    fun `due account is skipped when a quick sync for that account is already in flight (issue #57)`() {
+        val dueButRunning = account(
+            id = 42L, email = "busy@example.com",
+            cron = "0 0 * * * *",  // due since EPOCH
+            lastDispatched = null
+        )
+        val sibling = account(
+            id = 43L, email = "free@example.com",
+            cron = "0 0 * * * *",
+            lastDispatched = null
+        )
+
+        `when`(emailAccountService.findEnabled()).thenReturn(listOf(dueButRunning, sibling))
+        stubAccountGet(dueButRunning)
+        stubAccountGet(sibling)
+        stubJobBuild()
+        stubJobLaunchSuccess()
+
+        // Pre-existing in-flight execution for emailQuickSync_42 — simulates the
+        // race in the issue (manual click at 16:43:08, scheduler tick at 16:43:39).
+        val runningInstance = JobInstance(99L, "emailQuickSync_42")
+        val runningExec = JobExecution(runningInstance, JobParameters()).apply { id = 292L }
+        `when`(jobExplorer.findRunningJobExecutions(eq("emailQuickSync_42")))
+            .thenReturn(setOf(runningExec))
+        // Sibling account's job name remains "no running executions" — default stub
+        // returns emptySet() so we don't need to restub.
+
+        val results = orchestrator.runDueAccounts(now)
+
+        // Busy account should be skipped, sibling should dispatch normally.
+        val byId = results.associateBy { it.accountId }
+        assertThat(byId[42L]?.outcome).isEqualTo(DispatchOutcome.SKIPPED_IN_PROGRESS)
+        assertThat(byId[42L]?.detail).contains("executionId=292")
+        assertThat(byId[43L]?.outcome).isEqualTo(DispatchOutcome.DISPATCHED)
+
+        // Crucially: only the sibling's job was launched — no second emailQuickSync_42.
+        val paramsCaptor = ArgumentCaptor.forClass(JobParameters::class.java)
+        verify(jobLauncher, org.mockito.Mockito.times(1))
+            .run(any(Job::class.java), paramsCaptor.capture())
+        val launchedAccountIds = paramsCaptor.allValues
+            .mapNotNull { it.getString("accountId")?.toLong() }
+            .toSet()
+        assertThat(launchedAccountIds).containsExactly(43L)
+
+        // The busy account's lastDispatchedAt must NOT be touched — skip is not
+        // a dispatch, so the next tick should re-evaluate (and skip again if
+        // still running, dispatch once it finishes).
+        verify(emailAccountService, never()).recordDispatched(eq(42L), anyKotlin<OffsetDateTime>())
+    }
+
+    @Test
+    fun `runQuickSyncForAccount throws JobExecutionAlreadyRunningException when in-flight (issue #57)`() {
+        val acct = account(id = 77L, email = "manual@example.com",
+            cron = "0 0 * * * *", lastDispatched = null)
+        stubAccountGet(acct)
+
+        val runningInstance = JobInstance(7L, "emailQuickSync_77")
+        val runningExec = JobExecution(runningInstance, JobParameters()).apply { id = 700L }
+        `when`(jobExplorer.findRunningJobExecutions(eq("emailQuickSync_77")))
+            .thenReturn(setOf(runningExec))
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.batch.core.repository.JobExecutionAlreadyRunningException::class.java
+        ) {
+            orchestrator.runQuickSyncForAccount(accountId = 77L)
+        }
+
+        verify(jobLauncher, never()).run(any(Job::class.java), any(JobParameters::class.java))
+    }
+
+    @Test
     fun `runDueAccounts is a no-op when email crawling is disabled`() {
         // Rebuild orchestrator with a disabled configuration — emailConfiguration
         // is a real (non-mock) instance so we have to re-construct rather than stub.
@@ -219,7 +297,8 @@ class MultiAccountOrchestrationTest {
             emailFolderSyncService = emailFolderSyncService,
             emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
             jobLauncher = jobLauncher,
-            imapConnectionService = imapConnectionService
+            imapConnectionService = imapConnectionService,
+            jobExplorer = jobExplorer
         )
 
         val results = orchestrator.runDueAccounts(now)

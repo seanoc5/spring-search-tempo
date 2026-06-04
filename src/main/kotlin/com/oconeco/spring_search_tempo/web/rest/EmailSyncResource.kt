@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.batch.emailcrawl.AccountSyncStatus
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -136,6 +137,15 @@ class EmailSyncResource(
                         "syncType" to if (forceFullSync) "full" else "incremental",
                         "parallelConfig" to parallelConfig.modeName
                     )
+                )
+            )
+        } catch (e: JobExecutionAlreadyRunningException) {
+            log.info("Refusing duplicate quick sync for account {}: {}", accountId, e.message)
+            ResponseEntity.status(409).body(
+                EmailSyncResponse(
+                    status = "ALREADY_RUNNING",
+                    message = e.message ?: "Quick sync already in flight for account $accountId",
+                    results = mapOf("accountId" to accountId.toString())
                 )
             )
         } catch (e: Exception) {
