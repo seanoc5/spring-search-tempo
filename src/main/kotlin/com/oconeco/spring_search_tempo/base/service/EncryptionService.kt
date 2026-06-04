@@ -40,6 +40,10 @@ class EncryptionService(
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_LENGTH = 128
         const val V1_PREFIX = "v1:"
+        private const val KEY_NOT_CONFIGURED_MSG =
+            "Encryption key not configured (set app.security.encryption-key / env APP_ENCRYPTION_KEY). " +
+                "See the ENCRYPTION KEY NOT CONFIGURED banner in startup logs for setup steps " +
+                "(generate via `openssl rand -base64 32`; store in env or gitignored application-local.yml)."
     }
 
     private val keyBase64: String = when {
@@ -85,9 +89,7 @@ class EncryptionService(
      * @throws IllegalStateException if encryption key is not configured
      */
     fun encrypt(plaintext: String): String {
-        val key = secretKey ?: throw IllegalStateException(
-            "Encryption key not configured (set app.security.encryption-key / env APP_ENCRYPTION_KEY)"
-        )
+        val key = secretKey ?: throw IllegalStateException(KEY_NOT_CONFIGURED_MSG)
 
         val iv = ByteArray(GCM_IV_LENGTH)
         SecureRandom().nextBytes(iv)
@@ -111,9 +113,7 @@ class EncryptionService(
      * @throws IllegalStateException if encryption key is not configured
      */
     fun decrypt(ciphertext: String): String {
-        val key = secretKey ?: throw IllegalStateException(
-            "Encryption key not configured (set app.security.encryption-key / env APP_ENCRYPTION_KEY)"
-        )
+        val key = secretKey ?: throw IllegalStateException(KEY_NOT_CONFIGURED_MSG)
 
         val payload = if (ciphertext.startsWith(V1_PREFIX)) ciphertext.removePrefix(V1_PREFIX) else ciphertext
         val combined = Base64.getDecoder().decode(payload)

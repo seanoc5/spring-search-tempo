@@ -24,4 +24,6 @@ interface EmailAccountRepository : JpaRepository<EmailAccount, Long> {
 
     fun findBySourceHostIgnoreCase(sourceHost: String): List<EmailAccount>
 
+    fun countByEncryptedPasswordIsNotNull(): Long
+
 }
