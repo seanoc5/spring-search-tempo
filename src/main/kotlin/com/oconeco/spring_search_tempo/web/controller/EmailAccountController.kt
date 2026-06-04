@@ -11,6 +11,7 @@ import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.validation.BindingResult
@@ -267,6 +268,11 @@ class EmailAccountController(
             )
             redirectAttributes.addFlashAttribute("message",
                 "Email $syncType started for ${account.email}. Mode: ${parallelConfig.modeName}, chunkSize=${parallelConfig.chunkSize}. Status: $status")
+        } catch (e: JobExecutionAlreadyRunningException) {
+            // Issue #57: another quick sync is in flight (scheduler tick or earlier click).
+            log.info("Refusing duplicate {} for {}: {}", syncType, account.email, e.message)
+            redirectAttributes.addFlashAttribute("error",
+                "A quick sync is already running for ${account.email}. Wait for it to finish before launching another.")
         } catch (e: Exception) {
             log.error("Failed to start {} for account {}: {}", syncType, account.email, e.message, e)
             redirectAttributes.addFlashAttribute("error",

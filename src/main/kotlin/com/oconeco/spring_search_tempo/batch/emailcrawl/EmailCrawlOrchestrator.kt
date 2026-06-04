@@ -10,7 +10,9 @@ import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
+import org.springframework.batch.core.explore.JobExplorer
 import org.springframework.batch.core.launch.JobLauncher
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.scheduling.support.CronExpression
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -32,10 +34,24 @@ class EmailCrawlOrchestrator(
     private val emailFolderSyncService: EmailFolderSyncService,
     private val emailQuickSyncJobBuilder: EmailQuickSyncJobBuilder,
     private val jobLauncher: JobLauncher,
-    private val imapConnectionService: ImapConnectionService
+    private val imapConnectionService: ImapConnectionService,
+    private val jobExplorer: JobExplorer
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(EmailCrawlOrchestrator::class.java)
+
+        /** Job name shape used by [EmailQuickSyncJobBuilder.buildJob]. */
+        internal fun quickSyncJobName(accountId: Long) = "emailQuickSync_$accountId"
+    }
+
+    /**
+     * Returns the in-flight `emailQuickSync_<accountId>` execution if one
+     * exists, else `null`. Used to de-dup overlapping dispatches between
+     * the per-account cron scheduler (every ~30s) and manual UI/REST
+     * triggers — see issue #57.
+     */
+    private fun findRunningQuickSync(accountId: Long): JobExecution? {
+        return jobExplorer.findRunningJobExecutions(quickSyncJobName(accountId)).firstOrNull()
     }
 
     /**
@@ -93,6 +109,16 @@ class EmailCrawlOrchestrator(
             if (accountId == null || !emailAccountService.hasPassword(accountId)) {
                 log.info("Skipping {} — no password set; edit the account to add one", account.email)
                 results[account.email ?: "id=${account.id}"] = "SKIPPED (no password set)"
+                return@forEach
+            }
+            // Issue #57: skip if a quick sync for this account is already in flight.
+            findRunningQuickSync(accountId)?.let { alreadyRunning ->
+                log.info(
+                    "Skipping: quick sync already in flight for account {} (executionId={})",
+                    account.email, alreadyRunning.id
+                )
+                results[account.email ?: "id=$accountId"] =
+                    "SKIPPED (already running, executionId=${alreadyRunning.id})"
                 return@forEach
             }
             val folders = resolveFolders(account)
@@ -163,6 +189,15 @@ class EmailCrawlOrchestrator(
         interestingDays: Int = 7,
         parallelConfig: ParallelizationConfig = ParallelizationConfig()
     ): JobExecution {
+        // Issue #57: refuse if a quick sync for this account is already in flight.
+        // The Spring Batch timestamp parameter would otherwise let two concurrent
+        // executions race against the same mailbox.
+        findRunningQuickSync(accountId)?.let { running ->
+            throw JobExecutionAlreadyRunningException(
+                "Quick sync already in flight for accountId=$accountId (executionId=${running.id})"
+            )
+        }
+
         val account = emailAccountService.get(accountId)
         val folders = resolveFolders(account)
 
@@ -397,6 +432,23 @@ class EmailCrawlOrchestrator(
                     continue
                 }
 
+                // Issue #57: de-dup against an in-flight quick sync (manual click
+                // moments before the scheduler tick is the common case). Without
+                // this gate the unique-timestamp job parameter lets two concurrent
+                // executions race against the same mailbox.
+                val running = findRunningQuickSync(accountId)
+                if (running !== null) {
+                    log.info(
+                        "Skipping: quick sync already in flight for account {} (executionId={})",
+                        account.email, running.id
+                    )
+                    results += AccountDispatchResult(
+                        accountId, account.email, DispatchOutcome.SKIPPED_IN_PROGRESS,
+                        "executionId=${running.id}"
+                    )
+                    continue
+                }
+
                 log.info("Dispatching quick sync for account {} (cron='{}', last={}, due={})",
                     account.email, account.cronSchedule, account.lastDispatchedAt, nextBoundary)
 
@@ -463,6 +515,11 @@ enum class DispatchOutcome {
     INVALID_CRON,
     /** Account has no DB-encrypted password set; pre-flight skip (issue #55). */
     NO_PASSWORD,
+    /**
+     * A quick sync job for this account is already running (issue #57).
+     * Common case: user clicked "Run Quick Sync" moments before the scheduler tick.
+     */
+    SKIPPED_IN_PROGRESS,
     /** Exception during dispatch; the loop continues for sibling accounts. */
     ERROR
 }
