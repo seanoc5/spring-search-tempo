@@ -118,7 +118,7 @@ class EmailQuickSyncControllerIT : BaseIT() {
         // 2. set the password
         mockMvc.perform(
             post("/emailAccounts/{id}/password", id)
-                .param("password", "now-i-have-a-pwd")
+                .param("newPassword", "now-i-have-a-pwd")
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().is3xxRedirection)
