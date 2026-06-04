@@ -236,22 +236,34 @@ class EmailQuickSyncJobBuilder(
     }
 
     /**
-     * Serial body enrichment step (original behavior).
+     * Serial body enrichment step — the default path.
+     *
+     * Uses [PrefetchingBodyEnrichmentReader] to bulk-fetch ~50 message bodies
+     * per IMAP round-trip via `FetchProfile`, then a CPU-only
+     * [PrefetchedBodyEnrichmentProcessor] to extract text/attachments. Closes
+     * issue #58 — the old per-message `getMessageByUID` + `getContent`
+     * pattern measured ~25 messages/min on Gmail; the prefetch path is
+     * latency-bound only on the per-batch round-trip, not per-message.
      */
     private fun buildSerialBodyEnrichmentStep(
         account: EmailAccountDTO,
         config: ParallelizationConfig
     ): Step {
-        log.info("Building SERIAL body enrichment step for {}", account.email)
+        log.info(
+            "Building SERIAL+PREFETCH body enrichment step for {} (chunkSize={}, prefetchBatchSize={})",
+            account.email, config.chunkSize, config.chunkSize
+        )
 
-        val processor = createBodyEnrichmentProcessor()
+        val reader = createPrefetchingBodyEnrichmentReader(account.id!!, config.chunkSize)
+        val processor = createPrefetchedBodyEnrichmentProcessor()
 
         return StepBuilder("emailBodyEnrich_${account.id}", jobRepository)
-            .chunk<EmailMessageDTO, BodyEnrichmentResult>(config.chunkSize, transactionManager)
-            .reader(createBodyEnrichmentReader(account.id!!))
+            .chunk<PrefetchedBodyMessage, BodyEnrichmentResult>(config.chunkSize, transactionManager)
+            .reader(reader)
             .processor(processor)
             .writer(createBodyEnrichmentWriter())
-            .listener(processor)  // Processor manages IMAP connections
+            .listener(reader)  // Reader owns the IMAP folder for the step
+            .listener(processor)
             .listener(heartbeatChunkListener)  // Update heartbeat after each chunk
             .listener(progressTrackingItemWriteListener)  // Track progress for UI
             .build()
@@ -364,6 +376,29 @@ class EmailQuickSyncJobBuilder(
             emailMessageService = emailMessageService,
             accountId = accountId,
             pageSize = 100
+        )
+    }
+
+    private fun createPrefetchingBodyEnrichmentReader(
+        accountId: Long,
+        prefetchBatchSize: Int
+    ): PrefetchingBodyEnrichmentReader {
+        return PrefetchingBodyEnrichmentReader(
+            imapConnectionService = imapConnectionService,
+            emailAccountService = emailAccountService,
+            emailFolderService = emailFolderService,
+            emailMessageService = emailMessageService,
+            accountId = accountId,
+            pageSize = 100,
+            prefetchBatchSize = prefetchBatchSize
+        )
+    }
+
+    private fun createPrefetchedBodyEnrichmentProcessor(): PrefetchedBodyEnrichmentProcessor {
+        return PrefetchedBodyEnrichmentProcessor(
+            emailTextExtractionService = emailTextExtractionService,
+            emailAttachmentExtractionService = emailAttachmentExtractionService,
+            objectMapper = objectMapper
         )
     }
 
