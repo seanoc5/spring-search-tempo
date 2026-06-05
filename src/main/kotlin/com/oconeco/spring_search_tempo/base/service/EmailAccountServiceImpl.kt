@@ -50,6 +50,10 @@ class EmailAccountServiceImpl(
         return accounts.map { account -> toDisplayDTO(account) }
     }
 
+    // Issue #68: explicit read-only transaction so the view page always sees the
+    // latest committed lastError / lastErrorAt — no carry-over from a long-lived
+    // session that might still be holding entities loaded earlier in the request.
+    @Transactional(readOnly = true)
     override fun get(id: Long): EmailAccountDTO = emailAccountRepository.findById(id)
         .map { account -> toDisplayDTO(account) }
         .orElseThrow { NotFoundException() }

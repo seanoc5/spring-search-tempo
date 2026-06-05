@@ -9,6 +9,7 @@ import com.oconeco.spring_search_tempo.base.service.EmailConfigValidationService
 import com.oconeco.spring_search_tempo.base.service.ValidationResult
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
+import com.oconeco.spring_search_tempo.web.service.EmailSyncStatusViewService
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
@@ -27,7 +28,8 @@ class EmailAccountController(
     private val emailAccountService: EmailAccountService,
     private val emailCrawlOrchestrator: EmailCrawlOrchestrator,
     private val userOwnershipService: UserOwnershipService,
-    private val validationService: EmailConfigValidationService
+    private val validationService: EmailConfigValidationService,
+    private val syncStatusViewService: EmailSyncStatusViewService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -85,6 +87,27 @@ class EmailAccountController(
         model.addAttribute("emailAccount", account)
         model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
         return "emailAccount/view"
+    }
+
+    /**
+     * Live sync-status fragment (issue #68).
+     *
+     * Returns a Bootstrap card describing the latest `emailQuickSync_<accountId>`
+     * JobExecution: color-coded badge, start/duration, and (on failure) the
+     * truncated exit message. The fragment re-arms its own HTMX polling only
+     * while the execution is non-terminal — see the template for details.
+     *
+     * Always returns the same `#syncStatusPanel` root element so HTMX
+     * `hx-swap="outerHTML"` swaps cleanly per the CLAUDE.md HTMX rules.
+     */
+    @GetMapping("/{id}/syncStatus")
+    fun syncStatus(@PathVariable id: Long, model: Model): String {
+        // Touch the account so a bad id returns 404 via NotFoundException.
+        val account = emailAccountService.get(id)
+        model.addAttribute("accountId", id)
+        model.addAttribute("accountEmail", account.email)
+        model.addAttribute("syncStatus", syncStatusViewService.load(id))
+        return "emailAccount/syncStatus :: panel"
     }
 
     /**
@@ -261,13 +284,19 @@ class EmailAccountController(
 
         try {
             log.info("Starting {} for account: {} ({})", syncType, account.email, parallelConfig)
-            val status = emailCrawlOrchestrator.runQuickSyncForAccount(
+            emailCrawlOrchestrator.runQuickSyncForAccount(
                 accountId = id,
                 forceFullSync = forceFullSync,
                 parallelConfig = parallelConfig
             )
+            // Issue #68: keep the flash brief — the live status panel on the view page
+            // (HTMX-polled /emailAccounts/{id}/syncStatus) is the source of truth for
+            // execution state. The legacy "Status: JobExecution: id=..., version=0,
+            // startTime=null, endTime=null, ... status=STARTING" banner was both misleading
+            // (it never refreshed) and rendered twice (duplicate alert in view.html on top
+            // of layout.html's flash region).
             redirectAttributes.addFlashAttribute("message",
-                "Email $syncType started for ${account.email}. Mode: ${parallelConfig.modeName}, chunkSize=${parallelConfig.chunkSize}. Status: $status")
+                "Email $syncType started for ${account.email}.")
         } catch (e: JobExecutionAlreadyRunningException) {
             // Issue #57: another quick sync is in flight (scheduler tick or earlier click).
             log.info("Refusing duplicate {} for {}: {}", syncType, account.email, e.message)

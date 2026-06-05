@@ -32,14 +32,17 @@
         </div>
     </div>
 
-    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
-        [[${message}]]
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
+    <!--
+      Flash alerts (message/error) are rendered by layout.html. Do not duplicate them here.
+      Live sync status is the dedicated status panel below — backed by JobExplorer, not flash state.
+    -->
 
-    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
-        [[${error}]]
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <div id="syncStatusPanel"
+         th:hx-get="@{/emailAccounts/{id}/syncStatus(id=${emailAccount.id})}"
+         hx-trigger="load"
+         hx-swap="outerHTML"
+         class="mb-3">
+        <!-- Initial placeholder; first hx-get replaces this with the live status fragment. -->
     </div>
 
     <div class="row mb-4">
