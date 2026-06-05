@@ -187,11 +187,17 @@
                     </div>
                 </div>
 
-                <div th:if="${emailAccount.lastError}" class="card border-danger">
+                <div th:if="${emailAccount.errorDisplayVisible}" class="card border-danger">
                     <div class="card-header bg-danger text-white">
                         <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Last Error</h6>
                     </div>
                     <div class="card-body small">
+                        <div th:if="${emailAccount.lastErrorAt}" class="text-muted mb-1">
+                            [[${#temporals.format(emailAccount.lastErrorAt, 'yyyy-MM-dd HH:mm')}]]
+                            <span th:if="${emailAccount.errorAgeDescription}">
+                                ([[${emailAccount.errorAgeDescription}]])
+                            </span>
+                        </div>
                         [[${#strings.abbreviate(emailAccount.lastError, 200)}]]
                     </div>
                 </div>

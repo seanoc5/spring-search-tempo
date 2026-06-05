@@ -141,11 +141,15 @@
                             <span th:if="${account.activeJobRun == null && account.lastQuickSyncAt == null}" class="text-muted">Never</span>
                         </td>
                         <td>
-                            <span th:if="${account.lastError}" class="text-danger" th:title="${account.lastError}">
+                            <span th:if="${account.errorDisplayVisible}" class="text-danger"
+                                  th:title="${account.errorAgeDescription != null ? '(' + account.errorAgeDescription + ') ' + account.lastError : account.lastError}">
                                 <i class="bi bi-exclamation-triangle-fill"></i>
                                 [[${#strings.abbreviate(account.lastError, 30)}]]
+                                <span th:if="${account.errorAgeDescription}" class="text-muted small">
+                                    ([[${account.errorAgeDescription}]])
+                                </span>
                             </span>
-                            <span th:unless="${account.lastError}" class="text-success">
+                            <span th:unless="${account.errorDisplayVisible}" class="text-success">
                                 <i class="bi bi-check-circle"></i>
                             </span>
                         </td>

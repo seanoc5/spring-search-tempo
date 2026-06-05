@@ -28,7 +28,20 @@ import org.springframework.context.annotation.Configuration
 data class EmailConfiguration(
     var enabled: Boolean = false,
     var quickSyncFolders: List<String> = listOf("INBOX", "Sent"),
-    var accounts: List<EmailAccountConfig> = emptyList()
+    var accounts: List<EmailAccountConfig> = emptyList(),
+    var errorDisplay: ErrorDisplayConfig = ErrorDisplayConfig()
+)
+
+/**
+ * Controls how stale `EmailAccount.lastError` values are rendered in the UI (issue #59).
+ *
+ * If the error is older than `maxAgeDays`, the card is suppressed entirely — the row in
+ * the DB is retained for debugging but treated as expired for display purposes. The
+ * assumption: if the failure were still relevant, you'd have hit it again recently and
+ * the timestamp would have refreshed.
+ */
+data class ErrorDisplayConfig(
+    var maxAgeDays: Int = 7
 )
 
 /**

@@ -128,12 +128,15 @@
     </div>
 
     <!-- Error Status Card -->
-    <div th:if="${emailAccount.lastError}" class="card border-danger mb-4">
+    <div th:if="${emailAccount.errorDisplayVisible}" class="card border-danger mb-4">
         <div class="card-header bg-danger text-white">
             <h5 class="mb-0">
                 <i class="bi bi-exclamation-triangle me-2"></i>Last Error
                 <span th:if="${emailAccount.lastErrorAt}" class="float-end small">
                     [[${#temporals.format(emailAccount.lastErrorAt, 'yyyy-MM-dd HH:mm:ss')}]]
+                    <span th:if="${emailAccount.errorAgeDescription}">
+                        ([[${emailAccount.errorAgeDescription}]])
+                    </span>
                 </span>
             </h5>
         </div>
