@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.JobRunTrackingListener
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
@@ -49,6 +50,7 @@ class AnalysisAssignmentJobBuilder(
     private val crawlConfigService: CrawlConfigService,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -68,6 +70,7 @@ class AnalysisAssignmentJobBuilder(
 
         return JobBuilder("assignmentJob_${crawl.name}", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(buildFolderAssignmentStep(crawl, effectivePatterns))
             .next(buildFileAssignmentStep(crawl, effectivePatterns))
@@ -93,6 +96,7 @@ class AnalysisAssignmentJobBuilder(
 
         return JobBuilder("globalAssignmentJob", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .start(buildFolderAssignmentStep(null, defaultPatterns))
             .next(buildFileAssignmentStep(null, defaultPatterns))

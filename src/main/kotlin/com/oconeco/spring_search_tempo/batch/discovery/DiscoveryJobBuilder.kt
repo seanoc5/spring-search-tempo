@@ -11,6 +11,7 @@ import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.JobRunTrackingListener
 import com.oconeco.spring_search_tempo.batch.fscrawl.PathValidationListener
 import org.slf4j.LoggerFactory
@@ -60,6 +61,7 @@ class DiscoveryJobBuilder(
     private val jobRunService: JobRunService,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -96,6 +98,7 @@ class DiscoveryJobBuilder(
 
         return JobBuilder("discoveryJob_${crawl.name}", jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)
             .listener(jobRunTrackingListener)
             .listener(pathValidationListener)
             .start(

@@ -113,6 +113,16 @@ management:
 
 app:
   host-name: "${TEMPO_HOST_NAME:localhost}"
+  jobs:
+    heartbeat:
+      # Defense-in-depth backstop for in-process wedged steps (issue #64).
+      # JobExecutionAdvisoryLockListener handles JVM-death detection with
+      # hard evidence (PostgreSQL session-scoped advisory locks), so this
+      # threshold can be conservative: only a *live* JVM with a hung step
+      # (e.g., wedged IMAP socket inside a CompletableFuture) needs to be
+      # caught by the soft heartbeat path. 60 min comfortably exceeds any
+      # legitimately-slow chunk (Tika on a big PDF, 50 MB IMAP FETCH).
+      stale-threshold-minutes: 60
   monitoring:
     grafana-batch-dashboard-url: "${GRAFANA_BATCH_DASHBOARD_URL:http://localhost:3000/d/tempo-batch-overview}"
   security:

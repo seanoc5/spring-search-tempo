@@ -20,6 +20,7 @@ import com.oconeco.spring_search_tempo.base.service.EmbeddingService
 import com.oconeco.spring_search_tempo.base.service.NLPService
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
 import com.oconeco.spring_search_tempo.batch.ProgressTrackingItemWriteListener
+import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.embedding.EmbeddingChunkProcessor
 import com.oconeco.spring_search_tempo.batch.nlp.NLPChunkProcessor
 import org.slf4j.LoggerFactory
@@ -74,6 +75,7 @@ class EmailQuickSyncJobBuilder(
     private val objectMapper: ObjectMapper,
     private val jobRunService: JobRunService,
     private val emailJobRunTrackingListener: EmailJobRunTrackingListener,
+    private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val progressTrackingItemWriteListener: ProgressTrackingItemWriteListener<Any>,
     private val nlpService: NLPService,
@@ -129,6 +131,7 @@ class EmailQuickSyncJobBuilder(
 
         val jobBuilder = JobBuilder(jobName, jobRepository)
             .incrementer(RunIdIncrementer())
+            .listener(advisoryLockListener)  // Hard-evidence liveness lock (issue #64)
             .listener(emailJobRunTrackingListener)  // Track job run with heartbeat
 
         // Pass 1: Build header sync steps for each folder (fast)

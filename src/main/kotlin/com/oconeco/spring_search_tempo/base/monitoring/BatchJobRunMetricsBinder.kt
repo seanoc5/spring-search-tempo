@@ -16,7 +16,13 @@ import java.time.OffsetDateTime
 class BatchJobRunMetricsBinder(
     meterRegistry: MeterRegistry,
     private val jobRunRepository: JobRunRepository,
-    @Value("\${app.monitoring.batch.stale-threshold-minutes:2}")
+    // Issue #64: bumped default 2 → 60 min after introducing the PostgreSQL
+    // advisory-lock liveness layer (JobExecutionAdvisoryLockListener +
+    // OrphanedJobExecutionReaper). Hard-evidence reaping catches the common
+    // crash class instantly; heartbeat now serves only as defense-in-depth
+    // for in-process wedged steps (e.g., a stuck IMAP socket) and can afford
+    // a much wider window without false positives on legitimately slow chunks.
+    @Value("\${app.jobs.heartbeat.stale-threshold-minutes:\${app.monitoring.batch.stale-threshold-minutes:60}}")
     private val staleThresholdMinutes: Long
 ) {
     companion object {
