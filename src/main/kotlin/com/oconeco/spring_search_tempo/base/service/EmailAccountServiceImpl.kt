@@ -30,7 +30,8 @@ class EmailAccountServiceImpl(
     private val jobRunRepository: JobRunRepository,
     private val userOwnershipService: UserOwnershipService,
     private val smartDeleteService: SmartDeleteService,
-    private val encryptionService: EncryptionService
+    private val encryptionService: EncryptionService,
+    private val errorDisplayHelper: EmailErrorDisplayHelper
 ) : EmailAccountService {
 
     companion object {
@@ -41,21 +42,21 @@ class EmailAccountServiceImpl(
 
     override fun findAll(): List<EmailAccountDTO> {
         val accounts = emailAccountRepository.findAll(Sort.by("id"))
-        return accounts.map { account ->
-            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
-        }
+        return accounts.map { account -> toDisplayDTO(account) }
     }
 
     override fun findEnabled(): List<EmailAccountDTO> {
         val accounts = emailAccountRepository.findByEnabledTrue()
-        return accounts.map { account ->
-            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
-        }
+        return accounts.map { account -> toDisplayDTO(account) }
     }
 
     override fun get(id: Long): EmailAccountDTO = emailAccountRepository.findById(id)
-        .map { account -> emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO()) }
+        .map { account -> toDisplayDTO(account) }
         .orElseThrow { NotFoundException() }
+
+    private fun toDisplayDTO(account: EmailAccount): EmailAccountDTO =
+        emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
+            .also { errorDisplayHelper.apply(it) }
 
     override fun create(emailAccountDTO: EmailAccountDTO): Long {
         val emailAccount = EmailAccount()
@@ -78,9 +79,7 @@ class EmailAccountServiceImpl(
     override fun emailExists(email: String): Boolean = emailAccountRepository.existsByEmail(email)
 
     override fun findByEmail(email: String): EmailAccountDTO? {
-        return emailAccountRepository.findByEmail(email)?.let { account ->
-            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
-        }
+        return emailAccountRepository.findByEmail(email)?.let { account -> toDisplayDTO(account) }
     }
 
     override fun getEmailAccountValues(): Map<Long, Long> =
@@ -216,23 +215,19 @@ class EmailAccountServiceImpl(
                     currentStepName = job.currentStepName
                 }
             }
-        }
+        }.also { errorDisplayHelper.apply(it) }
     }
 
     override fun findAllForCurrentUser(): List<EmailAccountDTO> {
         val userId = userOwnershipService.getCurrentUserId() ?: return emptyList()
         val accounts = emailAccountRepository.findByOwnerId(userId)
-        return accounts.map { account ->
-            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
-        }
+        return accounts.map { account -> toDisplayDTO(account) }
     }
 
     override fun findEnabledForCurrentUser(): List<EmailAccountDTO> {
         val userId = userOwnershipService.getCurrentUserId() ?: return emptyList()
         val accounts = emailAccountRepository.findByOwnerIdAndEnabledTrue(userId)
-        return accounts.map { account ->
-            emailAccountMapper.updateEmailAccountDTO(account, EmailAccountDTO())
-        }
+        return accounts.map { account -> toDisplayDTO(account) }
     }
 
     override fun findAllWithSummaryForCurrentUser(): List<EmailAccountSummaryDTO> {

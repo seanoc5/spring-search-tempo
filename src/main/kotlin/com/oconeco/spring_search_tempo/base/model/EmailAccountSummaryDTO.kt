@@ -27,6 +27,12 @@ class EmailAccountSummaryDTO {
 
     var lastErrorAt: OffsetDateTime? = null
 
+    // Issue #59: derived display state for the "Last Error" badge.
+    // Populated by EmailErrorDisplayHelper in the service layer; not persisted.
+    var errorDisplayVisible: Boolean = false
+
+    var errorAgeDescription: String? = null
+
     // Aggregated counts
     var folderCount: Long = 0
 
