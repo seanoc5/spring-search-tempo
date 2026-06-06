@@ -77,13 +77,15 @@ class EmailJobRunTrackingListenerClearErrorIT : BaseIT() {
     }
 
     @Test
-    @DisplayName("afterJob(FAILED) → lastError stays populated, recordError captures the failure")
+    @DisplayName("afterJob(FAILED) → lastError populated AND lastQuickSyncAt bumped (issue #68)")
     fun preservesErrorOnFailure() {
         val accountId = saveAccount(
             email = "fail@example.com",
             lastError = null,
             lastErrorAt = null
         )
+        // Pre-condition: never synced.
+        assertThat(emailAccountRepository.findById(accountId).orElseThrow().lastQuickSyncAt).isNull()
 
         val jobName = "emailQuickSyncJob-$accountId"
         val jobRun = jobRunService.startJobRunWithoutConfig(jobName, "fail@example.com")
@@ -106,6 +108,74 @@ class EmailJobRunTrackingListenerClearErrorIT : BaseIT() {
         val refreshed = emailAccountRepository.findById(accountId).orElseThrow()
         assertThat(refreshed.lastError).contains("IMAP auth failed")
         assertThat(refreshed.lastErrorAt).isNotNull()
+        // Issue #68: an attempt was made, so the timestamp MUST be set — even though
+        // the attempt failed. This is what unblocks the operator from the "Last Quick
+        // Sync: Never" misleading state when every attempt fails at IMAP auth.
+        assertThat(refreshed.lastQuickSyncAt).isNotNull()
+    }
+
+    @Test
+    @DisplayName("afterJob(FAILED) with no exception → falls back to status-based error message (issue #68)")
+    fun fallsBackWhenNoExceptionCaptured() {
+        val accountId = saveAccount(
+            email = "fail-silent@example.com",
+            lastError = null,
+            lastErrorAt = null
+        )
+
+        val jobName = "emailQuickSyncJob-$accountId"
+        val jobRun = jobRunService.startJobRunWithoutConfig(jobName, "fail-silent@example.com")
+
+        val params = JobParameters(
+            mapOf(
+                EmailJobRunTrackingListener.ACCOUNT_ID_KEY to JobParameter(accountId.toString(), String::class.java),
+                EmailJobRunTrackingListener.ACCOUNT_EMAIL_KEY to JobParameter("fail-silent@example.com", String::class.java)
+            )
+        )
+        val instance = JobInstance(3L, jobName)
+        // No failure exceptions, no step exit descriptions — listener must still
+        // surface SOMETHING so the operator sees evidence of the failed attempt.
+        val jobExecution = JobExecution(instance, params).apply {
+            status = BatchStatus.FAILED
+            executionContext.putLong(EmailJobRunTrackingListener.JOB_RUN_ID_KEY, jobRun.id!!)
+        }
+
+        listener.afterJob(jobExecution)
+
+        val refreshed = emailAccountRepository.findById(accountId).orElseThrow()
+        assertThat(refreshed.lastError).contains("FAILED")
+        assertThat(refreshed.lastErrorAt).isNotNull()
+        assertThat(refreshed.lastQuickSyncAt).isNotNull()
+    }
+
+    @Test
+    @DisplayName("afterJob(STOPPED) → terminal state, lastQuickSyncAt still bumped (issue #68)")
+    fun stoppedAlsoBumpsTimestamp() {
+        val accountId = saveAccount(
+            email = "stopped@example.com",
+            lastError = null,
+            lastErrorAt = null
+        )
+
+        val jobName = "emailQuickSyncJob-$accountId"
+        val jobRun = jobRunService.startJobRunWithoutConfig(jobName, "stopped@example.com")
+
+        val params = JobParameters(
+            mapOf(
+                EmailJobRunTrackingListener.ACCOUNT_ID_KEY to JobParameter(accountId.toString(), String::class.java),
+                EmailJobRunTrackingListener.ACCOUNT_EMAIL_KEY to JobParameter("stopped@example.com", String::class.java)
+            )
+        )
+        val instance = JobInstance(4L, jobName)
+        val jobExecution = JobExecution(instance, params).apply {
+            status = BatchStatus.STOPPED
+            executionContext.putLong(EmailJobRunTrackingListener.JOB_RUN_ID_KEY, jobRun.id!!)
+        }
+
+        listener.afterJob(jobExecution)
+
+        val refreshed = emailAccountRepository.findById(accountId).orElseThrow()
+        assertThat(refreshed.lastQuickSyncAt).isNotNull()
     }
 
     private fun saveAccount(

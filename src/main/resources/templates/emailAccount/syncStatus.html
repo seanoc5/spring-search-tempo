@@ -1,0 +1,83 @@
+<!DOCTYPE HTML>
+<!--
+  Live sync-status fragment for the EmailAccount view page (issue #68).
+
+  Always renders a root element with id="syncStatusPanel" so HTMX
+  hx-swap="outerHTML" replaces cleanly. Polls itself every 2s only while the
+  execution is non-terminal — when COMPLETED / FAILED / STOPPED / ABANDONED the
+  fragment carries no hx-trigger and the browser stops polling on its own.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment root: always #syncStatusPanel, regardless of whether a run exists. -->
+<div th:fragment="panel"
+     id="syncStatusPanel"
+     th:hx-get="@{/emailAccounts/{id}/syncStatus(id=${accountId})}"
+     hx-swap="outerHTML"
+     th:attr="hx-trigger=${syncStatus == null || syncStatus.terminal} ? null : 'every 2s'"
+     class="mb-3">
+
+    <!-- No execution recorded yet for this account. -->
+    <div th:if="${syncStatus == null}" class="card border-secondary">
+        <div class="card-body py-2 d-flex align-items-center justify-content-between">
+            <span class="text-muted small">
+                <i class="bi bi-info-circle me-1"></i>
+                No quick-sync execution recorded yet for this account.
+            </span>
+            <span class="badge bg-light text-dark">Idle</span>
+        </div>
+    </div>
+
+    <!-- Latest execution panel. -->
+    <div th:if="${syncStatus != null}"
+         th:classappend="${syncStatus.terminal && syncStatus.status == 'COMPLETED'} ? 'border-success' :
+                         (${syncStatus.terminal && syncStatus.status == 'FAILED'} ? 'border-danger' :
+                         (${syncStatus.terminal} ? 'border-secondary' : 'border-primary'))"
+         class="card">
+        <div class="card-header py-2 d-flex align-items-center">
+            <h6 class="mb-0 me-2">
+                <i class="bi bi-activity me-1"></i>Sync Status
+            </h6>
+            <span th:classappend="${syncStatus.badgeClass}"
+                  class="badge"
+                  th:text="${syncStatus.status}">STATUS</span>
+            <span th:unless="${syncStatus.terminal}" class="ms-2 text-muted small">
+                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                live — polling every 2s
+            </span>
+            <span class="ms-auto text-muted small" th:if="${syncStatus.executionId != null}">
+                execId <span th:text="${syncStatus.executionId}">42</span>
+            </span>
+        </div>
+        <div class="card-body py-2">
+            <dl class="row mb-0 small">
+                <dt class="col-sm-3">Started:</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${syncStatus.startedAt}"
+                          th:text="${#temporals.format(syncStatus.startedAt, 'yyyy-MM-dd HH:mm:ss')}">
+                        2026-06-05 12:34:56
+                    </span>
+                    <span th:unless="${syncStatus.startedAt}" class="text-muted">—</span>
+                </dd>
+
+                <dt class="col-sm-3">Duration:</dt>
+                <dd class="col-sm-9">
+                    <span th:if="${syncStatus.durationSeconds != null}"
+                          th:text="|${syncStatus.durationSeconds}s|">12s</span>
+                    <span th:unless="${syncStatus.durationSeconds != null}" class="text-muted">—</span>
+                </dd>
+
+                <dt class="col-sm-3" th:if="${syncStatus.exitMessage}">Exit message:</dt>
+                <dd class="col-sm-9" th:if="${syncStatus.exitMessage}">
+                    <pre class="mb-0 small text-danger"
+                         style="white-space: pre-wrap; word-break: break-word;"
+                         th:text="${syncStatus.exitMessage}">stack trace excerpt</pre>
+                </dd>
+            </dl>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

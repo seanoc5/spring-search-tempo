@@ -111,18 +111,38 @@ class EmailJobRunTrackingListener(
     }
 
     /**
-     * Extract per-folder highest UIDs from header sync steps and update the account.
+     * Update account sync state on terminal JobExecution status.
+     *
+     * Issue #68: lastQuickSyncAt MUST be bumped on ANY terminal state — success OR
+     * failure. Previously the timestamp was only written on COMPLETED, which left
+     * the UI's "Last Quick Sync" stuck on "Never" for accounts whose every attempt
+     * failed at IMAP auth (the symptom that motivated this change).
+     *
+     * On COMPLETED: extract per-folder highest UIDs from header-sync steps, write
+     * UIDs + bump timestamp, clear any prior error.
+     *
+     * On FAILED / STOPPED / ABANDONED: bump the timestamp (the attempt happened)
+     * and record an error message combining the job's failure exceptions, exit
+     * description, and any per-step failure exceptions. This captures the case
+     * where the IMAP failure surfaces in `stepExecution.exitStatus.exitDescription`
+     * rather than `jobExecution.allFailureExceptions`.
      */
     private fun updateAccountSyncState(jobExecution: JobExecution, runStatus: RunStatus) {
         val accountIdStr = jobExecution.jobParameters.getString(ACCOUNT_ID_KEY) ?: return
         val accountId = accountIdStr.toLongOrNull() ?: return
 
         if (runStatus != RunStatus.COMPLETED) {
-            val errorMsg = jobExecution.allFailureExceptions
-                .joinToString("; ") { it.message ?: "Unknown error" }
-                .takeIf { it.isNotEmpty() }
-            if (errorMsg != null) {
+            val errorMsg = collectFailureMessage(jobExecution)
+                ?: "Job ended with status ${jobExecution.status} (no exception captured)"
+            try {
+                // Bump timestamp first so "Last Quick Sync" reflects the attempt
+                // even if recordError happens to throw.
+                emailAccountService.updateQuickSyncState(accountId, null, null)
                 emailAccountService.recordError(accountId, errorMsg)
+                log.info("Recorded failed sync attempt: accountId={}, status={}, error='{}'",
+                    accountId, jobExecution.status, errorMsg.take(200))
+            } catch (e: Exception) {
+                log.error("Failed to record failed sync attempt for accountId={}: {}", accountId, e.message, e)
             }
             return
         }
@@ -150,5 +170,34 @@ class EmailJobRunTrackingListener(
         } catch (e: Exception) {
             log.error("Failed to update account sync state for accountId={}: {}", accountId, e.message, e)
         }
+    }
+
+    /**
+     * Collect a human-readable failure message from a non-COMPLETED JobExecution.
+     *
+     * Combines (in order, de-duped, comma-joined):
+     *  - exceptions from `jobExecution.allFailureExceptions`
+     *  - exceptions from each `stepExecution.failureExceptions`
+     *  - `stepExecution.exitStatus.exitDescription` for any non-COMPLETED step
+     *
+     * Returns null if no failure signal was captured (caller falls back to a
+     * generic "status=X" message so the operator still sees something).
+     */
+    private fun collectFailureMessage(jobExecution: JobExecution): String? {
+        val parts = linkedSetOf<String>()
+        for (e in jobExecution.allFailureExceptions) {
+            e.message?.takeIf { it.isNotBlank() }?.let { parts += it }
+        }
+        for (step in jobExecution.stepExecutions) {
+            for (e in step.failureExceptions) {
+                e.message?.takeIf { it.isNotBlank() }?.let { parts += it }
+            }
+            if (step.exitStatus.exitCode != "COMPLETED") {
+                step.exitStatus.exitDescription
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { parts += it }
+            }
+        }
+        return parts.joinToString("; ").takeIf { it.isNotBlank() }
     }
 }
