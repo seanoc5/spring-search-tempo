@@ -10,6 +10,8 @@ import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -129,7 +131,7 @@ class NavJobIndicatorIT : BaseIT() {
     }
 
     @Test
-    @DisplayName("details — RUNNING email sync → row with account detail link and started-at time")
+    @DisplayName("details — RUNNING email sync → row with account detail link, current step, started-at time")
     fun detailsListsRunningExecutionWithLink() {
         saveJobRun(
             jobName = "emailQuickSync_42",
@@ -147,6 +149,33 @@ class NavJobIndicatorIT : BaseIT() {
             .andExpect(content().string(containsString("INBOX")))
             .andExpect(content().string(containsString("href=\"/emailAccounts/42\"")))
             .andExpect(content().string(containsString(">RUNNING<")))
+    }
+
+    /**
+     * Each known account-scoped prefix must route to its own detail page —
+     * not silently fall through to /batch. A typo in any prefix would
+     * regress to the batch fallback with no other observable signal.
+     *
+     * The canonical prefix list lives in
+     * [com.oconeco.spring_search_tempo.web.service.NavJobIndicatorService.detailLinkFor]
+     * and shadows the patterns in `BatchAdminService.normalizeJobName`.
+     */
+    @ParameterizedTest(name = "{0} → {1}")
+    @CsvSource(
+        "emailQuickSync_42, /emailAccounts/42",
+        "emailQuickSyncJob-42, /emailAccounts/42",
+        "oneDriveSync_7, /oneDriveAccounts/7",
+        "oneDriveSyncJob_7, /oneDriveAccounts/7",
+    )
+    @DisplayName("details — each account-scoped prefix routes to the correct detail page")
+    fun detailsAccountPrefixRouting(jobName: String, expectedHref: String) {
+        saveJobRun(jobName = jobName, status = RunStatus.RUNNING)
+
+        mockMvc.perform(
+            get("/nav/jobIndicator/details").with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("href=\"$expectedHref\"")))
     }
 
     @Test
