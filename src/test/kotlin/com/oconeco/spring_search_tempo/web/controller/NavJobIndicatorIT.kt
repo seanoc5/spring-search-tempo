@@ -115,14 +115,17 @@ class NavJobIndicatorIT : BaseIT() {
     }
 
     @Test
-    @DisplayName("details — empty list → 'No running jobs right now.'")
+    @DisplayName("details — empty list → 'In-flight jobs' header + 'No running jobs right now.' copy")
     fun detailsEmptyState() {
         mockMvc.perform(
             get("/nav/jobIndicator/details").with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
-            .andExpect(content().string(containsString("id=\"navJobIndicatorDetails\"")))
+            .andExpect(content().string(containsString("In-flight jobs")))
             .andExpect(content().string(containsString("No running jobs right now")))
+            // Fragment intentionally returns no #navJobIndicatorDetailsBody wrapper —
+            // the layout placeholder owns that slot. Duplicating the id would nest on swap.
+            .andExpect(content().string(not(containsString("id=\"navJobIndicatorDetailsBody\""))))
     }
 
     @Test
