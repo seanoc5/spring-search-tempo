@@ -18,7 +18,7 @@ class EmailConfigValidationServiceTest {
         val greenMail = EmailTestFixtures.imapExtension()
     }
 
-    private val service = EmailConfigValidationService()
+    private val service = EmailConfigValidationService(TcpReachabilityProbe())
 
     @BeforeEach
     fun setup() {

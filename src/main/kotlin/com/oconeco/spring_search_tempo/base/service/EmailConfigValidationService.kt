@@ -8,8 +8,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.io.IOException
 import java.net.InetSocketAddress
-import java.net.Socket
-import java.net.SocketTimeoutException
 import java.util.Properties
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocketFactory
@@ -26,7 +24,9 @@ import javax.net.ssl.SSLSocketFactory
  * supplied credentials work.
  */
 @Service
-class EmailConfigValidationService {
+class EmailConfigValidationService(
+    private val tcpReachabilityProbe: TcpReachabilityProbe
+) {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -42,16 +42,9 @@ class EmailConfigValidationService {
         }
 
         // 1. TCP reachability
-        try {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), PROBE_TIMEOUT_MS)
-            }
-        } catch (e: SocketTimeoutException) {
-            log.debug("TCP probe timeout for {}:{}", host, port)
-            return ValidationResult.Unreachable("Connection timed out after ${PROBE_TIMEOUT_MS / 1000}s")
-        } catch (e: IOException) {
-            log.debug("TCP probe failed for {}:{}: {}", host, port, e.message)
-            return ValidationResult.Unreachable(e.message ?: "Connection refused")
+        when (val r = tcpReachabilityProbe.probe(host, port, PROBE_TIMEOUT_MS)) {
+            is TcpReachabilityProbe.Result.Unreachable -> return ValidationResult.Unreachable(r.reason)
+            TcpReachabilityProbe.Result.Reachable -> Unit
         }
 
         // 2. TLS handshake (only when SSL is enabled)

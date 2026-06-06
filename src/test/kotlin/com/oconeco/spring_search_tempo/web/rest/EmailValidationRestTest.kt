@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.web.rest
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.service.EmailAccountForm
 import com.oconeco.spring_search_tempo.base.service.EmailConfigValidationService
+import com.oconeco.spring_search_tempo.base.service.TcpReachabilityProbe
 import com.oconeco.spring_search_tempo.base.service.email.EmailTestFixtures
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -35,7 +36,7 @@ class EmailValidationRestTest {
 
     @BeforeEach
     fun setup() {
-        val service = EmailConfigValidationService()
+        val service = EmailConfigValidationService(TcpReachabilityProbe())
         val controller = EmailValidationResource(service)
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build()
         EmailTestFixtures.createUser(

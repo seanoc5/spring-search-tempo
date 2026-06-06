@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.service.EmailAccountForm
 import com.oconeco.spring_search_tempo.base.service.EmailConfigValidationService
+import com.oconeco.spring_search_tempo.base.service.TcpReachabilityProbe
 import com.oconeco.spring_search_tempo.base.service.ValidationResult
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
@@ -29,7 +30,8 @@ class EmailAccountController(
     private val emailCrawlOrchestrator: EmailCrawlOrchestrator,
     private val userOwnershipService: UserOwnershipService,
     private val validationService: EmailConfigValidationService,
-    private val syncStatusViewService: EmailSyncStatusViewService
+    private val syncStatusViewService: EmailSyncStatusViewService,
+    private val tcpReachabilityProbe: TcpReachabilityProbe
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -126,6 +128,8 @@ class EmailAccountController(
     fun create(
         @Valid @ModelAttribute("emailAccount") emailAccountDTO: EmailAccountDTO,
         bindingResult: BindingResult,
+        @RequestParam(name = "skipReachabilityCheck", required = false, defaultValue = "false") skipReachabilityCheck: Boolean,
+        model: Model,
         redirectAttributes: RedirectAttributes
     ): String {
         if (bindingResult.hasErrors()) {
@@ -135,6 +139,11 @@ class EmailAccountController(
         // Check for duplicate email
         if (emailAccountService.emailExists(emailAccountDTO.email!!)) {
             bindingResult.rejectValue("email", "Exists", "Email account already exists")
+            return "emailAccount/add"
+        }
+
+        // Issue #72: pre-save TCP reachability check on imapHost:imapPort.
+        if (!checkImapReachability(emailAccountDTO, skipReachabilityCheck, bindingResult, model)) {
             return "emailAccount/add"
         }
 
@@ -210,9 +219,18 @@ class EmailAccountController(
         @Valid @ModelAttribute("emailAccount") emailAccountDTO: EmailAccountDTO,
         bindingResult: BindingResult,
         @RequestParam(name = "newPassword", required = false) newPassword: String?,
+        @RequestParam(name = "skipReachabilityCheck", required = false, defaultValue = "false") skipReachabilityCheck: Boolean,
+        model: Model,
         redirectAttributes: RedirectAttributes
     ): String {
         if (bindingResult.hasErrors()) {
+            model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
+            return "emailAccount/edit"
+        }
+
+        // Issue #72: pre-save TCP reachability check on imapHost:imapPort.
+        if (!checkImapReachability(emailAccountDTO, skipReachabilityCheck, bindingResult, model)) {
+            model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
             return "emailAccount/edit"
         }
 
@@ -412,6 +430,36 @@ class EmailAccountController(
         }
     }
 
+    /**
+     * Issue #72: fast TCP-connect probe against imapHost:imapPort before persisting,
+     * so typos surface in seconds rather than after a 60s sync-job timeout.
+     *
+     * Returns `true` when the form is safe to persist (probe ok, skipped, or host/port
+     * blank — those defer to provider-default resolution at sync time). Returns `false`
+     * after rejecting `imapHost` on the binding result so the caller re-renders the form.
+     */
+    private fun checkImapReachability(
+        dto: EmailAccountDTO,
+        skipReachabilityCheck: Boolean,
+        bindingResult: BindingResult,
+        model: Model
+    ): Boolean {
+        if (skipReachabilityCheck) return true
+        val host = dto.imapHost?.trim().orEmpty()
+        val port = dto.imapPort ?: 0
+        if (host.isBlank() || port <= 0) return true
+
+        return when (val r = tcpReachabilityProbe.probe(host, port, REACHABILITY_PROBE_TIMEOUT_MS)) {
+            TcpReachabilityProbe.Result.Reachable -> true
+            is TcpReachabilityProbe.Result.Unreachable -> {
+                log.info("Pre-save reachability probe failed for {}:{} — {}", host, port, r.reason)
+                bindingResult.rejectValue("imapHost", "Unreachable", "Unreachable: ${r.reason}")
+                model.addAttribute("reachabilityError", r.reason)
+                false
+            }
+        }
+    }
+
     private fun toViewModel(result: ValidationResult): ValidationResultView = when (result) {
         is ValidationResult.Ok -> ValidationResultView(
             outcome = "OK",
@@ -444,6 +492,11 @@ class EmailAccountController(
             heading = "Server rejected login",
             message = result.serverMessage
         )
+    }
+
+    companion object {
+        /** Acceptance criterion (a) on issue #72: 3-second connect timeout. */
+        const val REACHABILITY_PROBE_TIMEOUT_MS = 3_000
     }
 
     private fun normalizeParallelConfig(
