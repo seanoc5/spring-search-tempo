@@ -2,6 +2,8 @@ package com.oconeco.spring_search_tempo.batch.config
 
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.config.BaseIT
+import com.oconeco.spring_search_tempo.base.repos.ReapedJobRepository
+import io.micrometer.core.instrument.MeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -37,14 +39,22 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
     @Autowired
     lateinit var jobExplorer: JobExplorer
 
+    @Autowired
+    lateinit var meterRegistry: MeterRegistry
+
+    @Autowired
+    lateinit var reapedJobRepository: ReapedJobRepository
+
     @Test
     @DisplayName("STARTED row with no advisory lock is marked FAILED on reap")
     fun reapsOrphanedExecution() {
         // Spring Batch requires unique JobInstance per (jobName, params).
         // Use System.nanoTime() to avoid collisions across test runs.
         val jobName = "orphanReaperIT_${System.nanoTime()}"
+        val accountId = 4242L
         val params = JobParametersBuilder()
             .addLong("uniq", System.nanoTime())
+            .addString("accountId", accountId.toString())
             .toJobParameters()
 
         val execution = jobRepository.createJobExecution(jobName, params)
@@ -58,6 +68,8 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
         assertThat(jobExplorer.findRunningJobExecutions(jobName))
             .anyMatch { it.id == executionId }
 
+        val beforeAuditCount = reapedJobRepository.count()
+
         // No advisory lock was acquired in beforeJob (we bypassed the listener),
         // so the reaper's pg_try_advisory_lock will succeed → row is orphaned.
         reaper.reapOrphans()
@@ -68,6 +80,23 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
         assertThat(after.exitStatus.exitDescription)
             .contains("Orphan reaper")
         assertThat(after.endTime).isNotNull
+
+        // Issue #74: Micrometer counter incremented with job_name tag.
+        val counter = meterRegistry.find(OrphanedJobExecutionReaper.REAPED_COUNTER_NAME)
+            .tag("job_name", jobName)
+            .counter()
+        assertThat(counter)
+            .`as`("counter tempo.reaper.orphaned_jobs_reaped_total{job_name=$jobName} must exist")
+            .isNotNull
+        assertThat(counter!!.count()).isGreaterThanOrEqualTo(1.0)
+
+        // Issue #74: audit row written with execution + account context.
+        assertThat(reapedJobRepository.count()).isEqualTo(beforeAuditCount + 1)
+        val audit = reapedJobRepository.findAll().firstOrNull { it.jobExecutionId == executionId }
+        assertThat(audit).`as`("reaped_job audit row for executionId=$executionId").isNotNull
+        assertThat(audit!!.jobName).isEqualTo(jobName)
+        assertThat(audit.accountId).isEqualTo(accountId)
+        assertThat(audit.reapedAt).isNotNull
     }
 
     @Test

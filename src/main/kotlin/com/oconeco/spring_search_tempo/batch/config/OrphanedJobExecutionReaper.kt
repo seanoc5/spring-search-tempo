@@ -1,12 +1,19 @@
 package com.oconeco.spring_search_tempo.batch.config
 
+import com.oconeco.spring_search_tempo.base.domain.ReapedJob
+import com.oconeco.spring_search_tempo.base.repos.ReapedJobRepository
 import com.oconeco.spring_search_tempo.base.service.BatchAdminService
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.explore.JobExplorer
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import javax.sql.DataSource
 
 /**
@@ -29,6 +36,11 @@ import javax.sql.DataSource
  * Heartbeat staleness still runs as defense-in-depth for in-process hangs
  * (wedged IMAP socket inside a live JVM). See `JobRunService.findStaleJobRuns`.
  *
+ * Observability (issue #74): each reaping increments
+ * `tempo.reaper.orphaned_jobs_reaped_total{job_name=...}` and writes a
+ * row to `reaped_job` so operators can see how often the reaper fires,
+ * against which accounts/jobs, and whether the events cluster.
+ *
  * Cross-JVM note: advisory locks DO work cross-JVM if all instances share
  * the same Postgres. Multi-JVM job coordination has additional design
  * questions (out of scope for #64).
@@ -37,11 +49,14 @@ import javax.sql.DataSource
 class OrphanedJobExecutionReaper(
     private val dataSource: DataSource,
     private val jobExplorer: JobExplorer,
-    private val batchAdminService: BatchAdminService
+    private val batchAdminService: BatchAdminService,
+    private val meterRegistry: MeterRegistry,
+    private val reapedJobRepository: ReapedJobRepository
 ) {
 
     companion object {
         private val log = LoggerFactory.getLogger(OrphanedJobExecutionReaper::class.java)
+        const val REAPED_COUNTER_NAME = "tempo.reaper.orphaned_jobs_reaped_total"
     }
 
     /**
@@ -76,6 +91,7 @@ class OrphanedJobExecutionReaper(
                             "Reaped orphaned BatchJobExecution executionId={} jobName='{}' startedAt={}",
                             executionId, jobName, startTime
                         )
+                        recordReaping(execution, jobName)
                         reaped++
                     }
                 } else {
@@ -96,6 +112,37 @@ class OrphanedJobExecutionReaper(
             )
         } else {
             log.info("Orphan reaper: no orphans found among {} running row(s)", runningExecutions.size)
+        }
+    }
+
+    /**
+     * Increment the Micrometer counter and persist an audit row. Wrapped
+     * in its own try/catch so a metrics-side or DB-side hiccup never
+     * masks the underlying reaping (which has already succeeded by the
+     * time we get here).
+     */
+    private fun recordReaping(execution: JobExecution, jobName: String) {
+        try {
+            Counter.builder(REAPED_COUNTER_NAME)
+                .description("Orphaned BatchJobExecution rows reaped by OrphanedJobExecutionReaper")
+                .tag("job_name", jobName)
+                .register(meterRegistry)
+                .increment()
+        } catch (e: Exception) {
+            log.warn("Failed to increment reaper counter for executionId={}: {}", execution.id, e.message)
+        }
+
+        try {
+            val audit = ReapedJob().apply {
+                this.reapedAt = OffsetDateTime.now()
+                this.jobExecutionId = execution.id
+                this.jobName = jobName
+                this.accountId = execution.jobParameters.getString("accountId")?.toLongOrNull()
+                this.originalStartedAt = execution.startTime?.atZone(ZoneId.systemDefault())?.toOffsetDateTime()
+            }
+            reapedJobRepository.save(audit)
+        } catch (e: Exception) {
+            log.warn("Failed to persist reaped_job audit row for executionId={}: {}", execution.id, e.message)
         }
     }
 
