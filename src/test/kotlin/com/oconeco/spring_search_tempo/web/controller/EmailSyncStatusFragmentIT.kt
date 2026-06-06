@@ -78,6 +78,7 @@ class EmailSyncStatusFragmentIT : BaseIT() {
                 status = "STARTED",
                 badgeClass = "bg-primary",
                 terminal = false,
+                retryable = false,
                 startedAt = OffsetDateTime.now(),
                 endedAt = null,
                 durationSeconds = 5,
@@ -97,6 +98,113 @@ class EmailSyncStatusFragmentIT : BaseIT() {
     }
 
     @Test
+    @DisplayName("FAILED execution → Retry Quick Sync button rendered, posts to /sync (issue #70)")
+    fun failedRendersRetryButton() {
+        val id = saveAccount("failed-with-retry@example.com")
+        `when`(syncStatusViewService.load(id)).thenReturn(
+            EmailSyncStatusView(
+                executionId = 401L,
+                status = "FAILED",
+                badgeClass = "bg-danger",
+                terminal = true,
+                retryable = true,
+                startedAt = OffsetDateTime.now().minusSeconds(12),
+                endedAt = OffsetDateTime.now(),
+                durationSeconds = 12,
+                exitMessage = "[AUTHENTICATIONFAILED] bad creds",
+            )
+        )
+
+        mockMvc.perform(
+            get("/emailAccounts/{id}/syncStatus", id)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Retry Quick Sync")))
+            // Thymeleaf renders th:hx-post as hx-post in the output
+            .andExpect(content().string(containsString("hx-post=\"/emailAccounts/$id/sync\"")))
+            .andExpect(content().string(containsString("hx-target=\"#syncStatusPanel\"")))
+    }
+
+    @Test
+    @DisplayName("ABANDONED execution → Retry Quick Sync button rendered (issue #70)")
+    fun abandonedRendersRetryButton() {
+        val id = saveAccount("abandoned@example.com")
+        `when`(syncStatusViewService.load(id)).thenReturn(
+            EmailSyncStatusView(
+                executionId = 402L,
+                status = "ABANDONED",
+                badgeClass = "bg-secondary",
+                terminal = true,
+                retryable = true,
+                startedAt = OffsetDateTime.now().minusSeconds(40),
+                endedAt = OffsetDateTime.now(),
+                durationSeconds = 40,
+                exitMessage = null,
+            )
+        )
+
+        mockMvc.perform(
+            get("/emailAccounts/{id}/syncStatus", id)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("Retry Quick Sync")))
+    }
+
+    @Test
+    @DisplayName("STARTED execution → no Retry button (in-flight de-dup; issue #70)")
+    fun startedHidesRetryButton() {
+        val id = saveAccount("inflight@example.com")
+        `when`(syncStatusViewService.load(id)).thenReturn(
+            EmailSyncStatusView(
+                executionId = 403L,
+                status = "STARTED",
+                badgeClass = "bg-primary",
+                terminal = false,
+                retryable = false,
+                startedAt = OffsetDateTime.now().minusSeconds(2),
+                endedAt = null,
+                durationSeconds = 2,
+                exitMessage = null,
+            )
+        )
+
+        mockMvc.perform(
+            get("/emailAccounts/{id}/syncStatus", id)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(not(containsString("Retry Quick Sync"))))
+    }
+
+    @Test
+    @DisplayName("COMPLETED execution → no Retry button (not a failure; issue #70)")
+    fun completedHidesRetryButton() {
+        val id = saveAccount("ok-no-retry@example.com")
+        `when`(syncStatusViewService.load(id)).thenReturn(
+            EmailSyncStatusView(
+                executionId = 404L,
+                status = "COMPLETED",
+                badgeClass = "bg-success",
+                terminal = true,
+                retryable = false,
+                startedAt = OffsetDateTime.now().minusSeconds(30),
+                endedAt = OffsetDateTime.now(),
+                durationSeconds = 30,
+                exitMessage = null,
+            )
+        )
+
+        mockMvc.perform(
+            get("/emailAccounts/{id}/syncStatus", id)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(not(containsString("Retry Quick Sync"))))
+    }
+
+    @Test
     @DisplayName("FAILED terminal execution → no polling, exit message rendered")
     fun terminalFailureDropsPolling() {
         val id = saveAccount("failed@example.com")
@@ -106,6 +214,7 @@ class EmailSyncStatusFragmentIT : BaseIT() {
                 status = "FAILED",
                 badgeClass = "bg-danger",
                 terminal = true,
+                retryable = true,
                 startedAt = OffsetDateTime.now().minusSeconds(12),
                 endedAt = OffsetDateTime.now(),
                 durationSeconds = 12,
@@ -134,6 +243,7 @@ class EmailSyncStatusFragmentIT : BaseIT() {
                 status = "COMPLETED",
                 badgeClass = "bg-success",
                 terminal = true,
+                retryable = false,
                 startedAt = OffsetDateTime.now().minusSeconds(30),
                 endedAt = OffsetDateTime.now(),
                 durationSeconds = 30,
