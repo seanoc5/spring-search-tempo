@@ -56,6 +56,8 @@ class EmailAccountEditSavesPasswordIT : BaseIT() {
                 .param("enabled", "true")
                 // The new field
                 .param("newPassword", "fresh-app-password-abc")
+                // Issue #72 pre-save reachability probe is orthogonal to this test.
+                .param("skipReachabilityCheck", "true")
                 .with(user(BaseIT.LOGIN).roles("USER"))
                 .with(csrf())
         ).andExpect(status().is3xxRedirection)
@@ -96,6 +98,8 @@ class EmailAccountEditSavesPasswordIT : BaseIT() {
                 .param("useSsl", "true")
                 .param("enabled", "true")
                 .param("newPassword", "")  // explicitly blank, the Thunderbird case
+                // Issue #72 pre-save reachability probe is orthogonal to this test.
+                .param("skipReachabilityCheck", "true")
                 .with(user(BaseIT.LOGIN).roles("USER"))
                 .with(csrf())
         ).andExpect(status().is3xxRedirection)
