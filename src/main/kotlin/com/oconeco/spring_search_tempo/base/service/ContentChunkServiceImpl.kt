@@ -1,11 +1,14 @@
 package com.oconeco.spring_search_tempo.base.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteContentChunk
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteEmailMessage
 import com.oconeco.spring_search_tempo.base.events.BeforeDeleteFSFile
+import com.oconeco.spring_search_tempo.base.model.ChunkNlpView
+import com.oconeco.spring_search_tempo.base.model.ChunkNlpViewFactory
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
@@ -29,8 +32,14 @@ class ContentChunkServiceImpl(
     private val emailMessageRepository: EmailMessageRepository,
     private val oneDriveItemRepository: OneDriveItemRepository,
     private val publisher: ApplicationEventPublisher,
-    private val contentChunkMapper: ContentChunkMapper
+    private val contentChunkMapper: ContentChunkMapper,
+    private val objectMapper: ObjectMapper,
 ) : ContentChunkService {
+
+    @Transactional(readOnly = true)
+    override fun findNlpViewsForFile(fileId: Long): List<ChunkNlpView> =
+        contentChunkRepository.findByConceptIdOrderByChunkNumberAsc(fileId)
+            .map { ChunkNlpViewFactory.from(it, objectMapper) }
 
     @Transactional(readOnly = true)
     override fun count(): Long = contentChunkRepository.count()
