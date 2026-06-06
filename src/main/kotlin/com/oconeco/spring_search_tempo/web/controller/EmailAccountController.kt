@@ -265,11 +265,14 @@ class EmailAccountController(
         @RequestParam(name = "itemAsync", required = false, defaultValue = "false") itemAsync: Boolean,
         @RequestParam(name = "asyncThreads", required = false, defaultValue = "4") asyncThreads: Int,
         @RequestParam(name = "chunkSize", required = false, defaultValue = "20") chunkSize: Int,
+        @RequestHeader(value = "HX-Request", required = false) hxRequest: String?,
+        model: Model,
         redirectAttributes: RedirectAttributes
     ): String {
         val account = emailAccountService.get(id)
         val syncType = if (forceFullSync) "full sync" else "quick sync"
         val parallelConfig = normalizeParallelConfig(stepThreads, itemAsync, asyncThreads, chunkSize)
+        val isHtmx = !hxRequest.isNullOrBlank()
 
         // Pre-flight password guard (issue #55): refuse before dispatching a job
         // that's guaranteed to fail at credential resolution.
@@ -279,7 +282,7 @@ class EmailAccountController(
                 "error",
                 "Set a password before syncing — Edit the account first."
             )
-            return "redirect:/emailAccounts/$id"
+            return syncResponse(id, account.email, isHtmx, model)
         }
 
         try {
@@ -308,7 +311,28 @@ class EmailAccountController(
                 "Failed to start $syncType: ${e.message}")
         }
 
-        return "redirect:/emailAccounts/$id"
+        return syncResponse(id, account.email, isHtmx, model)
+    }
+
+    /**
+     * Issue #70: HTMX-aware response shape for `POST /sync`.
+     *
+     * - HX-Request → return the live `#syncStatusPanel` fragment so the inline Retry
+     *   button (and any other in-page caller) can `hx-swap="outerHTML"` directly,
+     *   without a redirect round-trip. The fresh fragment reflects whatever the
+     *   orchestrator just did — new in-flight execution, refused-duplicate (still
+     *   shows the existing running one), or unchanged FAILED status if the guard
+     *   short-circuited.
+     * - Normal POST → 302 back to the view page so the flash message renders via
+     *   the standard layout.html flash region (preserves the existing UX of the
+     *   top-of-page "Sync Now" form-submit).
+     */
+    private fun syncResponse(id: Long, accountEmail: String?, isHtmx: Boolean, model: Model): String {
+        if (!isHtmx) return "redirect:/emailAccounts/$id"
+        model.addAttribute("accountId", id)
+        model.addAttribute("accountEmail", accountEmail)
+        model.addAttribute("syncStatus", syncStatusViewService.load(id))
+        return "emailAccount/syncStatus :: panel"
     }
 
     /**

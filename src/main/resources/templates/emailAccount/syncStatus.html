@@ -75,6 +75,26 @@
                          th:text="${syncStatus.exitMessage}">stack trace excerpt</pre>
                 </dd>
             </dl>
+
+            <!--
+              Issue #70: inline Retry button for FAILED / ABANDONED.
+              Hidden while a sync is in-flight (the panel only renders the button
+              for terminal-failure states), and skipped on COMPLETED / STOPPED.
+              POSTs to the existing /sync endpoint with HX-Request → the controller
+              returns a fresh #syncStatusPanel fragment so the swap is direct.
+            -->
+            <div th:if="${syncStatus.retryable}" class="mt-2 d-flex gap-2 align-items-center">
+                <button type="button"
+                        class="btn btn-sm btn-outline-warning"
+                        th:hx-post="@{/emailAccounts/{id}/sync(id=${accountId})}"
+                        hx-target="#syncStatusPanel"
+                        hx-swap="outerHTML">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Retry Quick Sync
+                </button>
+                <span class="text-muted small">
+                    Creates a fresh JobExecution; does not restart the failed one.
+                </span>
+            </div>
         </div>
     </div>
 </div>

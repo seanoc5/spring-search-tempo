@@ -79,11 +79,17 @@ class EmailSyncStatusViewService(
             collectExitMessage(exec)?.take(EXIT_MESSAGE_LIMIT)
         } else null
 
+        // Issue #70: only FAILED / ABANDONED surface the inline Retry affordance.
+        // COMPLETED / STOPPED are terminal but not "broken" — the user uses the
+        // top-of-page Sync Now button for a deliberate re-run.
+        val retryable = terminal && (status == BatchStatus.FAILED || status == BatchStatus.ABANDONED)
+
         return EmailSyncStatusView(
             executionId = exec.id,
             status = status.name,
             badgeClass = badgeClass(status),
             terminal = terminal,
+            retryable = retryable,
             startedAt = exec.startTime?.atOffset(OffsetDateTime.now().offset),
             endedAt = exec.endTime?.atOffset(OffsetDateTime.now().offset),
             durationSeconds = durationSeconds,
@@ -140,6 +146,13 @@ data class EmailSyncStatusView(
     val status: String,
     val badgeClass: String,
     val terminal: Boolean,
+    /**
+     * Issue #70: true when the latest execution ended in FAILED or ABANDONED — the
+     * template renders an inline "Retry Quick Sync" button in those cases. False for
+     * COMPLETED / STOPPED / in-flight executions so the UI never invites an action
+     * that would be rejected by the in-flight de-dup guard.
+     */
+    val retryable: Boolean,
     val startedAt: OffsetDateTime?,
     val endedAt: OffsetDateTime?,
     val durationSeconds: Long?,
