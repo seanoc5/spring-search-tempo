@@ -1,0 +1,113 @@
+<!DOCTYPE HTML>
+<!--
+  Site-wide nav indicator for in-flight crawl/sync jobs (issue #73).
+
+  Two fragments:
+   - "badge"  : polled every 5s from the layout header. Contains the badge
+                wrapper, an HTMX-loaded dropdown panel, and self-poll.
+   - "details": fills the dropdown panel on click.
+
+  The badge root is always #navJobIndicator so hx-swap="outerHTML" replaces
+  cleanly on each poll. The dropdown body has id="navJobIndicatorDetails"
+  and is loaded on demand (hx-trigger="click from:#navJobIndicatorToggle").
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- =========== Badge fragment (polled every 5s) =========== -->
+<div th:fragment="badge"
+     id="navJobIndicator"
+     class="dropdown"
+     th:hx-get="@{/nav/jobIndicator}"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
+
+    <button id="navJobIndicatorToggle"
+            type="button"
+            class="btn btn-dark btn-sm position-relative d-flex align-items-center"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+            th:hx-get="@{/nav/jobIndicator/details}"
+            hx-target="#navJobIndicatorDetails"
+            hx-trigger="click"
+            th:title="${badge.hasRunning} ? |${badge.runningCount} job(s) running| : 'No running jobs'">
+
+        <!-- Icon shifts state: spinning arrows while running, dim circle when idle. -->
+        <i th:class="${badge.hasRunning} ? 'bi bi-arrow-repeat spin' : 'bi bi-circle text-muted'"></i>
+
+        <!-- Idle pill: small, muted, no count. -->
+        <span th:if="${!badge.hasRunning && !badge.hasRecentFailure}"
+              class="ms-2 d-none d-md-inline small text-white-50">idle</span>
+
+        <!-- Running count badge: top-right of the button. -->
+        <span th:if="${badge.hasRunning}"
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary"
+              th:text="${badge.runningCount}">3<span class="visually-hidden">running jobs</span></span>
+
+        <!-- Recent-failure dot: overlays even when no jobs are running. Smaller,
+             lower so it doesn't collide with the count badge. -->
+        <span th:if="${badge.hasRecentFailure}"
+              class="position-absolute top-100 start-100 translate-middle p-1 bg-danger border border-light rounded-circle"
+              th:title="|${badge.recentFailureCount} job(s) failed in the last 5 minutes|">
+            <span class="visually-hidden">recent job failures</span>
+        </span>
+    </button>
+
+    <!-- Dropdown panel — loaded by the toggle's hx-get into #navJobIndicatorDetails. -->
+    <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+         aria-labelledby="navJobIndicatorToggle"
+         style="min-width: 360px; max-width: 480px;">
+        <div id="navJobIndicatorDetails">
+            <div class="text-muted small p-3 text-center">
+                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                Loading…
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =========== Details fragment (loaded on click) =========== -->
+<div th:fragment="details" id="navJobIndicatorDetails">
+    <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+        <strong class="small">
+            <i class="bi bi-activity me-1"></i>In-flight jobs
+        </strong>
+        <span class="badge bg-secondary" th:text="${#lists.size(rows)}">0</span>
+    </div>
+
+    <div th:if="${rows.empty}" class="text-muted small p-3">
+        <i class="bi bi-check-circle me-1"></i>
+        No running jobs right now.
+    </div>
+
+    <ul th:if="${!rows.empty}" class="list-group list-group-flush mb-0">
+        <li th:each="row : ${rows}" class="list-group-item py-2">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <a th:href="@{${row.detailLink}}"
+                       class="text-decoration-none fw-semibold d-block text-truncate"
+                       th:text="${row.jobName}"
+                       th:title="${row.jobName}">jobName</a>
+                    <div th:if="${row.source != null}"
+                         class="small text-muted text-truncate"
+                         th:text="${row.source}"
+                         th:title="${row.source}">step</div>
+                    <div class="small text-muted">
+                        <span th:if="${row.startedAt != null}"
+                              th:text="|started ${#temporals.format(row.startedAt, 'HH:mm:ss')}|">started 12:34:56</span>
+                        <span th:if="${row.startedAt == null}">started —</span>
+                    </div>
+                </div>
+                <span class="badge bg-primary align-self-center" th:text="${row.status}">RUNNING</span>
+            </div>
+        </li>
+    </ul>
+
+    <div class="border-top px-3 py-2 d-flex justify-content-end">
+        <a th:href="@{/batch}" class="small text-decoration-none">All batch jobs &rarr;</a>
+    </div>
+</div>
+
+</body>
+</html>

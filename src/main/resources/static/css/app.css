@@ -760,3 +760,14 @@ body.admin-dashboard {
         padding: 0 !important;
     }
 }
+
+/* Nav job indicator (issue #73) — shared spin animation also used by
+   batch admin runningJobs fragment. */
+@keyframes navJobIndicatorSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spin {
+    animation: navJobIndicatorSpin 1s linear infinite;
+    display: inline-block;
+}

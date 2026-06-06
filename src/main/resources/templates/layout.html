@@ -25,7 +25,26 @@
                     <span class="fw-semibold fs-5 d-none d-sm-inline">[[#{app.title}]]</span>
                 </a>
 
-                <!-- Right: User Menu -->
+                <!-- Right: In-flight job indicator + User Menu -->
+                <div class="d-flex align-items-center gap-2">
+                    <!-- Site-wide nav indicator for in-flight crawl/sync jobs (issue #73).
+                         Stub shell hx-gets the real badge fragment on load and every 5s thereafter.
+                         The returned fragment swaps the whole #navJobIndicator out, so the
+                         hx-trigger="load, every 5s" here only fires until the first swap,
+                         after which the fragment's own hx-trigger="every 5s" takes over. -->
+                    <div id="navJobIndicator"
+                         class="dropdown"
+                         th:hx-get="@{/nav/jobIndicator}"
+                         hx-trigger="load, every 5s"
+                         hx-swap="outerHTML">
+                        <button type="button"
+                                class="btn btn-dark btn-sm position-relative d-flex align-items-center"
+                                disabled
+                                title="In-flight jobs">
+                            <i class="bi bi-circle text-muted"></i>
+                        </button>
+                    </div>
+
                 <div class="dropdown">
                     <button type="button" class="btn btn-dark dropdown-toggle d-flex align-items-center"
                             data-bs-toggle="dropdown" aria-expanded="false" id="userMenuDropdown">
@@ -53,6 +72,7 @@
                             </form>
                         </li>
                     </ul>
+                </div>
                 </div>
             </div>
         </header>
