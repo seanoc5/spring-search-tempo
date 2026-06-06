@@ -24,18 +24,34 @@ class NavJobIndicatorService(
     companion object {
         /** Window for treating a FAILED JobRun as "recent" enough to warrant a red dot. */
         const val RECENT_FAILURE_WINDOW_MINUTES = 5L
+
+        /**
+         * Heartbeat-freshness threshold for "actually running" filtering.
+         *
+         * A JobRun whose process has died will stop heartbeating; after this
+         * window we treat it as a ghost row and exclude it from the badge.
+         * The orphan reaper (issue #64) eventually sweeps these via the
+         * BatchJobExecution side, but the JobRun row can lag — without this
+         * filter the badge would spin forever and the dropdown would list
+         * jobs that no JVM is actually working on.
+         *
+         * Matches `BatchAdminService.HEARTBEAT_STALE_MINUTES` so the badge
+         * agrees with the batch dashboard's stale detection.
+         */
+        const val HEARTBEAT_FRESH_MINUTES = 2L
     }
 
     /**
      * Cheap aggregate read for the polled badge. Two COUNT queries hitting
-     * indexes on `run_status` / `finish_time`.
+     * indexes on `run_status` / `finish_time` / `last_heartbeat_at`.
      */
     @Transactional(readOnly = true)
     fun loadBadge(): NavJobIndicatorBadge {
-        val running = jobRunRepository.countByRunStatus(RunStatus.RUNNING)
+        val now = OffsetDateTime.now()
+        val running = jobRunRepository.countFreshRunningJobs(now.minusMinutes(HEARTBEAT_FRESH_MINUTES))
         val recentFailures = jobRunRepository.countByRunStatusAndFinishTimeGreaterThanEqual(
             RunStatus.FAILED,
-            OffsetDateTime.now().minusMinutes(RECENT_FAILURE_WINDOW_MINUTES),
+            now.minusMinutes(RECENT_FAILURE_WINDOW_MINUTES),
         )
         return NavJobIndicatorBadge(
             runningCount = running,
@@ -47,10 +63,14 @@ class NavJobIndicatorService(
      * On-demand list of currently running JobRuns for the click-opened
      * dropdown panel. Small set (one row per in-flight execution), so it's
      * fine to materialise the entities and project to a view DTO here.
+     *
+     * Filtered by the same heartbeat-fresh predicate as [loadBadge] so the
+     * count and the listed rows always agree.
      */
     @Transactional(readOnly = true)
     fun loadDetails(): List<NavJobIndicatorRow> {
-        val runs = jobRunRepository.findByRunStatus(RunStatus.RUNNING)
+        val threshold = OffsetDateTime.now().minusMinutes(HEARTBEAT_FRESH_MINUTES)
+        val runs = jobRunRepository.findFreshRunningJobs(threshold)
         return runs
             .sortedByDescending { it.startTime ?: OffsetDateTime.MIN }
             .map { run ->

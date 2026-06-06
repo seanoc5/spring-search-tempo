@@ -100,6 +100,41 @@ class NavJobIndicatorIT : BaseIT() {
     }
 
     @Test
+    @DisplayName("badge — ghost RUNNING row (no heartbeat, old startTime) → ignored, badge stays idle")
+    fun badgeIgnoresStaleGhostJob() {
+        // Simulates a JVM crash that left a RUNNING JobRun behind: no
+        // lastHeartbeatAt, startTime older than the freshness window.
+        saveJobRun(
+            jobName = "fsCrawlJob",
+            status = RunStatus.RUNNING,
+            startTime = OffsetDateTime.now().minusHours(6),
+        )
+
+        mockMvc.perform(
+            get("/nav/jobIndicator").with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString(">idle<")))
+            .andExpect(content().string(not(containsString("rounded-pill bg-primary"))))
+    }
+
+    @Test
+    @DisplayName("details — ghost RUNNING row is excluded from the list")
+    fun detailsExcludesStaleGhostJob() {
+        saveJobRun(
+            jobName = "fsCrawlJob",
+            status = RunStatus.RUNNING,
+            startTime = OffsetDateTime.now().minusHours(6),
+        )
+
+        mockMvc.perform(
+            get("/nav/jobIndicator/details").with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("No running jobs right now")))
+    }
+
+    @Test
     @DisplayName("badge — failure older than 5 min → no red dot")
     fun badgeNoDotForStaleFailure() {
         saveJobRun(
