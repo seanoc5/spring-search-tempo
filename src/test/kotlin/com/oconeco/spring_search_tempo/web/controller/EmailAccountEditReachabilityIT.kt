@@ -109,6 +109,56 @@ class EmailAccountEditReachabilityIT : BaseIT() {
     }
 
     @Test
+    @DisplayName("Create flow: unresolvable host re-renders the add form and creates no row")
+    fun createUnresolvableHostBlocksSave() {
+        val email = "reach-create-bad@example.com"
+        mockMvc.perform(
+            post("/emailAccounts/add")
+                .param("uri", "email://$email")
+                .param("version", "1")
+                .param("email", email)
+                .param("provider", "GENERIC_IMAP")
+                .param("imapHost", "does-not-resolve.invalid")
+                .param("imapPort", "993")
+                .param("useSsl", "true")
+                .param("enabled", "true")
+                .with(user(BaseIT.LOGIN).roles("USER"))
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(view().name("emailAccount/add"))
+            .andExpect(model().attributeHasFieldErrors("emailAccount", "imapHost"))
+
+        assertThat(emailAccountRepository.findByEmail(email))
+            .describedAs("Create with unreachable host must not persist a row")
+            .isNull()
+    }
+
+    @Test
+    @DisplayName("Create flow: skipReachabilityCheck=true lets an unreachable host through")
+    fun createWithSkipCheckboxPersists() {
+        val email = "reach-create-skip@example.com"
+        mockMvc.perform(
+            post("/emailAccounts/add")
+                .param("uri", "email://$email")
+                .param("version", "1")
+                .param("email", email)
+                .param("provider", "GENERIC_IMAP")
+                .param("imapHost", "does-not-resolve.invalid")
+                .param("imapPort", "993")
+                .param("useSsl", "true")
+                .param("enabled", "true")
+                .param("skipReachabilityCheck", "true")
+                .with(user(BaseIT.LOGIN).roles("USER"))
+                .with(csrf())
+        ).andExpect(status().is3xxRedirection)
+
+        assertThat(emailAccountRepository.findByEmail(email))
+            .describedAs("Skip checkbox must allow create to persist an unreachable host")
+            .isNotNull
+    }
+
+    @Test
     @DisplayName("Reachable host:port persists normally")
     fun reachableHostSavesNormally() {
         // Keep a listener open for the duration of the probe so it succeeds.
