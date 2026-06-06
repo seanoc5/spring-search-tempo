@@ -122,6 +122,57 @@
                     <pre class="mb-0" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">[[${#strings.abbreviate(fSFile.bodyText, 5000)}]]</pre>
                 </div>
             </div>
+
+            <!-- NLP Analysis -->
+            <div th:if="${chunkNlpViews != null && !#lists.isEmpty(chunkNlpViews)}" id="nlp-analysis-card" class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">NLP Analysis</h5>
+                    <span class="badge bg-secondary">[[${#lists.size(chunkNlpViews)}]] chunks</span>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush nlp-chunk-list">
+                        <li th:each="chunk : ${chunkNlpViews}" class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <small class="text-muted">
+                                    Chunk <span th:text="${chunk.chunkNumber ?: '-'}">0</span>
+                                    <span th:if="${chunk.entityCount > 0}" class="ms-2">
+                                        · <span th:text="${chunk.entityCount}">0</span> entities
+                                    </span>
+                                </small>
+                                <span th:if="${chunk.nlpProcessed}"
+                                      class="badge nlp-sentiment-badge"
+                                      th:classappend="${chunk.sentimentBadgeClass}"
+                                      th:title="${chunk.sentimentScoreFormatted != '' ? 'Score: ' + chunk.sentimentScoreFormatted : 'No score'}"
+                                      th:text="${chunk.sentimentLabel}">NEUTRAL</span>
+                                <span th:unless="${chunk.nlpProcessed}"
+                                      class="badge bg-light text-dark border nlp-not-processed">
+                                    Not yet processed
+                                </span>
+                            </div>
+                            <p class="mb-1 nlp-chunk-text">
+                                <th:block th:each="seg : ${chunk.segments}">
+                                    <a th:if="${seg.entity}"
+                                       class="nlp-entity-link badge me-1"
+                                       th:classappend="${seg.typeBadgeClass}"
+                                       th:href="${seg.href}"
+                                       th:title="${seg.entityType}"
+                                       th:text="${seg.text}">Entity</a>
+                                    <span th:unless="${seg.entity}" th:text="${seg.text}">text</span>
+                                </th:block>
+                            </p>
+                            <div th:if="${chunk.nlpProcessed && (chunk.nouns != null || chunk.verbs != null)}"
+                                 class="small text-muted mt-1">
+                                <div th:if="${chunk.nouns != null && chunk.nouns != ''}">
+                                    <strong>Nouns:</strong> <span th:text="${chunk.nouns}">nouns</span>
+                                </div>
+                                <div th:if="${chunk.verbs != null && chunk.verbs != ''}">
+                                    <strong>Verbs:</strong> <span th:text="${chunk.verbs}">verbs</span>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
         <div class="col-lg-4">

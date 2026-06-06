@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.base.controller
 
+import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
@@ -25,7 +26,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes
 @RequestMapping("/fSFiles")
 class FSFileController(
     private val fSFileService: FSFileService,
-    private val fSFolderService: FSFolderService
+    private val fSFolderService: FSFolderService,
+    private val contentChunkService: ContentChunkService,
 ) {
 
     @ModelAttribute
@@ -51,6 +53,7 @@ class FSFileController(
     @GetMapping("/{id}")
     fun view(@PathVariable(name = "id") id: Long, model: Model): String {
         model.addAttribute("fSFile", fSFileService.get(id))
+        model.addAttribute("chunkNlpViews", contentChunkService.findNlpViewsForFile(id))
         return "fSFile/view"
     }
 

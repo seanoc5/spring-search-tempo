@@ -1,9 +1,19 @@
 package com.oconeco.spring_search_tempo.base
 
+import com.oconeco.spring_search_tempo.base.model.ChunkNlpView
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 
 
 interface ContentChunkService {
+
+    /**
+     * Build view models for every ContentChunk linked to the given FSFile,
+     * ordered by chunkNumber. Each view includes the chunk text already split
+     * into plain/entity segments so templates can render entity links without
+     * doing HTML manipulation in SpEL. Returns an empty list when the file has
+     * no chunks (e.g. not yet chunked / LOCATE-only).
+     */
+    fun findNlpViewsForFile(fileId: Long): List<ChunkNlpView>
 
     fun count(): Long
 

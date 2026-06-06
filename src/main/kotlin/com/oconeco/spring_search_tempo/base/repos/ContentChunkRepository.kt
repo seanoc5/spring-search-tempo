@@ -26,6 +26,12 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun findByEmailMessageIdOrderByChunkNumberAsc(id: Long): List<ContentChunk>
 
     /**
+     * All chunks linked to a given FSFile, ordered by chunk number.
+     * Used by the FSFile detail view to render NLP annotations (sentiment, entities).
+     */
+    fun findByConceptIdOrderByChunkNumberAsc(id: Long): List<ContentChunk>
+
+    /**
      * Find chunks that have not been NLP processed yet and have text.
      * Used by NLP batch job to find chunks to process.
      * @deprecated Use findChunksForNlpProcessing instead to respect parent analysisStatus
