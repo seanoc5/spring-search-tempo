@@ -259,6 +259,122 @@ class EmailCrawlOrchestrator(
     }
 
     /**
+     * Pre-flight sync estimate for the EmailAccount view page (issue #83).
+     *
+     * Renders the "Last sync: 2 days ago · ~47 messages waiting" string the operator
+     * sees next to the "Sync Now" button. Touches IMAP read-only so the operator can
+     * tell at a glance whether the click will fetch a handful of new messages or
+     * trigger a huge initial pull.
+     *
+     * Behavior:
+     *  - **Account disabled or no password set** → reachable=false, the view renders
+     *    a short "Set a password / enable the account" hint.
+     *  - **Never synced** (`lastQuickSyncAt == null`) → `estimatedNew` equals the
+     *    total messageCount of resolved target folders.
+     *  - **Previously synced** → per-folder UID search for messages above
+     *    `lastSyncUid` (no header fetch — just UID list size).
+     *  - **IMAP unreachable** → reachable=false, the view degrades to "Estimate
+     *    unavailable" without breaking the page.
+     */
+    fun getSyncEstimate(accountId: Long): SyncEstimate {
+        val account = try {
+            emailAccountService.get(accountId)
+        } catch (e: Exception) {
+            log.debug("Could not load account {} for estimate: {}", accountId, e.message)
+            return SyncEstimate(
+                neverSynced = true, lastSyncAt = null, estimatedNew = 0L,
+                totalMessages = 0L, reachable = false,
+                message = "Account not found"
+            )
+        }
+
+        val neverSynced = account.lastQuickSyncAt == null
+        val lastSyncAt = account.lastQuickSyncAt
+
+        if (account.enabled != true) {
+            return SyncEstimate(
+                neverSynced = neverSynced, lastSyncAt = lastSyncAt,
+                estimatedNew = 0L, totalMessages = 0L, reachable = false,
+                message = "Account disabled"
+            )
+        }
+        if (!emailAccountService.hasPassword(accountId)) {
+            return SyncEstimate(
+                neverSynced = neverSynced, lastSyncAt = lastSyncAt,
+                estimatedNew = 0L, totalMessages = 0L, reachable = false,
+                message = "Password not set — edit the account to add one"
+            )
+        }
+
+        val folders = try {
+            resolveFolders(account)
+        } catch (e: Exception) {
+            log.debug("Folder resolution failed for {}: {}", account.email, e.message)
+            return SyncEstimate(
+                neverSynced = neverSynced, lastSyncAt = lastSyncAt,
+                estimatedNew = 0L, totalMessages = 0L, reachable = false,
+                message = "Estimate unavailable (folder resolution failed)"
+            )
+        }
+
+        // Per-folder lastSyncUid lookup so we can compute "new since last sync"
+        // without re-reading the whole mailbox.
+        val folderTargetsByName: Map<String, Long> = try {
+            emailFolderService.findByAccount(accountId)
+                .associate { (it.folderName ?: "") to (it.lastSyncUid ?: 0L) }
+        } catch (e: Exception) {
+            log.debug("findByAccount({}) failed: {}", accountId, e.message)
+            emptyMap()
+        }
+
+        return try {
+            imapConnectionService.withConnection(account) { store ->
+                var totalAcc = 0L
+                var newAcc = 0L
+                for (folderName in folders) {
+                    try {
+                        val folder = store.getFolder(folderName) as? com.sun.mail.imap.IMAPFolder
+                            ?: continue
+                        folder.open(jakarta.mail.Folder.READ_ONLY)
+                        try {
+                            val total = folder.messageCount.toLong()
+                            totalAcc += total
+                            val lastUid = folderTargetsByName[folderName] ?: 0L
+                            newAcc += if (neverSynced || lastUid == 0L) {
+                                total
+                            } else {
+                                // UID-range fetch returns the message handles, no header fetch.
+                                // size() is cheap; we do not iterate the array.
+                                val arr = folder.getMessagesByUID(lastUid + 1, jakarta.mail.UIDFolder.LASTUID)
+                                arr.filterNotNull().size.toLong()
+                            }
+                        } finally {
+                            folder.close(false)
+                        }
+                    } catch (e: Exception) {
+                        log.debug("Estimate skip for folder {}: {}", folderName, e.message)
+                    }
+                }
+                SyncEstimate(
+                    neverSynced = neverSynced,
+                    lastSyncAt = lastSyncAt,
+                    estimatedNew = newAcc,
+                    totalMessages = totalAcc,
+                    reachable = true,
+                    message = null
+                )
+            }
+        } catch (e: Exception) {
+            log.warn("IMAP estimate unavailable for {}: {}", account.email, e.message)
+            SyncEstimate(
+                neverSynced = neverSynced, lastSyncAt = lastSyncAt,
+                estimatedNew = 0L, totalMessages = 0L, reachable = false,
+                message = "Estimate unavailable (IMAP unreachable)"
+            )
+        }
+    }
+
+    /**
      * Get or create email accounts from configuration.
      *
      * Synchronizes configuration with database - creates accounts if they don't exist.
@@ -523,6 +639,27 @@ enum class DispatchOutcome {
     /** Exception during dispatch; the loop continues for sibling accounts. */
     ERROR
 }
+
+/**
+ * Pre-flight estimate displayed next to the "Sync Now" button (issue #83).
+ *
+ * @property neverSynced True when the account has no recorded quick-sync run yet.
+ * @property lastSyncAt Timestamp of the last quick sync, or null if never synced.
+ * @property estimatedNew Approximate count of new messages waiting since [lastSyncAt].
+ *   For never-synced accounts this equals [totalMessages].
+ * @property totalMessages Total messages across resolved target folders.
+ * @property reachable True when IMAP returned a usable count. False when disabled,
+ *   missing-password, or IMAP unreachable — the view uses [message] in that case.
+ * @property message Human-readable note when [reachable] is false; null otherwise.
+ */
+data class SyncEstimate(
+    val neverSynced: Boolean,
+    val lastSyncAt: OffsetDateTime?,
+    val estimatedNew: Long,
+    val totalMessages: Long,
+    val reachable: Boolean,
+    val message: String?,
+)
 
 /**
  * Status information for an email account's sync state.
