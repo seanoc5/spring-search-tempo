@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.batch.emailcrawl
 import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.EmailMessageService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.UidValidityObservation
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.service.ImapConnectionService
 import com.oconeco.spring_search_tempo.batch.fscrawl.JobRunTrackingListener
@@ -27,7 +28,12 @@ import org.springframework.batch.item.ItemReader
  * Supports:
  * - Incremental sync (default): Only fetch messages with UID > lastSyncUid
  * - Full sync (forceFullSync=true): Fetch all messages regardless of lastSyncUid
- * - UIDVALIDITY checking: Auto-reset to full sync if UIDVALIDITY changed
+ * - UIDVALIDITY checking (issue #84): hard-stop on mismatch. The reader marks
+ *   the folder with `uidValidityMismatchAt` and returns zero messages so the
+ *   job step completes without persisting against the new UID space. The
+ *   operator picks Reconcile (Message-ID matching) or Skip from the account
+ *   detail page; we deliberately do NOT auto-recover because UIDVALIDITY
+ *   rotations are rare and diagnostic.
  * - Header prefetch: Batch downloads envelope/headers to reduce IMAP round-trips
  * - Batch duplicate detection: Single DB query to filter existing messages
  * - Heartbeat callback: Optional callback invoked during long-running initialization
@@ -55,6 +61,7 @@ class EmailQuickSyncReader(
     private var totalFetched = 0
     private var duplicatesSkipped = 0
     private var jobRunId: Long? = null
+    private var uidValidityHalted: Boolean = false
 
     override fun beforeStep(stepExecution: StepExecution) {
         // Get jobRunId from execution context for heartbeat updates
@@ -133,22 +140,28 @@ class EmailQuickSyncReader(
                 folder!!.fullName
             )
 
-            // Check UIDVALIDITY - if changed, UIDs are invalid and we must do full sync
+            // Issue #84: UIDVALIDITY hard-stop. On mismatch, mark the folder and
+            // return zero messages — operator must reconcile (Message-ID match)
+            // or skip from the UI before sync resumes.
             val currentUidValidity = folder!!.uidValidity
-            val uidValidityChanged = emailFolderService.updateUidValidity(folderDto.id!!, currentUidValidity)
-            if (uidValidityChanged) {
-                log.warn("UIDVALIDITY changed for folder {} (was {}, now {}). Forcing full sync.",
-                    folderName, folderDto.uidValidity, currentUidValidity)
+            when (val obs = emailFolderService.observeUidValidity(folderDto.id!!, currentUidValidity)) {
+                is UidValidityObservation.Mismatch -> {
+                    log.warn(
+                        "UIDVALIDITY mismatch on {}: stored={}, server={}. Halting folder sync; " +
+                            "operator must Reconcile or Skip from /emailAccounts/{} (issue #84).",
+                        folderName, obs.storedUidValidity, obs.serverUidValidity, account.id
+                    )
+                    uidValidityHalted = true
+                    messageWrappers = emptyList()
+                    return
+                }
+                UidValidityObservation.Unchanged -> Unit  // normal path
             }
 
             // Determine effective lastUid
             val lastUid = when {
                 forceFullSync -> {
                     log.info("Force full sync requested for folder {}", folderName)
-                    0L
-                }
-                uidValidityChanged -> {
-                    log.info("UIDVALIDITY changed, resetting to full sync for folder {}", folderName)
                     0L
                 }
                 else -> folderDto.lastSyncUid ?: 0L
@@ -160,7 +173,7 @@ class EmailQuickSyncReader(
             // UIDFolder.LASTUID means "highest UID in folder"
             var rawMessages: Array<Message> = if (lastUid == 0L) {
                 // Full sync: get all messages via UID range (1 to LASTUID)
-                val isFirst = (folderDto.lastSyncUid ?: 0L) == 0L && !forceFullSync && !uidValidityChanged
+                val isFirst = (folderDto.lastSyncUid ?: 0L) == 0L && !forceFullSync
                 log.info("{} for folder {}, fetching all messages by UID range",
                     if (isFirst) "First sync" else "Full resync", folderName)
                 folder!!.getMessagesByUID(1, UIDFolder.LASTUID)
@@ -284,6 +297,14 @@ class EmailQuickSyncReader(
      * Get the highest UID processed (for sync state update).
      */
     fun getHighestUid(): Long = highestUid
+
+    /**
+     * Issue #84: true when the reader halted because the folder's UIDVALIDITY
+     * disagreed with the server. Callers (the writer's sync-state update path)
+     * should skip persisting a new lastSyncUid in this case — the cursor is
+     * meaningless under the new UID space and reconcile uses the old value.
+     */
+    fun isUidValidityHalted(): Boolean = uidValidityHalted
 
     /**
      * Get the folder ID (for sync state update).

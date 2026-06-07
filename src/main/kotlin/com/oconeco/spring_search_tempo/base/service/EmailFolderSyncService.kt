@@ -47,6 +47,34 @@ class EmailFolderSyncService(
      * preserve `lastSyncUid` / message history across server-side renames.
      */
     fun enumerateFolders(accountId: Long): List<Long> {
+        return enumerate(accountId, optInNewFolders = true).savedIds
+    }
+
+    /**
+     * Issue #84: re-enumerate folders on an already-enumerated account.
+     *
+     * Differs from [enumerateFolders] in two ways:
+     *
+     *  a. Newly-discovered folders are persisted with `syncEnabled=false`
+     *     ("opt-in"), so the operator confirms each one from the folder list
+     *     before sync starts pulling its history. This matches issue #3
+     *     semantics (user controls what gets crawled).
+     *  b. Returns the IDs of the *newly created* folders so the UI can show
+     *     an "N new folders discovered since last sync" banner.
+     *
+     * Both [enumerateFolders] and this method update the account's
+     * `lastFolderEnumeratedAt` so the orchestrator's drift-detection clock
+     * resets.
+     */
+    fun reEnumerateFolders(accountId: Long): ReEnumerationResult {
+        val result = enumerate(accountId, optInNewFolders = false)
+        return ReEnumerationResult(
+            allSavedIds = result.savedIds,
+            newlyDiscoveredFolderIds = result.newlyCreatedIds
+        )
+    }
+
+    private fun enumerate(accountId: Long, optInNewFolders: Boolean): EnumerationOutcome {
         val account = emailAccountService.get(accountId)
         log.info("Enumerating IMAP folders for {}", account.email)
 
@@ -59,19 +87,26 @@ class EmailFolderSyncService(
             rawFolders.mapNotNull { describe(it) }
         }
 
-        return persistDescriptors(accountId, account.email ?: "<unknown>", descriptors)
+        return persistDescriptors(
+            accountId,
+            account.email ?: "<unknown>",
+            descriptors,
+            optInNewFolders = optInNewFolders,
+        )
     }
 
     @Transactional
     internal fun persistDescriptors(
         accountId: Long,
         accountEmail: String,
-        descriptors: List<FolderDescriptor>
-    ): List<Long> {
+        descriptors: List<FolderDescriptor>,
+        optInNewFolders: Boolean = true,
+    ): EnumerationOutcome {
         val emailAccount = emailAccountRepository.findById(accountId)
             .orElseThrow { NotFoundException("emailAccount not found: $accountId") }
         val now = OffsetDateTime.now()
         val savedIds = mutableListOf<Long>()
+        val newlyCreatedIds = mutableListOf<Long>()
 
         for (descriptor in descriptors) {
             val existing = emailFolderRepository
@@ -79,25 +114,60 @@ class EmailFolderSyncService(
                 ?: emailFolderRepository
                     .findByEmailAccountIdAndFolderName(accountId, descriptor.folderName)
 
+            val isNew = existing == null
             val entity = existing ?: EmailFolder().apply {
                 this.emailAccount = emailAccount
                 this.uri = "email-folder://${accountEmail}/${descriptor.path}"
                 this.status = Status.NEW
                 this.analysisStatus = AnalysisStatus.LOCATE
                 this.version = 0L
-                // Default syncEnabled — true for selectable folders, false for \Noselect
-                this.syncEnabled = !descriptor.noselect
+                // Default syncEnabled. Initial enumeration opts new folders IN
+                // (selectable folders are useful by default). Re-enumeration on
+                // an already-enumerated account opts them OUT so the operator
+                // confirms newly-server-side-created folders before they start
+                // pulling history (issue #84, acceptance criterion f).
+                this.syncEnabled = if (optInNewFolders) !descriptor.noselect else false
             }
 
             entity.applyDescriptor(descriptor, now)
 
             val saved = emailFolderRepository.save(entity)
-            saved.id?.let { savedIds.add(it) }
+            saved.id?.let {
+                savedIds.add(it)
+                if (isNew) newlyCreatedIds.add(it)
+            }
         }
 
-        log.info("[{}] Persisted {} folders", accountEmail, savedIds.size)
-        return savedIds
+        // Issue #84: stamp the account so the orchestrator's drift detector
+        // resets its clock. Done inside the same transaction so a partial
+        // failure can't claim "we enumerated" without actually persisting.
+        emailAccount.lastFolderEnumeratedAt = now
+        emailAccountRepository.save(emailAccount)
+
+        log.info(
+            "[{}] Persisted {} folders ({} newly discovered)",
+            accountEmail, savedIds.size, newlyCreatedIds.size,
+        )
+        return EnumerationOutcome(savedIds, newlyCreatedIds)
     }
+
+    /**
+     * Internal upsert return type — see [reEnumerateFolders] for the public
+     * shape that the orchestrator and controllers consume.
+     */
+    internal data class EnumerationOutcome(
+        val savedIds: List<Long>,
+        val newlyCreatedIds: List<Long>,
+    )
+
+    /**
+     * Issue #84: result surfaced from [reEnumerateFolders] for the orchestrator
+     * and UI banner logic.
+     */
+    data class ReEnumerationResult(
+        val allSavedIds: List<Long>,
+        val newlyDiscoveredFolderIds: List<Long>,
+    )
 
     /**
      * Quick check used by the orchestrator: does this account have any enumerated

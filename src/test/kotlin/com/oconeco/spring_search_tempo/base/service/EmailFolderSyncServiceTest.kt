@@ -1,10 +1,11 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.icegreen.greenmail.junit5.GreenMailExtension
-import com.icegreen.greenmail.util.ServerSetup
+import com.icegreen.greenmail.util.ServerSetupTest
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
+import com.oconeco.spring_search_tempo.base.UidValidityObservation
 import com.oconeco.spring_search_tempo.base.config.BaseIT
 import com.oconeco.spring_search_tempo.base.domain.EmailAccount
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
@@ -36,7 +37,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
     companion object {
         @JvmField
         @RegisterExtension
-        val greenMail = GreenMailExtension(ServerSetup.IMAP)
+        val greenMail = GreenMailExtension(ServerSetupTest.IMAP)
 
         private const val USER_EMAIL = "user@example.com"
         private const val USER_PASSWORD = "secret"
@@ -116,7 +117,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
     }
 
     @Test
-    @DisplayName("UIDVALIDITY change on one folder does not reset siblings")
+    @DisplayName("UIDVALIDITY mismatch on one folder halts that folder only and preserves lastSyncUid")
     fun uidValidityChangePerFolder() {
         val accountId = createAccount()
         createServerFolders(listOf("Sent"))
@@ -126,26 +127,49 @@ class EmailFolderSyncServiceTest : BaseIT() {
         val sent = emailFolderRepository.findByEmailAccountIdAndPath(accountId, "Sent")!!
 
         // Seed both folders with a sync cursor + initial UIDVALIDITY.
-        emailFolderService.updateUidValidity(inbox.id!!, 1000L)
+        // First observeUidValidity() on a virgin folder is the first-write path
+        // (stored == null) — it just persists the server value as Unchanged.
+        emailFolderService.observeUidValidity(inbox.id!!, 1000L)
         emailFolderService.updateSyncState(inbox.id!!, 42L, 10L)
-        emailFolderService.updateUidValidity(sent.id!!, 2000L)
+        emailFolderService.observeUidValidity(sent.id!!, 2000L)
         emailFolderService.updateSyncState(sent.id!!, 17L, 4L)
 
-        // Simulate INBOX being recreated server-side: UIDVALIDITY changes.
-        val inboxChanged = emailFolderService.updateUidValidity(inbox.id!!, 1001L)
-        val sentTouched = emailFolderService.updateUidValidity(sent.id!!, 2000L)
+        // Issue #84: simulate INBOX being recreated server-side. The observer
+        // should report Mismatch, mark the folder, and (critically) preserve
+        // the existing lastSyncUid so the reconcile step can map by Message-ID.
+        val inboxOutcome = emailFolderService.observeUidValidity(inbox.id!!, 1001L)
+        val sentOutcome = emailFolderService.observeUidValidity(sent.id!!, 2000L)
 
-        assertThat(inboxChanged).isTrue
-        assertThat(sentTouched).isFalse
+        assertThat(inboxOutcome).isInstanceOf(UidValidityObservation.Mismatch::class.java)
+        assertThat(sentOutcome).isEqualTo(UidValidityObservation.Unchanged)
 
         val refreshedInbox = emailFolderService.get(inbox.id!!)
         val refreshedSent = emailFolderService.get(sent.id!!)
 
-        // INBOX cursor wiped because its UIDs are now invalid.
-        assertThat(refreshedInbox.lastSyncUid).isEqualTo(0L)
-        // Sibling's cursor is untouched — its UIDVALIDITY is unchanged.
+        // Issue #84: cursor preserved (reconcile needs it); mismatch flag set.
+        assertThat(refreshedInbox.lastSyncUid).isEqualTo(42L)
+        assertThat(refreshedInbox.uidValidityMismatchAt).isNotNull
+        // Sibling untouched.
         assertThat(refreshedSent.lastSyncUid).isEqualTo(17L)
         assertThat(refreshedSent.uidValidity).isEqualTo(2000L)
+        assertThat(refreshedSent.uidValidityMismatchAt).isNull()
+    }
+
+    @Test
+    @DisplayName("clearUidValidityMismatch updates UIDVALIDITY and clears the halt flag (issue #84)")
+    fun clearMismatchResumesSync() {
+        val accountId = createAccount()
+        emailFolderSyncService.enumerateFolders(accountId)
+
+        val inbox = emailFolderRepository.findByEmailAccountIdAndPath(accountId, "INBOX")!!
+        emailFolderService.observeUidValidity(inbox.id!!, 1000L)
+        emailFolderService.observeUidValidity(inbox.id!!, 1001L)  // mismatch
+
+        emailFolderService.clearUidValidityMismatch(inbox.id!!, 1001L)
+
+        val refreshed = emailFolderService.get(inbox.id!!)
+        assertThat(refreshed.uidValidity).isEqualTo(1001L)
+        assertThat(refreshed.uidValidityMismatchAt).isNull()
     }
 
     @Test
@@ -166,6 +190,35 @@ class EmailFolderSyncServiceTest : BaseIT() {
         val reEnabled = emailFolderService.get(sentId)
         assertThat(reEnabled.syncEnabled).isTrue
         assertThat(reEnabled.lastSyncUid).isEqualTo(0L)
+    }
+
+    @Test
+    @DisplayName("reEnumerateFolders opts new folders OUT (syncEnabled=false) and reports them (issue #84)")
+    fun reEnumerateOptsNewFoldersOut() {
+        val accountId = createAccount()
+        createServerFolders(listOf("Sent"))
+        emailFolderSyncService.enumerateFolders(accountId)
+
+        // Operator-initial state: Sent is opted in by enumerateFolders().
+        val sentId = emailFolderRepository.findByEmailAccountIdAndPath(accountId, "Sent")!!.id!!
+        assertThat(emailFolderService.get(sentId).syncEnabled).isTrue
+
+        // Server-side: a new folder appears.
+        createServerFolders(listOf("Newsletters"))
+
+        val result = emailFolderSyncService.reEnumerateFolders(accountId)
+
+        val newsletters = emailFolderRepository.findByEmailAccountIdAndPath(accountId, "Newsletters")!!
+        assertThat(newsletters.syncEnabled).isFalse
+        assertThat(result.newlyDiscoveredFolderIds).contains(newsletters.id)
+        assertThat(result.newlyDiscoveredFolderIds).doesNotContain(sentId)
+
+        // Newly-discovered drives the "N new folders" banner.
+        assertThat(emailFolderService.countNewlyDiscovered(accountId)).isGreaterThanOrEqualTo(1L)
+
+        // Account stamped so orchestrator's drift detector resets.
+        val account = emailAccountService.get(accountId)
+        assertThat(account.lastFolderEnumeratedAt).isNotNull
     }
 
     @Test
@@ -194,7 +247,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
             this.uri = "email://$email-${System.nanoTime()}"
             this.provider = EmailProvider.GENERIC_IMAP
             this.imapHost = "127.0.0.1"
-            this.imapPort = ServerSetup.IMAP.port
+            this.imapPort = ServerSetupTest.IMAP.port
             this.useSsl = false
             this.enabled = true
             this.version = 1L
@@ -208,11 +261,11 @@ class EmailFolderSyncServiceTest : BaseIT() {
         val props = Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
-            put("mail.imap.port", ServerSetup.IMAP.port.toString())
+            put("mail.imap.port", ServerSetupTest.IMAP.port.toString())
         }
         val session = Session.getInstance(props)
         val store: Store = session.getStore("imap")
-        store.connect("127.0.0.1", ServerSetup.IMAP.port, USER_EMAIL, USER_PASSWORD)
+        store.connect("127.0.0.1", ServerSetupTest.IMAP.port, USER_EMAIL, USER_PASSWORD)
         try {
             paths.forEach { path ->
                 val folder = store.getFolder(path)

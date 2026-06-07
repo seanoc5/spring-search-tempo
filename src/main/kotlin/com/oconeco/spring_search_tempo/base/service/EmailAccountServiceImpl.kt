@@ -133,6 +133,13 @@ class EmailAccountServiceImpl(
         emailAccountRepository.save(emailAccount)
     }
 
+    override fun recordFolderEnumerated(id: Long, at: OffsetDateTime) {
+        val emailAccount = emailAccountRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+        emailAccount.lastFolderEnumeratedAt = at
+        emailAccountRepository.save(emailAccount)
+    }
+
     override fun clearError(id: Long) {
         val emailAccount = emailAccountRepository.findById(id)
             .orElseThrow { NotFoundException() }

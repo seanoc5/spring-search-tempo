@@ -57,6 +57,13 @@ class EmailAccount : SaveableObject() {
     @Column
     var lastFullSyncFolderCount: Int? = null
 
+    // Issue #84: when this account last had its server-side folder list
+    // refreshed via LIST *. The orchestrator re-enumerates when this value
+    // is older than `app.email.folder-enum-max-age` so newly-created server
+    // folders surface without a manual UI action.
+    @Column
+    var lastFolderEnumeratedAt: OffsetDateTime? = null
+
     // Account status
     @Column
     var enabled: Boolean = true

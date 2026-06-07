@@ -1,6 +1,7 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.EmailFolderService
+import com.oconeco.spring_search_tempo.base.UidValidityObservation
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.EmailFolder
 import com.oconeco.spring_search_tempo.base.domain.Status
@@ -12,6 +13,7 @@ import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
+import java.time.OffsetDateTime
 
 
 @Service
@@ -126,22 +128,47 @@ class EmailFolderServiceImpl(
         emailFolderRepository.saveAll(folders)
     }
 
-    override fun updateUidValidity(id: Long, newUidValidity: Long): Boolean {
+    override fun observeUidValidity(id: Long, serverUidValidity: Long): UidValidityObservation {
         val emailFolder = emailFolderRepository.findById(id)
             .orElseThrow { NotFoundException() }
 
-        val oldUidValidity = emailFolder.uidValidity
-        val changed = oldUidValidity != null && oldUidValidity != newUidValidity
-
-        if (changed) {
-            // UIDVALIDITY changed - UIDs are no longer valid, reset sync state.
-            // Scoped to THIS folder only; siblings' UIDVALIDITY is untouched.
-            emailFolder.lastSyncUid = 0L
+        val stored = emailFolder.uidValidity
+        return when {
+            stored == null -> {
+                // First observation — persist and proceed normally.
+                emailFolder.uidValidity = serverUidValidity
+                emailFolderRepository.save(emailFolder)
+                UidValidityObservation.Unchanged
+            }
+            stored == serverUidValidity -> UidValidityObservation.Unchanged
+            else -> {
+                // Issue #84: hard-stop. Do NOT clear lastSyncUid — reconcile
+                // needs it (and the old UIDVALIDITY) to map historical UIDs
+                // back via Message-ID. Update of `uidValidity` itself happens
+                // in clearUidValidityMismatch() after the operator confirms.
+                emailFolder.uidValidityMismatchAt = OffsetDateTime.now()
+                emailFolderRepository.save(emailFolder)
+                log.warn(
+                    "UIDVALIDITY mismatch on folder id={} path='{}' — stored={}, server={}. " +
+                        "Folder sync halted; awaiting operator confirmation.",
+                    id, emailFolder.path ?: emailFolder.folderName, stored, serverUidValidity
+                )
+                UidValidityObservation.Mismatch(
+                    storedUidValidity = stored,
+                    serverUidValidity = serverUidValidity
+                )
+            }
         }
+    }
+
+    override fun clearUidValidityMismatch(id: Long, newUidValidity: Long) {
+        val emailFolder = emailFolderRepository.findById(id)
+            .orElseThrow { NotFoundException() }
+
         emailFolder.uidValidity = newUidValidity
+        emailFolder.uidValidityMismatchAt = null
 
         emailFolderRepository.save(emailFolder)
-        return changed
     }
 
     override fun setSyncEnabled(id: Long, enabled: Boolean) {
@@ -169,6 +196,10 @@ class EmailFolderServiceImpl(
             .mapNotNull { it.path ?: it.folderName }
             .sorted()
     }
+
+    override fun countNewlyDiscovered(accountId: Long): Long =
+        emailFolderRepository
+            .countByEmailAccountIdAndSyncEnabledFalseAndNoselectFalseAndLastSyncUidIsNull(accountId)
 
     /**
      * Apply heuristic semantic flags (`isInbox`, `isSent`, ...) based on folder name.

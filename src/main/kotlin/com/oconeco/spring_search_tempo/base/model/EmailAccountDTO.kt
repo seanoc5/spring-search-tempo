@@ -64,6 +64,9 @@ class EmailAccountDTO {
 
     var lastFullSyncFolderCount: Int? = null
 
+    // Issue #84: see EmailAccount.lastFolderEnumeratedAt.
+    var lastFolderEnumeratedAt: OffsetDateTime? = null
+
     // Credential configuration
     // DEPRECATED (issue #55): env-var credential fallback removed. Kept on the DTO
     // for one release so existing serialized state survives a deploy. Sole credential
