@@ -113,6 +113,24 @@ class EmailAccountController(
     }
 
     /**
+     * Pre-flight sync estimate fragment (issue #83).
+     *
+     * Rendered next to the "Sync Now" button so the operator can tell at a glance
+     * whether a click will pull a handful of messages or trigger a huge initial
+     * pull. HTMX-loaded on view-page render (and re-trigger-able from the live
+     * status panel once a sync finishes) so the page itself doesn't block on the
+     * IMAP round-trip.
+     */
+    @GetMapping("/{id}/syncEstimate")
+    fun syncEstimate(@PathVariable id: Long, model: Model): String {
+        // Touch the account so a bad id returns 404 via NotFoundException.
+        emailAccountService.get(id)
+        model.addAttribute("accountId", id)
+        model.addAttribute("estimate", emailCrawlOrchestrator.getSyncEstimate(id))
+        return "emailAccount/syncEstimate :: panel"
+    }
+
+    /**
      * Show add form.
      */
     @GetMapping("/add")
@@ -273,11 +291,19 @@ class EmailAccountController(
     /**
      * Trigger sync for a specific account.
      *
-     * @param forceFullSync If true, ignore lastSyncUid and fetch all messages (full recrawl)
+     * Accepts either `fullRescan` (new public form param introduced by issue #83 —
+     * what the "Force full rescan (advanced)" checkbox next to the top "Sync Now"
+     * button posts) or the legacy `forceFullSync` (still used by the lower "Sync
+     * Tuning" power-user form and any external script). Either one true → full
+     * rescan; otherwise → incremental from `lastSyncUid`.
+     *
+     * @param fullRescan If true, ignore lastSyncUid and fetch all messages (full recrawl)
+     * @param forceFullSync Legacy alias of `fullRescan` (kept for the tuned-sync form)
      */
     @PostMapping("/{id}/sync")
     fun syncAccount(
         @PathVariable id: Long,
+        @RequestParam(name = "fullRescan", required = false, defaultValue = "false") fullRescan: Boolean,
         @RequestParam(name = "forceFullSync", required = false, defaultValue = "false") forceFullSync: Boolean,
         @RequestParam(name = "stepThreads", required = false, defaultValue = "1") stepThreads: Int,
         @RequestParam(name = "itemAsync", required = false, defaultValue = "false") itemAsync: Boolean,
@@ -288,7 +314,10 @@ class EmailAccountController(
         redirectAttributes: RedirectAttributes
     ): String {
         val account = emailAccountService.get(id)
-        val syncType = if (forceFullSync) "full sync" else "quick sync"
+        val effectiveFullSync = fullRescan || forceFullSync
+        val syncType = if (effectiveFullSync) "full sync" else "quick sync"
+        @Suppress("NAME_SHADOWING")
+        val forceFullSync = effectiveFullSync
         val parallelConfig = normalizeParallelConfig(stepThreads, itemAsync, asyncThreads, chunkSize)
         val isHtmx = !hxRequest.isNullOrBlank()
 

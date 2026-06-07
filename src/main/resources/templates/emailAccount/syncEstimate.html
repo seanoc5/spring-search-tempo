@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!--
+  Pre-flight sync-estimate fragment (issue #83).
+
+  Rendered next to the "Sync Now" button. The wrapping `panel` fragment is the
+  HTMX target so refreshes preserve the #syncEstimatePanel id.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<span th:fragment="panel"
+      id="syncEstimatePanel"
+      class="text-muted small ms-1">
+    <th:block th:if="${estimate == null}">—</th:block>
+    <th:block th:if="${estimate != null}">
+        <i class="bi bi-info-circle me-1"></i>
+        <th:block th:if="${estimate.reachable}">
+            <th:block th:if="${estimate.neverSynced}">
+                Never synced ·
+                <span th:text="|~${estimate.estimatedNew} messages estimated|">~3,200 messages estimated</span>
+            </th:block>
+            <th:block th:if="${!estimate.neverSynced}">
+                Last sync:
+                <span th:if="${estimate.lastSyncAt != null}"
+                      th:text="${#temporals.format(estimate.lastSyncAt, 'yyyy-MM-dd HH:mm')}">2026-06-05 14:22</span>
+                ·
+                <span th:text="|~${estimate.estimatedNew} messages waiting|">~47 messages waiting</span>
+            </th:block>
+        </th:block>
+        <th:block th:if="${!estimate.reachable}">
+            <th:block th:if="${estimate.neverSynced}">Never synced ·</th:block>
+            <th:block th:if="${!estimate.neverSynced && estimate.lastSyncAt != null}">
+                Last sync:
+                <span th:text="${#temporals.format(estimate.lastSyncAt, 'yyyy-MM-dd HH:mm')}">2026-06-05 14:22</span> ·
+            </th:block>
+            <span th:text="${estimate.message ?: 'Estimate unavailable'}">Estimate unavailable</span>
+        </th:block>
+    </th:block>
+</span>
+
+</body>
+</html>

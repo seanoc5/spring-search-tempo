@@ -24,12 +24,41 @@
             <a th:href="@{/emailAccounts/{id}/edit(id=${emailAccount.id})}" class="btn btn-outline-secondary">
                 <i class="bi bi-pencil me-1"></i>Edit
             </a>
-            <form th:action="@{/emailAccounts/{id}/sync(id=${emailAccount.id})}" method="post" class="d-inline">
+            <!--
+              Issue #83: single "Sync Now" button. Default = incremental from
+              `lastSyncUid`; the advanced checkbox below posts fullRescan=true to
+              override. The pre-flight estimate (HTMX-loaded below the button) is
+              what the operator looks at to choose.
+            -->
+            <form th:action="@{/emailAccounts/{id}/sync(id=${emailAccount.id})}" method="post"
+                  class="d-flex flex-column align-items-end gap-1 m-0">
                 <button type="submit" class="btn btn-primary" th:disabled="${!emailAccount.enabled}">
                     <i class="bi bi-arrow-repeat me-1"></i>Sync Now
                 </button>
+                <div class="form-check small">
+                    <input class="form-check-input" type="checkbox"
+                           id="topFullRescan" name="fullRescan" value="true">
+                    <label class="form-check-label text-muted" for="topFullRescan">
+                        Force full rescan <span class="text-muted">(advanced)</span>
+                    </label>
+                </div>
             </form>
         </div>
+    </div>
+
+    <!--
+      Issue #83: pre-flight estimate. Lazily HTMX-loaded so the page itself
+      doesn't block on the IMAP round-trip; the fragment renders a short
+      "Last sync: 2 days ago · ~47 messages waiting" string.
+    -->
+    <div class="mb-3">
+        <span id="syncEstimatePanel"
+              th:hx-get="@{/emailAccounts/{id}/syncEstimate(id=${emailAccount.id})}"
+              hx-trigger="load"
+              hx-swap="outerHTML"
+              class="text-muted small">
+            <i class="bi bi-hourglass-split me-1"></i>Checking mailbox…
+        </span>
     </div>
 
     <!--
