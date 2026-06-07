@@ -93,7 +93,6 @@ class UidValidityReconcileService(
         var matched = 0
         var newCount = 0
         var serverUidValidity = 0L
-        var highestUid = 0L
 
         // IMAP I/O and DB writes interleave per-row, but the surrounding
         // transaction is per-save (Spring Data JPA default) rather than
@@ -120,7 +119,6 @@ class UidValidityReconcileService(
                         val uid = imapFolder.getUID(msg)
                         if (uid > 0) {
                             serverByMessageId[messageId] = uid
-                            if (uid > highestUid) highestUid = uid
                         }
                     }
 
@@ -144,7 +142,7 @@ class UidValidityReconcileService(
             }
         }
 
-        finalizeReconcile(folderId, serverUidValidity, highestUid)
+        finalizeReconcile(folderId, serverUidValidity)
 
         val elapsed = System.currentTimeMillis() - startedAt
         log.info(
@@ -186,14 +184,25 @@ class UidValidityReconcileService(
     }
 
     @Transactional
-    internal fun finalizeReconcile(folderId: Long, serverUidValidity: Long, highestUid: Long) {
+    internal fun finalizeReconcile(folderId: Long, serverUidValidity: Long) {
         val refreshed = emailFolderRepository.findById(folderId)
             .orElseThrow { NotFoundException("emailFolder not found: $folderId") }
         refreshed.uidValidity = serverUidValidity
         refreshed.uidValidityMismatchAt = null
-        if (highestUid > 0) {
-            refreshed.lastSyncUid = highestUid
-        }
+        // Reset the cursor — the old value was under the now-discarded UID
+        // space and so is meaningless under the new one. The next quick sync
+        // will FETCH UID 1:LASTUID, and Message-ID duplicate detection (the
+        // existing fast-path in EmailQuickSyncReader.initialize) will skip the
+        // rows we just remapped, only body-fetching the truly-new messages.
+        //
+        // Tempting alternative: set lastSyncUid = max(matchedUid) so unmatched
+        // messages with HIGHER UIDs go through normal incremental sync. But
+        // new messages can have UIDs interleaved among matched ones (the
+        // server can renumber arbitrarily), so the only safe choice is a full
+        // re-scan with dedup. The cost is paying ENVELOPE-fetch on the
+        // matched rows once; the saving is that we never silently skip
+        // truly-new messages that arrived in the mismatch window.
+        refreshed.lastSyncUid = 0L
         emailFolderRepository.save(refreshed)
     }
 
