@@ -22,16 +22,16 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.view
 import java.time.OffsetDateTime
 
 /**
- * Render coverage for the FSFile detail page's NLP section (issue #71).
+ * Renders the dedicated entity-detail / entity-search route added in issue #81.
  *
- * Verifies that sentiment badges and named-entity links are surfaced when chunks
- * have been NLP-processed, and that a "Not yet processed" placeholder appears
- * when they haven't.
+ * The FSFile NLP section links each named entity here with both its text *and*
+ * its NER type so e.g. "Seattle" (LOCATION) doesn't collide with the common
+ * word in plain FTS.
  */
 @SpringBootTest(classes = [SpringSearchTempoApplication::class])
 @AutoConfigureMockMvc
-@DisplayName("FSFile detail view renders NLP sentiment badges and entity links (issue #71)")
-class FSFileViewNlpRenderIT : BaseIT() {
+@DisplayName("GET /entity renders chunks aggregated by named entity (issue #81)")
+class EntityControllerIT : BaseIT() {
 
     @Autowired
     lateinit var mockMvc: MockMvc
@@ -43,94 +43,84 @@ class FSFileViewNlpRenderIT : BaseIT() {
     lateinit var contentChunkRepository: ContentChunkRepository
 
     @Test
-    @DisplayName("GET /fSFiles/{id} — fully NLP-processed chunk renders sentiment badge + entity link")
-    fun rendersBadgesAndEntityLinks() {
-        val fileId = saveFile("nlp-processed.txt")
-        // Text laid out so offsets line up with the entity spans below.
-        val text = "Acme Corp launched in Seattle last Tuesday."
-        //          0         1         2         3         4
-        //          0123456789012345678901234567890123456789012
-        //          ^Acme Corp^         ^Seattle^
+    @DisplayName("returns chunks tagged with the requested entity text + type")
+    fun matchesByTextAndType() {
+        val fileId = saveFile("seattle-doc.txt")
         saveChunk(
             fileId = fileId,
             chunkNumber = 0,
-            text = text,
-            sentiment = "POSITIVE",
-            sentimentScore = 0.87,
+            text = "Acme Corp launched in Seattle last Tuesday.",
             namedEntities = """
                 [
                   {"text":"Acme Corp","type":"ORGANIZATION","startOffset":0,"endOffset":9},
                   {"text":"Seattle","type":"LOCATION","startOffset":22,"endOffset":29}
                 ]
             """.trimIndent(),
-            nlpProcessedAt = OffsetDateTime.now(),
         )
 
         val body = mockMvc.perform(
-            get("/fSFiles/{id}", fileId)
+            get("/entity")
+                .param("text", "Seattle")
+                .param("type", "LOCATION")
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
-            .andExpect(view().name("fSFile/view"))
+            .andExpect(view().name("entity/detail"))
             .andReturn().response.contentAsString
 
-        assertThat(body).contains("id=\"nlp-analysis-card\"")
-        assertThat(body).contains("nlp-sentiment-badge")
-        assertThat(body).contains("bg-success") // POSITIVE → bg-success
-        assertThat(body).contains("POSITIVE")
-        assertThat(body).contains("nlp-entity-link")
-        // Entity link → /entity?text=...&type=... (issue #81 — preserves entity type, not plain FTS).
-        // Thymeleaf HTML-encodes the & in href attributes, so the rendered output is &amp;.
-        assertThat(body).contains("/entity?text=Acme+Corp&amp;type=ORGANIZATION")
-        assertThat(body).contains("/entity?text=Seattle&amp;type=LOCATION")
-        // Entity type badge styling propagated through
-        assertThat(body).contains("text-bg-success") // ORGANIZATION
-        assertThat(body).contains("text-bg-info")    // LOCATION
-        // No "Not yet processed" placeholder for this chunk
-        assertThat(body).doesNotContain("nlp-not-processed")
+        // Page header shows the entity + type badge
+        assertThat(body).contains("Seattle")
+        assertThat(body).contains("LOCATION")
+        // Matched chunk shows up
+        assertThat(body).contains("Acme Corp launched in Seattle")
+        // Co-occurring entity link points back at /entity, not /search
+        assertThat(body).contains("/entity?text=Seattle")
     }
 
     @Test
-    @DisplayName("GET /fSFiles/{id} — chunk with nlpProcessedAt=null shows 'Not yet processed' placeholder")
-    fun rendersNotYetProcessedPlaceholder() {
-        val fileId = saveFile("nlp-pending.txt")
-        saveChunk(
-            fileId = fileId,
-            chunkNumber = 0,
-            text = "This chunk has no NLP annotations yet.",
-            sentiment = null,
-            sentimentScore = null,
-            namedEntities = null,
-            nlpProcessedAt = null,
-        )
-
+    @DisplayName("ignores type filter that's not in VALID_ENTITY_TYPES and warns the user")
+    fun ignoresUnknownTypeAndWarns() {
         val body = mockMvc.perform(
-            get("/fSFiles/{id}", fileId)
+            get("/entity")
+                .param("text", "Seattle")
+                .param("type", "MADE_UP")
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        assertThat(body).contains("id=\"nlp-analysis-card\"")
-        assertThat(body).contains("Not yet processed")
-        assertThat(body).doesNotContain("nlp-sentiment-badge")
-        assertThat(body).doesNotContain("nlp-entity-link")
+        assertThat(body).contains("MADE_UP")
+        assertThat(body).contains("ignored")
     }
 
     @Test
-    @DisplayName("GET /fSFiles/{id} — file with no chunks renders without an NLP card, no errors")
-    fun rendersWithoutNlpCardWhenNoChunks() {
-        val fileId = saveFile("no-chunks.txt")
-
+    @DisplayName("blank text param renders an empty-state prompt without an error")
+    fun blankTextRendersEmptyState() {
         val body = mockMvc.perform(
-            get("/fSFiles/{id}", fileId)
+            get("/entity")
+                .param("text", "   ")
                 .with(user(BaseIT.LOGIN).roles("USER"))
         )
             .andExpect(status().isOk)
             .andReturn().response.contentAsString
 
-        assertThat(body).doesNotContain("id=\"nlp-analysis-card\"")
-        assertThat(body).doesNotContain("nlp-sentiment-badge")
+        assertThat(body).contains("Provide an entity text to search")
+    }
+
+    @Test
+    @DisplayName("no matching chunks renders a no-results message with FTS fallback link")
+    fun noMatchesRendersFallback() {
+        val body = mockMvc.perform(
+            get("/entity")
+                .param("text", "NonExistentEntityXYZ123")
+                .param("type", "PERSON")
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        assertThat(body).contains("No chunks tagged with entity")
+        assertThat(body).contains("/search?q=NonExistentEntityXYZ123")
     }
 
     private fun saveFile(label: String): Long {
@@ -150,20 +140,15 @@ class FSFileViewNlpRenderIT : BaseIT() {
         fileId: Long,
         chunkNumber: Int,
         text: String,
-        sentiment: String?,
-        sentimentScore: Double?,
         namedEntities: String?,
-        nlpProcessedAt: OffsetDateTime?,
     ): Long {
         val file = fSFileRepository.findById(fileId).orElseThrow()
         val chunk = ContentChunk().apply {
             this.chunkNumber = chunkNumber
             this.chunkType = "Sentence"
             this.text = text
-            this.sentiment = sentiment
-            this.sentimentScore = sentimentScore
             this.namedEntities = namedEntities
-            this.nlpProcessedAt = nlpProcessedAt
+            this.nlpProcessedAt = OffsetDateTime.now()
             this.concept = file
         }
         return contentChunkRepository.save(chunk).id!!
