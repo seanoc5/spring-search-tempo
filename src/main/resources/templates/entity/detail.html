@@ -1,0 +1,171 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="${'Entity: ' + entityText}">Entity Detail</title>
+    <style>
+        .entity-badge { font-size: 0.85em; }
+        .entity-PERSON { background-color: #0d6efd !important; color: #fff !important; }
+        .entity-ORGANIZATION { background-color: #6f42c1 !important; color: #fff !important; }
+        .entity-LOCATION { background-color: #198754 !important; color: #fff !important; }
+        .entity-DATE { background-color: #fd7e14 !important; color: #fff !important; }
+        .entity-MONEY { background-color: #20c997 !important; color: #fff !important; }
+        .entity-MISC { background-color: #6c757d !important; color: #fff !important; }
+    </style>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/}">Home</a></li>
+            <li class="breadcrumb-item"><a th:href="@{/search}">Search</a></li>
+            <li class="breadcrumb-item active">Entity</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-center mb-4">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-tags me-2"></i>
+            <span th:text="${entityText}">Entity Text</span>
+            <span th:if="${entityType}" class="badge ms-2 entity-badge"
+                  th:classappend="${'entity-' + entityType}"
+                  th:text="${entityType}">TYPE</span>
+        </h1>
+    </div>
+
+    <!-- Refine form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form th:action="@{/entity}" method="get" class="row g-3">
+                <div class="col-md-7">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" name="text" th:value="${entityText}"
+                               class="form-control" placeholder="Entity text..." required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-select">
+                        <option value="">All types</option>
+                        <option th:each="t : ${validTypes}"
+                                th:value="${t}"
+                                th:selected="${t == entityType}"
+                                th:text="${t}">PERSON</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Search</button>
+                </div>
+            </form>
+            <div class="mt-2 text-muted small">
+                <i class="bi bi-info-circle me-1"></i>
+                Shows every content chunk where this entity was tagged by NLP. To search raw text instead, use
+                <a th:href="@{/search(q=${entityText})}">full-text search</a>.
+            </div>
+            <div th:if="${typeIgnored}" class="alert alert-warning mt-2 mb-0 py-2 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Unknown entity type <code th:text="${requestedType}">XYZ</code> ignored; showing all types.
+            </div>
+        </div>
+    </div>
+
+    <!-- Error -->
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>[[${error}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Results -->
+    <div th:if="${hasResults}">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted">
+                Found <strong th:text="${totalResults}">0</strong> chunk(s) mentioning
+                <strong th:text="${entityText}">entity</strong>
+                <span th:if="${entityType}">as <span th:text="${entityType}">TYPE</span></span>
+                <span th:if="${results.totalPages > 1}">
+                    (Page [[${results.number + 1}]] of [[${results.totalPages}]])
+                </span>
+            </span>
+        </div>
+
+        <div class="list-group mb-4">
+            <div th:each="result : ${results.content}" class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">
+                            <a th:if="${result.fileId != null}"
+                               th:href="@{|/fSFiles/${result.fileId}|}"
+                               class="text-decoration-none"
+                               th:text="${result.fileUri ?: 'File #' + result.fileId}">File</a>
+                            <span th:unless="${result.fileId != null}" class="text-muted">Standalone chunk</span>
+                        </h5>
+                        <div class="mb-2">
+                            <a th:href="@{|/contentChunks/${result.chunkId}|}" class="badge bg-secondary text-decoration-none me-2">
+                                <i class="bi bi-hash me-1"></i>Chunk [[${result.chunkNumber}]]
+                            </a>
+                            <span th:if="${result.sentiment}" class="badge me-2"
+                                  th:classappend="${result.sentiment == 'POSITIVE' ? 'bg-success' : (result.sentiment == 'NEGATIVE' ? 'bg-danger' : 'bg-info')}"
+                                  th:text="${result.sentiment}">NEUTRAL</span>
+                        </div>
+                        <p class="mb-2" th:text="${result.textSnippet}">Chunk text snippet...</p>
+                        <div th:if="${!#lists.isEmpty(result.entities)}" class="small">
+                            <i class="bi bi-tags me-1 text-muted"></i>
+                            <a th:each="ent : ${result.entities}"
+                               th:href="@{/entity(text=${ent.text}, type=${ent.type})}"
+                               th:title="${ent.type}"
+                               class="badge entity-badge me-1 text-decoration-none"
+                               th:classappend="${'entity-' + ent.type}"
+                               th:text="${ent.text}">Entity</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div th:if="${results.totalPages > 1}" class="d-flex justify-content-between align-items-center">
+            <a th:if="${results.hasPrevious()}"
+               th:href="@{/entity(text=${entityText}, type=${entityType}, page=${results.number - 1}, size=${results.size})}"
+               class="btn btn-outline-secondary">
+                <i class="bi bi-chevron-left me-1"></i>Previous
+            </a>
+            <span th:unless="${results.hasPrevious()}"></span>
+            <span class="text-muted">
+                Page [[${results.number + 1}]] of [[${results.totalPages}]]
+            </span>
+            <a th:if="${results.hasNext()}"
+               th:href="@{/entity(text=${entityText}, type=${entityType}, page=${results.number + 1}, size=${results.size})}"
+               class="btn btn-outline-secondary">
+                Next<i class="bi bi-chevron-right ms-1"></i>
+            </a>
+            <span th:unless="${results.hasNext()}"></span>
+        </div>
+    </div>
+
+    <!-- No results -->
+    <div th:if="${entityText != null && entityText != '' && !hasResults && error == null}">
+        <div class="alert alert-warning">
+            <i class="bi bi-search me-2"></i>
+            No chunks tagged with entity "<strong th:text="${entityText}">text</strong>"
+            <span th:if="${entityType}">as <strong th:text="${entityType}">TYPE</strong></span>.
+            <p class="mb-0 mt-2">
+                Try
+                <a th:if="${entityType}" th:href="@{/entity(text=${entityText})}">all entity types</a>
+                <span th:unless="${entityType}">a different entity</span>,
+                or fall back to
+                <a th:href="@{/search(q=${entityText})}">full-text search</a>.
+            </p>
+        </div>
+    </div>
+
+    <!-- Empty state (no text param at all) -->
+    <div th:if="${entityText == null || entityText == ''}">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            Provide an entity text to search. Click a tagged entity on a file detail page,
+            or use the form above.
+        </div>
+    </div>
+</div>
+</body>
+</html>

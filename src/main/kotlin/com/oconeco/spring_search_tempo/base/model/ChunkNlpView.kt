@@ -117,10 +117,17 @@ object ChunkNlpViewFactory {
             if (start < cursor) continue
             if (start > cursor) out += TextSegment(text.substring(cursor, start))
             val entityText = text.substring(start, end)
+            val encodedText = URLEncoder.encode(entityText, StandardCharsets.UTF_8)
+            val href = buildString {
+                append("/entity?text=").append(encodedText)
+                if (ent.type.isNotBlank()) {
+                    append("&type=").append(URLEncoder.encode(ent.type, StandardCharsets.UTF_8))
+                }
+            }
             out += TextSegment(
                 text = entityText,
                 entityType = ent.type,
-                href = "/search?q=" + URLEncoder.encode(entityText, StandardCharsets.UTF_8),
+                href = href,
             )
             cursor = end
         }
