@@ -57,13 +57,6 @@ interface EmailAccountService {
     fun recordDispatched(id: Long, dispatchedAt: java.time.OffsetDateTime)
 
     /**
-     * Issue #84: record the wall-clock time at which we successfully refreshed
-     * the server-side folder list. Drives the re-enum drift detector in
-     * `EmailCrawlOrchestrator.resolveFolders`.
-     */
-    fun recordFolderEnumerated(id: Long, at: java.time.OffsetDateTime)
-
-    /**
      * Encrypt and store an IMAP password for the account. Pass a blank string to clear the stored
      * password (after which the account has no credential and is skipped by the scheduler until
      * a new password is set). The plaintext is never logged or persisted.
