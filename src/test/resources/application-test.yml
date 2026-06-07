@@ -6,9 +6,17 @@ spring:
     hibernate:
       ddl-auto: update  # Auto-update schema for tests
     show-sql: false
+  flyway:
+    # Issue #85: Hibernate (ddl-auto: update) is the source of truth for the
+    # test schema; Flyway running in parallel hits "relation ... does not exist"
+    # because the migrations expect tables Hibernate hasn't created yet.
+    # Same rationale as application-it.yml.
+    enabled: false
   batch:
     job:
       enabled: false  # Disable batch jobs during tests unless explicitly needed
+    jdbc:
+      initialize-schema: always  # Create batch tables for tests (Flyway is disabled above)
   session:
     jdbc:
       initialize-schema: always  # Create session tables for tests
