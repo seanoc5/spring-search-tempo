@@ -1,7 +1,7 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.icegreen.greenmail.junit5.GreenMailExtension
-import com.icegreen.greenmail.util.ServerSetup
+import com.icegreen.greenmail.util.ServerSetupTest
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
@@ -36,7 +36,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
     companion object {
         @JvmField
         @RegisterExtension
-        val greenMail = GreenMailExtension(ServerSetup.IMAP)
+        val greenMail = GreenMailExtension(ServerSetupTest.IMAP)
 
         private const val USER_EMAIL = "user@example.com"
         private const val USER_PASSWORD = "secret"
@@ -194,7 +194,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
             this.uri = "email://$email-${System.nanoTime()}"
             this.provider = EmailProvider.GENERIC_IMAP
             this.imapHost = "127.0.0.1"
-            this.imapPort = ServerSetup.IMAP.port
+            this.imapPort = ServerSetupTest.IMAP.port
             this.useSsl = false
             this.enabled = true
             this.version = 1L
@@ -208,11 +208,11 @@ class EmailFolderSyncServiceTest : BaseIT() {
         val props = Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
-            put("mail.imap.port", ServerSetup.IMAP.port.toString())
+            put("mail.imap.port", ServerSetupTest.IMAP.port.toString())
         }
         val session = Session.getInstance(props)
         val store: Store = session.getStore("imap")
-        store.connect("127.0.0.1", ServerSetup.IMAP.port, USER_EMAIL, USER_PASSWORD)
+        store.connect("127.0.0.1", ServerSetupTest.IMAP.port, USER_EMAIL, USER_PASSWORD)
         try {
             paths.forEach { path ->
                 val folder = store.getFolder(path)
