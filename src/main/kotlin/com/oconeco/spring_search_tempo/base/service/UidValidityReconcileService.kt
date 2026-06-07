@@ -125,14 +125,17 @@ class UidValidityReconcileService(
                     }
 
                     if (serverByMessageId.isNotEmpty()) {
-                        val matchedIds = emailMessageRepository.findExistingMessageIds(serverByMessageId.keys)
-                        for (mid in matchedIds) {
-                            val newUid = serverByMessageId[mid] ?: continue
-                            val row = emailMessageRepository.findByMessageId(mid) ?: continue
+                        // Bulk-load all matching DB rows in one query (Message-ID is
+                        // globally unique via the JPA-enforced constraint, so a single
+                        // IN(...) is exact). Avoids the N+1 that would dominate
+                        // wall-clock on huge folders.
+                        val matchedRows = emailMessageRepository.findByMessageIdIn(serverByMessageId.keys)
+                        for (row in matchedRows) {
+                            val newUid = serverByMessageId[row.messageId] ?: continue
                             row.imapUid = newUid
-                            emailMessageRepository.save(row)
                             matched++
                         }
+                        emailMessageRepository.saveAll(matchedRows)
                         newCount = serverByMessageId.size - matched
                     }
                 }
