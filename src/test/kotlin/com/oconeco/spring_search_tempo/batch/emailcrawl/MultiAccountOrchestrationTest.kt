@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.batch.emailcrawl
 import com.oconeco.spring_search_tempo.base.EmailAccountService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.config.EmailConfiguration
+import com.oconeco.spring_search_tempo.base.service.EmailFolderSyncService.ReEnumerationResult
 import com.oconeco.spring_search_tempo.base.domain.EmailProvider
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.service.EmailFolderSyncService
@@ -283,6 +284,83 @@ class MultiAccountOrchestrationTest {
         }
 
         verify(jobLauncher, never()).run(any(Job::class.java), any(JobParameters::class.java))
+    }
+
+    @Test
+    fun `runQuickSync re-enumerates folders when account lastFolderEnumeratedAt is older than max-age (issue #84)`() {
+        emailConfiguration = EmailConfiguration(
+            enabled = true,
+            quickSyncFolders = listOf("INBOX"),
+            folderEnumMaxAgeHours = 24L,
+        )
+        orchestrator = EmailCrawlOrchestrator(
+            emailConfiguration = emailConfiguration,
+            emailAccountService = emailAccountService,
+            emailFolderService = emailFolderService,
+            emailFolderSyncService = emailFolderSyncService,
+            emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
+            jobLauncher = jobLauncher,
+            imapConnectionService = imapConnectionService,
+            jobExplorer = jobExplorer,
+        )
+
+        val staleAccount = account(id = 81L, email = "stale@example.com",
+            cron = "0 0 * * * *", lastDispatched = null).apply {
+            // Stamp is 25 hours old — outside the 24h drift window.
+            lastFolderEnumeratedAt = OffsetDateTime.now().minusHours(25)
+        }
+        stubAccountGet(staleAccount)
+        stubJobBuild()
+        stubJobLaunchSuccess()
+
+        // Existing folder list keeps the orchestrator past the targets check.
+        `when`(emailFolderService.fetchTargets(eq(81L))).thenReturn(listOf("INBOX"))
+        `when`(emailFolderSyncService.reEnumerateFolders(eq(81L)))
+            .thenReturn(ReEnumerationResult(allSavedIds = listOf(1L), newlyDiscoveredFolderIds = listOf(99L)))
+
+        // runQuickSyncForAccount drives resolveFolders → maybeRefreshFolderEnumeration.
+        orchestrator.runQuickSyncForAccount(accountId = 81L)
+
+        // Stale enumeration → re-enum was triggered. First-time path (enumerateFolders)
+        // must NOT fire when the account already has a stamp.
+        verify(emailFolderSyncService).reEnumerateFolders(eq(81L))
+        verify(emailFolderSyncService, never()).enumerateFolders(eq(81L))
+    }
+
+    @Test
+    fun `runQuickSync skips re-enumeration when account was enumerated recently (issue #84)`() {
+        emailConfiguration = EmailConfiguration(
+            enabled = true,
+            quickSyncFolders = listOf("INBOX"),
+            folderEnumMaxAgeHours = 24L,
+        )
+        orchestrator = EmailCrawlOrchestrator(
+            emailConfiguration = emailConfiguration,
+            emailAccountService = emailAccountService,
+            emailFolderService = emailFolderService,
+            emailFolderSyncService = emailFolderSyncService,
+            emailQuickSyncJobBuilder = emailQuickSyncJobBuilder,
+            jobLauncher = jobLauncher,
+            imapConnectionService = imapConnectionService,
+            jobExplorer = jobExplorer,
+        )
+
+        val freshAccount = account(id = 82L, email = "fresh@example.com",
+            cron = "0 0 * * * *", lastDispatched = null).apply {
+            // Stamp is 1 hour old — well within the 24h drift window.
+            lastFolderEnumeratedAt = OffsetDateTime.now().minusHours(1)
+        }
+        stubAccountGet(freshAccount)
+        stubJobBuild()
+        stubJobLaunchSuccess()
+
+        `when`(emailFolderService.fetchTargets(eq(82L))).thenReturn(listOf("INBOX"))
+
+        orchestrator.runQuickSyncForAccount(accountId = 82L)
+
+        // Fresh enumeration → no enumerate / re-enumerate calls.
+        verify(emailFolderSyncService, never()).reEnumerateFolders(eq(82L))
+        verify(emailFolderSyncService, never()).enumerateFolders(eq(82L))
     }
 
     @Test

@@ -29,7 +29,16 @@ data class EmailConfiguration(
     var enabled: Boolean = false,
     var quickSyncFolders: List<String> = listOf("INBOX", "Sent"),
     var accounts: List<EmailAccountConfig> = emptyList(),
-    var errorDisplay: ErrorDisplayConfig = ErrorDisplayConfig()
+    var errorDisplay: ErrorDisplayConfig = ErrorDisplayConfig(),
+    /**
+     * Issue #84: drift detection for server-side folder list. When the account's
+     * `lastFolderEnumeratedAt` is older than this many hours, the orchestrator
+     * re-enumerates folders before resolving the sync set. Cheap (single
+     * LIST *), so the default is intentionally conservative — 24h matches the
+     * "rare enough that the operator notices new folders by hand within a day"
+     * heuristic.
+     */
+    var folderEnumMaxAgeHours: Long = 24,
 )
 
 /**

@@ -38,6 +38,13 @@ class EmailFolder : SaveableObject() {
     @Column
     var uidValidity: Long? = null  // IMAP UIDVALIDITY (detect folder recreations)
 
+    // Issue #84: hard-stop on UIDVALIDITY mismatch.
+    // Non-null = the reader observed a server-side UIDVALIDITY rotation; sync
+    // is halted for this folder until the operator picks Reconcile (Message-ID
+    // matching) or Skip (disable sync) from the account detail page.
+    @Column
+    var uidValidityMismatchAt: OffsetDateTime? = null
+
     /**
      * Whether this folder is included in `EmailQuickSyncReader.fetchTargets()`.
      * Defaults to true for selectable folders, false for `\Noselect` containers

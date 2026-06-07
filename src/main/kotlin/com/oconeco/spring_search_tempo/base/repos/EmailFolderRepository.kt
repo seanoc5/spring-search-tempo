@@ -28,4 +28,18 @@ interface EmailFolderRepository : JpaRepository<EmailFolder, Long> {
      */
     fun countByEmailAccountId(accountId: Long): Long
 
+    /**
+     * Issue #84: folders observed during the most-recent re-enumeration that
+     * the operator hasn't opted into yet. Newly-discovered folders land with
+     * `syncEnabled=false` and `lastSyncUid IS NULL` (never synced); the
+     * "N new folders discovered" banner on the account detail page uses this
+     * count to invite the operator to the folder list.
+     *
+     * \Noselect folders also satisfy `syncEnabled=false`, so we exclude them
+     * — they're not actionable.
+     */
+    fun countByEmailAccountIdAndSyncEnabledFalseAndNoselectFalseAndLastSyncUidIsNull(
+        accountId: Long
+    ): Long
+
 }

@@ -49,6 +49,9 @@ class EmailFolderDTO {
 
     var uidValidity: Long? = null
 
+    // Issue #84: see EmailFolder.uidValidityMismatchAt.
+    var uidValidityMismatchAt: OffsetDateTime? = null
+
     var syncEnabled: Boolean = true
 
     var lastEnumeratedAt: OffsetDateTime? = null

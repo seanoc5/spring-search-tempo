@@ -66,6 +66,56 @@
       Live sync status is the dedicated status panel below — backed by JobExplorer, not flash state.
     -->
 
+    <!--
+      Issue #84: UIDVALIDITY mismatch banner. Server-side renumbering halts
+      sync until the operator confirms. Hard-stop is intentional — see issue
+      body. One block per affected folder so the Reconcile / Skip actions
+      carry the correct folderId without JS.
+    -->
+    <div th:if="${uidValidityMismatchFolders != null && !uidValidityMismatchFolders.isEmpty()}"
+         th:each="mismatchedFolder : ${uidValidityMismatchFolders}"
+         class="alert alert-danger d-flex flex-wrap align-items-center gap-3 mb-3"
+         role="alert">
+        <div class="flex-grow-1">
+            <strong><i class="bi bi-exclamation-octagon-fill me-2"></i>UIDVALIDITY mismatch detected on folder
+                <code>[[${mismatchedFolder.path ?: mismatchedFolder.folderName}]]</code>.</strong>
+            <div class="small mt-1">
+                The server has renumbered messages in this folder. Click <em>Reconcile</em> to repair using
+                Message-ID matching, or <em>Skip</em> to disable sync for this folder.
+            </div>
+        </div>
+        <form th:action="@{|/emailAccounts/${emailAccount.id}/folders/${mismatchedFolder.id}/uidValidity/reconcile|}"
+              method="post" class="d-inline">
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="bi bi-arrow-repeat me-1"></i>Reconcile
+            </button>
+        </form>
+        <form th:action="@{|/emailAccounts/${emailAccount.id}/folders/${mismatchedFolder.id}/uidValidity/skip|}"
+              method="post" class="d-inline">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-circle me-1"></i>Skip
+            </button>
+        </form>
+    </div>
+
+    <!--
+      Issue #84: "N new folders discovered" banner. Drift-detected folders
+      land with syncEnabled=false; the operator opts in from the folder list.
+    -->
+    <div th:if="${newlyDiscoveredFolderCount != null && newlyDiscoveredFolderCount > 0}"
+         class="alert alert-info d-flex align-items-center justify-content-between mb-3"
+         role="alert">
+        <div>
+            <i class="bi bi-folder-plus me-2"></i>
+            <strong>[[${newlyDiscoveredFolderCount}]]</strong>
+            new folder<span th:if="${newlyDiscoveredFolderCount != 1}">s</span>
+            discovered since the last sync.
+        </div>
+        <a th:href="@{|/emailAccounts/${emailAccount.id}/folders|}" class="btn btn-sm btn-outline-primary">
+            Review &amp; enable
+        </a>
+    </div>
+
     <div id="syncStatusPanel"
          th:hx-get="@{/emailAccounts/{id}/syncStatus(id=${emailAccount.id})}"
          hx-trigger="load"

@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
 import com.oconeco.spring_search_tempo.base.service.EmailAccountForm
 import com.oconeco.spring_search_tempo.base.service.EmailConfigValidationService
 import com.oconeco.spring_search_tempo.base.service.TcpReachabilityProbe
+import com.oconeco.spring_search_tempo.base.service.UidValidityReconcileService
 import com.oconeco.spring_search_tempo.base.service.ValidationResult
 import com.oconeco.spring_search_tempo.batch.emailcrawl.EmailCrawlOrchestrator
 import com.oconeco.spring_search_tempo.batch.emailcrawl.ParallelizationConfig
@@ -31,7 +32,9 @@ class EmailAccountController(
     private val userOwnershipService: UserOwnershipService,
     private val validationService: EmailConfigValidationService,
     private val syncStatusViewService: EmailSyncStatusViewService,
-    private val tcpReachabilityProbe: TcpReachabilityProbe
+    private val tcpReachabilityProbe: TcpReachabilityProbe,
+    private val uidValidityReconcileService: UidValidityReconcileService,
+    private val emailFolderService: com.oconeco.spring_search_tempo.base.EmailFolderService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -88,6 +91,19 @@ class EmailAccountController(
         val account = emailAccountService.get(id)
         model.addAttribute("emailAccount", account)
         model.addAttribute("hasEncryptedPassword", emailAccountService.hasPassword(id))
+
+        // Issue #84: surface UIDVALIDITY mismatches as a red banner so the
+        // operator sees them on the account landing page (not buried in the
+        // folder list). Hard-stop preference is intentional — see issue body.
+        val folders = emailFolderService.findByAccount(id)
+        model.addAttribute(
+            "uidValidityMismatchFolders",
+            folders.filter { it.uidValidityMismatchAt != null }
+        )
+        // Issue #84: surface the "N new folders discovered" banner when
+        // re-enumeration found server-side folders the operator hasn't
+        // opted into yet.
+        model.addAttribute("newlyDiscoveredFolderCount", emailFolderService.countNewlyDiscovered(id))
         return "emailAccount/view"
     }
 
@@ -424,6 +440,68 @@ class EmailAccountController(
         }
 
         return "redirect:/emailAccounts"
+    }
+
+    /**
+     * Issue #84: reconcile a folder after a UIDVALIDITY mismatch. Walks the
+     * server folder, matches our DB rows by Message-ID, and updates the stored
+     * imapUid values + UIDVALIDITY. Operator-driven action; no auto-recovery.
+     */
+    @PostMapping("/{id}/folders/{folderId}/uidValidity/reconcile")
+    fun reconcileUidValidity(
+        @PathVariable id: Long,
+        @PathVariable folderId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        // Touch the account so a bad id returns 404 via NotFoundException.
+        emailAccountService.get(id)
+        try {
+            val result = uidValidityReconcileService.reconcile(folderId)
+            val warning = if (result.missingMessageIdIndex) {
+                " (warning: email_message.message_id is not indexed — reconcile ran but slow)"
+            } else ""
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Reconciled folder '${result.folderPath}': scanned=${result.serverMessagesScanned}, " +
+                    "matched=${result.messagesMatched}, new=${result.messagesNew}, " +
+                    "new UIDVALIDITY=${result.newUidValidity}, took ${result.elapsedMillis}ms.$warning"
+            )
+        } catch (e: Exception) {
+            log.error("Reconcile failed for account {} folder {}: {}", id, folderId, e.message, e)
+            redirectAttributes.addFlashAttribute(
+                "error",
+                "Reconcile failed: ${e.message}"
+            )
+        }
+        return "redirect:/emailAccounts/$id"
+    }
+
+    /**
+     * Issue #84: skip action for a UIDVALIDITY-halted folder. Disables sync
+     * on the folder and clears the halt flag so the account-level banner
+     * goes away. Operator can re-enable from the folder list later.
+     */
+    @PostMapping("/{id}/folders/{folderId}/uidValidity/skip")
+    fun skipUidValidity(
+        @PathVariable id: Long,
+        @PathVariable folderId: Long,
+        redirectAttributes: RedirectAttributes
+    ): String {
+        emailAccountService.get(id)
+        try {
+            uidValidityReconcileService.skip(folderId)
+            redirectAttributes.addFlashAttribute(
+                "message",
+                "Folder sync disabled. Re-enable from the folder list once the server state is understood."
+            )
+        } catch (e: Exception) {
+            log.error("Skip failed for account {} folder {}: {}", id, folderId, e.message, e)
+            redirectAttributes.addFlashAttribute(
+                "error",
+                "Skip failed: ${e.message}"
+            )
+        }
+        return "redirect:/emailAccounts/$id"
     }
 
     /**

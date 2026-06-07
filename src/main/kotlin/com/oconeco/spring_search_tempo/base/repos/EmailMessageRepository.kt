@@ -17,6 +17,8 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
 
     fun findByMessageId(messageId: String): EmailMessage?
 
+    fun findByMessageIdIn(messageIds: Collection<String>): List<EmailMessage>
+
     fun findByUri(uri: String): EmailMessage?
 
     fun existsByMessageId(messageId: String): Boolean

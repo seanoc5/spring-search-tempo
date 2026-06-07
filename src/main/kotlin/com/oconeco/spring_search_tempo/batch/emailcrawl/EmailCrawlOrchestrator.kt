@@ -15,6 +15,7 @@ import org.springframework.batch.core.launch.JobLauncher
 import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.scheduling.support.CronExpression
 import org.springframework.stereotype.Service
+import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -420,10 +421,13 @@ class EmailCrawlOrchestrator(
      * Resolve which folders to sync for an account.
      *
      * Order of preference:
-     *  1. Enumerated `EmailFolder` rows with `syncEnabled=true` and not `\Noselect`.
-     *     This is the path the user controls from the UI (issue #3).
-     *  2. If no folder rows exist yet (account never enumerated), enumerate now
-     *     so first-run accounts work without an explicit user action.
+     *  1. If the account has never been enumerated OR its enumeration is older
+     *     than `app.email.folder-enum-max-age-hours` (issue #84), re-enumerate
+     *     so newly-created server-side folders surface without a manual UI
+     *     action. New folders land with `syncEnabled=false` so the operator
+     *     opts in (matches issue #3 semantics).
+     *  2. Enumerated `EmailFolder` rows with `syncEnabled=true` and not
+     *     `\Noselect`. This is the path the user controls from the UI.
      *  3. If enumeration fails or surfaces no selectable folders, fall back to
      *     the legacy `application.yml` `quickSyncFolders` list so misconfigured
      *     servers still get a best-effort sync.
@@ -432,21 +436,56 @@ class EmailCrawlOrchestrator(
         val id = account.id
             ?: return emailConfiguration.quickSyncFolders
 
+        maybeRefreshFolderEnumeration(account, id)
+
         val targets = emailFolderService.fetchTargets(id)
         if (targets.isNotEmpty()) {
             return targets
         }
 
-        // First-run: try to enumerate. Best-effort — IMAP errors fall through to config.
-        return try {
-            log.info("[{}] No enumerated folders found; running first-time enumeration", account.email)
-            emailFolderSyncService.enumerateFolders(id)
-            val enumerated = emailFolderService.fetchTargets(id)
-            if (enumerated.isNotEmpty()) enumerated else emailConfiguration.quickSyncFolders
+        // Fall through: enumeration may have run but turned up nothing
+        // selectable, OR a transient IMAP error prevented it. Fall back so
+        // misconfigured servers still get a best-effort sync against the
+        // YAML-listed folders.
+        return emailConfiguration.quickSyncFolders
+    }
+
+    /**
+     * Issue #84: enumerate (or re-enumerate) folders when stale. Best-effort —
+     * we never let a LIST * failure kill the sync; the legacy fallback in
+     * [resolveFolders] keeps the account moving even if we couldn't refresh.
+     */
+    private fun maybeRefreshFolderEnumeration(account: EmailAccountDTO, accountId: Long) {
+        val maxAge = Duration.ofHours(emailConfiguration.folderEnumMaxAgeHours.coerceAtLeast(1L))
+        val last = account.lastFolderEnumeratedAt
+        val needsRefresh = last == null ||
+            Duration.between(last, OffsetDateTime.now()) > maxAge
+
+        if (!needsRefresh) return
+
+        try {
+            if (last == null) {
+                log.info("[{}] First-time folder enumeration", account.email)
+                emailFolderSyncService.enumerateFolders(accountId)
+            } else {
+                log.info(
+                    "[{}] Folder enumeration is stale (last={}, max-age={}h); re-enumerating",
+                    account.email, last, maxAge.toHours(),
+                )
+                val result = emailFolderSyncService.reEnumerateFolders(accountId)
+                if (result.newlyDiscoveredFolderIds.isNotEmpty()) {
+                    log.info(
+                        "[{}] Re-enumeration discovered {} new folder(s) — persisted with syncEnabled=false " +
+                            "(operator opts in from /emailAccounts/{}/folders)",
+                        account.email, result.newlyDiscoveredFolderIds.size, accountId,
+                    )
+                }
+            }
         } catch (e: Exception) {
-            log.warn("Folder enumeration failed for {}: {}. Falling back to configured quick-sync folders.",
-                account.email, e.message)
-            emailConfiguration.quickSyncFolders
+            log.warn(
+                "Folder enumeration failed for {}: {}. Falling back to existing folder rows / configured quick-sync list.",
+                account.email, e.message,
+            )
         }
     }
 
