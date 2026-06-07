@@ -61,7 +61,6 @@ class EmailQuickSyncReader(
     private var totalFetched = 0
     private var duplicatesSkipped = 0
     private var jobRunId: Long? = null
-    private var uidValidityHalted: Boolean = false
 
     override fun beforeStep(stepExecution: StepExecution) {
         // Get jobRunId from execution context for heartbeat updates
@@ -151,7 +150,8 @@ class EmailQuickSyncReader(
                             "operator must Reconcile or Skip from /emailAccounts/{} (issue #84).",
                         folderName, obs.storedUidValidity, obs.serverUidValidity, account.id
                     )
-                    uidValidityHalted = true
+                    // No items emitted ⇒ writer's afterStep `highestUid > 0`
+                    // guard skips updateSyncState ⇒ lastSyncUid preserved.
                     messageWrappers = emptyList()
                     return
                 }
@@ -295,16 +295,15 @@ class EmailQuickSyncReader(
 
     /**
      * Get the highest UID processed (for sync state update).
+     *
+     * Issue #84 invariant: when the reader has halted on UIDVALIDITY mismatch,
+     * `messageWrappers` is the empty list and `highestUid` is never advanced
+     * past zero, so the writer's `afterStep` short-circuits on its `highestUid
+     * > 0` guard and does NOT call `updateSyncState`. That preserves the
+     * stored `lastSyncUid` under the old UID space — which is exactly what
+     * reconcile needs to map by Message-ID.
      */
     fun getHighestUid(): Long = highestUid
-
-    /**
-     * Issue #84: true when the reader halted because the folder's UIDVALIDITY
-     * disagreed with the server. Callers (the writer's sync-state update path)
-     * should skip persisting a new lastSyncUid in this case — the cursor is
-     * meaningless under the new UID space and reconcile uses the old value.
-     */
-    fun isUidValidityHalted(): Boolean = uidValidityHalted
 
     /**
      * Get the folder ID (for sync state update).

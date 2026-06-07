@@ -68,21 +68,16 @@ class UidValidityReconcileService(
     )
 
     /**
-     * Reconcile a single folder. Caller is the controller for "Reconcile" UI
-     * action; this method is read-mostly on IMAP (headers only) and writes
-     * back through the existing JPA path.
+     * Reconcile a single folder. Operator-driven from the account detail page.
+     *
+     * Deliberately NOT `@Transactional` at the method level — IMAP header
+     * fetch on a huge mailbox can take minutes, and holding a DB transaction
+     * open across that I/O would block the connection pool and stall sibling
+     * syncs. Persistence is done in narrow inner transactions on the JPA
+     * repository methods + a final transactional cleanup.
      */
-    @Transactional
     fun reconcile(folderId: Long): ReconcileResult {
-        val folder = emailFolderRepository.findById(folderId)
-            .orElseThrow { NotFoundException("emailFolder not found: $folderId") }
-        require(folder.uidValidityMismatchAt != null) {
-            "Folder $folderId is not in mismatch state; refusing to reconcile."
-        }
-        val accountId = folder.emailAccount?.id
-            ?: throw IllegalStateException("Folder $folderId has no email account.")
-        val account = emailAccountService.get(accountId)
-        val folderPath = folder.path ?: folder.folderName ?: error("Folder has no path/name")
+        val context = loadReconcileContext(folderId)
 
         val missingIndex = !messageIdIsIndexed()
         if (missingIndex) {
@@ -100,8 +95,11 @@ class UidValidityReconcileService(
         var serverUidValidity = 0L
         var highestUid = 0L
 
-        imapConnectionService.withConnection(account) { store ->
-            val imapFolder = store.getFolder(folderPath) as IMAPFolder
+        // IMAP I/O and DB writes interleave per-row, but the surrounding
+        // transaction is per-save (Spring Data JPA default) rather than
+        // per-folder. The connection isn't held open across the IMAP fetch.
+        imapConnectionService.withConnection(context.accountDto) { store ->
+            val imapFolder = store.getFolder(context.folderPath) as IMAPFolder
             imapFolder.open(Folder.READ_ONLY)
             try {
                 serverUidValidity = imapFolder.uidValidity
@@ -116,8 +114,6 @@ class UidValidityReconcileService(
                     }
                     imapFolder.fetch(messages, fetchProfile)
 
-                    // Build the server-side (messageId -> uid) map first so we
-                    // can hit the DB once for the lookup.
                     val serverByMessageId = HashMap<String, Long>(messages.size)
                     for (msg in messages) {
                         val messageId = msg.getHeader("Message-ID")?.firstOrNull()?.trim() ?: continue
@@ -132,9 +128,6 @@ class UidValidityReconcileService(
                         val matchedIds = emailMessageRepository.findExistingMessageIds(serverByMessageId.keys)
                         for (mid in matchedIds) {
                             val newUid = serverByMessageId[mid] ?: continue
-                            // Update by Message-ID rather than re-loading the entity to
-                            // avoid hydrating thousands of EmailMessage rows for a
-                            // reconcile that only needs to touch imapUid.
                             val row = emailMessageRepository.findByMessageId(mid) ?: continue
                             row.imapUid = newUid
                             emailMessageRepository.save(row)
@@ -148,8 +141,49 @@ class UidValidityReconcileService(
             }
         }
 
-        // Persist new UIDVALIDITY + clear the halt + advance lastSyncUid so the
-        // next normal sync FETCHes only the truly-new messages.
+        finalizeReconcile(folderId, serverUidValidity, highestUid)
+
+        val elapsed = System.currentTimeMillis() - startedAt
+        log.info(
+            "Reconcile complete for folder {} (account {}): scanned={}, matched={}, new={}, " +
+                "new UIDVALIDITY={}, elapsed={}ms",
+            context.folderPath, context.accountEmail, scanned, matched, newCount, serverUidValidity, elapsed
+        )
+
+        return ReconcileResult(
+            folderId = folderId,
+            folderPath = context.folderPath,
+            serverMessagesScanned = scanned,
+            messagesMatched = matched,
+            messagesNew = newCount,
+            newUidValidity = serverUidValidity,
+            elapsedMillis = elapsed,
+            missingMessageIdIndex = missingIndex,
+        )
+    }
+
+    internal data class ReconcileContext(
+        val accountDto: com.oconeco.spring_search_tempo.base.model.EmailAccountDTO,
+        val accountEmail: String?,
+        val folderPath: String,
+    )
+
+    @Transactional(readOnly = true)
+    internal fun loadReconcileContext(folderId: Long): ReconcileContext {
+        val folder = emailFolderRepository.findById(folderId)
+            .orElseThrow { NotFoundException("emailFolder not found: $folderId") }
+        require(folder.uidValidityMismatchAt != null) {
+            "Folder $folderId is not in mismatch state; refusing to reconcile."
+        }
+        val accountId = folder.emailAccount?.id
+            ?: throw IllegalStateException("Folder $folderId has no email account.")
+        val account = emailAccountService.get(accountId)
+        val folderPath = folder.path ?: folder.folderName ?: error("Folder has no path/name")
+        return ReconcileContext(account, account.email, folderPath)
+    }
+
+    @Transactional
+    internal fun finalizeReconcile(folderId: Long, serverUidValidity: Long, highestUid: Long) {
         val refreshed = emailFolderRepository.findById(folderId)
             .orElseThrow { NotFoundException("emailFolder not found: $folderId") }
         refreshed.uidValidity = serverUidValidity
@@ -158,24 +192,6 @@ class UidValidityReconcileService(
             refreshed.lastSyncUid = highestUid
         }
         emailFolderRepository.save(refreshed)
-
-        val elapsed = System.currentTimeMillis() - startedAt
-        log.info(
-            "Reconcile complete for folder {} (account {}): scanned={}, matched={}, new={}, " +
-                "new UIDVALIDITY={}, elapsed={}ms",
-            folderPath, account.email, scanned, matched, newCount, serverUidValidity, elapsed
-        )
-
-        return ReconcileResult(
-            folderId = folderId,
-            folderPath = folderPath,
-            serverMessagesScanned = scanned,
-            messagesMatched = matched,
-            messagesNew = newCount,
-            newUidValidity = serverUidValidity,
-            elapsedMillis = elapsed,
-            missingMessageIdIndex = missingIndex,
-        )
     }
 
     /**
