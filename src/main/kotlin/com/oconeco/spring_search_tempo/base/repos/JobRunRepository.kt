@@ -199,6 +199,42 @@ interface JobRunRepository : JpaRepository<JobRun, Long> {
     """)
     fun countStaleRunningJobs(@Param("threshold") threshold: OffsetDateTime): Long
 
+    /**
+     * Count RUNNING jobs that are still "fresh" by heartbeat (issue #73).
+     *
+     * A row is fresh when:
+     *   - run_status = RUNNING, AND
+     *   - lastHeartbeatAt is recent (>= threshold), OR
+     *   - lastHeartbeatAt is null and startTime is recent (newly started)
+     *
+     * Mirror of [countStaleRunningJobs] / [findStaleRunningJobs] — needed so
+     * the site-wide nav indicator doesn't surface ghost rows left RUNNING by
+     * a crashed JVM that hasn't yet been swept by the orphan reaper.
+     */
+    @Query("""
+        SELECT COUNT(jr) FROM JobRun jr
+        WHERE jr.runStatus = 'RUNNING'
+          AND (
+              (jr.lastHeartbeatAt IS NOT NULL AND jr.lastHeartbeatAt >= :threshold)
+              OR (jr.lastHeartbeatAt IS NULL AND jr.startTime >= :threshold)
+          )
+    """)
+    fun countFreshRunningJobs(@Param("threshold") threshold: OffsetDateTime): Long
+
+    /**
+     * Find RUNNING jobs that are still "fresh" by heartbeat (issue #73).
+     * See [countFreshRunningJobs] for the freshness definition.
+     */
+    @Query("""
+        SELECT jr FROM JobRun jr
+        WHERE jr.runStatus = 'RUNNING'
+          AND (
+              (jr.lastHeartbeatAt IS NOT NULL AND jr.lastHeartbeatAt >= :threshold)
+              OR (jr.lastHeartbeatAt IS NULL AND jr.startTime >= :threshold)
+          )
+    """)
+    fun findFreshRunningJobs(@Param("threshold") threshold: OffsetDateTime): List<JobRun>
+
     @Modifying
     fun deleteByCrawlConfigId(crawlConfigId: Long): Int
 

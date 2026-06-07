@@ -1,0 +1,98 @@
+<!DOCTYPE HTML>
+<!--
+  Site-wide nav indicator for in-flight crawl/sync jobs (issue #73).
+
+  Two fragments:
+   - "badge"  : polled every 5s by the layout header. ONLY the visual state
+                span (icon + count badge + recent-failure dot). It must NOT
+                include the dropdown menu or the toggle button — otherwise
+                the 5s poll would tear down the dropdown the user just
+                opened.
+   - "details": fills the dropdown panel content on click. Returns body
+                content (no wrapper id) so the placeholder
+                #navJobIndicatorDetailsBody owns the slot.
+
+  The badge root is always #navJobIndicator so hx-swap="outerHTML" replaces
+  cleanly on each poll. The toggle button and dropdown menu live in the
+  layout (static, never swapped).
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- =========== Badge fragment (polled every 5s) ===========
+     Renders ONLY the visual state. The enclosing toggle button + dropdown
+     menu are static in layout.html and survive every poll tick. -->
+<span th:fragment="badge"
+      id="navJobIndicator"
+      th:hx-get="@{/nav/jobIndicator}"
+      hx-trigger="every 5s"
+      hx-swap="outerHTML"
+      class="d-inline-flex align-items-center">
+
+    <!-- Icon shifts state: spinning arrows while running, dim circle when idle. -->
+    <i th:class="${badge.hasRunning} ? 'bi bi-arrow-repeat spin' : 'bi bi-circle text-muted'"></i>
+
+    <!-- Idle pill: small, muted, no count. -->
+    <span th:if="${!badge.hasRunning && !badge.hasRecentFailure}"
+          class="ms-2 d-none d-md-inline small text-white-50">idle</span>
+
+    <!-- Running count badge: top-right of the (positioned) button parent. -->
+    <span th:if="${badge.hasRunning}"
+          class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary"
+          th:text="${badge.runningCount}">3<span class="visually-hidden">running jobs</span></span>
+
+    <!-- Recent-failure dot: overlays even when no jobs are running. Smaller,
+         lower so it doesn't collide with the count badge. -->
+    <span th:if="${badge.hasRecentFailure}"
+          class="position-absolute top-100 start-100 translate-middle p-1 bg-danger border border-light rounded-circle"
+          th:title="|${badge.recentFailureCount} job(s) failed in the last 5 minutes|">
+        <span class="visually-hidden">recent job failures</span>
+    </span>
+</span>
+
+<!-- =========== Details fragment (loaded on click) ===========
+     Returns body content only — the placeholder #navJobIndicatorDetailsBody
+     in layout.html owns the slot, so the fragment must not carry the same id. -->
+<th:block th:fragment="details">
+    <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+        <strong class="small">
+            <i class="bi bi-activity me-1"></i>In-flight jobs
+        </strong>
+        <span class="badge bg-secondary" th:text="${#lists.size(rows)}">0</span>
+    </div>
+
+    <div th:if="${rows.empty}" class="text-muted small p-3">
+        <i class="bi bi-check-circle me-1"></i>
+        No running jobs right now.
+    </div>
+
+    <ul th:if="${!rows.empty}" class="list-group list-group-flush mb-0">
+        <li th:each="row : ${rows}" class="list-group-item py-2">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <a th:href="@{${row.detailLink}}"
+                       class="text-decoration-none fw-semibold d-block text-truncate"
+                       th:text="${row.jobName}"
+                       th:title="${row.jobName}">jobName</a>
+                    <div th:if="${row.source != null}"
+                         class="small text-muted text-truncate"
+                         th:text="${row.source}"
+                         th:title="${row.source}">step</div>
+                    <div class="small text-muted">
+                        <span th:if="${row.startedAt != null}"
+                              th:text="|started ${#temporals.format(row.startedAt, 'HH:mm:ss')}|">started 12:34:56</span>
+                        <span th:if="${row.startedAt == null}">started —</span>
+                    </div>
+                </div>
+                <span class="badge bg-primary align-self-center" th:text="${row.status}">RUNNING</span>
+            </div>
+        </li>
+    </ul>
+
+    <div class="border-top px-3 py-2 d-flex justify-content-end">
+        <a th:href="@{/batch}" class="small text-decoration-none">All batch jobs &rarr;</a>
+    </div>
+</th:block>
+
+</body>
+</html>

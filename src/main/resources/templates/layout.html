@@ -25,7 +25,47 @@
                     <span class="fw-semibold fs-5 d-none d-sm-inline">[[#{app.title}]]</span>
                 </a>
 
-                <!-- Right: User Menu -->
+                <!-- Right: In-flight job indicator + User Menu -->
+                <div class="d-flex align-items-center gap-2">
+                    <!-- Site-wide nav indicator for in-flight crawl/sync jobs (issue #73).
+
+                         The toggle button + dropdown menu are STATIC here — Bootstrap's
+                         dropdown state and the click-loaded panel must survive the 5s
+                         poll. ONLY the inner #navJobIndicator span (icon + count badge +
+                         recent-failure dot) is swapped by hx-get="/nav/jobIndicator".
+                         The first poll fires on `load`; the returned fragment carries
+                         hx-trigger="every 5s" so steady-state polling takes over. -->
+                    <div class="dropdown">
+                        <button id="navJobIndicatorToggle"
+                                type="button"
+                                class="btn btn-dark btn-sm position-relative d-flex align-items-center"
+                                data-bs-toggle="dropdown"
+                                data-bs-auto-close="outside"
+                                aria-expanded="false"
+                                th:hx-get="@{/nav/jobIndicator/details}"
+                                hx-target="#navJobIndicatorDetailsBody"
+                                hx-trigger="click"
+                                title="In-flight jobs">
+                            <span id="navJobIndicator"
+                                  class="d-inline-flex align-items-center"
+                                  th:hx-get="@{/nav/jobIndicator}"
+                                  hx-trigger="load, every 5s"
+                                  hx-swap="outerHTML">
+                                <i class="bi bi-circle text-muted"></i>
+                            </span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+                             aria-labelledby="navJobIndicatorToggle"
+                             style="min-width: 360px; max-width: 480px;">
+                            <div id="navJobIndicatorDetailsBody">
+                                <div class="text-muted small p-3 text-center">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    Loading&hellip;
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 <div class="dropdown">
                     <button type="button" class="btn btn-dark dropdown-toggle d-flex align-items-center"
                             data-bs-toggle="dropdown" aria-expanded="false" id="userMenuDropdown">
@@ -53,6 +93,7 @@
                             </form>
                         </li>
                     </ul>
+                </div>
                 </div>
             </div>
         </header>
