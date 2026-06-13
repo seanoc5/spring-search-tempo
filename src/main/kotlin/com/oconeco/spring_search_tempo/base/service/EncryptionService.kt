@@ -134,13 +134,3 @@ class EncryptionService(
     fun isConfigured(): Boolean = keyBase64.isNotBlank()
 
 }
-
-/**
- * @deprecated Renamed to [EncryptionService] — this service encrypts more than OneDrive tokens
- * (IMAP passwords too). Update references; this typealias will be removed in a future release.
- */
-@Deprecated(
-    message = "Renamed to EncryptionService — this service encrypts IMAP passwords too, not just OneDrive tokens.",
-    replaceWith = ReplaceWith("EncryptionService")
-)
-typealias TokenEncryptionService = EncryptionService
