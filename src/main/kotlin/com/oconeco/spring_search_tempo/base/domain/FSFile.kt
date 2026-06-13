@@ -90,6 +90,14 @@ class FSFile : FSObject() {
     @JdbcTypeCode(SqlTypes.JSON)
     var archiveContents: String? = null
 
+    /**
+     * For per-entry archive rows (issue #118), points back at the enclosing archive's URI
+     * (e.g. `file:///path/to/archive.zip`). Null for normal files. Used to find and delete
+     * stale entries when the archive's mtime/size changes between crawls.
+     */
+    @Column(columnDefinition = "text")
+    var parentArchiveUri: String? = null
+
     @OneToMany(mappedBy = "concept")
     var contentChunks = mutableSetOf<ContentChunk>()
 

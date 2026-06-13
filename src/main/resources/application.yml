@@ -222,6 +222,20 @@ app:
     # Seed data: docs/sql/012-seed-crawl-configs.sql
     # Edit via UI: /crawlConfigs/{id}/edit
 
+  # Per-entry archive enumeration (issue #118).
+  # When enabled, .zip/.tar/.tar.gz/.7z/.jar files seen during a crawl produce one
+  # FSFile row per inner entry with a synthetic jar-style URI
+  # (file:///path/archive.zip!/inner/file.txt). Each entry runs through the same
+  # PatternMatchingService as a regular file, so .git/ inside a zip is still SKIP.
+  archive:
+    enabled: true
+    # Outer archive = depth 1. An archive-inside-an-archive-inside-an-archive
+    # triggers a SKIP-with-reason at depth 3.
+    max-recursion-depth: 2
+    # Archives with more entries than this fall back to LOCATE-only treatment
+    # to keep DB growth bounded. Log line names the archive and entry count.
+    max-extracted-entries: 1000
+
   scheduling:
     crawl:
       enabled: false

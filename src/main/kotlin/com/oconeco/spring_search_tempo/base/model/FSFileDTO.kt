@@ -116,4 +116,7 @@ class FSFileDTO {
     /** JSON metadata for archive files (entry names/sizes) */
     var archiveContents: String? = null
 
+    /** URI of the parent archive when this FSFile is a per-entry row (issue #118). */
+    var parentArchiveUri: String? = null
+
 }

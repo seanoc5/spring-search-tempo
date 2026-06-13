@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
+import com.oconeco.spring_search_tempo.base.config.ArchiveConfiguration
 import com.oconeco.spring_search_tempo.base.config.EffectivePatterns
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
@@ -11,10 +12,12 @@ import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
+import com.oconeco.spring_search_tempo.base.service.ArchiveEnumerationService
 import com.oconeco.spring_search_tempo.base.service.FSFileMapper
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.TextAndMetadataResult
+import com.oconeco.spring_search_tempo.base.service.TextExtractionResult
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
@@ -65,7 +68,9 @@ class CombinedCrawlProcessor(
     private val textExtractionService: TextExtractionService,
     private val forceFullRecrawl: Boolean = false,
     meterRegistry: MeterRegistry? = null,
-    private val maxCacheSize: Long = DEFAULT_MAX_CACHE_SIZE
+    private val maxCacheSize: Long = DEFAULT_MAX_CACHE_SIZE,
+    private val archiveService: ArchiveEnumerationService? = null,
+    private val archiveConfig: ArchiveConfiguration = ArchiveConfiguration()
 ) : ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
 
     companion object {
@@ -323,6 +328,18 @@ class CombinedCrawlProcessor(
             if (dto != null) {
                 log.debug("\t\t++++ File {} will be persisted", file)
                 fileDtos.add(dto)
+
+                // Issue #118: if the file is a recognised archive and the analysis
+                // status warranted opening it, fan out per-entry rows. Entries
+                // append to the same DTO list — they're plain FSFile rows that
+                // happen to carry parentArchiveUri.
+                if (shouldEnumerateArchive(file, dto)) {
+                    val entries = enumerateArchiveEntries(file, dto)
+                    if (entries.isNotEmpty()) {
+                        log.info("Archive {} produced {} entry rows", file, entries.size)
+                        fileDtos.addAll(entries)
+                    }
+                }
             } else {
                 log.info("\t\t.... File {} was skipped (maybe already current or skipped by pattern) ", file)
             }
@@ -548,6 +565,159 @@ class CombinedCrawlProcessor(
 
         return parentFolder?.analysisStatus?.also {
             parentStatusCache.put(parentUri, it)
+        }
+    }
+
+    // ---------- Archive enumeration (issue #118) ----------------------------
+
+    /**
+     * Should we open this file as an archive and emit per-entry rows? Only when:
+     * - archive enumeration is enabled and the archive service is wired in,
+     * - the file extension is one we recognise,
+     * - the file's analysis status reached INDEX (SKIP/LOCATE skip the work).
+     * Returns false for archives we'd rather skip silently (parent recursion cap exceeded).
+     */
+    private fun shouldEnumerateArchive(file: Path, dto: FSFileDTO): Boolean {
+        if (!archiveConfig.enabled || archiveService == null) return false
+        if (archiveService.detectKind(file) == null) return false
+        // Only enumerate when the archive would have been opened anyway. SKIP / LOCATE
+        // remain "metadata-only" — same as today's behaviour for opaque blobs.
+        return when (dto.analysisStatus) {
+            AnalysisStatus.INDEX, AnalysisStatus.ANALYZE, AnalysisStatus.SEMANTIC -> true
+            else -> false
+        }
+    }
+
+    /**
+     * Enumerate entries for a single archive and return one DTO per entry. Each entry
+     * runs through PatternMatchingService against its synthetic URI so .git/ or build/
+     * inside a zip still SKIP. INDEX/ANALYZE entries get their bytes streamed through
+     * Tika via [TextExtractionService.extractTextFromStream].
+     *
+     * Recursion is capped via [ArchiveConfiguration.maxRecursionDepth]: an entry whose
+     * own URI would push past the cap is recorded as a SKIP row with a reason rather
+     * than enumerated. Archives over [ArchiveConfiguration.maxExtractedEntries] fall
+     * back to LOCATE-only treatment of the outer archive (no entries emitted).
+     */
+    private fun enumerateArchiveEntries(file: Path, archiveDto: FSFileDTO): List<FSFileDTO> {
+        val service = archiveService ?: return emptyList()
+        val archiveUri = archiveDto.uri ?: return emptyList()
+
+        // Recursion cap. Outer archive on a real path = depth 1; an entry would be depth 2.
+        // Nested-archive entries running through this same processor path bring depth 3+.
+        val parentDepth = service.depthOf(archiveUri)
+        if (parentDepth + 1 > archiveConfig.maxRecursionDepth) {
+            log.warn(
+                "Archive recursion cap exceeded (depth would be {}, cap {}), skipping enumeration: {}",
+                parentDepth + 1, archiveConfig.maxRecursionDepth, archiveUri
+            )
+            return emptyList()
+        }
+
+        val rawEntries = service.enumerateEntries(file).toList()
+        if (rawEntries.size > archiveConfig.maxExtractedEntries) {
+            log.warn(
+                "Archive {} has {} entries (cap {}), falling back to LOCATE-only (no per-entry rows)",
+                archiveUri, rawEntries.size, archiveConfig.maxExtractedEntries
+            )
+            // Existing entries from a previous (smaller) version of this archive
+            // would dangle if we left them in place after a fallback.
+            deleteStaleArchiveEntries(archiveUri)
+            return emptyList()
+        }
+        if (rawEntries.isEmpty()) {
+            deleteStaleArchiveEntries(archiveUri)
+            return emptyList()
+        }
+
+        // Incremental re-crawl: we only get here when the archive's mtime/size changed
+        // (unchanged archives short-circuit in processFile()). Drop the prior entries so
+        // re-enumeration doesn't double-up or strand removed entries.
+        deleteStaleArchiveEntries(archiveUri)
+
+        val out = mutableListOf<FSFileDTO>()
+        for (entry in rawEntries) {
+            if (entry.isDirectory) continue
+            val entryUri = service.buildEntryUri(archiveUri, entry.entryPath)
+            val analysisStatus = patternMatchingService.determineFileAnalysisStatus(
+                path = entryUri,
+                filePatterns = effectivePatterns.filePatterns,
+                parentFolderStatus = archiveDto.analysisStatus ?: AnalysisStatus.LOCATE,
+                priority = effectivePatterns.filePatternPriority
+            )
+            val entryDto = buildArchiveEntryDto(file, archiveUri, entryUri, entry, analysisStatus)
+            out += entryDto
+        }
+        return out
+    }
+
+    private fun buildArchiveEntryDto(
+        archivePath: Path,
+        archiveUri: String,
+        entryUri: String,
+        entry: ArchiveEnumerationService.ArchiveEntry,
+        analysisStatus: AnalysisStatus
+    ): FSFileDTO {
+        val dto = FSFileDTO()
+        dto.uri = entryUri
+        dto.parentArchiveUri = archiveUri
+        dto.label = entry.entryPath.substringAfterLast('/').ifBlank { entry.entryPath }
+        dto.type = "ARCHIVE_ENTRY"
+        dto.size = if (entry.size >= 0) entry.size else null
+        dto.fsLastModified = entry.lastModified?.let {
+            java.time.OffsetDateTime.ofInstant(it, java.time.ZoneOffset.UTC)
+        }
+        dto.analysisStatus = analysisStatus
+        dto.status = Status.NEW
+        dto.version = 0L
+        dto.crawlDepth = null
+
+        when (analysisStatus) {
+            AnalysisStatus.SKIP, AnalysisStatus.LOCATE -> {
+                // No content extraction.
+            }
+            AnalysisStatus.INDEX, AnalysisStatus.ANALYZE, AnalysisStatus.SEMANTIC -> {
+                extractArchiveEntryText(archivePath, entry.entryPath, dto)
+            }
+        }
+        return dto
+    }
+
+    /**
+     * Remove any per-entry rows belonging to a previous crawl of this archive.
+     * Caller-controlled — only invoked when we're about to re-enumerate (changed
+     * archive) or when we've decided not to enumerate at all (oversized / empty).
+     */
+    private fun deleteStaleArchiveEntries(archiveUri: String) {
+        try {
+            val deleted = fileRepository.deleteByParentArchiveUri(archiveUri)
+            if (deleted > 0) {
+                log.info("Deleted {} stale archive entries for {}", deleted, archiveUri)
+            }
+        } catch (e: Exception) {
+            log.warn("Failed to delete stale archive entries for {}: {}", archiveUri, e.message)
+        }
+    }
+
+    private fun extractArchiveEntryText(archivePath: Path, entryPath: String, dto: FSFileDTO) {
+        val service = archiveService ?: return
+        val stream = service.openEntryStream(archivePath, entryPath)
+        if (stream == null) {
+            dto.bodyText = "[Archive entry not readable]"
+            dto.extractionError = true
+            return
+        }
+        stream.use { input ->
+            when (val result = textExtractionService.extractTextFromStream(input, entryPath)) {
+                is TextExtractionResult.Success -> {
+                    dto.bodyText = result.text
+                    dto.bodySize = result.text.length.toLong()
+                }
+                is TextExtractionResult.Failure -> {
+                    dto.bodyText = "[Extraction failed: ${result.error}]"
+                    dto.extractionError = true
+                }
+            }
         }
     }
 

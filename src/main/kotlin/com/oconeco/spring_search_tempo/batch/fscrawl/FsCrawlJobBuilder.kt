@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.batch.fscrawl
 
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.config.ArchiveConfiguration
 import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
@@ -10,6 +11,7 @@ import com.oconeco.spring_search_tempo.base.service.CrawlCheckpointService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import com.oconeco.spring_search_tempo.base.service.CrawlOwnershipMap
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
+import com.oconeco.spring_search_tempo.base.service.ArchiveEnumerationService
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.base.service.StartPathValidator
@@ -67,7 +69,9 @@ class FsCrawlJobBuilder(
     private val advisoryLockListener: JobExecutionAdvisoryLockListener,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor,
     private val meterRegistry: MeterRegistry,
-    private val crawlConfiguration: CrawlConfiguration
+    private val crawlConfiguration: CrawlConfiguration,
+    private val archiveConfiguration: ArchiveConfiguration,
+    private val archiveEnumerationService: ArchiveEnumerationService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -288,7 +292,9 @@ class FsCrawlJobBuilder(
             patternMatchingService = patternMatchingService,
             textExtractionService = textExtractionService,
             forceFullRecrawl = forceFullRecrawl,
-            meterRegistry = meterRegistry
+            meterRegistry = meterRegistry,
+            archiveService = archiveEnumerationService,
+            archiveConfig = archiveConfiguration
         )
     }
 
