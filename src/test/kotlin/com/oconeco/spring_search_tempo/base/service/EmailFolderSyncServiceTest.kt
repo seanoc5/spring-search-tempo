@@ -35,9 +35,12 @@ import java.util.Properties
 class EmailFolderSyncServiceTest : BaseIT() {
 
     companion object {
+        // Dynamic port (issue #106): hardcoded 3143 collided across
+        // GreenMail-backed tests sharing the same JVM after Spring
+        // tear-down.
         @JvmField
         @RegisterExtension
-        val greenMail = GreenMailExtension(ServerSetupTest.IMAP)
+        val greenMail = GreenMailExtension(ServerSetupTest.IMAP.dynamicPort())
 
         private const val USER_EMAIL = "user@example.com"
         private const val USER_PASSWORD = "secret"
@@ -247,7 +250,7 @@ class EmailFolderSyncServiceTest : BaseIT() {
             this.uri = "email://$email-${System.nanoTime()}"
             this.provider = EmailProvider.GENERIC_IMAP
             this.imapHost = "127.0.0.1"
-            this.imapPort = ServerSetupTest.IMAP.port
+            this.imapPort = greenMail.imap.port
             this.useSsl = false
             this.enabled = true
             this.version = 1L
@@ -261,11 +264,11 @@ class EmailFolderSyncServiceTest : BaseIT() {
         val props = Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
-            put("mail.imap.port", ServerSetupTest.IMAP.port.toString())
+            put("mail.imap.port", greenMail.imap.port.toString())
         }
         val session = Session.getInstance(props)
         val store: Store = session.getStore("imap")
-        store.connect("127.0.0.1", ServerSetupTest.IMAP.port, USER_EMAIL, USER_PASSWORD)
+        store.connect("127.0.0.1", greenMail.imap.port, USER_EMAIL, USER_PASSWORD)
         try {
             paths.forEach { path ->
                 val folder = store.getFolder(path)

@@ -52,9 +52,12 @@ import java.util.Properties
 class PrefetchingBodyEnrichmentReaderTest {
 
     companion object {
+        // Dynamic port (issue #106): hardcoded 3143 collided across
+        // GreenMail-backed tests sharing the same JVM after Spring
+        // tear-down.
         @JvmField
         @RegisterExtension
-        val greenMail = GreenMailExtension(ServerSetupTest.IMAP)
+        val greenMail = GreenMailExtension(ServerSetupTest.IMAP.dynamicPort())
 
         private const val USER_EMAIL = "bulkfetch@example.com"
         private const val USER_PASSWORD = "secret"
@@ -83,7 +86,7 @@ class PrefetchingBodyEnrichmentReaderTest {
             email = USER_EMAIL
             provider = EmailProvider.GENERIC_IMAP
             imapHost = "127.0.0.1"
-            imapPort = ServerSetupTest.IMAP.port
+            imapPort = greenMail.imap.port
             useSsl = false
         }
         val folderDto = EmailFolderDTO().apply {
@@ -284,11 +287,11 @@ class PrefetchingBodyEnrichmentReaderTest {
         val props = Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
-            put("mail.imap.port", ServerSetupTest.IMAP.port.toString())
+            put("mail.imap.port", greenMail.imap.port.toString())
         }
         val session = Session.getInstance(props)
         val store = session.getStore("imap")
-        store.connect("127.0.0.1", ServerSetupTest.IMAP.port, USER_EMAIL, USER_PASSWORD)
+        store.connect("127.0.0.1", greenMail.imap.port, USER_EMAIL, USER_PASSWORD)
         return store
     }
 

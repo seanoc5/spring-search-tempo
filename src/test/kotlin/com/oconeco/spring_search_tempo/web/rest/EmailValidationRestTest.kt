@@ -51,7 +51,7 @@ class EmailValidationRestTest {
     fun postReturnsOk() {
         val form = EmailAccountForm(
             host = "127.0.0.1",
-            port = EmailTestFixtures.IMAP.port,
+            port = greenMail.imap.port,
             username = EmailTestFixtures.DEFAULT_USER,
             password = EmailTestFixtures.DEFAULT_PASSWORD,
             useSsl = false
@@ -77,7 +77,7 @@ class EmailValidationRestTest {
     fun postReturnsBadRequestOnAuthFailure() {
         val form = EmailAccountForm(
             host = "127.0.0.1",
-            port = EmailTestFixtures.IMAP.port,
+            port = greenMail.imap.port,
             username = EmailTestFixtures.DEFAULT_USER,
             password = "wrong",
             useSsl = false

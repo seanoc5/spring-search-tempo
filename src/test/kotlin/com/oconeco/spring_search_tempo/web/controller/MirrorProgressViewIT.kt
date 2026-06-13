@@ -58,21 +58,24 @@ import java.util.Properties
 class MirrorProgressViewIT : BaseIT() {
 
     companion object {
-        private const val SRC_PORT = 3247
-        private const val DST_PORT = 3249
-
+        // Dynamic ports (issue #106): hardcoded ports collided across
+        // GreenMail-backed tests sharing the same JVM after Spring
+        // tear-down. Read the live ports via [srcPort] / [dstPort]
+        // accessors — each `.reset()` rebinds to a fresh OS port.
         private const val SRC_EMAIL = "old-progress@oconeco.com"
         private const val DST_EMAIL = "new-progress@oconeco.com"
         private const val MAIL_PASSWORD = "secret"
 
         private lateinit var srcServer: GreenMail
         private lateinit var dstServer: GreenMail
+        private val srcPort: Int get() = srcServer.imap.port
+        private val dstPort: Int get() = dstServer.imap.port
 
         @JvmStatic
         @BeforeAll
         fun startServers() {
-            srcServer = GreenMail(ServerSetup(SRC_PORT, null, "imap")).also { it.start() }
-            dstServer = GreenMail(ServerSetup(DST_PORT, null, "imap")).also { it.start() }
+            srcServer = GreenMail(ServerSetup(0, null, "imap")).also { it.start() }
+            dstServer = GreenMail(ServerSetup(0, null, "imap")).also { it.start() }
         }
 
         @JvmStatic
@@ -111,8 +114,8 @@ class MirrorProgressViewIT : BaseIT() {
         mirrorConfigRepository.deleteAll()
         emailAccountRepository.deleteAll()
 
-        sourceAccountId = persistAccount(SRC_EMAIL, SRC_PORT)
-        destAccountId = persistAccount(DST_EMAIL, DST_PORT)
+        sourceAccountId = persistAccount(SRC_EMAIL, srcPort)
+        destAccountId = persistAccount(DST_EMAIL, dstPort)
 
         configId = mirrorConfigRepository.save(
             MirrorConfig().apply {
@@ -192,9 +195,22 @@ class MirrorProgressViewIT : BaseIT() {
         assertThat(body).contains("in flight")
         // The misleading "% complete" column is gone.
         assertThat(body).doesNotContain("% complete")
-        assertThat(body).contains("hx-trigger=\"every 5s\"")
         // Error log row visible.
         assertThat(body).contains("IMAP appended timed out")
+
+        // Auto-refresh trigger is on the progress fragment root; asserting on
+        // the full page is unreliable because the layout's nav job-indicator
+        // also carries `hx-trigger="every 5s"`. Request the HTMX fragment.
+        val fragment = RestAssured
+            .given()
+            .accept(ContentType.HTML)
+            .header("HX-Request", "true")
+            .`when`()
+            .get("/emailMirrors/$configId/runs/$jobRunId")
+            .then()
+            .statusCode(200)
+            .extract().asString()
+        assertThat(fragment).contains("hx-trigger=\"every 5s\"")
     }
 
     @Test
@@ -236,17 +252,21 @@ class MirrorProgressViewIT : BaseIT() {
         running.status = Status.CURRENT
         jobRunRepository.save(running)
 
-        val body = RestAssured
+        // Request the HTMX fragment only — the full page always includes the
+        // layout's nav job-indicator (`hx-trigger="every 5s"`), which would
+        // make the "doesNotContain" assertion impossible on the wrapped page.
+        val fragment = RestAssured
             .given()
             .accept(ContentType.HTML)
+            .header("HX-Request", "true")
             .`when`()
             .get("/emailMirrors/$configId/runs/$jobRunId")
             .then()
             .statusCode(200)
             .extract().asString()
 
-        assertThat(body).doesNotContain("hx-trigger=\"every 5s\"")
-        assertThat(body).contains("Completed")
+        assertThat(fragment).doesNotContain("hx-trigger=\"every 5s\"")
+        assertThat(fragment).contains("Completed")
     }
 
     @Test
@@ -429,9 +449,9 @@ class MirrorProgressViewIT : BaseIT() {
         val store = Session.getInstance(Properties().apply {
             put("mail.store.protocol", "imap")
             put("mail.imap.host", "127.0.0.1")
-            put("mail.imap.port", SRC_PORT.toString())
+            put("mail.imap.port", srcPort.toString())
         }).getStore("imap")
-        store.connect("127.0.0.1", SRC_PORT, SRC_EMAIL, MAIL_PASSWORD)
+        store.connect("127.0.0.1", srcPort, SRC_EMAIL, MAIL_PASSWORD)
         try {
             val folder = store.getFolder(folderName) as com.sun.mail.imap.IMAPFolder
             folder.open(jakarta.mail.Folder.READ_ONLY)

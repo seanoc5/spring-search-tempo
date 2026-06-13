@@ -66,21 +66,24 @@ import java.util.Properties
 class MirrorAutoIndexIT : BaseIT() {
 
     companion object {
-        private const val SRC_PORT = 3247
-        private const val DST_PORT = 3249
-
+        // Dynamic ports (issue #106): hardcoded ports collided across
+        // GreenMail-backed tests sharing the same JVM after Spring
+        // tear-down. Read the live ports via [srcPort] / [dstPort]
+        // accessors — each `.reset()` rebinds to a fresh OS port.
         private const val SRC_EMAIL = "src@oconeco.com"
         private const val DST_EMAIL = "dst@oconeco.com"
         private const val PASSWORD = "secret"
 
         private lateinit var srcServer: GreenMail
         private lateinit var dstServer: GreenMail
+        private val srcPort: Int get() = srcServer.imap.port
+        private val dstPort: Int get() = dstServer.imap.port
 
         @JvmStatic
         @BeforeAll
         fun startServers() {
-            srcServer = GreenMail(ServerSetup(SRC_PORT, null, "imap")).also { it.start() }
-            dstServer = GreenMail(ServerSetup(DST_PORT, null, "imap")).also { it.start() }
+            srcServer = GreenMail(ServerSetup(0, null, "imap")).also { it.start() }
+            dstServer = GreenMail(ServerSetup(0, null, "imap")).also { it.start() }
         }
 
         @JvmStatic
@@ -136,8 +139,8 @@ class MirrorAutoIndexIT : BaseIT() {
         emailAccountRepository.deleteAll()
         rateLimiter.reset()
 
-        sourceAccountId = persistAccount(SRC_EMAIL, SRC_PORT)
-        destAccountId = persistAccount(DST_EMAIL, DST_PORT)
+        sourceAccountId = persistAccount(SRC_EMAIL, srcPort)
+        destAccountId = persistAccount(DST_EMAIL, dstPort)
 
         configId = mirrorConfigRepository.save(
             MirrorConfig().apply {
