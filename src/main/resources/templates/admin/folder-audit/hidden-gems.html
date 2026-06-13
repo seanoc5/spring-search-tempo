@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Folder Audit — Hidden Gems</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-3 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-gem me-2"></i>
+            Hidden-gem Candidates <span class="text-muted" th:text="${'#' + run.id}">#1</span>
+        </h1>
+        <a th:href="@{/admin/folder-audit/runs/{id}(id=${run.id})}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-arrow-left"></i> Back to run
+        </a>
+        <a th:href="@{/admin/folder-audit/{id}/browse(id=${run.id})}"
+           class="btn btn-sm btn-outline-primary ms-2">
+            <i class="bi bi-folder2-open"></i> Browse
+        </a>
+    </div>
+
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${successMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${errorMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <p class="text-muted">
+        Folders under a SKIP root whose name also matches an INDEX/ANALYZE
+        pattern. Dismissed and promoted paths are filtered out via
+        <code>hidden_gem_resolution</code> — they will not reappear on
+        future audit runs against the same source.
+    </p>
+
+    <div th:if="${#lists.isEmpty(candidates)}" class="alert alert-info">
+        <i class="bi bi-check-circle me-2"></i>
+        No unresolved hidden-gem candidates for this run.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(candidates)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Path</th>
+                <th class="text-end">Depth</th>
+                <th class="text-end">Files</th>
+                <th>SKIP pattern</th>
+                <th>INDEX/ANALYZE pattern</th>
+                <th class="text-end">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${candidates}">
+                <td>
+                    <a th:href="@{/admin/folder-audit/{id}/browse(id=${run.id},path=${c.path})}"
+                       th:text="${c.path}">/path</a>
+                </td>
+                <td class="text-end" th:text="${c.depth}">0</td>
+                <td class="text-end" th:text="${c.fileCount}">0</td>
+                <td><code class="small" th:text="${c.underSkipPattern}">skip</code></td>
+                <td><code class="small" th:text="${c.matchedIndexPattern}">index</code></td>
+                <td class="text-end">
+                    <form th:action="@{/admin/folder-audit/{id}/hidden-gems/dismiss(id=${run.id})}"
+                          method="post" class="d-inline">
+                        <input type="hidden" name="path" th:value="${c.path}"/>
+                        <button type="submit" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Dismiss
+                        </button>
+                    </form>
+                    <form th:action="@{/admin/folder-audit/{id}/hidden-gems/reclassify(id=${run.id})}"
+                          method="post" class="d-inline">
+                        <input type="hidden" name="path" th:value="${c.path}"/>
+                        <input type="hidden" name="target" value="INDEX"/>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-up-circle"></i> → INDEX
+                        </button>
+                    </form>
+                    <form th:action="@{/admin/folder-audit/{id}/hidden-gems/reclassify(id=${run.id})}"
+                          method="post" class="d-inline">
+                        <input type="hidden" name="path" th:value="${c.path}"/>
+                        <input type="hidden" name="target" value="ANALYZE"/>
+                        <button type="submit" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-arrow-up-circle"></i> → ANALYZE
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

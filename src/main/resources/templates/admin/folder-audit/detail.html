@@ -60,9 +60,21 @@
         </dd>
     </dl>
 
+    <div class="d-flex gap-2 mt-3">
+        <a class="btn btn-outline-primary"
+           th:href="@{/admin/folder-audit/{id}/browse(id=${run.id})}">
+            <i class="bi bi-folder2-open"></i> Browse snapshot
+        </a>
+        <a class="btn btn-outline-warning"
+           th:href="@{/admin/folder-audit/{id}/hidden-gems(id=${run.id})}">
+            <i class="bi bi-gem"></i> Hidden-gem candidates
+        </a>
+    </div>
+
     <p class="small text-muted mt-3">
         Per-folder snapshot rows live in <code>folder_snapshot</code>.
-        Browseable view + reclassify UI is a follow-up issue.
+        Resolutions (dismiss / reclassify) persist in
+        <code>hidden_gem_resolution</code> and survive snapshot rotation.
     </p>
 </div>
 </body>
