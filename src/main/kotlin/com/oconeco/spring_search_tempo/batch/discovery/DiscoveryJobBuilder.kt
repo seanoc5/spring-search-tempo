@@ -3,6 +3,7 @@ package com.oconeco.spring_search_tempo.batch.discovery
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
@@ -62,7 +63,8 @@ class DiscoveryJobBuilder(
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
     private val advisoryLockListener: JobExecutionAdvisoryLockListener,
-    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor,
+    private val crawlConfiguration: CrawlConfiguration
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(DiscoveryJobBuilder::class.java)
@@ -88,7 +90,15 @@ class DiscoveryJobBuilder(
 
         val defaults = crawlConfigService.getDefaults()
         val effectivePatterns = crawlConfigService.getEffectivePatterns(crawl)
-        val maxDepth = crawl.getMaxDepth(defaults)
+        val perConfigMaxDepth = crawl.getMaxDepth(defaults)
+        val absoluteMaxDepth = crawlConfiguration.absoluteMaxDepth
+        val maxDepth = minOf(perConfigMaxDepth, absoluteMaxDepth)
+        if (maxDepth < perConfigMaxDepth) {
+            log.warn(
+                "Discovery '{}' maxDepth={} capped to app.crawl.absolute-max-depth={} (issue #105 backstop)",
+                crawl.name, perConfigMaxDepth, absoluteMaxDepth
+            )
+        }
         val followLinks = crawl.getFollowLinks(defaults)
         val effectiveFreshnessHours = freshnessHours ?: defaults.recentCrawlSkipHours
 

@@ -47,6 +47,7 @@ class FolderAuditService(
         private val log = LoggerFactory.getLogger(FolderAuditService::class.java)
     }
 
+    @Throws(JobExecutionAlreadyRunningException::class)
     fun startFilesystemAuditRun(): Long {
         // Dedup: a full-filesystem walk is expensive — refuse a second
         // concurrent launch (double-clicked admin button, runaway API

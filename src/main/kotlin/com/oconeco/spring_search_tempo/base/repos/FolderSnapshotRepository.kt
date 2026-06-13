@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.repos
 
 import com.oconeco.spring_search_tempo.base.domain.FolderSnapshot
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -41,4 +42,14 @@ interface FolderSnapshotRepository : JpaRepository<FolderSnapshot, Long> {
         @Param("runId") runId: Long,
         @Param("sourceRef") sourceRef: String
     ): List<FolderSnapshot>
+
+    /**
+     * Bulk-delete all snapshots whose audit_run_id is NOT in [keepIds].
+     * Used by snapshot rotation (issue #105). Returns the number of rows
+     * deleted, which the caller logs / asserts on. Empty `keepIds` would
+     * delete every row, so the caller guards against that.
+     */
+    @Modifying
+    @Query("delete from FolderSnapshot s where s.auditRun.id not in :keepIds")
+    fun deleteByAuditRunIdNotIn(@Param("keepIds") keepIds: Collection<Long>): Int
 }
