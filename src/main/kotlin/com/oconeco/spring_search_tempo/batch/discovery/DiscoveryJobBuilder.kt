@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.config.CrawlDefinition
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
+import com.oconeco.spring_search_tempo.base.service.CrawlOwnershipMap
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
 import com.oconeco.spring_search_tempo.batch.HeartbeatChunkListener
@@ -59,6 +60,7 @@ class DiscoveryJobBuilder(
     private val fileRepository: FSFileRepository,
     private val patternMatchingService: PatternMatchingService,
     private val crawlConfigService: CrawlConfigService,
+    private val crawlOwnershipMap: CrawlOwnershipMap,
     private val jobRunService: JobRunService,
     private val jobRunTrackingListener: JobRunTrackingListener,
     private val heartbeatChunkListener: HeartbeatChunkListener,
@@ -119,7 +121,8 @@ class DiscoveryJobBuilder(
                     followLinks = followLinks,
                     skipPatterns = effectivePatterns.folderPatterns.skip,
                     crawlConfigId = crawlConfigId,
-                    freshnessHours = effectiveFreshnessHours
+                    freshnessHours = effectiveFreshnessHours,
+                    crawlName = crawl.name
                 )
             )
             .build()
@@ -135,7 +138,8 @@ class DiscoveryJobBuilder(
         followLinks: Boolean,
         skipPatterns: List<String>,
         crawlConfigId: Long?,
-        freshnessHours: Int
+        freshnessHours: Int,
+        crawlName: String
     ): Step {
         log.info(
             "Building discovery step: {} start paths, maxDepth={}, {} SKIP patterns",
@@ -146,7 +150,9 @@ class DiscoveryJobBuilder(
             RecentCrawlSkipChecker(
                 fsFolderRepository = folderRepository,
                 currentCrawlConfigId = crawlConfigId,
-                freshnessHours = freshnessHours
+                freshnessHours = freshnessHours,
+                currentCrawlName = crawlName,
+                ownershipMap = crawlOwnershipMap
             )
         } else {
             null

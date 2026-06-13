@@ -177,6 +177,14 @@ class CombinedCrawlReader(
                             )
                             continue
                         }
+                        is RecentCrawlCheckResult.OwnedByOtherCrawl -> {
+                            skippedByRecentCrawl++
+                            log.info(
+                                "Skipping subtree owned by another crawl (structural): {} (owner={})",
+                                dir, result.otherCrawlName
+                            )
+                            continue
+                        }
                         is RecentCrawlCheckResult.NotRecentlyCrawled -> Unit
                     }
                 }
