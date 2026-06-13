@@ -88,14 +88,6 @@ class FSFileServiceImpl(
             .collect(CustomCollectors.toSortedMap(FSFile::id, FSFile::id))
 
     @Transactional(readOnly = true)
-    override fun findFilesWithBodyText(pageable: Pageable): Page<FSFileDTO> {
-        val page = fSFileRepository.findByBodyTextIsNotNull(pageable)
-        return PageImpl(page.content
-                .map { fSFile -> fSFileMapper.updateFSFileDTO(fSFile, FSFileDTO()) },
-                pageable, page.totalElements)
-    }
-
-    @Transactional(readOnly = true)
     override fun countByJobRunId(jobRunId: Long): Long =
         fSFileRepository.countByJobRunId(jobRunId)
 
