@@ -2,18 +2,24 @@ package com.oconeco.spring_search_tempo.base
 
 import com.oconeco.spring_search_tempo.base.model.ChunkNlpView
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 
 
 interface ContentChunkService {
 
     /**
-     * Build view models for every ContentChunk linked to the given FSFile,
-     * ordered by chunkNumber. Each view includes the chunk text already split
-     * into plain/entity segments so templates can render entity links without
-     * doing HTML manipulation in SpEL. Returns an empty list when the file has
-     * no chunks (e.g. not yet chunked / LOCATE-only).
+     * Build view models for ContentChunks linked to the given FSFile, ordered
+     * by chunkNumber and paginated. Each view includes the chunk text already
+     * split into plain/entity segments so templates can render entity links
+     * without doing HTML manipulation in SpEL. Returns an empty page when the
+     * file has no chunks (e.g. not yet chunked / LOCATE-only).
+     *
+     * Pagination keeps the response size bounded for heavily-chunked ANALYZE
+     * documents (issue #82) — a 10MB sentence-chunked file can produce
+     * hundreds of chunks.
      */
-    fun findNlpViewsForFile(fileId: Long): List<ChunkNlpView>
+    fun findNlpViewsForFile(fileId: Long, pageable: Pageable): Page<ChunkNlpView>
 
     fun count(): Long
 

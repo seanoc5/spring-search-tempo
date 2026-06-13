@@ -19,6 +19,8 @@ import com.oconeco.spring_search_tempo.base.util.NotFoundException
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.event.EventListener
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -37,9 +39,17 @@ class ContentChunkServiceImpl(
 ) : ContentChunkService {
 
     @Transactional(readOnly = true)
-    override fun findNlpViewsForFile(fileId: Long): List<ChunkNlpView> =
-        contentChunkRepository.findByConceptIdOrderByChunkNumberAsc(fileId)
+    override fun findNlpViewsForFile(fileId: Long, pageable: Pageable): Page<ChunkNlpView> {
+        val sorted = if (pageable.sort.isUnsorted) {
+            org.springframework.data.domain.PageRequest.of(
+                pageable.pageNumber,
+                pageable.pageSize,
+                Sort.by(Sort.Direction.ASC, "chunkNumber"),
+            )
+        } else pageable
+        return contentChunkRepository.findByConceptId(fileId, sorted)
             .map { ChunkNlpViewFactory.from(it, objectMapper) }
+    }
 
     @Transactional(readOnly = true)
     override fun count(): Long = contentChunkRepository.count()

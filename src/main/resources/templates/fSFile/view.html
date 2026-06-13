@@ -124,14 +124,14 @@
             </div>
 
             <!-- NLP Analysis -->
-            <div th:if="${chunkNlpViews != null && !#lists.isEmpty(chunkNlpViews)}" id="nlp-analysis-card" class="card mb-4">
+            <div th:if="${chunkNlpViews != null && !chunkNlpViews.empty}" id="nlp-analysis-card" class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">NLP Analysis</h5>
-                    <span class="badge bg-secondary">[[${#lists.size(chunkNlpViews)}]] chunks</span>
+                    <span class="badge bg-secondary">[[${chunkNlpViews.totalElements}]] chunks</span>
                 </div>
                 <div class="card-body p-0">
                     <ul class="list-group list-group-flush nlp-chunk-list">
-                        <li th:each="chunk : ${chunkNlpViews}" class="list-group-item">
+                        <li th:each="chunk : ${chunkNlpViews.content}" class="list-group-item">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <small class="text-muted">
                                     Chunk <span th:text="${chunk.chunkNumber ?: '-'}">0</span>
@@ -171,6 +171,9 @@
                             </div>
                         </li>
                     </ul>
+                </div>
+                <div th:if="${chunkNlpViews.totalPages > 1}" class="card-footer">
+                    <div th:replace="~{fragments/utils::pagination()}" />
                 </div>
             </div>
         </div>
