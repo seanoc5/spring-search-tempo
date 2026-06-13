@@ -261,8 +261,7 @@ app:
       chunk-size: 25
     # Credentials are stored DB-encrypted (issue #55). The `accounts:` block below carries
     # default host/port/region info only — set the IMAP password by editing the account in
-    # the UI (/emailAccounts/{id}/edit → IMAP Password). The legacy `credential-env-var:`
-    # key is no longer read at runtime.
+    # the UI (/emailAccounts/{id}/edit → IMAP Password).
     accounts:
       # Gmail account (requires App Password)
       # To enable:

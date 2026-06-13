@@ -69,9 +69,8 @@ class EmailAccountInitializer(
                     return@forEach
                 }
 
-                // Create new account. credentialEnvVar is deliberately not set here —
-                // env-var credentials were removed in issue #55; users set passwords
-                // via the account edit page after first start-up.
+                // Create new account. Credentials are set via the account edit
+                // page after first start-up (env-var fallback removed in issue #55).
                 val dto = EmailAccountDTO().apply {
                     email = config.email
                     label = config.name

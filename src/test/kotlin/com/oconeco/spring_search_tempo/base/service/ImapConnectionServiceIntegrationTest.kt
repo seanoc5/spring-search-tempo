@@ -71,14 +71,6 @@ class ImapConnectionServiceIntegrationTest {
             }
 
         log.info("Testing authentication for: {}", gmailAccount.email)
-        log.info("Credential env var configured: {}", gmailAccount.credentialEnvVar)
-
-        val passwordEnvVar = gmailAccount.credentialEnvVar
-        val passwordValue = System.getenv(passwordEnvVar)
-        log.info("Env var '{}' is set: {}, length: {}",
-            passwordEnvVar,
-            passwordValue != null,
-            passwordValue?.length ?: 0)
 
         val account = EmailAccountDTO().apply {
             email = gmailAccount.email

@@ -67,12 +67,6 @@ class EmailAccountDTO {
     // Issue #84: see EmailAccount.lastFolderEnumeratedAt.
     var lastFolderEnumeratedAt: OffsetDateTime? = null
 
-    // Credential configuration
-    // DEPRECATED (issue #55): env-var credential fallback removed. Kept on the DTO
-    // for one release so existing serialized state survives a deploy. Sole credential
-    // path is now the DB-encrypted password (set via /emailAccounts/{id}/password).
-    var credentialEnvVar: String? = null
-
     // Account status
     var enabled: Boolean = true
 
