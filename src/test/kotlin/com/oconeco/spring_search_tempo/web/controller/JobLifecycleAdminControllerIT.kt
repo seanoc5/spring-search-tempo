@@ -111,8 +111,8 @@ class JobLifecycleAdminControllerIT : BaseIT() {
                 .extract()
 
         val status = response.statusCode()
-        assert(status == HttpStatus.MOVED_PERMANENTLY.value() || status == HttpStatus.FOUND.value()) {
-            "expected 3xx redirect from /admin/reaper, got $status"
+        assert(status == HttpStatus.MOVED_PERMANENTLY.value()) {
+            "expected 301 redirect from /admin/reaper, got $status"
         }
         val location = response.header("Location") ?: ""
         assert(location.endsWith("/admin/job-lifecycle")) {

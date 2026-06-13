@@ -4,6 +4,7 @@ import com.oconeco.spring_search_tempo.base.repos.JobLifecycleEventRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.servlet.view.RedirectView
@@ -44,5 +45,7 @@ class JobLifecycleAdminController(
 @Controller
 class JobLifecycleAdminLegacyRedirect {
     @GetMapping("/admin/reaper")
-    fun redirect(): RedirectView = RedirectView("/admin/job-lifecycle", true)
+    fun redirect(): RedirectView = RedirectView("/admin/job-lifecycle", true).apply {
+        setStatusCode(HttpStatus.MOVED_PERMANENTLY)
+    }
 }
