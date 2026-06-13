@@ -1,0 +1,113 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Folder Audit — Browse</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-3 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-folder2-open me-2"></i>
+            Browse Snapshot <span class="text-muted" th:text="${'#' + run.id}">#1</span>
+        </h1>
+        <a th:href="@{/admin/folder-audit/runs/{id}(id=${run.id})}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-arrow-left"></i> Back to run
+        </a>
+        <a th:href="@{/admin/folder-audit/{id}/hidden-gems(id=${run.id})}"
+           class="btn btn-sm btn-outline-warning ms-2">
+            <i class="bi bi-gem"></i> Hidden-gems
+        </a>
+    </div>
+
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${successMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${errorMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <nav th:if="${!#lists.isEmpty(breadcrumbs)}" aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li th:each="bc, st : ${breadcrumbs}"
+                th:classappend="${st.last} ? 'breadcrumb-item active' : 'breadcrumb-item'">
+                <span th:if="${st.last}" th:text="${bc.name}">name</span>
+                <a th:unless="${st.last}"
+                   th:href="@{/admin/folder-audit/{id}/browse(id=${run.id},path=${bc.path})}"
+                   th:text="${bc.name}">name</a>
+            </li>
+        </ol>
+    </nav>
+
+    <div th:if="${noRoot}" class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        No snapshot row found for path <code th:text="${currentPath}">…</code> in run #[[${run.id}]].
+    </div>
+
+    <div th:unless="${noRoot}">
+        <p class="text-muted small">
+            Current path:
+            <code th:text="${currentPath}">/path</code>
+        </p>
+
+        <div th:if="${#lists.isEmpty(children)}" class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            No child folders in the snapshot for this directory.
+        </div>
+
+        <div th:unless="${#lists.isEmpty(children)}" class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                <tr>
+                    <th>Folder</th>
+                    <th class="text-end">Depth</th>
+                    <th class="text-end">Files</th>
+                    <th>Classification</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="c : ${children}">
+                    <td>
+                        <a th:href="@{/admin/folder-audit/{id}/browse(id=${run.id},path=${c.path})}">
+                            <i class="bi bi-folder"></i>
+                            <span th:text="${#strings.replace(c.path, currentPath + '/', '')}">name</span>
+                        </a>
+                    </td>
+                    <td class="text-end" th:text="${c.depth}">0</td>
+                    <td class="text-end" th:text="${c.fileCount}">0</td>
+                    <td>
+                        <span th:if="${c.underSkipPattern != null}"
+                              class="badge bg-secondary me-1"
+                              th:title="${c.underSkipPattern}">
+                            <i class="bi bi-slash-circle"></i> under SKIP
+                        </span>
+                        <span th:if="${c.matchedIndexPattern != null}"
+                              class="badge bg-primary me-1"
+                              th:title="${c.matchedIndexPattern}">
+                            <i class="bi bi-search"></i> matches INDEX
+                        </span>
+                        <th:block th:with="res=${resolutionsByPath.get(c.path)}">
+                            <span th:if="${res != null and res.resolution?.name() == 'DISMISSED'}"
+                                  class="badge bg-dark">
+                                <i class="bi bi-x-circle"></i> dismissed
+                            </span>
+                            <span th:if="${res != null and res.resolution?.name() == 'PROMOTED_TO_INDEX'}"
+                                  class="badge bg-success">
+                                <i class="bi bi-arrow-up-circle"></i> promoted → INDEX
+                            </span>
+                            <span th:if="${res != null and res.resolution?.name() == 'PROMOTED_TO_ANALYZE'}"
+                                  class="badge bg-success">
+                                <i class="bi bi-arrow-up-circle"></i> promoted → ANALYZE
+                            </span>
+                        </th:block>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>
