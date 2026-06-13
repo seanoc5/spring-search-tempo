@@ -2,7 +2,8 @@ package com.oconeco.spring_search_tempo.batch.config
 
 import com.oconeco.spring_search_tempo.SpringSearchTempoApplication
 import com.oconeco.spring_search_tempo.base.config.BaseIT
-import com.oconeco.spring_search_tempo.base.repos.ReapedJobRepository
+import com.oconeco.spring_search_tempo.base.domain.JobLifecycleEventType
+import com.oconeco.spring_search_tempo.base.repos.JobLifecycleEventRepository
 import io.micrometer.core.instrument.MeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
@@ -43,7 +44,7 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
     lateinit var meterRegistry: MeterRegistry
 
     @Autowired
-    lateinit var reapedJobRepository: ReapedJobRepository
+    lateinit var jobLifecycleEventRepository: JobLifecycleEventRepository
 
     @Test
     @DisplayName("STARTED row with no advisory lock is marked FAILED on reap")
@@ -68,7 +69,7 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
         assertThat(jobExplorer.findRunningJobExecutions(jobName))
             .anyMatch { it.id == executionId }
 
-        val beforeAuditCount = reapedJobRepository.count()
+        val beforeAuditCount = jobLifecycleEventRepository.count()
 
         // No advisory lock was acquired in beforeJob (we bypassed the listener),
         // so the reaper's pg_try_advisory_lock will succeed → row is orphaned.
@@ -90,13 +91,15 @@ class OrphanedJobExecutionReaperIT : BaseIT() {
             .isNotNull
         assertThat(counter!!.count()).isGreaterThanOrEqualTo(1.0)
 
-        // Issue #74: audit row written with execution + account context.
-        assertThat(reapedJobRepository.count()).isEqualTo(beforeAuditCount + 1)
-        val audit = reapedJobRepository.findAll().firstOrNull { it.jobExecutionId == executionId }
-        assertThat(audit).`as`("reaped_job audit row for executionId=$executionId").isNotNull
+        // Issue #74/#75: lifecycle audit row written with execution + account context.
+        assertThat(jobLifecycleEventRepository.count()).isEqualTo(beforeAuditCount + 1)
+        val audit = jobLifecycleEventRepository.findAll().firstOrNull { it.jobExecutionId == executionId }
+        assertThat(audit).`as`("job_lifecycle_event row for executionId=$executionId").isNotNull
         assertThat(audit!!.jobName).isEqualTo(jobName)
         assertThat(audit.accountId).isEqualTo(accountId)
-        assertThat(audit.reapedAt).isNotNull
+        assertThat(audit.eventTime).isNotNull
+        assertThat(audit.eventType).isEqualTo(JobLifecycleEventType.REAPED)
+        assertThat(audit.actionTaken).isEqualTo("reaped")
     }
 
     @Test
