@@ -17,6 +17,7 @@ import com.oconeco.spring_search_tempo.batch.chunking.ChunkingStrategySelector
 import com.oconeco.spring_search_tempo.batch.config.BatchTaskExecutorConfig.Companion.DEFAULT_THROTTLE_LIMIT
 import com.oconeco.spring_search_tempo.batch.config.JobExecutionAdvisoryLockListener
 import com.oconeco.spring_search_tempo.batch.nlp.NLPAutoTriggerListener
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
@@ -61,7 +62,8 @@ class FsCrawlJobBuilder(
     private val jobRunService: JobRunService,
     private val chunkingStrategySelector: ChunkingStrategySelector,
     private val advisoryLockListener: JobExecutionAdvisoryLockListener,
-    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
+    @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor,
+    private val meterRegistry: MeterRegistry
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlJobBuilder::class.java)
@@ -269,7 +271,8 @@ class FsCrawlJobBuilder(
             fileMapper = fileMapper,
             patternMatchingService = patternMatchingService,
             textExtractionService = textExtractionService,
-            forceFullRecrawl = forceFullRecrawl
+            forceFullRecrawl = forceFullRecrawl,
+            meterRegistry = meterRegistry
         )
     }
 
