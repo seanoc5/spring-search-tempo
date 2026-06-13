@@ -17,6 +17,8 @@ interface FolderSnapshotRepository : JpaRepository<FolderSnapshot, Long> {
 
     fun findByAuditRunIdAndPath(auditRunId: Long, path: String): FolderSnapshot?
 
+    fun findFirstByAuditRunIdOrderByDepthAsc(auditRunId: Long): FolderSnapshot?
+
     /**
      * Hidden-gem candidates: folders under a SKIP root whose name also
      * matches an INDEX/ANALYZE pattern, excluding any path that already

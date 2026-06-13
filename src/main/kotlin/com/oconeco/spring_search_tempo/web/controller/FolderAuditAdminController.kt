@@ -207,11 +207,7 @@ class FolderAuditAdminController(
         if (!rawPath.isNullOrBlank()) {
             return folderSnapshotRepository.findByAuditRunIdAndPath(runId, rawPath)
         }
-        return folderSnapshotRepository
-            .findAll()
-            .asSequence()
-            .filter { it.auditRun?.id == runId }
-            .minByOrNull { it.depth }
+        return folderSnapshotRepository.findFirstByAuditRunIdOrderByDepthAsc(runId)
     }
 
     private fun buildBreadcrumbs(runId: Long, currentPath: String): List<Breadcrumb> {
