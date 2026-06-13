@@ -64,6 +64,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-aop")
     implementation("io.micrometer:micrometer-registry-prometheus")
+    // Caffeine: bounded, observable in-memory caches for hot-path processors
+    // (see CombinedCrawlProcessor). Version managed by Spring Boot BOM.
+    implementation("com.github.ben-manes.caffeine:caffeine")
     implementation("org.springframework.session:spring-session-jdbc")
     implementation("io.github.wimdeblauwe:error-handling-spring-boot-starter:4.6.0")
     implementation("org.springframework.boot:spring-boot-starter-hateoas")

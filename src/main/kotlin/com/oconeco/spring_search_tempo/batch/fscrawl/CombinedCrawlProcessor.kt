@@ -1,7 +1,11 @@
 package com.oconeco.spring_search_tempo.batch.fscrawl
 
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.oconeco.spring_search_tempo.base.config.EffectivePatterns
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
+import com.oconeco.spring_search_tempo.base.domain.FSFile
+import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.domain.Status
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
@@ -12,14 +16,15 @@ import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.TextAndMetadataResult
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tag
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFileAttributes
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentSkipListSet
-import kotlin.io.path.name
+import java.util.concurrent.TimeUnit
 
 /**
  * Combined processor that handles both folders and their files in a single pass.
@@ -41,6 +46,13 @@ import kotlin.io.path.name
  * @param patternMatchingService Service for determining analysis status
  * @param textExtractionService Service for text extraction from files
  * @param forceFullRecrawl When true, skip timestamp checks and re-process all items
+ * @param meterRegistry Optional Micrometer registry. When provided, the four
+ *   Caffeine caches expose hit/miss/size gauges under `cache.*` with `cache=`
+ *   tags. Pass null in unit tests that don't care about observability.
+ * @param maxCacheSize Maximum entries per cache. Default 50_000 keeps memory
+ *   bounded on full-system crawls while still absorbing the locality typical
+ *   of directory-by-directory walks. Tests can dial this down to force
+ *   eviction without driving millions of paths through the processor.
  */
 class CombinedCrawlProcessor(
     private val startPaths: List<Path>,
@@ -51,24 +63,64 @@ class CombinedCrawlProcessor(
     private val fileMapper: FSFileMapper,
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
-    private val forceFullRecrawl: Boolean = false
+    private val forceFullRecrawl: Boolean = false,
+    meterRegistry: MeterRegistry? = null,
+    private val maxCacheSize: Long = DEFAULT_MAX_CACHE_SIZE
 ) : ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
 
     companion object {
         private val log = LoggerFactory.getLogger(CombinedCrawlProcessor::class.java)
         private const val MAX_TEXT_EXTRACT_SIZE = 100 * 1024 * 1024 // 10MB limit  10,444,800
+
+        /** Default per-cache entry cap. ~50k is comfortably above one directory's
+         *  worth of files for normal trees while keeping worst-case heap small. */
+        const val DEFAULT_MAX_CACHE_SIZE: Long = 50_000
+
+        /** Idle-eviction window. Five minutes is long enough to keep a directory's
+         *  lookups hot through its continuation batches and the next sibling
+         *  directory, short enough that abandoned regions don't pin memory. */
+        private val EXPIRE_AFTER_ACCESS: java.time.Duration = java.time.Duration.ofMinutes(5)
     }
 
-    // Cache for parent folder analysis status (supports hierarchical matching)
-    private val parentStatusCache = ConcurrentHashMap<String, AnalysisStatus>()
+    private fun <K : Any, V : Any> buildCache(): Cache<K, V> =
+        Caffeine.newBuilder()
+            .maximumSize(maxCacheSize)
+            .expireAfterAccess(EXPIRE_AFTER_ACCESS.toMinutes(), TimeUnit.MINUTES)
+            .recordStats()
+            .build()
 
-    // Cache for folders that were skipped (unchanged) - continuation batches should also skip
-    private val skippedFolderCache = ConcurrentSkipListSet<String>()
+    // Cache for parent folder analysis status (supports hierarchical matching).
+    // Grows with the number of unique directories visited, so bound it.
+    internal val parentStatusCache: Cache<String, AnalysisStatus> = buildCache()
 
-    // Batch cache for file lookups within a directory
-    // TODO: Consider using Spring Cache abstraction or Caffeine for more sophisticated caching
-    private val fileCache = ConcurrentHashMap<String, com.oconeco.spring_search_tempo.base.domain.FSFile?>()
-    private val folderCache = ConcurrentHashMap<String, com.oconeco.spring_search_tempo.base.domain.FSFolder?>()
+    // Cache for folders that were skipped (unchanged) - continuation batches should also skip.
+    // Caffeine has no Set primitive, so we use a Cache<String, Boolean> as a bounded set.
+    internal val skippedFolderCache: Cache<String, Boolean> = buildCache()
+
+    // Cache for file lookups within (and across) recently visited directories.
+    // Caffeine rejects null values; we put only on DB hits, so misses naturally
+    // fall through to the next batched IN-clause query — same semantics as the
+    // ConcurrentHashMap version this replaces.
+    internal val fileCache: Cache<String, FSFile> = buildCache()
+
+    // Folder cache. Uses Cache.get(key, loader) which treats a null loader
+    // return as "do not cache" — preserves the prior null-suppression semantics
+    // without needing a sentinel value.
+    internal val folderCache: Cache<String, FSFolder> = buildCache()
+
+    init {
+        meterRegistry?.let { registry ->
+            // Bind each cache to Micrometer so cache.size / cache.gets / cache.puts
+            // surface at /actuator/metrics. Each processor instance lives for one
+            // job; we tag with an instance discriminator so re-binding across runs
+            // doesn't collide on (name, tags) and silently drop the new meters.
+            val instanceTag = Tag.of("instance", java.lang.Long.toString(System.identityHashCode(this).toLong() and 0xFFFFFFFFL, 36))
+            CaffeineCacheMetrics.monitor(registry, fileCache, "fileCache", listOf(instanceTag))
+            CaffeineCacheMetrics.monitor(registry, folderCache, "folderCache", listOf(instanceTag))
+            CaffeineCacheMetrics.monitor(registry, parentStatusCache, "parentStatusCache", listOf(instanceTag))
+            CaffeineCacheMetrics.monitor(registry, skippedFolderCache, "skippedFolderCache", listOf(instanceTag))
+        }
+    }
 
     override fun process(item: CombinedCrawlItem): CombinedCrawlResult? {
         log.debug(
@@ -85,7 +137,7 @@ class CombinedCrawlProcessor(
         val folderDto = processFolder(item.directory, item.totalFileCount) ?: run {
             // Folder is unchanged - skip entire directory including files
             // Mark as skipped so continuation batches also skip
-            skippedFolderCache.add(item.directory.toString())
+            skippedFolderCache.put(item.directory.toString(), true)
             log.debug("\t\tSkipping unchanged directory and all {} files: {}", item.files.size, item.directory)
             return null
         }
@@ -117,17 +169,15 @@ class CombinedCrawlProcessor(
         val dirUri = item.directory.toString()
 
         // Check if first batch decided to skip this folder (unchanged)
-        if (dirUri in skippedFolderCache) {
+        if (skippedFolderCache.getIfPresent(dirUri) == true) {
             log.debug("Continuation batch for unchanged folder, skipping {} files: {}", item.files.size, dirUri)
             return null
         }
 
         // Get parent folder's analysis status from cache (set during first batch)
-        val parentStatus = parentStatusCache[dirUri] ?: run {
+        val parentStatus = parentStatusCache.getIfPresent(dirUri) ?: run {
             // Fallback: check database if not in cache (shouldn't happen normally)
-            val existingFolder = folderCache.getOrPut(dirUri) {
-                folderRepository.findByUri(dirUri)
-            }
+            val existingFolder = folderCache.get(dirUri) { folderRepository.findByUri(dirUri) }
             existingFolder?.analysisStatus ?: run {
                 log.warn("Continuation batch but folder not found in cache or DB: {}", dirUri)
                 return null
@@ -168,8 +218,8 @@ class CombinedCrawlProcessor(
             return null
         }
 
-        // Check if folder exists in DB (use cache)
-        val existingFolder = folderCache.getOrPut(uri) {
+        // Check if folder exists in DB (use cache; null result is not cached)
+        val existingFolder = folderCache.get(uri) {
             val existing = folderRepository.findByUri(uri)
             log.debug("\t\tFound existing folder: {}", existing)
             existing
@@ -204,7 +254,7 @@ class CombinedCrawlProcessor(
         )
 
         // Cache this folder's status for its children
-        parentStatusCache[uri] = analysisStatus
+        parentStatusCache.put(uri, analysisStatus)
 
         // If folder is SKIP, persist metadata but don't process children
         // Return the DTO so metadata is saved, but children won't be crawled
@@ -255,12 +305,14 @@ class CombinedCrawlProcessor(
         log.trace("Processing {} files with parent folder status: {}", files.size, parentFolderStatus)
 
         // Batch lookup: a single IN-clause query for every URI not already cached.
-        // ConcurrentHashMap rejects null values, so we only populate hits — misses stay
-        // absent from the cache and read as null in processFile, matching the old semantics.
-        val urisToFetch = files.map { it.toString() }.filter { !fileCache.containsKey(it) }
+        // Caffeine (like the prior ConcurrentHashMap) rejects null values, so we
+        // only populate hits — misses stay absent and read as null in processFile,
+        // matching the old semantics.
+        val cacheView = fileCache.asMap()
+        val urisToFetch = files.map { it.toString() }.filter { !cacheView.containsKey(it) }
         if (urisToFetch.isNotEmpty()) {
             fileRepository.findByUriIn(urisToFetch).forEach { file ->
-                file.uri?.let { fileCache[it] = file }
+                file.uri?.let { fileCache.put(it, file) }
             }
         }
 
@@ -295,7 +347,7 @@ class CombinedCrawlProcessor(
         }
 
         // Check if file exists in DB (use cache)
-        val existingFile = fileCache[uri]
+        val existingFile = fileCache.getIfPresent(uri)
 
         // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
@@ -489,15 +541,13 @@ class CombinedCrawlProcessor(
         val parentUri = parent.toString()
 
         // Check cache first
-        parentStatusCache[parentUri]?.let { return it }
+        parentStatusCache.getIfPresent(parentUri)?.let { return it }
 
-        // Check database (via folder cache)
-        val parentFolder = folderCache.getOrPut(parentUri) {
-            folderRepository.findByUri(parentUri)
-        }
+        // Check database (via folder cache; null is not cached)
+        val parentFolder = folderCache.get(parentUri) { folderRepository.findByUri(parentUri) }
 
         return parentFolder?.analysisStatus?.also {
-            parentStatusCache[parentUri] = it
+            parentStatusCache.put(parentUri, it)
         }
     }
 
@@ -505,10 +555,10 @@ class CombinedCrawlProcessor(
      * Clear all caches. Useful for testing or between batch job runs.
      */
     fun clearCaches() {
-        parentStatusCache.clear()
-        skippedFolderCache.clear()
-        fileCache.clear()
-        folderCache.clear()
+        parentStatusCache.invalidateAll()
+        skippedFolderCache.invalidateAll()
+        fileCache.invalidateAll()
+        folderCache.invalidateAll()
         log.debug("Cleared all processor caches")
     }
 }
