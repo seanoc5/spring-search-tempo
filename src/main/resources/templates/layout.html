@@ -225,6 +225,11 @@
                             <i class="bi bi-recycle"></i>
                             <span>Job Lifecycle</span>
                         </a>
+                        <a th:href="@{/admin/folder-audit}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/admin/folder-audit')} ? 'active' : ''">
+                            <i class="bi bi-folder-check"></i>
+                            <span>Folder Audit</span>
+                        </a>
                         <!-- Admin-only: System Monitor -->
                         <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/system}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/system')} ? 'active' : ''">
