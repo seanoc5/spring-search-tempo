@@ -97,5 +97,11 @@ data class DiscoveredFile(
     /** Directory depth */
     val crawlDepth: Int,
     /** Whether parent folder was SKIP */
-    val parentSkipDetected: Boolean
+    val parentSkipDetected: Boolean,
+    /** POSIX owner username (issue #120) */
+    val posixOwner: String? = null,
+    /** POSIX group name (issue #120) */
+    val posixGroup: String? = null,
+    /** POSIX mode as a decimal integer (0-0777). Null on non-POSIX (issue #120). */
+    val posixMode: Int? = null,
 )

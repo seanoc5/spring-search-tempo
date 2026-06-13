@@ -19,6 +19,7 @@ import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.TextAndMetadataResult
 import com.oconeco.spring_search_tempo.base.service.TextExtractionResult
 import com.oconeco.spring_search_tempo.base.service.TextExtractionService
+import com.oconeco.spring_search_tempo.base.util.PosixModeUtil
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics
@@ -526,6 +527,12 @@ class CombinedCrawlProcessor(
                     dto.owner = attrs.owner()?.name
                     dto.group = attrs.group()?.name
                     dto.permissions = formatPermissions(attrs)
+                    // Issue #120 — also populate the typed POSIX fields:
+                    // owner/group as strings, mode as a decimal int we can
+                    // bit-test in SQL.
+                    dto.posixOwner = attrs.owner()?.name
+                    dto.posixGroup = attrs.group()?.name
+                    dto.posixMode = PosixModeUtil.toMode(attrs.permissions())
                 }
             }
         } catch (e: UnsupportedOperationException) {

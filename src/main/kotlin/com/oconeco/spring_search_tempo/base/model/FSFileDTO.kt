@@ -38,6 +38,15 @@ class FSFileDTO {
 
     var permissions: String? = null
 
+    /** POSIX file owner (Unix username). Null on non-POSIX filesystems. Issue #120. */
+    var posixOwner: String? = null
+
+    /** POSIX file group name. Null on non-POSIX filesystems. Issue #120. */
+    var posixGroup: String? = null
+
+    /** POSIX file mode as a decimal integer (0-0777). Null on non-POSIX. Issue #120. */
+    var posixMode: Int? = null
+
     var fsLastModified: java.time.OffsetDateTime? = null
 
     var bodyText: String? = null
