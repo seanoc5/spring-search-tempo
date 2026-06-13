@@ -1,7 +1,8 @@
 package com.oconeco.spring_search_tempo.batch.config
 
-import com.oconeco.spring_search_tempo.base.domain.ReapedJob
-import com.oconeco.spring_search_tempo.base.repos.ReapedJobRepository
+import com.oconeco.spring_search_tempo.base.domain.JobLifecycleEvent
+import com.oconeco.spring_search_tempo.base.domain.JobLifecycleEventType
+import com.oconeco.spring_search_tempo.base.repos.JobLifecycleEventRepository
 import com.oconeco.spring_search_tempo.base.service.BatchAdminService
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.MeterRegistry
@@ -36,10 +37,12 @@ import javax.sql.DataSource
  * Heartbeat staleness still runs as defense-in-depth for in-process hangs
  * (wedged IMAP socket inside a live JVM). See `JobRunService.findStaleJobRuns`.
  *
- * Observability (issue #74): each reaping increments
+ * Observability (issues #74, #75): each reaping increments
  * `tempo.reaper.orphaned_jobs_reaped_total{job_name=...}` and writes a
- * row to `reaped_job` so operators can see how often the reaper fires,
- * against which accounts/jobs, and whether the events cluster.
+ * row to `job_lifecycle_event` (type=REAPED) so operators can see how
+ * often the reaper fires, against which accounts/jobs, and whether the
+ * events cluster. Shutdown-hook events share the same table so the
+ * admin view can present them interleaved.
  *
  * Cross-JVM note: advisory locks DO work cross-JVM if all instances share
  * the same Postgres. Multi-JVM job coordination has additional design
@@ -51,7 +54,7 @@ class OrphanedJobExecutionReaper(
     private val jobExplorer: JobExplorer,
     private val batchAdminService: BatchAdminService,
     private val meterRegistry: MeterRegistry,
-    private val reapedJobRepository: ReapedJobRepository
+    private val jobLifecycleEventRepository: JobLifecycleEventRepository
 ) {
 
     companion object {
@@ -91,7 +94,7 @@ class OrphanedJobExecutionReaper(
                             "Reaped orphaned BatchJobExecution executionId={} jobName='{}' startedAt={}",
                             executionId, jobName, startTime
                         )
-                        recordReaping(execution, jobName)
+                        recordReaping(execution, jobName, reason)
                         reaped++
                     }
                 } else {
@@ -121,7 +124,7 @@ class OrphanedJobExecutionReaper(
      * masks the underlying reaping (which has already succeeded by the
      * time we get here).
      */
-    private fun recordReaping(execution: JobExecution, jobName: String) {
+    private fun recordReaping(execution: JobExecution, jobName: String, reason: String) {
         try {
             Counter.builder(REAPED_COUNTER_NAME)
                 .description("Orphaned BatchJobExecution rows reaped by OrphanedJobExecutionReaper")
@@ -133,16 +136,19 @@ class OrphanedJobExecutionReaper(
         }
 
         try {
-            val audit = ReapedJob().apply {
-                this.reapedAt = OffsetDateTime.now()
+            val audit = JobLifecycleEvent().apply {
+                this.eventTime = OffsetDateTime.now()
+                this.eventType = JobLifecycleEventType.REAPED
+                this.actionTaken = "reaped"
                 this.jobExecutionId = execution.id
                 this.jobName = jobName
                 this.accountId = execution.jobParameters.getString("accountId")?.toLongOrNull()
                 this.originalStartedAt = execution.startTime?.atZone(ZoneId.systemDefault())?.toOffsetDateTime()
+                this.details = reason
             }
-            reapedJobRepository.save(audit)
+            jobLifecycleEventRepository.save(audit)
         } catch (e: Exception) {
-            log.warn("Failed to persist reaped_job audit row for executionId={}: {}", execution.id, e.message)
+            log.warn("Failed to persist job_lifecycle_event audit row for executionId={}: {}", execution.id, e.message)
         }
     }
 

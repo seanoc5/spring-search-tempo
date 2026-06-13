@@ -220,10 +220,10 @@
                             <i class="bi bi-list-task"></i>
                             <span>[[#{nav.batchJobs}]]</span>
                         </a>
-                        <a th:href="@{/admin/reaper}" class="nav-item"
-                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/admin/reaper')} ? 'active' : ''">
+                        <a th:href="@{/admin/job-lifecycle}" class="nav-item"
+                           th:classappend="${requestUri != null and (#strings.startsWith(requestUri, '/admin/job-lifecycle') or #strings.startsWith(requestUri, '/admin/reaper'))} ? 'active' : ''">
                             <i class="bi bi-recycle"></i>
-                            <span>Orphan Reaper</span>
+                            <span>Job Lifecycle</span>
                         </a>
                         <!-- Admin-only: System Monitor -->
                         <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/system}" class="nav-item"

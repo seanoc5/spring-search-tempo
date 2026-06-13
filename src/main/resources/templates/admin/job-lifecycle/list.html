@@ -1,0 +1,112 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Job Lifecycle</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-recycle me-2"></i>Job Lifecycle Events
+        </h1>
+        <a th:href="@{/batch}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-arrow-left"></i> Batch Jobs
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Recent interventions on in-flight <code>BatchJobExecution</code> rows:
+        <span class="badge bg-warning text-dark"><i class="bi bi-recycle"></i> reaped</span>
+        rows were marked FAILED at boot by
+        <code>OrphanedJobExecutionReaper</code> (advisory lock acquired —
+        original JVM was gone);
+        <span class="badge bg-info text-dark"><i class="bi bi-power"></i> shutdown</span>
+        rows were marked FAILED by <code>RunningJobShutdownHook</code>
+        during graceful JVM exit. A cluster of either against the same
+        job/account suggests the underlying liveness mechanism is broken;
+        isolated rows are normal after a crash or restart.
+    </p>
+
+    <p class="small text-muted">
+        Counter: <code>tempo.reaper.orphaned_jobs_reaped_total</code>
+        (tag: <code>job_name</code>) is exported via
+        <a th:href="@{/actuator/prometheus}">/actuator/prometheus</a>.
+    </p>
+
+    <div th:if="${#lists.isEmpty(events)}" class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No lifecycle events recorded yet — neither the reaper nor the
+        shutdown hook has fired against a STARTED execution.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(events)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Event Time</th>
+                <th>Type</th>
+                <th>Action</th>
+                <th>Job Name</th>
+                <th>Execution</th>
+                <th>Account</th>
+                <th>Original Start</th>
+                <th>Age At Event</th>
+                <th>Details</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="e : ${events}">
+                <td th:text="${e.eventTime}">2026-06-06T12:00:00Z</td>
+                <td>
+                    <span th:if="${e.eventType?.name() == 'REAPED'}"
+                          class="badge bg-warning text-dark">
+                        <i class="bi bi-recycle"></i> reaped
+                    </span>
+                    <span th:if="${e.eventType?.name() == 'SHUTDOWN'}"
+                          class="badge bg-info text-dark">
+                        <i class="bi bi-power"></i> shutdown
+                    </span>
+                </td>
+                <td>
+                    <code th:text="${e.actionTaken}">stopped</code>
+                </td>
+                <td>
+                    <code th:text="${e.jobName}">jobName</code>
+                </td>
+                <td>
+                    <a th:href="@{/batch/{id}(id=${e.jobExecutionId})}"
+                       th:text="${'#' + e.jobExecutionId}">#123</a>
+                </td>
+                <td>
+                    <a th:if="${e.accountId != null}"
+                       th:href="@{/emailAccounts/{id}(id=${e.accountId})}"
+                       th:text="${e.accountId}">42</a>
+                    <span th:if="${e.accountId == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${e.originalStartedAt != null}" th:text="${e.originalStartedAt}">2026-06-06T11:00:00Z</span>
+                    <span th:if="${e.originalStartedAt == null}" class="text-muted">unknown</span>
+                </td>
+                <td>
+                    <span th:if="${e.ageAtEventDisplay != null}" th:text="${e.ageAtEventDisplay}">1h 5m 3s</span>
+                    <span th:if="${e.ageAtEventDisplay == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${e.details != null}"
+                          class="text-muted small"
+                          th:title="${e.details}"
+                          th:text="${#strings.abbreviate(e.details, 60)}">reason</span>
+                    <span th:if="${e.details == null}" class="text-muted">—</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p class="small text-muted mt-3">
+        Showing most-recent <span th:text="${limit}">50</span> events.
+    </p>
+</div>
+</body>
+</html>
