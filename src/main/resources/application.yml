@@ -320,6 +320,19 @@ app:
     model-name: mxbai-embed-large
     max-text-length: 8192
     batch-size: 10
+
+  # Folder audit (issue #103): "sanity-check" enumeration that walks every
+  # directory under start paths *including under SKIP folders*, so the
+  # operator can reconcile our folder count against `find / -type d` and
+  # surface "hidden gem" folders that should probably be reclassified.
+  audit:
+    # How many levels to descend below a detected SKIP root before the
+    # visitor returns SKIP_SUBTREE. Default 1 — we'll record the SKIP
+    # root itself and its immediate children, but not grandchildren.
+    # This is the cost-control knob that prevents
+    # node_modules/foo/node_modules/bar/... from exploding.
+    hidden-gem-peek-depth: 1
+
   # OneDrive integration (OAuth2 + PKCE, Microsoft Graph API)
   onedrive:
     enabled: false

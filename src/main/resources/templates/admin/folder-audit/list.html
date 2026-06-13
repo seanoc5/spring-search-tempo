@@ -1,0 +1,107 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Folder Audit</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-folder-check me-2"></i>Folder Audit
+        </h1>
+        <form th:action="@{/admin/folder-audit/run}" method="post" class="ms-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-play-fill"></i> Run Folder Audit Now
+            </button>
+        </form>
+    </div>
+
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${successMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${errorMessage}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <p class="text-muted">
+        The folder audit walks every directory under the configured start
+        paths <strong>including under SKIP folders</strong> (bounded by
+        <code>app.audit.hidden-gem-peek-depth</code>). Use it to reconcile
+        our folder count against <code>find / -type d | wc -l</code> and
+        to surface "hidden gem" folders that should probably be
+        reclassified from SKIP to INDEX/ANALYZE.
+    </p>
+
+    <div th:if="${#lists.isEmpty(runs)}" class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No audit runs yet. Click <strong>Run Folder Audit Now</strong> to start one.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(runs)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Run</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th class="text-end">Total Folders</th>
+                <th class="text-end">SKIP Subtrees</th>
+                <th class="text-end">Hidden Gems</th>
+                <th>Source</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${runs}">
+                <td>
+                    <a th:href="@{/admin/folder-audit/runs/{id}(id=${r.id})}"
+                       th:text="${'#' + r.id}">#1</a>
+                </td>
+                <td>
+                    <span th:if="${r.status?.name() == 'RUNNING'}"
+                          class="badge bg-info text-dark">
+                        <i class="bi bi-arrow-repeat"></i> running
+                    </span>
+                    <span th:if="${r.status?.name() == 'COMPLETED'}"
+                          class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> completed
+                    </span>
+                    <span th:if="${r.status?.name() == 'FAILED'}"
+                          class="badge bg-danger">
+                        <i class="bi bi-x-circle"></i> failed
+                    </span>
+                </td>
+                <td th:text="${r.started}">2026-06-13T12:00:00Z</td>
+                <td>
+                    <span th:if="${r.finished != null}" th:text="${r.finished}">2026-06-13T12:05:00Z</span>
+                    <span th:if="${r.finished == null}" class="text-muted">—</span>
+                </td>
+                <td class="text-end" th:text="${r.totalFolders}">0</td>
+                <td class="text-end" th:text="${r.skipSubtreeCount}">0</td>
+                <td class="text-end" th:text="${r.hiddenGemCount}">0</td>
+                <td>
+                    <code class="small" th:text="${r.sourceType?.name()}">FILESYSTEM</code>
+                    <span class="text-muted small" th:if="${r.sourceRef != null}"
+                          th:text="${r.sourceRef}">crawl-name</span>
+                </td>
+                <td>
+                    <a class="btn btn-sm btn-outline-secondary"
+                       th:href="@{/admin/folder-audit/runs/{id}(id=${r.id})}">
+                        Details
+                    </a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p class="small text-muted mt-3">
+        Showing most-recent <span th:text="${limit}">50</span> runs.
+    </p>
+</div>
+</body>
+</html>
