@@ -58,9 +58,6 @@ data class ErrorDisplayConfig(
  *
  * Provides defaults for IMAP host/port/provider/region. Credentials are set in the UI
  * (stored DB-encrypted) — not in this configuration object.
- *
- * `credentialEnvVar` is retained as a no-op binding target so deployments with the
- * legacy YAML key don't fail to start; the value is ignored. Slated for removal.
  */
 data class EmailAccountConfig(
     var name: String = "",
@@ -69,8 +66,6 @@ data class EmailAccountConfig(
     var imapHost: String? = null,
     var imapPort: Int = 993,
     var useSsl: Boolean = true,
-    /** @deprecated env-var credential fallback removed in issue #55; ignored at runtime. */
-    var credentialEnvVar: String? = null,
     var enabled: Boolean = true,
     var region: String = "us-east-1"  // For WorkMail
 )

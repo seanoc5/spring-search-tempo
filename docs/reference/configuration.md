@@ -105,8 +105,7 @@ app:
 ### Email Configuration
 
 The `accounts:` block carries default host/port/region info only — IMAP credentials are
-stored DB-encrypted (set via the account edit page in the UI, never in YAML). The legacy
-`credential-env-var:` key was removed in issue #55.
+stored DB-encrypted (set via the account edit page in the UI, never in YAML).
 
 ```yaml
 app:
