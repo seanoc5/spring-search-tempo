@@ -39,14 +39,6 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun findByConceptId(id: Long, pageable: Pageable): Page<ContentChunk>
 
     /**
-     * Find chunks that have not been NLP processed yet and have text.
-     * Used by NLP batch job to find chunks to process.
-     * @deprecated Use findChunksForNlpProcessing instead to respect parent analysisStatus
-     */
-    @Deprecated("Use findChunksForNlpProcessing instead", ReplaceWith("findChunksForNlpProcessing(analysisStatuses, pageable)"))
-    fun findByNlpProcessedAtIsNullAndTextIsNotNull(pageable: Pageable): Page<ContentChunk>
-
-    /**
      * Find chunks eligible for NLP processing based on parent file's analysisStatus.
      *
      * Only processes chunks where:
