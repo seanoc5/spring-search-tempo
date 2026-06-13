@@ -51,9 +51,15 @@ class FSFileController(
     }
 
     @GetMapping("/{id}")
-    fun view(@PathVariable(name = "id") id: Long, model: Model): String {
+    fun view(
+        @PathVariable(name = "id") id: Long,
+        @PageableDefault(size = 25) pageable: Pageable,
+        model: Model
+    ): String {
         model.addAttribute("fSFile", fSFileService.get(id))
-        model.addAttribute("chunkNlpViews", contentChunkService.findNlpViewsForFile(id))
+        val chunkPage = contentChunkService.findNlpViewsForFile(id, pageable)
+        model.addAttribute("chunkNlpViews", chunkPage)
+        model.addAttribute("paginationModel", WebUtils.getPaginationModel(chunkPage))
         return "fSFile/view"
     }
 

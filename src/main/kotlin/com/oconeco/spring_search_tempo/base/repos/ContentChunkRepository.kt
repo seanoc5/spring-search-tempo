@@ -32,6 +32,13 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun findByConceptIdOrderByChunkNumberAsc(id: Long): List<ContentChunk>
 
     /**
+     * Paginated chunks for a given FSFile, ordered by chunk number.
+     * Used by the FSFile detail view's NLP card to keep the page bounded for
+     * heavily-chunked ANALYZE documents (see issue #82).
+     */
+    fun findByConceptId(id: Long, pageable: Pageable): Page<ContentChunk>
+
+    /**
      * Find chunks that have not been NLP processed yet and have text.
      * Used by NLP batch job to find chunks to process.
      * @deprecated Use findChunksForNlpProcessing instead to respect parent analysisStatus

@@ -118,6 +118,55 @@ class FSFileViewNlpRenderIT : BaseIT() {
     }
 
     @Test
+    @DisplayName("GET /fSFiles/{id} — chunk list is paginated; first page caps at default size, second page shows remainder (issue #82)")
+    fun paginatesHeavilyChunkedFile() {
+        val fileId = saveFile("heavily-chunked.txt")
+        // 30 chunks > default size 25 → expect 2 pages
+        repeat(30) { i ->
+            saveChunk(
+                fileId = fileId,
+                chunkNumber = i,
+                text = "chunk-marker-$i body text.",
+                sentiment = null,
+                sentimentScore = null,
+                namedEntities = null,
+                nlpProcessedAt = null,
+            )
+        }
+
+        val page1 = mockMvc.perform(
+            get("/fSFiles/{id}", fileId)
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        // Header shows total, not just the visible slice.
+        assertThat(page1).contains("30 chunks")
+        // First 25 chunk markers present.
+        assertThat(page1).contains("chunk-marker-0 ")
+        assertThat(page1).contains("chunk-marker-24 ")
+        // Chunks beyond first page are not rendered.
+        assertThat(page1).doesNotContain("chunk-marker-25 ")
+        assertThat(page1).doesNotContain("chunk-marker-29 ")
+        // Pagination controls appear when totalPages > 1.
+        assertThat(page1).contains("pagination")
+
+        val page2 = mockMvc.perform(
+            get("/fSFiles/{id}", fileId)
+                .param("page", "1")
+                .with(user(BaseIT.LOGIN).roles("USER"))
+        )
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+
+        assertThat(page2).contains("chunk-marker-25 ")
+        assertThat(page2).contains("chunk-marker-29 ")
+        assertThat(page2).doesNotContain("chunk-marker-0 ")
+        assertThat(page2).doesNotContain("chunk-marker-24 ")
+    }
+
+    @Test
     @DisplayName("GET /fSFiles/{id} — file with no chunks renders without an NLP card, no errors")
     fun rendersWithoutNlpCardWhenNoChunks() {
         val fileId = saveFile("no-chunks.txt")
