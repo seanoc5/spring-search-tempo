@@ -4,7 +4,9 @@ import com.oconeco.spring_search_tempo.base.domain.FolderAuditRun
 import com.oconeco.spring_search_tempo.base.repos.FolderAuditRunRepository
 import com.oconeco.spring_search_tempo.batch.audit.FolderAuditService
 import org.slf4j.LoggerFactory
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.data.domain.PageRequest
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -38,8 +40,15 @@ class FolderAuditResource(
     @PostMapping("/run")
     fun startRun(): ResponseEntity<FolderAuditRunStartResponse> {
         log.info("REST API request to start folder audit run")
-        val runId = folderAuditService.startFilesystemAuditRun()
-        return ResponseEntity.accepted().body(FolderAuditRunStartResponse(runId = runId))
+        return try {
+            val runId = folderAuditService.startFilesystemAuditRun()
+            ResponseEntity.accepted().body(FolderAuditRunStartResponse(runId = runId))
+        } catch (e: JobExecutionAlreadyRunningException) {
+            log.info("Refusing concurrent folder audit run: {}", e.message)
+            ResponseEntity.status(HttpStatus.CONFLICT).body(
+                FolderAuditRunStartResponse(runId = null, message = e.message)
+            )
+        }
     }
 
     @GetMapping("/runs")
@@ -72,7 +81,10 @@ class FolderAuditResource(
     )
 }
 
-data class FolderAuditRunStartResponse(val runId: Long)
+data class FolderAuditRunStartResponse(
+    val runId: Long?,
+    val message: String? = null
+)
 
 data class FolderAuditRunResponse(
     val id: Long,

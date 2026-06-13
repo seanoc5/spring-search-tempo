@@ -38,9 +38,12 @@ import kotlin.io.path.isRegularFile
  * audit's perspective.
  *
  * Pattern matching for the "hidden gem" flag ([FolderSnapshot.matchedIndexPattern])
- * uses the literal directory path against INDEX, ANALYZE and SEMANTIC
- * patterns, since those production patterns are typically written to
- * match the folder itself (e.g. an anchored `Documents$` rule).
+ * uses the same synthetic-child probe as SKIP detection (in addition to
+ * the literal path). Production INDEX/ANALYZE/SEMANTIC patterns are
+ * written in both styles — some match the folder itself (anchored on
+ * the folder name), others match content within it. Probing both ways
+ * makes the hidden-gem signal robust regardless of which style the
+ * operator used.
  */
 class FolderAuditVisitor(
     private val run: FolderAuditRun,
@@ -95,11 +98,20 @@ class FolderAuditVisitor(
 
         val matchedSkipPattern = if (underSkip) currentSkipPattern else null
 
-        // INDEX/ANALYZE/SEMANTIC patterns match the folder path directly.
+        // INDEX/ANALYZE/SEMANTIC patterns: try the literal folder path
+        // first, then the synthetic-child probe. The dual check catches
+        // both pattern styles (`.*/Documents$` matching the folder vs.
+        // `.*/Documents/.*` matching its contents).
         val matchedIndexPattern = if (indexPatterns.isNotEmpty()) {
-            patternMatchingService.matchesSkipPatternOnly(dir.toString(), indexPatterns)
-                .takeIf { it.isSkip }
-                ?.matchedPattern
+            val literal = patternMatchingService.matchesSkipPatternOnly(dir.toString(), indexPatterns)
+            if (literal.isSkip) {
+                literal.matchedPattern
+            } else {
+                val syntheticChildForIndex = if (dir.toString().endsWith("/")) "${dir}x" else "$dir/x"
+                patternMatchingService.matchesSkipPatternOnly(syntheticChildForIndex, indexPatterns)
+                    .takeIf { it.isSkip }
+                    ?.matchedPattern
+            }
         } else null
 
         if (matchedSkipPattern != null && matchedIndexPattern != null) {

@@ -7,8 +7,11 @@ import com.oconeco.spring_search_tempo.base.repos.FolderAuditRunRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
 import org.slf4j.LoggerFactory
 import org.springframework.batch.core.Job
+import org.springframework.batch.core.JobExecution
 import org.springframework.batch.core.JobParametersBuilder
+import org.springframework.batch.core.explore.JobExplorer
 import org.springframework.batch.core.launch.JobLauncher
+import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import java.time.OffsetDateTime
@@ -36,6 +39,7 @@ class FolderAuditService(
     private val folderAuditRunRepository: FolderAuditRunRepository,
     private val crawlConfigService: CrawlConfigService,
     private val jobLauncher: JobLauncher,
+    private val jobExplorer: JobExplorer,
     @Qualifier("filesystemFolderAuditJob") private val filesystemFolderAuditJob: Job
 ) {
 
@@ -44,6 +48,18 @@ class FolderAuditService(
     }
 
     fun startFilesystemAuditRun(): Long {
+        // Dedup: a full-filesystem walk is expensive — refuse a second
+        // concurrent launch (double-clicked admin button, runaway API
+        // client) rather than fanning out duplicate walks.
+        val running: Set<JobExecution> = jobExplorer.findRunningJobExecutions("filesystemFolderAuditJob")
+        if (running.isNotEmpty()) {
+            val active = running.first()
+            val runningRunId = active.jobParameters.getLong("runId")
+            throw JobExecutionAlreadyRunningException(
+                "filesystemFolderAuditJob already running (executionId=${active.id}, runId=$runningRunId)"
+            )
+        }
+
         val enabledCrawls = crawlConfigService.getEnabledCrawls()
         val sourceRef = if (enabledCrawls.isEmpty()) {
             "(no enabled crawls)"
