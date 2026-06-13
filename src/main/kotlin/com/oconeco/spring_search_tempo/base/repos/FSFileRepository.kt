@@ -332,4 +332,17 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
         @Param("searchableStatuses") searchableStatuses: List<AnalysisStatus>
     ): List<Array<Any>>
 
+    /**
+     * Find all files sharing the same SHA-256 content hash.
+     * Issue #119: byte-identical duplicate detection.
+     */
+    fun findByContentHash(contentHash: String): List<FSFile>
+
+    /**
+     * Count files matching this hash other than the given id.
+     * Used by the FSFile detail UI to render "N duplicate copies" where N
+     * excludes the file the user is currently viewing.
+     */
+    fun countByContentHashAndIdNot(contentHash: String, id: Long): Int
+
 }

@@ -67,7 +67,7 @@ class IndexingProcessor(
 
         try {
             // Extract text and metadata using Tika
-            when (val result = textExtractionService.extractTextAndMetadata(path, maxTextSize)) {
+            when (val result = textExtractionService.extractTextAndMetadata(path, maxTextSize, computeHash = true)) {
                 is TextAndMetadataResult.Success -> {
                     // Update DTO with extracted content
                     item.bodyText = result.text
@@ -81,6 +81,7 @@ class IndexingProcessor(
                     item.modifiedDate = result.metadata.modifiedDate
                     item.language = result.metadata.language
                     item.pageCount = result.metadata.pageCount
+                    item.contentHash = result.contentHash
 
                     // Mark as successfully indexed
                     item.indexedAt = now

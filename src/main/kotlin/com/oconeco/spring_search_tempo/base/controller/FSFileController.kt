@@ -60,7 +60,18 @@ class FSFileController(
         val chunkPage = contentChunkService.findNlpViewsForFile(id, pageable)
         model.addAttribute("chunkNlpViews", chunkPage)
         model.addAttribute("paginationModel", WebUtils.getPaginationModel(chunkPage))
+        model.addAttribute("duplicateCount", fSFileService.countDuplicates(id))
         return "fSFile/view"
+    }
+
+    @GetMapping("/{id}/duplicates")
+    fun duplicates(
+        @PathVariable(name = "id") id: Long,
+        model: Model
+    ): String {
+        model.addAttribute("fSFile", fSFileService.get(id))
+        model.addAttribute("duplicates", fSFileService.findDuplicates(id))
+        return "fSFile/duplicates"
     }
 
     @GetMapping("/add")

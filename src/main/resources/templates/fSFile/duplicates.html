@@ -1,0 +1,65 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Duplicate Files</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/fSFiles}">Files</a></li>
+            <li class="breadcrumb-item">
+                <a th:href="@{/fSFiles/{id}(id=${fSFile.id})}">[[${fSFile.label ?: fSFile.uri}]]</a>
+            </li>
+            <li class="breadcrumb-item active">Duplicates</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-wrap mb-4">
+        <h1 class="flex-grow-1">Duplicate files</h1>
+        <a th:href="@{/fSFiles/{id}(id=${fSFile.id})}" class="btn btn-outline-secondary">Back to file</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">This file:</dt>
+                <dd class="col-sm-9"><code>[[${fSFile.uri}]]</code></dd>
+
+                <dt class="col-sm-3">Content hash:</dt>
+                <dd class="col-sm-9"><code class="small">[[${fSFile.contentHash}]]</code></dd>
+
+                <dt class="col-sm-3">Other copies:</dt>
+                <dd class="col-sm-9">[[${#lists.size(duplicates)}]]</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div th:if="${duplicates.empty}" class="alert alert-info">
+        No other byte-identical copies were found.
+    </div>
+
+    <div th:if="${!duplicates.empty}" class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead>
+            <tr>
+                <th scope="col">Path</th>
+                <th scope="col">Size</th>
+                <th scope="col"><!-- --></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="dup : ${duplicates}">
+                <td><code>[[${dup.uri}]]</code></td>
+                <td>[[${dup.size ?: '-'}]]</td>
+                <td>
+                    <a th:href="@{/fSFiles/{id}(id=${dup.id})}" class="btn btn-sm btn-outline-secondary">View</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

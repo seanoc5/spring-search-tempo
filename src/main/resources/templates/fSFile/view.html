@@ -112,6 +112,29 @@
                 </div>
             </div>
 
+            <!-- Duplicates (INDEX-class files only — LOCATE/SKIP have no contentHash) -->
+            <div th:if="${fSFile.contentHash != null}" class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Duplicates</h5>
+                    <span class="badge"
+                          th:classappend="${duplicateCount > 0 ? 'bg-warning text-dark' : 'bg-secondary'}"
+                          th:text="${duplicateCount + ' duplicate ' + (duplicateCount == 1 ? 'copy' : 'copies')}">
+                        0 duplicate copies
+                    </span>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-3">Content hash:</dt>
+                        <dd class="col-sm-9"><code class="small">[[${fSFile.contentHash}]]</code></dd>
+                    </dl>
+                    <div th:if="${duplicateCount > 0}" class="mt-3">
+                        <a th:href="@{/fSFiles/{id}/duplicates(id=${fSFile.id})}" class="btn btn-sm btn-outline-primary">
+                            View duplicates
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <!-- Body Text Preview -->
             <div th:if="${fSFile.bodyText != null && fSFile.bodyText != ''}" class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">

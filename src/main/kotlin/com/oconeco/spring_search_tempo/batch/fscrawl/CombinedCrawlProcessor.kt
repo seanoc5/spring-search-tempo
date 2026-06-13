@@ -77,6 +77,13 @@ class CombinedCrawlProcessor(
         private val log = LoggerFactory.getLogger(CombinedCrawlProcessor::class.java)
         private const val MAX_TEXT_EXTRACT_SIZE = 100 * 1024 * 1024 // 10MB limit  10,444,800
 
+        /** Analysis statuses that read the file's content (and therefore get a contentHash). */
+        private val INDEX_CLASS_STATUSES = setOf(
+            AnalysisStatus.INDEX,
+            AnalysisStatus.ANALYZE,
+            AnalysisStatus.SEMANTIC
+        )
+
         /** Default per-cache entry cap. ~50k is comfortably above one directory's
          *  worth of files for normal trees while keeping worst-case heap small. */
         const val DEFAULT_MAX_CACHE_SIZE: Long = 50_000
@@ -366,6 +373,16 @@ class CombinedCrawlProcessor(
         // Check if file exists in DB (use cache)
         val existingFile = fileCache.getIfPresent(uri)
 
+        // Determine analysis status up front so the unchanged-skip check can
+        // honour AC #119g: a file freshly promoted from LOCATE to INDEX needs
+        // re-processing (it has no contentHash yet) even if mtime/size match.
+        val analysisStatus = patternMatchingService.determineFileAnalysisStatus(
+            path = uri,
+            filePatterns = effectivePatterns.filePatterns,
+            parentFolderStatus = parentFolderStatus ?: AnalysisStatus.LOCATE,
+            priority = effectivePatterns.filePatternPriority
+        )
+
         // Incremental crawl: check if file is unchanged (skip check when forceFullRecrawl=true)
         if (existingFile == null) {
             log.debug("\t\t++++ File does not exist in DB, will process: {}", uri)
@@ -376,25 +393,21 @@ class CombinedCrawlProcessor(
             )
 
             if (!forceFullRecrawl && isUnchanged) {
-                log.debug("\t\tFile unchanged, skipping: {}", uri)
-                return null
-            }
-
-            if (forceFullRecrawl) {
+                val needsHash = analysisStatus in INDEX_CLASS_STATUSES
+                if (needsHash && existingFile.contentHash == null) {
+                    log.info("\t\tFile unchanged but freshly promoted to {} with no contentHash, re-processing: {}",
+                        analysisStatus, uri)
+                } else {
+                    log.debug("\t\tFile unchanged, skipping: {}", uri)
+                    return null
+                }
+            } else if (forceFullRecrawl) {
                 log.info("\t\tFile exists, forcing recrawl (forceFullRecrawl=true): {}", uri)
             } else {
                 log.info("\t\tFile modified, will update: {} (fs_modified={}, db_modified={})",
                     uri, fsMetadata.lastModified, existingFile.fsLastModified)
             }
         }
-
-        // Determine analysis status using file patterns and parent folder status
-        val analysisStatus = patternMatchingService.determineFileAnalysisStatus(
-            path = uri,
-            filePatterns = effectivePatterns.filePatterns,
-            parentFolderStatus = parentFolderStatus ?: AnalysisStatus.LOCATE,
-            priority = effectivePatterns.filePatternPriority
-        )
 
         // Create or update DTO
         val dto = FSFileDTO()
@@ -468,7 +481,7 @@ class CombinedCrawlProcessor(
             return
         }
 
-        when (val result = textExtractionService.extractTextAndMetadata(file, MAX_TEXT_EXTRACT_SIZE.toLong())) {
+        when (val result = textExtractionService.extractTextAndMetadata(file, MAX_TEXT_EXTRACT_SIZE.toLong(), computeHash = true)) {
             is TextAndMetadataResult.Success -> {
                 dto.bodyText = result.text
                 dto.bodySize = result.text.length.toLong()
@@ -478,6 +491,7 @@ class CombinedCrawlProcessor(
                 dto.contentType = result.metadata.contentType
                 dto.modifiedDate = result.metadata.modifiedDate
                 dto.pageCount = result.metadata.pageCount
+                dto.contentHash = result.contentHash
 
                 log.debug("\t\tExtracted text and metadata from: {} ({} chars)", dto.uri, result.text.length)        // todo -- change to debug
             }

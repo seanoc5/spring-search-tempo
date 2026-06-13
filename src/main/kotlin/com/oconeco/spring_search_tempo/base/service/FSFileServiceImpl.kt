@@ -194,4 +194,20 @@ class FSFileServiceImpl(
             .associate { (it[0] as Long) to (it[1] as Long) }
     }
 
+    @Transactional(readOnly = true)
+    override fun countDuplicates(id: Long): Int {
+        val file = fSFileRepository.findById(id).orElse(null) ?: return 0
+        val hash = file.contentHash ?: return 0
+        return fSFileRepository.countByContentHashAndIdNot(hash, id)
+    }
+
+    @Transactional(readOnly = true)
+    override fun findDuplicates(id: Long): List<FSFileDTO> {
+        val file = fSFileRepository.findById(id).orElse(null) ?: return emptyList()
+        val hash = file.contentHash ?: return emptyList()
+        return fSFileRepository.findByContentHash(hash)
+            .filter { it.id != id }
+            .map { fSFileMapper.updateFSFileDTO(it, FSFileDTO()) }
+    }
+
 }

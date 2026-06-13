@@ -401,4 +401,103 @@ class TextExtractionServiceTest {
         // Only contentType should reliably be present
         assertNotNull(success.metadata.contentType)
     }
+
+    // ---- Issue #119: contentHash (SHA-256) computed alongside text extraction ----
+
+    @Test
+    @DisplayName("Should leave contentHash null when computeHash=false (default)")
+    fun testContentHashAbsentByDefault() {
+        val file = tempDir.resolve("default.txt")
+        file.writeText("Hello, World!")
+
+        val result = service.extractTextAndMetadata(file)
+
+        assertTrue(result is TextAndMetadataResult.Success)
+        assertNull((result as TextAndMetadataResult.Success).contentHash,
+            "Default extractTextAndMetadata call must not populate contentHash")
+    }
+
+    @Test
+    @DisplayName("Should compute SHA-256 over raw file bytes when computeHash=true")
+    fun testContentHashMatchesRawBytes() {
+        val payload = "Hello, World!".toByteArray()
+        val file = tempDir.resolve("hashed.txt")
+        Files.write(file, payload)
+
+        val result = service.extractTextAndMetadata(file, computeHash = true)
+
+        assertTrue(result is TextAndMetadataResult.Success)
+        val success = result as TextAndMetadataResult.Success
+
+        val expected = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payload)
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(expected, success.contentHash,
+            "contentHash must be SHA-256 over the file bytes, not the extracted text")
+
+        // Sanity: extracted text differs from raw bytes for binary-ish content,
+        // and the hash is over bytes — verify it does NOT equal the hash of the extracted text.
+        val textHash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(success.text.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        // For pure-ASCII text, body text often equals bytes (modulo trailing whitespace
+        // Tika inserts). Don't assert inequality unconditionally — just confirm
+        // contentHash matches the raw-bytes hash explicitly, which it does above.
+        assertEquals(64, success.contentHash!!.length, "SHA-256 hex digest must be 64 chars")
+        assertEquals(success.contentHash, expected,
+            "contentHash is raw-bytes hash; textHash provided for documentation")
+        @Suppress("UNUSED_VARIABLE")
+        val unused = textHash
+    }
+
+    @Test
+    @DisplayName("Identical raw bytes in different paths produce identical contentHash")
+    fun testContentHashStableAcrossPaths() {
+        val payload = "spring-search-tempo dedup smoke test".toByteArray()
+        val a = tempDir.resolve("a.txt").also { Files.write(it, payload) }
+        val b = tempDir.resolve("nested/b.txt").also {
+            Files.createDirectories(it.parent)
+            Files.write(it, payload)
+        }
+
+        val ra = service.extractTextAndMetadata(a, computeHash = true) as TextAndMetadataResult.Success
+        val rb = service.extractTextAndMetadata(b, computeHash = true) as TextAndMetadataResult.Success
+
+        assertNotNull(ra.contentHash)
+        assertEquals(ra.contentHash, rb.contentHash,
+            "Two files with identical bytes must hash to the same SHA-256")
+    }
+
+    @Test
+    @DisplayName("Empty INDEX-class file hashes to canonical SHA-256 of empty input")
+    fun testContentHashForEmptyFile() {
+        val empty = tempDir.resolve("empty.txt")
+        Files.createFile(empty)
+
+        val result = service.extractTextAndMetadata(empty, computeHash = true)
+
+        assertTrue(result is TextAndMetadataResult.Success)
+        assertEquals(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            (result as TextAndMetadataResult.Success).contentHash,
+            "Empty INDEX-class files should hash to SHA-256('') so two empty files dedup."
+        )
+    }
+
+    @Test
+    @DisplayName("DigestInputStream wrapping does not corrupt extracted text")
+    fun testHashingDoesNotCorruptExtractedText() {
+        val text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n" +
+            "Pellentesque habitant morbi tristique senectute."
+        val file = tempDir.resolve("lorem.txt")
+        file.writeText(text)
+
+        val plain = service.extractTextAndMetadata(file) as TextAndMetadataResult.Success
+        val hashed = service.extractTextAndMetadata(file, computeHash = true) as TextAndMetadataResult.Success
+
+        assertEquals(plain.text, hashed.text,
+            "Wrapping the Tika input in DigestInputStream must not alter the extracted text")
+        assertEquals(plain.metadata.contentType, hashed.metadata.contentType,
+            "Wrapping the Tika input in DigestInputStream must not alter detected metadata")
+    }
 }
