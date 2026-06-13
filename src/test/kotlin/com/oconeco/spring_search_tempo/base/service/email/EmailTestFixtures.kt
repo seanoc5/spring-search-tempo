@@ -32,11 +32,17 @@ import jakarta.mail.internet.MimeMessage
  */
 object EmailTestFixtures {
 
-    /** Standard plain-IMAP setup on the canonical test port (3143). */
-    val IMAP: ServerSetup = ServerSetupTest.IMAP
+    /**
+     * Plain-IMAP setup bound to an OS-assigned port (issue #106). Using
+     * the canonical 3143 port collided with other GreenMail-backed tests
+     * sharing the same JVM after Spring tear-down, producing the
+     * "exceeded 2s timeout binding to port 3143" cascade. Read the real
+     * port from the server *after* start, e.g. `greenMail.imap.port`.
+     */
+    val IMAP: ServerSetup = ServerSetupTest.IMAP.dynamicPort()
 
-    /** Standard imaps (SSL) setup on the canonical test port (3993). */
-    val IMAPS: ServerSetup = ServerSetupTest.IMAPS
+    /** IMAPS counterpart with the same dynamic-port treatment. */
+    val IMAPS: ServerSetup = ServerSetupTest.IMAPS.dynamicPort()
 
     /**
      * JUnit5 extension that boots GreenMail's plain IMAP server before

@@ -31,7 +31,9 @@ class EmailConfigValidationServiceTest {
 
     private fun validForm() = EmailAccountForm(
         host = "127.0.0.1",
-        port = EmailTestFixtures.IMAP.port,
+        // GreenMail listens on an OS-assigned port (issue #106) — read it
+        // from the live server, not the ServerSetup constant (which is 0).
+        port = greenMail.imap.port,
         username = EmailTestFixtures.DEFAULT_USER,
         password = EmailTestFixtures.DEFAULT_PASSWORD,
         useSsl = false
