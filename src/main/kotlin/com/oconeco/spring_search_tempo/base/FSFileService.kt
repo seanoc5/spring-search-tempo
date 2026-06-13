@@ -24,13 +24,6 @@ interface FSFileService {
     fun getFSFileValues(): Map<Long, Long>
 
     /**
-     * Find files with non-null bodyText for chunking.
-     * Used by batch processing to retrieve files that need text chunking.
-     * @deprecated Use findFilesNeedingChunking instead to avoid re-processing.
-     */
-    fun findFilesWithBodyText(pageable: Pageable): Page<FSFileDTO>
-
-    /**
      * Find files that need chunking: have bodyText and either never chunked or modified since last chunking.
      * This prevents re-processing already-chunked files on every job run.
      *

@@ -40,8 +40,6 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
         @Param("escapedPrefix") escapedPrefix: String
     ): List<Long>
 
-    fun findByBodyTextIsNotNull(pageable: Pageable): Page<FSFile>
-
     /**
      * Find files that need chunking: have bodyText and either never chunked or modified since last chunking.
      * This prevents re-processing already-chunked files on every job run.
