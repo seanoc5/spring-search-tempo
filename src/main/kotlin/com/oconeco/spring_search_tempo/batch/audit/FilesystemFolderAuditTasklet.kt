@@ -120,7 +120,19 @@ class FilesystemFolderAuditTasklet(
 
             // Snapshot rotation (issue #105): keep the latest N runs, drop the rest.
             // Runs only on COMPLETED — a FAILED run shouldn't roll a healthy older run off the back.
-            folderAuditRetentionService.rotate(auditProperties.retainRuns)
+            //
+            // Isolated try/catch: retention is housekeeping, not part of the audit's contract.
+            // A transient DB error here must NOT fall into the outer catch and flip the
+            // just-COMPLETED run to FAILED — that would mis-report the audit's actual outcome.
+            // Log-and-swallow; next week's run will rotate again.
+            try {
+                folderAuditRetentionService.rotate(auditProperties.retainRuns)
+            } catch (e: Exception) {
+                log.warn(
+                    "Folder audit runId={} retention rotate failed (audit itself succeeded): {}",
+                    runId, e.message, e
+                )
+            }
         } catch (e: Exception) {
             log.error("Folder audit runId={} failed", runId, e)
             run.status = FolderAuditRunStatus.FAILED
