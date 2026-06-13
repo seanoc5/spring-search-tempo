@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.audit
 
+import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.domain.FolderAuditRunStatus
 import com.oconeco.spring_search_tempo.base.repos.FolderAuditRunRepository
 import com.oconeco.spring_search_tempo.base.repos.FolderSnapshotRepository
@@ -10,8 +11,8 @@ import org.springframework.batch.core.StepContribution
 import org.springframework.batch.core.scope.context.ChunkContext
 import org.springframework.batch.core.step.tasklet.Tasklet
 import org.springframework.batch.repeat.RepeatStatus
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.nio.file.FileVisitOption
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.OffsetDateTime
@@ -34,9 +35,12 @@ class FilesystemFolderAuditTasklet(
     private val folderSnapshotRepository: FolderSnapshotRepository,
     private val patternMatchingService: PatternMatchingService,
     private val crawlConfigService: CrawlConfigService,
-    @Value("\${app.audit.hidden-gem-peek-depth:1}")
-    private val peekDepth: Int
+    private val auditProperties: AuditProperties,
+    private val crawlConfiguration: CrawlConfiguration,
+    private val folderAuditRetentionService: FolderAuditRetentionService
 ) : Tasklet {
+
+    private val peekDepth: Int get() = auditProperties.hiddenGemPeekDepth
 
     companion object {
         private val log = LoggerFactory.getLogger(FilesystemFolderAuditTasklet::class.java)
@@ -52,9 +56,10 @@ class FilesystemFolderAuditTasklet(
 
         try {
             val crawls = crawlConfigService.getEnabledCrawls()
+            val absoluteMaxDepth = crawlConfiguration.absoluteMaxDepth
             log.info(
-                "Folder audit runId={} starting walk of {} enabled crawls (peekDepth={})",
-                runId, crawls.size, peekDepth
+                "Folder audit runId={} starting walk of {} enabled crawls (peekDepth={}, absoluteMaxDepth={})",
+                runId, crawls.size, peekDepth, absoluteMaxDepth
             )
 
             var total = 0L
@@ -89,10 +94,10 @@ class FilesystemFolderAuditTasklet(
                     )
 
                     log.info(
-                        "Audit runId={} walking crawl={} startPath={}",
-                        runId, crawl.name, startPath
+                        "Audit runId={} walking crawl={} startPath={} maxDepth={}",
+                        runId, crawl.name, startPath, absoluteMaxDepth
                     )
-                    Files.walkFileTree(path, visitor)
+                    Files.walkFileTree(path, emptySet<FileVisitOption>(), absoluteMaxDepth, visitor)
                     visitor.flush()
 
                     total += visitor.totalFolders
@@ -112,6 +117,22 @@ class FilesystemFolderAuditTasklet(
                 "Folder audit runId={} completed: total={} skipRoots={} hiddenGems={}",
                 runId, total, skipRoots, hiddenGems
             )
+
+            // Snapshot rotation (issue #105): keep the latest N runs, drop the rest.
+            // Runs only on COMPLETED — a FAILED run shouldn't roll a healthy older run off the back.
+            //
+            // Isolated try/catch: retention is housekeeping, not part of the audit's contract.
+            // A transient DB error here must NOT fall into the outer catch and flip the
+            // just-COMPLETED run to FAILED — that would mis-report the audit's actual outcome.
+            // Log-and-swallow; next week's run will rotate again.
+            try {
+                folderAuditRetentionService.rotate(auditProperties.retainRuns)
+            } catch (e: Exception) {
+                log.warn(
+                    "Folder audit runId={} retention rotate failed (audit itself succeeded): {}",
+                    runId, e.message, e
+                )
+            }
         } catch (e: Exception) {
             log.error("Folder audit runId={} failed", runId, e)
             run.status = FolderAuditRunStatus.FAILED

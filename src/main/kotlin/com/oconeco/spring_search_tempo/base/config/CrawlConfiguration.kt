@@ -12,7 +12,19 @@ import org.springframework.context.annotation.Configuration
 @ConfigurationProperties(prefix = "app.crawl")
 data class CrawlConfiguration(
     var defaults: CrawlDefaults = CrawlDefaults(),
-    var crawls: List<CrawlDefinition> = emptyList()
+    var crawls: List<CrawlDefinition> = emptyList(),
+    /**
+     * App-wide absolute ceiling on directory-walk depth (issue #105).
+     *
+     * Per-config [CrawlDefinition.maxDepth] is the day-to-day knob and
+     * continues to win when it is smaller. This is a cross-cutting backstop
+     * that prevents any walker — `FilesystemFolderAuditJob`, `DiscoveryReader`,
+     * `CombinedCrawlReader` — from descending past a sane depth even when
+     * the per-config value is misconfigured (or absent on the audit, which
+     * has no per-config knob of its own). 50 levels comfortably exceeds any
+     * legitimate filesystem depth.
+     */
+    var absoluteMaxDepth: Int = 50
 ) {
     /**
      * Merge crawl-specific patterns with global defaults.

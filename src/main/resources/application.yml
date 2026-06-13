@@ -139,6 +139,12 @@ app:
     # / ONEDRIVE_TOKEN_ENCRYPTION_KEY; the old name still works but logs a deprecation warning.
     encryption-key: "${APP_ENCRYPTION_KEY:}"
   crawl:
+    # App-wide absolute ceiling on directory-walk depth (issue #105).
+    # Per-crawl `max-depth` continues to win when smaller; this is a
+    # cross-cutting backstop respected by FilesystemFolderAuditJob,
+    # DiscoveryReader, and CombinedCrawlReader. 50 comfortably exceeds
+    # any sane filesystem depth.
+    absolute-max-depth: 50
     # Global defaults that all crawls inherit
     defaults:
       max-depth: 10
@@ -332,6 +338,16 @@ app:
     # This is the cost-control knob that prevents
     # node_modules/foo/node_modules/bar/... from exploding.
     hidden-gem-peek-depth: 1
+    # Weekly @Scheduled trigger for FolderAuditScheduler (issue #105).
+    # Default 03:00 every Sunday. Set weekly-enabled=false to kill the
+    # cron without changing the expression (the REST endpoint and admin
+    # button keep working).
+    weekly-cron: "0 0 3 * * SUN"
+    weekly-enabled: true
+    # Snapshot rotation: keep the latest N folder_audit_run + folder_snapshot
+    # rows; prune older ones after a successful audit run.
+    # `hidden_gem_resolution` rows are NOT rotated — they're durable.
+    retain-runs: 4
 
   # OneDrive integration (OAuth2 + PKCE, Microsoft Graph API)
   onedrive:
