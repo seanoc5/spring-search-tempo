@@ -20,11 +20,29 @@ sealed class RecentCrawlCheckResult {
         val otherAnalysisStatus: AnalysisStatus,
         val lastUpdated: OffsetDateTime
     ) : RecentCrawlCheckResult()
+
+    /**
+     * Folder is the declared start-path of another (currently configured) crawl -
+     * skip subtree on structural grounds, no DB hit required. Takes precedence
+     * over recency.
+     */
+    data class OwnedByOtherCrawl(val otherCrawlName: String) : RecentCrawlCheckResult()
 }
 
 /**
  * Service to check if folders should be skipped because they were recently
  * crawled by another crawl configuration.
+ *
+ * Two-layer policy:
+ *  1. **Structural ownership** (when [ownershipMap] and [currentCrawlName] are
+ *     both non-null): if the folder is the declared start-path of another
+ *     configured crawl, short-circuit to [RecentCrawlCheckResult.OwnedByOtherCrawl]
+ *     without consulting the database. Ownership wins regardless of timing —
+ *     covers the cold-start case and the parallel-execution race window.
+ *  2. **Recency fallback**: existing DB-backed lookup against
+ *     `fs_folder.last_updated`. Still the right answer for yaml-only crawl
+ *     variants and ad-hoc invocations that aren't represented in
+ *     [CrawlConfigService.getEnabledCrawls].
  *
  * Key behaviors:
  * - Only checks at crawl config root directories (startPaths from other configs)
@@ -34,11 +52,17 @@ sealed class RecentCrawlCheckResult {
  * @param fsFolderRepository Repository for folder lookups
  * @param currentCrawlConfigId The ID of the crawl config currently running
  * @param freshnessHours Hours threshold for "recent" crawl (default 24)
+ * @param currentCrawlName The configured name of the crawl currently running.
+ *   Required for ownership short-circuit; when null, ownership layer is bypassed.
+ * @param ownershipMap Structural ownership map. When null, ownership layer is
+ *   bypassed and only the recency query runs (preserves prior behavior).
  */
 class RecentCrawlSkipChecker(
     private val fsFolderRepository: FSFolderRepository,
     private val currentCrawlConfigId: Long,
-    private val freshnessHours: Int = 24
+    private val freshnessHours: Int = 24,
+    private val currentCrawlName: String? = null,
+    private val ownershipMap: CrawlOwnershipMap? = null
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(RecentCrawlSkipChecker::class.java)
@@ -66,7 +90,20 @@ class RecentCrawlSkipChecker(
             return cachedResult
         }
 
-        // Check if this folder is a crawl config root that was recently crawled
+        // Structural ownership layer: if this path is the configured start-path
+        // of *another* crawl, that crawl owns the subtree — skip without a DB hit.
+        if (ownershipMap != null && currentCrawlName != null) {
+            val owner = ownershipMap.lookup(path)
+            if (owner != null && owner != currentCrawlName) {
+                val result = RecentCrawlCheckResult.OwnedByOtherCrawl(owner)
+                log.info("Folder owned by another crawl (structural): uri={}, owner={}",
+                    uri, owner)
+                cache[uri] = result
+                return result
+            }
+        }
+
+        // Recency fallback (existing behavior).
         val result = checkForRecentCrawlConfigRoot(uri)
 
         // Cache the result
@@ -145,7 +182,8 @@ class RecentCrawlSkipChecker(
             "cacheSize" to cache.size,
             "currentCrawlConfigId" to currentCrawlConfigId,
             "freshnessHours" to freshnessHours,
-            "threshold" to threshold
+            "threshold" to threshold,
+            "ownershipEnabled" to (ownershipMap != null && currentCrawlName != null)
         )
     }
 }

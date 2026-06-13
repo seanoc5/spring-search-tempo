@@ -103,6 +103,14 @@ class DiscoveryReader(
                             )
                             return FileVisitResult.SKIP_SUBTREE
                         }
+                        is RecentCrawlCheckResult.OwnedByOtherCrawl -> {
+                            skippedByRecentCrawl++
+                            log.info(
+                                "Skipping subtree owned by another crawl (structural): {} (owner={})",
+                                dir, result.otherCrawlName
+                            )
+                            return FileVisitResult.SKIP_SUBTREE
+                        }
                         is RecentCrawlCheckResult.NotRecentlyCrawled -> {
                             // Continue
                         }

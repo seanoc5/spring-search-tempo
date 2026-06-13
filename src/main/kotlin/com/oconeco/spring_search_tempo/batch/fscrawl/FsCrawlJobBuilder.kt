@@ -8,6 +8,7 @@ import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlCheckpointService
 import com.oconeco.spring_search_tempo.base.service.CrawlConfigService
+import com.oconeco.spring_search_tempo.base.service.CrawlOwnershipMap
 import com.oconeco.spring_search_tempo.base.service.FSFolderMapper
 import com.oconeco.spring_search_tempo.base.service.PatternMatchingService
 import com.oconeco.spring_search_tempo.base.service.RecentCrawlSkipChecker
@@ -53,6 +54,7 @@ class FsCrawlJobBuilder(
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
+    private val crawlOwnershipMap: CrawlOwnershipMap,
     private val chunkService: com.oconeco.spring_search_tempo.base.ContentChunkService,
     private val crawlCleanupListener: CrawlCleanupListener,
     private val jobRunTrackingListener: JobRunTrackingListener,
@@ -122,7 +124,7 @@ class FsCrawlJobBuilder(
             .listener(pathValidationListener)  // Validates paths and records warnings (needs jobRunId)
             .listener(crawlCheckpointListener)  // Resume from checkpoint / clear on success (issue #8)
             .listener(nlpAutoTriggerListener)  // Auto-trigger NLP after crawl completes
-            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, effectiveFreshnessHours))
+            .start(buildCombinedCrawlStep(crawl, effectivePatterns, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, effectiveFreshnessHours, crawl.name))
             .next(buildChunkingStep(crawl, chunkProcessAll))
             .build()
     }
@@ -193,14 +195,15 @@ class FsCrawlJobBuilder(
         followLinks: Boolean,
         forceFullRecrawl: Boolean = false,
         crawlConfigId: Long? = null,
-        freshnessHours: Int = 24
+        freshnessHours: Int = 24,
+        crawlName: String = crawl.name
     ): Step {
         log.info("Building combined crawl step for: {} with {} start paths (maxDepth={}, followLinks={}, forceFullRecrawl={}, crawlConfigId={}, freshnessHours={})",
             crawl.name, crawl.startPaths.size, maxDepth, followLinks, forceFullRecrawl, crawlConfigId, freshnessHours)
 
         val startPaths = crawl.startPaths.map { Path(it) }
 
-        val reader = createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns, crawlConfigId, freshnessHours)
+        val reader = createCombinedReader(startPaths, maxDepth, followLinks, effectivePatterns, crawlConfigId, freshnessHours, crawlName)
         val writer = createCombinedWriter()
 
         return StepBuilder("fsCrawlCombined_${crawl.name}", jobRepository)
@@ -228,19 +231,22 @@ class FsCrawlJobBuilder(
         followLinks: Boolean,
         effectivePatterns: com.oconeco.spring_search_tempo.base.config.EffectivePatterns,
         crawlConfigId: Long? = null,
-        freshnessHours: Int = 24
+        freshnessHours: Int = 24,
+        crawlName: String? = null
     ): CombinedCrawlReader {
-        log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}, crawlConfigId={}, freshnessHours={}",
-            startPaths.size, maxDepth, followLinks, crawlConfigId, freshnessHours)
+        log.debug("Creating CombinedCrawlReader: {} startPaths, maxDepth={}, followLinks={}, crawlConfigId={}, freshnessHours={}, crawlName={}",
+            startPaths.size, maxDepth, followLinks, crawlConfigId, freshnessHours, crawlName)
 
         // Create recent crawl checker only if we have a crawl config ID
         val recentCrawlChecker = if (crawlConfigId != null) {
-            log.info("Creating RecentCrawlSkipChecker for crawlConfigId={}, freshnessHours={}",
-                crawlConfigId, freshnessHours)
+            log.info("Creating RecentCrawlSkipChecker for crawlConfigId={}, freshnessHours={}, crawlName={}",
+                crawlConfigId, freshnessHours, crawlName)
             RecentCrawlSkipChecker(
                 fsFolderRepository = fsFolderRepository,
                 currentCrawlConfigId = crawlConfigId,
-                freshnessHours = freshnessHours
+                freshnessHours = freshnessHours,
+                currentCrawlName = crawlName,
+                ownershipMap = crawlOwnershipMap
             )
         } else {
             log.debug("No crawlConfigId provided, recent crawl skip checking disabled")
