@@ -118,7 +118,7 @@ class FSFile : FSObject() {
      *
      * Populated during INDEX/ANALYZE/SEMANTIC processing only. LOCATE and SKIP
      * files leave this null. Two files with identical bytes share a hash even if
-     * their extracted text or paths differ. Indexed (see V11 migration) so
+     * their extracted text or paths differ. Indexed (see V13 migration) so
      * `findByContentHash` is a single index lookup.
      */
     @Column(length = 64)
