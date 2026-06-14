@@ -1,5 +1,6 @@
 package com.oconeco.spring_search_tempo.batch.discovery
 
+import com.oconeco.spring_search_tempo.base.util.PosixModeUtil
 import org.slf4j.LoggerFactory
 import org.springframework.batch.item.ItemProcessor
 import java.nio.file.Files
@@ -158,13 +159,13 @@ class DiscoveryProcessor(
                 null
             }
 
-            val permissions = try {
-                posixView?.readAttributes()?.permissions()?.let {
-                    PosixFilePermissions.toString(it)
-                }
+            val permissionSet = try {
+                posixView?.readAttributes()?.permissions()
             } catch (e: Exception) {
                 null
             }
+            val permissions = permissionSet?.let { PosixFilePermissions.toString(it) }
+            val posixMode = PosixModeUtil.toMode(permissionSet)
 
             val lastModified = try {
                 val instant = (attrs["lastModifiedTime"] as? java.nio.file.attribute.FileTime)?.toInstant()
@@ -189,7 +190,10 @@ class DiscoveryProcessor(
                 group = group,
                 permissions = permissions,
                 crawlDepth = calculateDepth(path),
-                parentSkipDetected = parentSkipDetected
+                parentSkipDetected = parentSkipDetected,
+                posixOwner = owner,
+                posixGroup = group,
+                posixMode = posixMode,
             )
 
         } catch (e: Exception) {

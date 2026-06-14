@@ -1,0 +1,93 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>FSFile Metadata Duplicates</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-files me-2"></i>Metadata-Duplicate Files
+        </h1>
+    </div>
+
+    <p class="text-muted">
+        Files sharing the same <code>(name, size, last-modified)</code>
+        triple — the metadata fingerprint that surfaces drift such as
+        the same file copied across users with different ownership.
+        Groups of one (singletons) are not duplicates and are excluded.
+        Groups where ownership <strong>differs</strong> across the
+        copies are flagged as <span class="badge text-bg-warning">UID drift</span>.
+    </p>
+
+    <div th:if="${#lists.isEmpty(groupRows)}" class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No metadata-duplicate groups found.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(groupRows)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Name</th>
+                <th class="text-end">Size</th>
+                <th>Last Modified</th>
+                <th class="text-end">Copies</th>
+                <th>Owners</th>
+                <th>Groups</th>
+                <th>Modes</th>
+                <th>Files</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${groupRows}"
+                th:classappend="${row.ownerMismatch} ? 'table-warning' : ''">
+                <td>
+                    <code th:text="${row.group.label}">projects.json</code>
+                    <span th:if="${row.ownerMismatch}"
+                          class="badge text-bg-warning ms-1"
+                          title="Distinct POSIX owners across copies">
+                        <i class="bi bi-exclamation-triangle-fill"></i> UID drift
+                    </span>
+                </td>
+                <td class="text-end" th:text="${row.group.size}">1234</td>
+                <td>
+                    <span class="small" th:text="${row.group.fsLastModified}">2026-06-01T12:00Z</span>
+                </td>
+                <td class="text-end" th:text="${row.group.count}">3</td>
+                <td>
+                    <span th:each="o, oStat : ${row.distinctOwners}">
+                        <code th:text="${o}">sean</code><span th:if="${!oStat.last}">, </span>
+                    </span>
+                    <span th:if="${#lists.isEmpty(row.distinctOwners)}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:each="g, gStat : ${row.distinctGroups}">
+                        <code th:text="${g}">staff</code><span th:if="${!gStat.last}">, </span>
+                    </span>
+                    <span th:if="${#lists.isEmpty(row.distinctGroups)}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:each="m, mStat : ${row.distinctModes}">
+                        <code th:text="${m}">0644</code><span th:if="${!mStat.last}">, </span>
+                    </span>
+                    <span th:if="${#lists.isEmpty(row.distinctModes)}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <ul class="list-unstyled mb-0 small">
+                        <li th:each="f : ${row.files}">
+                            <a th:href="@{/fSFiles/{id}(id=${f.id})}"
+                               th:text="${f.uri}">/path/to/file</a>
+                        </li>
+                    </ul>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div th:replace="~{fragments/utils::pagination()}" />
+</div>
+</body>
+</html>

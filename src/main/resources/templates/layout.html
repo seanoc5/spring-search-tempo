@@ -230,6 +230,11 @@
                             <i class="bi bi-folder-check"></i>
                             <span>Folder Audit</span>
                         </a>
+                        <a th:href="@{/admin/fsfile/metadata-duplicates}" class="nav-item"
+                           th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/admin/fsfile/metadata-duplicates')} ? 'active' : ''">
+                            <i class="bi bi-files"></i>
+                            <span>Metadata Duplicates</span>
+                        </a>
                         <!-- Admin-only: System Monitor -->
                         <a sec:authorize="hasAuthority('ROLE_ADMIN')" th:href="@{/system}" class="nav-item"
                            th:classappend="${requestUri != null and #strings.startsWith(requestUri, '/system')} ? 'active' : ''">

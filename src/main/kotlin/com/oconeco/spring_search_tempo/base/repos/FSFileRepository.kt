@@ -3,15 +3,17 @@ package com.oconeco.spring_search_tempo.base.repos
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.Status
+import com.oconeco.spring_search_tempo.base.model.MetadataDuplicateGroup
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.OffsetDateTime
 
 
-interface FSFileRepository : JpaRepository<FSFile, Long> {
+interface FSFileRepository : JpaRepository<FSFile, Long>, FSFileMetadataDuplicateRepository {
 
     @Query("""
         SELECT f FROM FSFile f
@@ -344,5 +346,21 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
      * excludes the file the user is currently viewing.
      */
     fun countByContentHashAndIdNot(contentHash: String, id: Long): Int
+
+    /**
+     * Fetch the actual files for one metadata-duplicate group (issue #120).
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.label = :label
+        AND f.size = :size
+        AND f.fsLastModified = :fsLastModified
+        ORDER BY f.id
+    """)
+    fun findByMetadataTriple(
+        @Param("label") label: String,
+        @Param("size") size: Long,
+        @Param("fsLastModified") fsLastModified: OffsetDateTime,
+    ): List<FSFile>
 
 }

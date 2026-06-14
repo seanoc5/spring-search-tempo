@@ -182,6 +182,9 @@ class DiscoveryWriter(
                 owner = file.owner
                 group = file.group
                 permissions = file.permissions
+                posixOwner = file.posixOwner
+                posixGroup = file.posixGroup
+                posixMode = file.posixMode
                 status = Status.CURRENT
                 crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId
@@ -209,6 +212,9 @@ class DiscoveryWriter(
                 owner = file.owner
                 group = file.group
                 permissions = file.permissions
+                posixOwner = file.posixOwner
+                posixGroup = file.posixGroup
+                posixMode = file.posixMode
                 status = Status.NEW
                 crawlConfigId = this@DiscoveryWriter.crawlConfigId
                 jobRunId = this@DiscoveryWriter.jobRunId

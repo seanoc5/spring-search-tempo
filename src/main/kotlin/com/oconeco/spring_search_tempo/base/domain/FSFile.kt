@@ -16,9 +16,24 @@ import org.hibernate.type.SqlTypes
 @Table(
     indexes = [
         Index(name = "idx_status", columnList = "status"),
+        Index(name = "idx_fsfile_metadata_dup", columnList = "label, size, fs_last_modified"),
     ]
 )
 class FSFile : FSObject() {
+
+    // POSIX metadata persisted separately from the legacy
+    // FSObject.owner/group/permissions string fields so we can
+    // store the numeric POSIX mode (0-0777, decimal) for cheap
+    // bitwise SQL questions like "world-writable" (issue #120).
+    @Column(length = 255)
+    var posixOwner: String? = null
+
+    @Column(length = 255)
+    var posixGroup: String? = null
+
+    @Column
+    var posixMode: Int? = null
+
 
     @Column(columnDefinition = "text")
     var bodyText: String? = null
