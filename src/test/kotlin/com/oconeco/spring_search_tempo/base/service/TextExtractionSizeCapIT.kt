@@ -1,0 +1,213 @@
+package com.oconeco.spring_search_tempo.base.service
+
+import com.oconeco.spring_search_tempo.testfixtures.CrawlTreeFixture
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.Random
+import kotlin.io.path.fileSize
+
+/**
+ * Pins the edge-case behavior of [TextExtractionService.extractTextAndMetadata]
+ * around the text-extraction size cap (issue #117).
+ *
+ * Without this IT, a Tika upgrade or an `app.text-extraction.max-text-length`
+ * tweak could silently change empty / near-cap / over-cap / oversized-binary
+ * semantics, and nothing in the existing test suite would catch it. Each
+ * scenario below locks down the current observed behavior — change the
+ * production code and you have to come back here and decide which assertion
+ * to flip.
+ *
+ * The fixture is built by [CrawlTreeFixture] (issue #115). `empty.txt` ships
+ * with the static fixture; `oversized.txt` is generated at fixture-build
+ * time at one byte over [TextExtractionService.DEFAULT_MAX_TEXT_LENGTH]. The
+ * near-cap text file and oversized binary file are generated inline here
+ * because they're not part of the shared crawl fixture.
+ */
+@DisplayName("TextExtractionService size-cap edge cases (issue #117)")
+class TextExtractionSizeCapIT {
+
+    private lateinit var service: TextExtractionService
+
+    @TempDir
+    lateinit var tmp: Path
+
+    private lateinit var fixtureRoot: Path
+
+    @BeforeEach
+    fun setup() {
+        service = TextExtractionService()
+        fixtureRoot = CrawlTreeFixture.build(tmp.resolve("fixture"))
+    }
+
+    @Test
+    @DisplayName("a/g - the cap constant is reachable and matches the default Tika handler limit")
+    fun capConstantIsReachable() {
+        // AC (g): the IT must reference the same constant the production code
+        // applies, not a magic number. If somebody renames or reroutes the
+        // constant, this assertion fails - exactly what we want.
+        assertThat(TextExtractionService.DEFAULT_MAX_TEXT_LENGTH)
+            .`as`("DEFAULT_MAX_TEXT_LENGTH should be 10 MiB (used by Tika BodyContentHandler and default file-size cap)")
+            .isEqualTo(10 * 1024 * 1024)
+
+        // And the service's effective cap (instance field) reflects the constant.
+        assertThat(service.maxTextLength)
+            .`as`("service.maxTextLength should default to DEFAULT_MAX_TEXT_LENGTH")
+            .isEqualTo(TextExtractionService.DEFAULT_MAX_TEXT_LENGTH)
+    }
+
+    @Test
+    @DisplayName("b - empty file: Success with empty text and contentType populated")
+    fun emptyFile() {
+        val empty = fixtureRoot.resolve("empty.txt")
+        assertThat(empty.fileSize()).isEqualTo(0L)
+
+        val result = service.extractTextAndMetadata(empty)
+
+        assertThat(result).isInstanceOf(TextAndMetadataResult.Success::class.java)
+        val success = result as TextAndMetadataResult.Success
+        assertThat(success.text)
+            .`as`("empty file should yield empty string (not null)")
+            .isEqualTo("")
+        // Tika infers contentType from the extension even on zero bytes -
+        // locks down the empty-file metadata fallback path so downstream
+        // INDEX rows don't render as "unknown" MIME type.
+        assertThat(success.metadata.contentType)
+            .`as`("contentType should still be inferable on an empty .txt")
+            .isNotNull
+        assertThat(success.metadata.contentType!!).startsWith("text/")
+    }
+
+    @Test
+    @DisplayName("c - just-under-cap text file: Success with full text content")
+    fun justUnderCapTextFile() {
+        // Cap - 1 KiB. ASCII so length-in-bytes ~= length-in-chars (modulo
+        // Tika whitespace handling).
+        val nearCapSize = TextExtractionService.DEFAULT_MAX_TEXT_LENGTH - 1024
+        val nearCap = tmp.resolve("near-cap.txt")
+        writeRepeatingAscii(nearCap, nearCapSize.toLong())
+        assertThat(nearCap.fileSize()).isEqualTo(nearCapSize.toLong())
+
+        val result = service.extractTextAndMetadata(nearCap)
+
+        assertThat(result).isInstanceOf(TextAndMetadataResult.Success::class.java)
+        val success = result as TextAndMetadataResult.Success
+        // Allow a small sanitization tolerance for Tika-injected whitespace;
+        // the point is that text is fully present, not truncated to some
+        // smaller cap.
+        assertThat(success.text.length)
+            .`as`("near-cap text should be fully extracted (within Tika whitespace tolerance)")
+            .isBetween(nearCapSize - 8, nearCapSize + 16)
+    }
+
+    @Test
+    @DisplayName("d - oversized text file (> cap): Failure with 'exceeds maximum' reason")
+    fun oversizedTextFile() {
+        val oversized = fixtureRoot.resolve("oversized.txt")
+        assertThat(oversized.fileSize())
+            .`as`("CrawlTreeFixture generates oversized.txt at cap + 1 byte")
+            .isEqualTo(CrawlTreeFixture.OVERSIZED_TXT_SIZE)
+        assertThat(oversized.fileSize())
+            .isGreaterThan(TextExtractionService.DEFAULT_MAX_TEXT_LENGTH.toLong())
+
+        val result = service.extractTextAndMetadata(oversized)
+
+        // Current behavior: file-size precheck rejects before extraction starts.
+        // Locked-down semantic: Failure with a clear "exceeds maximum" reason.
+        // If this ever changes to truncate-to-cap, flip this assertion deliberately
+        // and update the comment block at the top of the class.
+        assertThat(result).isInstanceOf(TextAndMetadataResult.Failure::class.java)
+        val failure = result as TextAndMetadataResult.Failure
+        assertThat(failure.error)
+            .`as`("oversized text Failure should explain why")
+            .contains("exceeds maximum")
+    }
+
+    @Test
+    @DisplayName("e - oversized binary (> cap): no OOM, Failure with size-cap reason")
+    fun oversizedBinaryFile() {
+        // Just over the cap. Random bytes keep Tika from heuristically
+        // treating it as text.
+        val binSize = TextExtractionService.DEFAULT_MAX_TEXT_LENGTH.toLong() + 4096L
+        val bin = tmp.resolve("oversized.iso")
+        writeRandomBytes(bin, binSize, seed = 117L)
+        assertThat(bin.fileSize()).isEqualTo(binSize)
+
+        // Must NOT OOM, must NOT throw. Any uncaught exception fails the test.
+        val result = service.extractTextAndMetadata(bin)
+
+        assertThat(result)
+            .`as`("oversized binary must not OOM; must return a Result")
+            .isInstanceOfAny(
+                TextAndMetadataResult.Success::class.java,
+                TextAndMetadataResult.Failure::class.java
+            )
+        // Current behavior: file-size precheck -> Failure with "exceeds
+        // maximum". AC (e) also permits Success-with-locate-only-metadata;
+        // we lock down the actually-observed branch here.
+        assertThat(result).isInstanceOf(TextAndMetadataResult.Failure::class.java)
+        val failure = result as TextAndMetadataResult.Failure
+        assertThat(failure.error).contains("exceeds maximum")
+    }
+
+    @Test
+    @DisplayName("f - PostgreSQL-safe sanitization: null bytes stripped from extracted text")
+    fun nullByteSanitization() {
+        // HTML extension forces Tika's HTML parser to run regardless of any
+        // null bytes in the payload. With a plain .txt extension Tika auto-
+        // detects nulls as binary and returns an empty body - the sanitizer
+        // would still produce a null-byte-free string but the test wouldn't
+        // actually prove that the sanitizer fired. HTML routes around that.
+        val withNulls = tmp.resolve("null-bytes.html")
+        val nullByte = "\u0000"
+        val payload = ("<html><body>Alpha" + nullByte + "Beta" + nullByte +
+            "Gamma" + nullByte + "Delta</body></html>").toByteArray()
+        // Sanity: the file we wrote actually contains null bytes.
+        val bytes = Files.readAllBytes(withNulls.also { Files.write(it, payload) })
+        assertThat(bytes).contains(0.toByte())
+
+        val result = service.extractTextAndMetadata(withNulls)
+
+        assertThat(result).isInstanceOf(TextAndMetadataResult.Success::class.java)
+        val success = result as TextAndMetadataResult.Success
+        assertThat(success.text)
+            .`as`("sanitizer must remove ALL null bytes - Postgres TEXT rejects them")
+            .doesNotContain(nullByte)
+        // The visible content survives the strip - confirms the sanitizer
+        // ran on real extracted output, not on an empty string from a
+        // binary-detection bailout.
+        assertThat(success.text).contains("Alpha", "Beta", "Gamma", "Delta")
+    }
+
+    // ---- helpers -----------------------------------------------------------
+
+    private fun writeRepeatingAscii(path: Path, size: Long) {
+        val chunk = "the quick brown fox jumps over the lazy dog\n".toByteArray()
+        var remaining = size
+        Files.newOutputStream(path).use { out ->
+            while (remaining > 0) {
+                val n = minOf(chunk.size.toLong(), remaining).toInt()
+                out.write(chunk, 0, n)
+                remaining -= n
+            }
+        }
+    }
+
+    private fun writeRandomBytes(path: Path, size: Long, seed: Long) {
+        val rng = Random(seed)
+        val buf = ByteArray(8192)
+        var remaining = size
+        Files.newOutputStream(path).use { out ->
+            while (remaining > 0) {
+                rng.nextBytes(buf)
+                val n = minOf(buf.size.toLong(), remaining).toInt()
+                out.write(buf, 0, n)
+                remaining -= n
+            }
+        }
+    }
+}
