@@ -107,23 +107,15 @@ class AnalysisStatusEndToEndIT : BaseIT() {
     @Autowired lateinit var contentChunkRepository: ContentChunkRepository
 
     // Mock NLPService rather than depending on the real Stanford CoreNLP
-    // pipeline:
-    //
-    //   1. The default `stanford-corenlp:4.5.5:models` JAR ships
-    //      `englishPCFG.ser.gz` (lex parser) but NOT
-    //      `englishSR.ser.gz` (shift-reduce parser), and
-    //      `StanfordNLPService` hardcodes
-    //      `parse.model=…/srparser/englishSR.ser.gz`, so the pipeline
-    //      throws RuntimeIOException on initialization in any
-    //      environment that hasn't separately downloaded the SR model.
-    //   2. Even when the pipeline starts, real CoreNLP runs add ~5–10 s
-    //      to test startup, which puts us close to the 60 s ceiling
-    //      from AC #e.
+    // pipeline. Issue #131 fixed the bundled-model mismatch so real
+    // analyze() now works out of the box, but real CoreNLP runs still add
+    // ~5–10 s to test startup — close to the 60 s ceiling from AC #e.
     //
     // The contract this IT is locking down is "ANALYZE chunks get
     // namedEntities + sentiment populated by the NLP step" — i.e. the
     // wiring, not Stanford's accuracy. A deterministic mock makes that
-    // assertion sharp without coupling to model availability.
+    // assertion sharp and fast. StanfordNLPServiceSmokeTest separately
+    // pins the real pipeline against the bundled PCFG model.
     @MockitoBean
     lateinit var nlpService: NLPService
 
