@@ -64,18 +64,14 @@ import kotlin.io.path.deleteRecursively
  * and would race the assertions.
  *
  * NOTE — NLP step bypass: this IT does not invoke `NLPJobLauncher` /
- * `nlpProcessingStep`. Both rely on `ContentChunkRepository
- * .findChunksForNlpProcessing`, whose JPQL OR-chain over four `@ManyToOne`
- * parent associations produces an implicit INNER-JOIN cartesian that
- * returns zero rows whenever a chunk has only one parent populated (the
- * common case for FSFile chunks). Same shape appears in
- * `countByParentAnalysisStatus`, `countNlpPendingAtAnalyzeLevel`, and
- * `findChunksForEmbedding`. Verified in this IT against real data via
- * direct EntityManager queries — a one-parent-only chunk vanishes from
- * the result set. To keep this IT's scope tight (issue #116 is the
- * contract IT, not an NLP-repo fix), we drive each ANALYZE chunk through
- * `NLPChunkProcessor` directly and persist the result. The broken JPQL
- * deserves its own follow-up; flagged in the PR summary.
+ * `nlpProcessingStep`. The full batch step pulls in `JobExecutionAdvisoryLockListener`
+ * and the embedding-step (Ollama) wiring, neither of which this IT cares
+ * to exercise; the contract under test is "ANALYZE chunks get NLP fields
+ * populated," not the surrounding batch plumbing. We drive each ANALYZE
+ * chunk through `NLPChunkProcessor` directly. The repo-level queries
+ * (`findChunksForNlpProcessing`, `countByParentAnalysisStatus`,
+ * `countNlpPendingAtAnalyzeLevel`, `findChunksForEmbedding`) are
+ * covered by `ContentChunkNlpQueryIT` (issue #130).
  */
 @SpringBootTest(classes = [SpringSearchTempoApplication::class])
 @TestPropertySource(properties = ["app.nlp.auto-trigger=false"])
