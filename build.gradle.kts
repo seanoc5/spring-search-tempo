@@ -84,6 +84,11 @@ dependencies {
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
     implementation("org.apache.poi:poi-ooxml:5.4.1")
 
+    // Apache Commons Compress for per-entry enumeration of .zip/.tar/.7z/.jar archives (issue #118).
+    // Tika already pulls in commons-compress transitively, but pinning the dep makes our
+    // dependency on the API surface explicit and survives future Tika upgrades.
+    implementation("org.apache.commons:commons-compress:1.27.1")
+
     // Stanford CoreNLP for NLP processing (Named Entity Recognition, POS tagging, parsing)
     implementation("edu.stanford.nlp:stanford-corenlp:4.5.5")
     implementation("edu.stanford.nlp:stanford-corenlp:4.5.5:models") {

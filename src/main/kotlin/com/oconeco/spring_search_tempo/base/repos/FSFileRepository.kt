@@ -131,6 +131,24 @@ interface FSFileRepository : JpaRepository<FSFile, Long> {
     fun deleteBySourceHost(sourceHost: String): Int
 
     /**
+     * Find all per-entry archive rows whose parent is the given archive URI.
+     * Used during incremental re-crawl to remove stale entries when an archive
+     * changes (issue #118).
+     */
+    fun findByParentArchiveUri(parentArchiveUri: String): List<FSFile>
+
+    /**
+     * Delete all per-entry archive rows belonging to the given archive (issue #118).
+     */
+    @Modifying
+    fun deleteByParentArchiveUri(parentArchiveUri: String): Int
+
+    /**
+     * Count per-entry archive rows for an archive URI (issue #118).
+     */
+    fun countByParentArchiveUri(parentArchiveUri: String): Long
+
+    /**
      * Count files by analysis status.
      */
     fun countByAnalysisStatus(analysisStatus: AnalysisStatus): Long
