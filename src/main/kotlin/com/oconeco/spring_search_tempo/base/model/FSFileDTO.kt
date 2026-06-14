@@ -119,4 +119,7 @@ class FSFileDTO {
     /** URI of the parent archive when this FSFile is a per-entry row (issue #118). */
     var parentArchiveUri: String? = null
 
+    /** SHA-256 hex digest of the raw file bytes (INDEX-class files only) */
+    var contentHash: String? = null
+
 }

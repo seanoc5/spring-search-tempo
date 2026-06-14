@@ -96,4 +96,18 @@ interface FSFileService {
      */
     fun countSearchableByCrawlConfig(): Map<Long, Long>
 
+    /**
+     * Count how many other files share the same content hash as the given file.
+     * Returns 0 when the file is missing, has no contentHash (LOCATE/SKIP), or
+     * is the only copy. Excludes the file itself from the count.
+     */
+    fun countDuplicates(id: Long): Int
+
+    /**
+     * Find all files (other than the given id) sharing the same content hash.
+     * Returns an empty list when the file has no contentHash (LOCATE/SKIP) or
+     * no other copies exist. Used by the "duplicates" detail view.
+     */
+    fun findDuplicates(id: Long): List<FSFileDTO>
+
 }

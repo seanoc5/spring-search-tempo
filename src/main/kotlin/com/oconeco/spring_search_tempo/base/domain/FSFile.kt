@@ -98,6 +98,17 @@ class FSFile : FSObject() {
     @Column(columnDefinition = "text")
     var parentArchiveUri: String? = null
 
+    /**
+     * SHA-256 hex digest of the raw file bytes.
+     *
+     * Populated during INDEX/ANALYZE/SEMANTIC processing only. LOCATE and SKIP
+     * files leave this null. Two files with identical bytes share a hash even if
+     * their extracted text or paths differ. Indexed (see V11 migration) so
+     * `findByContentHash` is a single index lookup.
+     */
+    @Column(length = 64)
+    var contentHash: String? = null
+
     @OneToMany(mappedBy = "concept")
     var contentChunks = mutableSetOf<ContentChunk>()
 
