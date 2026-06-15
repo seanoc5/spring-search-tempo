@@ -1,4 +1,5 @@
--- V11: Issue #119 — Add content_hash column to fsfile for byte-identical dedup.
+-- V13: Issue #119 — Add content_hash column to fsfile for byte-identical dedup.
+-- (Renumbered from V11 → V13 per issue #132; V11 was a collision with V11__archive_entries.sql)
 --
 -- The hash is SHA-256 over the RAW file bytes (not extracted text), computed
 -- in the INDEX-class text extraction path. LOCATE files don't get a hash —
