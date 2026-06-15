@@ -5,6 +5,7 @@ import edu.stanford.nlp.ling.CoreLabel
 import edu.stanford.nlp.pipeline.CoreDocument
 import edu.stanford.nlp.pipeline.StanfordCoreNLP
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.Properties
 
@@ -107,7 +108,14 @@ data class DependencyParseResult(
  * Lazily initializes the pipeline to avoid long startup times.
  */
 @Service
-class StanfordNLPService : NLPService {
+class StanfordNLPService(
+    // Defaults to the lexparser PCFG model that ships in `stanford-corenlp:4.5.5:models`.
+    // The faster shift-reduce model (`edu/stanford/nlp/models/srparser/englishSR.ser.gz`)
+    // is NOT bundled and must be downloaded separately; override via
+    // `app.nlp.parse-model` if you have it on the classpath.
+    @Value("\${app.nlp.parse-model:edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz}")
+    private val parseModel: String = "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz",
+) : NLPService {
 
     companion object {
         private val log = LoggerFactory.getLogger(StanfordNLPService::class.java)
@@ -115,12 +123,12 @@ class StanfordNLPService : NLPService {
 
     // Lazy initialization - pipeline takes ~5 seconds to load
     private val pipeline: StanfordCoreNLP by lazy {
-        log.info("Initializing Stanford CoreNLP pipeline (this may take a few seconds)...")
+        log.info("Initializing Stanford CoreNLP pipeline with parse.model={} (this may take a few seconds)...", parseModel)
         val props = Properties().apply {
             // Configure annotators to use
             setProperty("annotators", "tokenize,ssplit,pos,lemma,ner,parse,sentiment")
             setProperty("ner.useSUTime", "false")  // Disable SUTime for faster processing
-            setProperty("parse.model", "edu/stanford/nlp/models/srparser/englishSR.ser.gz")
+            setProperty("parse.model", parseModel)
         }
 
         val startTime = System.currentTimeMillis()
