@@ -56,20 +56,38 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * @param pageable Pagination parameters
      * @return Page of ContentChunk entities eligible for NLP processing
      */
-    @Query("""
-        SELECT c FROM ContentChunk c
-        WHERE c.nlpProcessedAt IS NULL
-          AND c.text IS NOT NULL
-          AND (
-              (c.concept IS NOT NULL AND c.concept.analysisStatus IN :analysisStatuses)
-              OR
-              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :analysisStatuses)
-              OR
-              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :analysisStatuses)
-              OR
-              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :analysisStatuses)
-          )
-    """)
+    @Query(
+        value = """
+            SELECT c FROM ContentChunk c
+            LEFT JOIN c.concept f
+            LEFT JOIN c.emailMessage em
+            LEFT JOIN c.browserBookmark bb
+            LEFT JOIN c.oneDriveItem od
+            WHERE c.nlpProcessedAt IS NULL
+              AND c.text IS NOT NULL
+              AND (
+                  f.analysisStatus IN :analysisStatuses
+                  OR em.analysisStatus IN :analysisStatuses
+                  OR bb.analysisStatus IN :analysisStatuses
+                  OR od.analysisStatus IN :analysisStatuses
+              )
+        """,
+        countQuery = """
+            SELECT COUNT(c) FROM ContentChunk c
+            LEFT JOIN c.concept f
+            LEFT JOIN c.emailMessage em
+            LEFT JOIN c.browserBookmark bb
+            LEFT JOIN c.oneDriveItem od
+            WHERE c.nlpProcessedAt IS NULL
+              AND c.text IS NOT NULL
+              AND (
+                  f.analysisStatus IN :analysisStatuses
+                  OR em.analysisStatus IN :analysisStatuses
+                  OR bb.analysisStatus IN :analysisStatuses
+                  OR od.analysisStatus IN :analysisStatuses
+              )
+        """
+    )
     fun findChunksForNlpProcessing(
         @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>,
         pageable: Pageable
@@ -259,14 +277,15 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      */
     @Query("""
         SELECT COUNT(c) FROM ContentChunk c
+        LEFT JOIN c.concept f
+        LEFT JOIN c.emailMessage em
+        LEFT JOIN c.browserBookmark bb
+        LEFT JOIN c.oneDriveItem od
         WHERE
-            (c.concept IS NOT NULL AND c.concept.analysisStatus = :status)
-            OR
-            (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus = :status)
-            OR
-            (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus = :status)
-            OR
-            (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus = :status)
+            f.analysisStatus = :status
+            OR em.analysisStatus = :status
+            OR bb.analysisStatus = :status
+            OR od.analysisStatus = :status
     """)
     fun countByParentAnalysisStatus(@Param("status") status: AnalysisStatus): Long
 
@@ -276,16 +295,17 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      */
     @Query("""
         SELECT COUNT(c) FROM ContentChunk c
+        LEFT JOIN c.concept f
+        LEFT JOIN c.emailMessage em
+        LEFT JOIN c.browserBookmark bb
+        LEFT JOIN c.oneDriveItem od
         WHERE c.nlpProcessedAt IS NULL
           AND c.text IS NOT NULL
           AND (
-              (c.concept IS NOT NULL AND c.concept.analysisStatus IN :statuses)
-              OR
-              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :statuses)
-              OR
-              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :statuses)
-              OR
-              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :statuses)
+              f.analysisStatus IN :statuses
+              OR em.analysisStatus IN :statuses
+              OR bb.analysisStatus IN :statuses
+              OR od.analysisStatus IN :statuses
           )
     """)
     fun countNlpPendingAtAnalyzeLevel(
@@ -367,21 +387,40 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      * - parent analysisStatus is in the provided list (typically ANALYZE/SEMANTIC)
      * - embeddingGeneratedAt is null (unless forceRefresh=true)
      */
-    @Query("""
-        SELECT c FROM ContentChunk c
-        WHERE c.text IS NOT NULL
-          AND c.nlpProcessedAt IS NOT NULL
-          AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
-          AND (
-              (c.concept IS NOT NULL AND c.concept.analysisStatus IN :analysisStatuses)
-              OR
-              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN :analysisStatuses)
-              OR
-              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN :analysisStatuses)
-              OR
-              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN :analysisStatuses)
-          )
-    """)
+    @Query(
+        value = """
+            SELECT c FROM ContentChunk c
+            LEFT JOIN c.concept f
+            LEFT JOIN c.emailMessage em
+            LEFT JOIN c.browserBookmark bb
+            LEFT JOIN c.oneDriveItem od
+            WHERE c.text IS NOT NULL
+              AND c.nlpProcessedAt IS NOT NULL
+              AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
+              AND (
+                  f.analysisStatus IN :analysisStatuses
+                  OR em.analysisStatus IN :analysisStatuses
+                  OR bb.analysisStatus IN :analysisStatuses
+                  OR od.analysisStatus IN :analysisStatuses
+              )
+        """,
+        countQuery = """
+            SELECT COUNT(c) FROM ContentChunk c
+            LEFT JOIN c.concept f
+            LEFT JOIN c.emailMessage em
+            LEFT JOIN c.browserBookmark bb
+            LEFT JOIN c.oneDriveItem od
+            WHERE c.text IS NOT NULL
+              AND c.nlpProcessedAt IS NOT NULL
+              AND (:forceRefresh = true OR c.embeddingGeneratedAt IS NULL)
+              AND (
+                  f.analysisStatus IN :analysisStatuses
+                  OR em.analysisStatus IN :analysisStatuses
+                  OR bb.analysisStatus IN :analysisStatuses
+                  OR od.analysisStatus IN :analysisStatuses
+              )
+        """
+    )
     fun findChunksForEmbedding(
         @Param("forceRefresh") forceRefresh: Boolean,
         @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>,
@@ -398,29 +437,30 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
      */
     @Query("""
         SELECT COUNT(c) FROM ContentChunk c
+        LEFT JOIN c.concept f
+        LEFT JOIN c.emailMessage em
+        LEFT JOIN c.browserBookmark bb
+        LEFT JOIN c.oneDriveItem od
         WHERE c.embeddingGeneratedAt IS NULL
           AND c.text IS NOT NULL
           AND c.nlpProcessedAt IS NOT NULL
           AND (
-              (c.concept IS NOT NULL AND c.concept.analysisStatus IN (
+              f.analysisStatus IN (
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
-              ))
-              OR
-              (c.emailMessage IS NOT NULL AND c.emailMessage.analysisStatus IN (
+              )
+              OR em.analysisStatus IN (
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
-              ))
-              OR
-              (c.browserBookmark IS NOT NULL AND c.browserBookmark.analysisStatus IN (
+              )
+              OR bb.analysisStatus IN (
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
-              ))
-              OR
-              (c.oneDriveItem IS NOT NULL AND c.oneDriveItem.analysisStatus IN (
+              )
+              OR od.analysisStatus IN (
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.ANALYZE,
                   com.oconeco.spring_search_tempo.base.domain.AnalysisStatus.SEMANTIC
-              ))
+              )
           )
     """)
     fun countEmbeddingPending(): Long
