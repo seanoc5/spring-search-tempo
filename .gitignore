@@ -10,6 +10,10 @@ logs/
 remote-crawler.jar
 .DS_Store
 
+## Stanford SR parser jar — downloaded on demand by `./gradlew downloadSRParser`
+## (~600 MB; do not commit). See StanfordNLPService for runtime auto-detection.
+libs/stanford-srparser-*.jar
+
 !/.claude/settings.local.json
 
 

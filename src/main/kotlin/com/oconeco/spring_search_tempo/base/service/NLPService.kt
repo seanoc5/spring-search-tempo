@@ -109,16 +109,56 @@ data class DependencyParseResult(
  */
 @Service
 class StanfordNLPService(
-    // Defaults to the lexparser PCFG model that ships in `stanford-corenlp:4.5.5:models`.
-    // The faster shift-reduce model (`edu/stanford/nlp/models/srparser/englishSR.ser.gz`)
-    // is NOT bundled and must be downloaded separately; override via
-    // `app.nlp.parse-model` if you have it on the classpath.
-    @Value("\${app.nlp.parse-model:edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz}")
-    private val parseModel: String = "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz",
+    // Empty string sentinel means "no explicit override — auto-detect".
+    // If `app.nlp.parse-model` is set in YAML, it wins and bypasses the SR
+    // probe (escape hatch shipped in PR #135 / issue #131).
+    @Value("\${app.nlp.parse-model:}")
+    private val configuredParseModel: String = "",
 ) : NLPService {
 
     companion object {
+        const val PCFG_MODEL = "edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz"
+        const val SR_MODEL = "edu/stanford/nlp/models/srparser/englishSR.ser.gz"
+
         private val log = LoggerFactory.getLogger(StanfordNLPService::class.java)
+
+        /**
+         * Probe whether the Stanford shift-reduce parser model is resolvable on
+         * the classpath. The SR jar (`stanford-srparser-2014-10-23-models.jar`)
+         * is not bundled with the deploy artifact; operators opt in via
+         * `./gradlew downloadSRParser`, which drops it into `libs/` where
+         * `bootRun`'s `developmentOnly` classpath picks it up. Returns `false`
+         * in the default `./gradlew test` environment.
+         */
+        fun isSRParserOnClasspath(
+            classLoader: ClassLoader = StanfordNLPService::class.java.classLoader,
+        ): Boolean = classLoader.getResource(SR_MODEL) != null
+    }
+
+    // Resolved once per JVM at bean construction so the chosen-mode log line
+    // also fires exactly once. (Direct construction in tests hits the same
+    // path, so the smoke test still exercises the PCFG fallback branch.)
+    private val parseModel: String = resolveParseModel()
+
+    private fun resolveParseModel(): String {
+        if (configuredParseModel.isNotBlank()) {
+            log.info(
+                "StanfordNLPService: app.nlp.parse-model is set to '{}' — using verbatim (auto-detection bypassed).",
+                configuredParseModel,
+            )
+            return configuredParseModel
+        }
+        return if (isSRParserOnClasspath()) {
+            log.info(
+                "StanfordNLPService: SR parser detected on classpath, using shift-reduce mode (~20× faster than PCFG). Memory footprint ~1GB at load.",
+            )
+            SR_MODEL
+        } else {
+            log.info(
+                "StanfordNLPService: PCFG parser in use (bundled default). Run `./gradlew downloadSRParser` to enable SR for ~20× faster NLP throughput.",
+            )
+            PCFG_MODEL
+        }
     }
 
     // Lazy initialization - pipeline takes ~5 seconds to load
