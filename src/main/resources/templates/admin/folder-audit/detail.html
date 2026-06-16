@@ -76,6 +76,118 @@
         Resolutions (dismiss / reclassify) persist in
         <code>hidden_gem_resolution</code> and survive snapshot rotation.
     </p>
+
+    <hr class="my-4"/>
+
+    <h2 class="h4 mb-3">
+        <i class="bi bi-calculator me-2"></i> Reconciliation
+    </h2>
+    <p class="text-muted small">
+        Paste a ground-truth folder count (typically from
+        <code>find &lt;path&gt; -type d 2>/dev/null | wc -l</code>) to see the
+        delta against this audit's stored total. Computed live — nothing is
+        persisted.
+    </p>
+
+    <form method="get" th:action="@{/admin/folder-audit/runs/{id}(id=${run.id})}" class="row g-2 align-items-end mb-4">
+        <div class="col-sm-3">
+            <label for="groundTruthCount" class="form-label small mb-1">Ground-truth count</label>
+            <input type="number" min="0" step="1" id="groundTruthCount" name="groundTruthCount"
+                   class="form-control" placeholder="e.g. 412345"
+                   th:value="${reconciliation?.groundTruthTotal}"
+                   required/>
+        </div>
+        <div class="col-sm-6">
+            <label for="sourceCommand" class="form-label small mb-1">Source (optional, free text)</label>
+            <input type="text" id="sourceCommand" name="sourceCommand"
+                   class="form-control" placeholder="find /home/sean -type d 2>/dev/null | wc -l"
+                   th:value="${reconciliation?.sourceCommand}"/>
+        </div>
+        <div class="col-sm-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-arrow-clockwise"></i> Compute delta
+            </button>
+        </div>
+    </form>
+
+    <div th:if="${reconciliation != null}" class="card mb-4">
+        <div class="card-body">
+            <h3 class="h5 mb-3">
+                Delta vs.
+                <span th:if="${reconciliation.sourceCommand != null}">
+                    <code th:text="${reconciliation.sourceCommand}">find ...</code>
+                </span>
+                <span th:if="${reconciliation.sourceCommand == null}" class="text-muted">ground truth</span>
+            </h3>
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Audit total</dt>
+                <dd class="col-sm-9" th:text="${reconciliation.auditTotal}">0</dd>
+
+                <dt class="col-sm-3">Ground-truth total</dt>
+                <dd class="col-sm-9" th:text="${reconciliation.groundTruthTotal}">0</dd>
+
+                <dt class="col-sm-3">Delta (signed)</dt>
+                <dd class="col-sm-9">
+                    <span th:text="${reconciliation.delta > 0 ? '+' + reconciliation.delta : reconciliation.delta}">0</span>
+                    <span class="text-muted small">
+                        (ground-truth &minus; audit)
+                    </span>
+                </dd>
+
+                <dt class="col-sm-3">Percent delta</dt>
+                <dd class="col-sm-9">
+                    <span class="badge"
+                          th:classappend="${reconciliation.severity.badgeClass}"
+                          th:text="${#numbers.formatDecimal(reconciliation.percentDelta, 1, 2) + '%'}">0.00%</span>
+                    <span class="text-muted small ms-2" th:text="${reconciliation.severity.label}">≤1%</span>
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <h3 class="h5 mb-3">
+        <i class="bi bi-diagram-3 me-2"></i> Per-top-level-path breakdown
+    </h3>
+    <p class="text-muted small" th:if="${pathBreakdown.isEmpty()}">
+        No top-level paths recorded for this run.
+    </p>
+    <div class="table-responsive" th:unless="${pathBreakdown.isEmpty()}">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Top-level path</th>
+                    <th class="text-end">Audit count</th>
+                    <th>SKIP root</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="row : ${pathBreakdown}">
+                    <td><code th:text="${row.path}">/home/sean/Documents</code></td>
+                    <td class="text-end" th:text="${row.auditCount}">0</td>
+                    <td>
+                        <span th:if="${row.isSkipRoot}" class="badge bg-warning text-dark">
+                            <i class="bi bi-slash-circle"></i>
+                            <code class="text-dark"
+                                  th:text="${row.underSkipPattern}">pattern</code>
+                        </span>
+                        <span th:unless="${row.isSkipRoot}" class="text-muted">—</span>
+                    </td>
+                    <td>
+                        <span th:if="${row.isSkipRoot}" class="text-muted small">
+                            +<span th:text="${row.foldersWalkedInto}">0</span>
+                            folders walked into (peek-depth contribution; find
+                            walks the same subtree so a small delta here is expected)
+                        </span>
+                        <span th:unless="${row.isSkipRoot}" class="text-muted small">
+                            <span th:text="${row.foldersWalkedInto}">0</span>
+                            descendants
+                        </span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 </body>
 </html>

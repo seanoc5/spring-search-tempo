@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.HiddenGemResolution
 import com.oconeco.spring_search_tempo.base.repos.FolderAuditRunRepository
 import com.oconeco.spring_search_tempo.base.repos.FolderSnapshotRepository
 import com.oconeco.spring_search_tempo.base.repos.HiddenGemResolutionRepository
+import com.oconeco.spring_search_tempo.batch.audit.FolderAuditReconciliationService
 import com.oconeco.spring_search_tempo.batch.audit.FolderAuditService
 import com.oconeco.spring_search_tempo.batch.audit.HiddenGemResolutionService
 import org.slf4j.LoggerFactory
@@ -40,7 +41,8 @@ class FolderAuditAdminController(
     private val folderSnapshotRepository: FolderSnapshotRepository,
     private val hiddenGemResolutionRepository: HiddenGemResolutionRepository,
     private val folderAuditService: FolderAuditService,
-    private val hiddenGemResolutionService: HiddenGemResolutionService
+    private val hiddenGemResolutionService: HiddenGemResolutionService,
+    private val reconciliationService: FolderAuditReconciliationService
 ) {
 
     companion object {
@@ -80,10 +82,27 @@ class FolderAuditAdminController(
     }
 
     @GetMapping("/runs/{id}")
-    fun runDetail(@PathVariable id: Long, model: Model): String {
+    fun runDetail(
+        @PathVariable id: Long,
+        @RequestParam(name = "groundTruthCount", required = false) groundTruthCount: Long?,
+        @RequestParam(name = "sourceCommand", required = false) sourceCommand: String?,
+        model: Model
+    ): String {
         val run = folderAuditRunRepository.findById(id).orElse(null)
             ?: return "redirect:/admin/folder-audit"
         model.addAttribute("run", run)
+        model.addAttribute("pathBreakdown", reconciliationService.computeBreakdown(id))
+        // The reconciliation form GETs back to this same URL; when the
+        // operator supplies a non-negative ground-truth count we render the
+        // delta block. Negative values fall through silently — the HTML
+        // form's `min=0` handles that on the client and the controller stays
+        // permissive for direct URL hits.
+        if (groundTruthCount != null && groundTruthCount >= 0) {
+            model.addAttribute(
+                "reconciliation",
+                reconciliationService.reconcile(id, groundTruthCount, sourceCommand)
+            )
+        }
         return "admin/folder-audit/detail"
     }
 

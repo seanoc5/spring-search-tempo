@@ -21,6 +21,28 @@ interface FolderSnapshotRepository : JpaRepository<FolderSnapshot, Long> {
     fun findFirstByAuditRunIdOrderByDepthAsc(auditRunId: Long): FolderSnapshot?
 
     /**
+     * Count snapshots in the subtree rooted at [path] (inclusive). Used by the
+     * folder-audit reconciliation breakdown (issue #138) so the operator can see
+     * how many folders the audit walked under each top-level path — including
+     * the peek-depth contribution under SKIP roots, which is exactly the drift
+     * the reconciliation form is trying to make legible.
+     *
+     * Implementation note: paths in `folder_snapshot` are stored without
+     * trailing slashes (see [com.oconeco.spring_search_tempo.batch.audit.FolderAuditVisitor]),
+     * so a child path always has the form `:path` + `/...`. The `OR` form here
+     * is required because a plain `LIKE :path%` would also match siblings
+     * sharing a prefix (e.g. `/home/sean` and `/home/seanoc5`).
+     */
+    @Query(
+        """
+        SELECT COUNT(s) FROM FolderSnapshot s
+        WHERE s.auditRun.id = :runId
+          AND (s.path = :path OR s.path LIKE CONCAT(:path, '/%'))
+        """
+    )
+    fun countSubtree(@Param("runId") runId: Long, @Param("path") path: String): Long
+
+    /**
      * Hidden-gem candidates: folders under a SKIP root whose name also
      * matches an INDEX/ANALYZE pattern, excluding any path that already
      * has a durable resolution row for the run's source_ref.
