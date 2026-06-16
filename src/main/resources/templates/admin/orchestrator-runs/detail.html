@@ -1,0 +1,158 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>FS Crawl Orchestrator Run</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-list-check me-2"></i>
+            Sweep <span th:text="${'#' + run.id}">#42</span>
+        </h1>
+        <a th:href="@{/admin/crawl/orchestrator-runs}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-arrow-left"></i> All Runs
+        </a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <dl class="row">
+                <dt class="col-sm-4">Status</dt>
+                <dd class="col-sm-8">
+                    <span th:if="${run.runStatus.name() == 'RUNNING'}"
+                          class="badge bg-info text-dark">
+                        <i class="bi bi-hourglass-split"></i> running
+                    </span>
+                    <span th:if="${run.runStatus.name() == 'COMPLETED'}"
+                          class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> completed
+                    </span>
+                    <span th:if="${run.runStatus.name() == 'FAILED'}"
+                          class="badge bg-danger">
+                        <i class="bi bi-x-circle"></i> failed
+                    </span>
+                </dd>
+                <dt class="col-sm-4">Started</dt>
+                <dd class="col-sm-8" th:text="${run.startedAt}">2026-06-16T12:00:00Z</dd>
+                <dt class="col-sm-4">Finished</dt>
+                <dd class="col-sm-8">
+                    <span th:if="${run.finishedAt != null}" th:text="${run.finishedAt}">2026-06-16T12:05:00Z</span>
+                    <span th:if="${run.finishedAt == null}" class="text-muted">—</span>
+                </dd>
+                <dt class="col-sm-4">Triggered By</dt>
+                <dd class="col-sm-8">
+                    <span th:if="${run.triggeredBy != null}" th:text="${run.triggeredBy}">user</span>
+                    <span th:if="${run.triggeredBy == null}" class="text-muted">—</span>
+                </dd>
+            </dl>
+        </div>
+        <div class="col-md-6">
+            <dl class="row">
+                <dt class="col-sm-6">Total Crawls</dt>
+                <dd class="col-sm-6" th:text="${run.totalCrawls}">3</dd>
+                <dt class="col-sm-6">Succeeded</dt>
+                <dd class="col-sm-6">
+                    <span class="badge bg-success" th:text="${run.succeeded}">3</span>
+                </dd>
+                <dt class="col-sm-6">Failed</dt>
+                <dd class="col-sm-6">
+                    <span th:if="${run.failed > 0}" class="badge bg-danger" th:text="${run.failed}">0</span>
+                    <span th:if="${run.failed == 0}" class="text-muted">0</span>
+                </dd>
+                <dt class="col-sm-6">Skipped</dt>
+                <dd class="col-sm-6">
+                    <span th:if="${run.skipped > 0}" class="badge bg-secondary" th:text="${run.skipped}">0</span>
+                    <span th:if="${run.skipped == 0}" class="text-muted">0</span>
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <h2 class="h4 mb-3">Per-Crawl Outcomes</h2>
+
+    <div th:if="${#lists.isEmpty(outcomes)}" class="alert alert-secondary">
+        <i class="bi bi-info-circle me-2"></i>
+        No per-crawl outcomes recorded yet — the sweep may not have iterated any
+        crawl rows, or it's still in flight on the first one.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(outcomes)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Crawl Config</th>
+                <th>Outcome</th>
+                <th>Batch Status</th>
+                <th>Job Execution</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th class="text-end">Elapsed (ms)</th>
+                <th>Error</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="o : ${outcomes}">
+                <td>
+                    <a th:if="${o.crawlConfigId != null}"
+                       th:href="@{/crawlConfigs/{id}(id=${o.crawlConfigId})}"
+                       th:text="${o.crawlConfigLabel != null ? o.crawlConfigLabel : o.crawlConfigName}">
+                        My Crawl
+                    </a>
+                    <span th:if="${o.crawlConfigId == null}" class="text-muted">unknown</span>
+                </td>
+                <td>
+                    <span th:if="${o.outcome.name() == 'SUCCEEDED'}"
+                          class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> succeeded
+                    </span>
+                    <span th:if="${o.outcome.name() == 'FAILED'}"
+                          class="badge bg-danger">
+                        <i class="bi bi-x-circle"></i> failed
+                    </span>
+                    <span th:if="${o.outcome.name() == 'SKIPPED'}"
+                          class="badge bg-secondary">
+                        <i class="bi bi-dash-circle"></i> skipped
+                    </span>
+                    <span th:if="${o.outcome.name() == 'PENDING'}"
+                          class="badge bg-info text-dark">
+                        <i class="bi bi-hourglass-split"></i> pending
+                    </span>
+                </td>
+                <td>
+                    <code th:if="${o.batchStatus != null}" th:text="${o.batchStatus}">COMPLETED</code>
+                    <span th:if="${o.batchStatus == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <a th:if="${o.jobExecutionId != null}"
+                       th:href="@{/batch/{id}(id=${o.jobExecutionId})}"
+                       th:text="${'#' + o.jobExecutionId}">#123</a>
+                    <span th:if="${o.jobExecutionId == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${o.startedAt != null}" th:text="${o.startedAt}">2026-06-16T12:00:00Z</span>
+                    <span th:if="${o.startedAt == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${o.finishedAt != null}" th:text="${o.finishedAt}">2026-06-16T12:01:00Z</span>
+                    <span th:if="${o.finishedAt == null}" class="text-muted">—</span>
+                </td>
+                <td class="text-end">
+                    <span th:if="${o.elapsedMs != null}" th:text="${o.elapsedMs}">1234</span>
+                    <span th:if="${o.elapsedMs == null}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${o.errorMessage != null}"
+                          class="text-danger small"
+                          th:title="${o.errorMessage}"
+                          th:text="${#strings.abbreviate(o.errorMessage, 80)}">reason</span>
+                    <span th:if="${o.errorMessage == null}" class="text-muted">—</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

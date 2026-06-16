@@ -34,4 +34,11 @@ interface CrawlConfigRepository : JpaRepository<CrawlConfig, Long> {
         pageable: Pageable
     ): Page<CrawlConfig>
 
+    /**
+     * All enabled crawl configs in deterministic id-ascending order. Drives
+     * `FsCrawlOrchestrator.runAllEnabledCrawls` (issue #139) — sweeping by
+     * id is stable across renames and matches the order rows were created.
+     */
+    fun findByEnabledTrueOrderByIdAsc(): List<CrawlConfig>
+
 }

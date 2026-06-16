@@ -54,6 +54,19 @@
             <div class="d-flex flex-wrap mb-3 align-items-center">
                 <h1 class="flex-grow-1 mb-0">Crawl Configurations</h1>
                 <div class="d-flex gap-2">
+                    <!-- Issue #139: sequential sweep of every enabled CrawlConfig.
+                         Button posts to the REST endpoint via JS so we can surface
+                         the runId + in-flight-disable affordance without round-tripping
+                         a full form submit. -->
+                    <button type="button" id="runAllEnabledBtn" class="btn btn-success"
+                            onclick="runAllEnabledSweep()">
+                        <i class="bi bi-collection-play"></i>
+                        <span class="run-all-label">Run All Enabled</span>
+                    </button>
+                    <a th:href="@{/admin/crawl/orchestrator-runs}" class="btn btn-outline-secondary"
+                       title="Past sweeps history">
+                        <i class="bi bi-list-check"></i> Sweep History
+                    </a>
                     <a th:href="@{/crawlConfigs/wizard}" class="btn btn-primary">
                         <i class="bi bi-magic"></i> Preset Wizard
                     </a>
@@ -308,7 +321,52 @@
                     tooltipTriggerList.forEach(function (tooltipTriggerEl) {
                         new bootstrap.Tooltip(tooltipTriggerEl);
                     });
+                    pollRunAllEnabledStatus();
                 });
+
+                // ── Issue #139: Run All Enabled button ─────────────────────────────
+                // The endpoint is async — it returns 202 with a runId and we
+                // redirect to /admin/crawl/orchestrator-runs/{id} so the user
+                // lands on the run-summary drilldown immediately. While a sweep
+                // is in flight, the button reads "Sweep in flight…" and is
+                // disabled (anyone navigating back here gets the right state).
+                function runAllEnabledSweep() {
+                    const btn = document.getElementById('runAllEnabledBtn');
+                    if (!btn || btn.disabled) return;
+                    btn.disabled = true;
+                    btn.querySelector('.run-all-label').textContent = 'Starting sweep…';
+                    fetch('/api/crawl/run-all-enabled', { method: 'POST', headers: { 'Accept': 'application/json' } })
+                        .then(r => r.json().catch(() => ({})).then(body => ({ status: r.status, body })))
+                        .then(({ body }) => {
+                            if (body && body.summaryUrl) {
+                                window.location = body.summaryUrl;
+                            } else {
+                                btn.disabled = false;
+                                btn.querySelector('.run-all-label').textContent = 'Run All Enabled';
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Run All Enabled failed', err);
+                            btn.disabled = false;
+                            btn.querySelector('.run-all-label').textContent = 'Run All Enabled';
+                        });
+                }
+
+                function pollRunAllEnabledStatus() {
+                    const btn = document.getElementById('runAllEnabledBtn');
+                    if (!btn) return;
+                    fetch('/api/crawl/orchestrator-runs/active', { headers: { 'Accept': 'application/json' } })
+                        .then(r => {
+                            if (r.status === 204) {
+                                btn.disabled = false;
+                                btn.querySelector('.run-all-label').textContent = 'Run All Enabled';
+                            } else if (r.ok) {
+                                btn.disabled = true;
+                                btn.querySelector('.run-all-label').textContent = 'Sweep in flight…';
+                            }
+                        })
+                        .catch(() => { /* leave button untouched */ });
+                }
             </script>
         </div>
     </body>
