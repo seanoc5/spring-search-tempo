@@ -1,0 +1,100 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>FS Crawl Orchestrator Runs</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-list-check me-2"></i>FS Crawl Orchestrator Runs
+        </h1>
+        <a th:href="@{/crawlConfigs}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-arrow-left"></i> Crawl Configurations
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Past sweeps from the "Run All Enabled" button on the Crawl Configurations
+        page (issue #139). Each row is one sequential pass across every enabled
+        <code>CrawlConfig</code>. Drill into a row to see per-crawl outcomes.
+    </p>
+
+    <div th:if="${anyInFlight}" class="alert alert-info">
+        <i class="bi bi-hourglass-split me-2"></i>
+        A sweep is currently in flight. The row at the top of the table is the
+        active one; refresh to watch its counters tick up.
+    </div>
+
+    <div th:if="${#lists.isEmpty(runs)}" class="alert alert-secondary">
+        <i class="bi bi-info-circle me-2"></i>
+        No sweeps recorded yet. Trigger one from the Crawl Configurations page
+        or via <code>POST /api/crawl/run-all-enabled</code>.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(runs)}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>Run</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Finished</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Succeeded</th>
+                <th class="text-end">Failed</th>
+                <th class="text-end">Skipped</th>
+                <th>Triggered By</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${runs}">
+                <td>
+                    <a th:href="@{/admin/crawl/orchestrator-runs/{id}(id=${r.id})}"
+                       th:text="${'#' + r.id}">#42</a>
+                </td>
+                <td>
+                    <span th:if="${r.runStatus.name() == 'RUNNING'}"
+                          class="badge bg-info text-dark">
+                        <i class="bi bi-hourglass-split"></i> running
+                    </span>
+                    <span th:if="${r.runStatus.name() == 'COMPLETED'}"
+                          class="badge bg-success">
+                        <i class="bi bi-check-circle"></i> completed
+                    </span>
+                    <span th:if="${r.runStatus.name() == 'FAILED'}"
+                          class="badge bg-danger">
+                        <i class="bi bi-x-circle"></i> failed
+                    </span>
+                </td>
+                <td th:text="${r.startedAt}">2026-06-16T12:00:00Z</td>
+                <td>
+                    <span th:if="${r.finishedAt != null}" th:text="${r.finishedAt}">2026-06-16T12:05:00Z</span>
+                    <span th:if="${r.finishedAt == null}" class="text-muted">—</span>
+                </td>
+                <td class="text-end" th:text="${r.totalCrawls}">3</td>
+                <td class="text-end">
+                    <span class="badge bg-success" th:text="${r.succeeded}">3</span>
+                </td>
+                <td class="text-end">
+                    <span th:if="${r.failed > 0}" class="badge bg-danger" th:text="${r.failed}">0</span>
+                    <span th:if="${r.failed == 0}" class="text-muted">0</span>
+                </td>
+                <td class="text-end">
+                    <span th:if="${r.skipped > 0}" class="badge bg-secondary" th:text="${r.skipped}">0</span>
+                    <span th:if="${r.skipped == 0}" class="text-muted">0</span>
+                </td>
+                <td>
+                    <span th:if="${r.triggeredBy != null}"
+                          class="text-muted small"
+                          th:text="${r.triggeredBy}">user</span>
+                    <span th:if="${r.triggeredBy == null}" class="text-muted">—</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
