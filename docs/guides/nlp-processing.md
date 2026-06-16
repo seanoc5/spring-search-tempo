@@ -54,6 +54,72 @@ interface NLPService {
 
 Implementation using Stanford CoreNLP. The pipeline is lazily initialized (~5 seconds on first use).
 
+#### Parser choice: PCFG (default) vs SR (opt-in)
+
+Stanford CoreNLP supports two parsers for the `parse` annotator, and CoreNLP's
+sentiment analyzer is tree-based — so parser quality flows directly into
+`ContentChunk.sentiment` and `sentimentScore` as well as raw throughput.
+
+| Parser | Default? | Speed | Accuracy (F1) | Memory at load |
+|--------|----------|-------|---------------|----------------|
+| **PCFG** (`englishPCFG.ser.gz`) | ✅ Yes | Baseline | Baseline | ~0.3 GB |
+| **SR** (`englishSR.ser.gz`) | Opt-in | **~20× faster** | **+1 F1 point** | ~1 GB |
+
+**PCFG is the bundled default** — it ships inside
+`edu.stanford.nlp:stanford-corenlp:4.5.5:models`, works out of the box on a
+fresh checkout, and keeps CI runs fast on small test corpora. For
+full-system indexing of millions of chunks, **SR's speed-up is the headline
+win**; it's also slightly more accurate. The SR model jar is ~600 MB, which
+is why we don't bundle it into the deploy artifact by default.
+
+To enable SR:
+
+```bash
+./gradlew downloadSRParser
+./gradlew bootRun        # or restart however you normally run the app
+```
+
+The Gradle task fetches `stanford-srparser-2014-10-23-models.jar` from
+Stanford's distribution mirror into the project's `libs/` directory. The
+task is idempotent — re-running it is a no-op if the jar is already
+present. The download lives outside `build/`, so it survives
+`./gradlew clean` without re-downloading.
+
+On the next app start, `StanfordNLPService` probes the classpath for
+`edu/stanford/nlp/models/srparser/englishSR.ser.gz`. If found, it switches
+to SR automatically and logs at INFO:
+
+```
+StanfordNLPService: SR parser detected on classpath, using shift-reduce mode (~20× faster than PCFG). Memory footprint ~1GB at load.
+```
+
+If the SR jar is absent (default), the service logs:
+
+```
+StanfordNLPService: PCFG parser in use (bundled default). Run `./gradlew downloadSRParser` to enable SR for ~20× faster NLP throughput.
+```
+
+**Power-user override.** Set `app.nlp.parse-model` in `application.yml` to
+an explicit classpath resource (or filesystem path Stanford CoreNLP can
+load) and the auto-detection logic is bypassed entirely — the configured
+value is used verbatim:
+
+```yaml
+app:
+  nlp:
+    parse-model: edu/stanford/nlp/models/srparser/englishSR.ser.gz
+    # or a custom path to a model you've trained / mirrored locally
+```
+
+**Memory note.** SR's larger footprint (~1 GB at load) is fine on most
+modern hardware, but it's worth knowing on memory-constrained hosts. If
+you're already tight on heap, stick with PCFG.
+
+**Test classpath stays on PCFG.** `developmentOnly` puts the SR jar onto
+`bootRun`'s classpath but not `test`'s, so `./gradlew test` keeps using
+bundled PCFG even after `downloadSRParser` has run. The `bootJar` deploy
+artifact also stays slim — it does not include the SR jar.
+
 ### NLPProcessingJobConfiguration (`batch/nlp/`)
 
 Spring Batch job that processes ContentChunks:

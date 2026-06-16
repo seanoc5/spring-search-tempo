@@ -3,6 +3,11 @@ import org.springframework.boot.gradle.tasks.bundling.BootJar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URI
 
 plugins {
     id("org.springframework.boot") version "3.5.7"
@@ -96,6 +101,15 @@ dependencies {
         // Can be selective about which models to include
     }
 
+    // Stanford SR (shift-reduce) parser — opt-in via `./gradlew downloadSRParser`.
+    // The model jar is too large (~600 MB) to bundle in the deploy artifact, so
+    // we ship PCFG as the default and let operators drop the SR jar into `libs/`.
+    // `developmentOnly` puts the jar on bootRun's classpath (so the StanfordNLPService
+    // classpath probe finds englishSR.ser.gz) but excludes it from `bootJar` and
+    // `test` runtime — so `./gradlew test` keeps using bundled PCFG, and the deploy
+    // artifact stays slim unless someone explicitly bundles the jar.
+    developmentOnly(fileTree("libs") { include("stanford-srparser-*.jar") })
+
     // Email crawling - Jakarta Mail for IMAP/SMTP
     implementation("com.sun.mail:jakarta.mail:2.0.1")
 
@@ -175,5 +189,69 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
 tasks.register("printAppVersion") {
     doLast {
         println(project.version)
+    }
+}
+
+// Opt-in download of the Stanford shift-reduce (SR) parser model jar.
+// PCFG is the bundled default (see issue #131 / PR #135); SR is ~20× faster
+// and ~1 F1 point more accurate but the model is ~600 MB so we don't ship it.
+// Run `./gradlew downloadSRParser` once on a dev/prod box, restart, and
+// StanfordNLPService auto-detects englishSR.ser.gz on the classpath.
+tasks.register("downloadSRParser") {
+    group = "build setup"
+    description = "Download the Stanford SR (shift-reduce) parser model jar into libs/ for faster NLP."
+
+    val srJarName = "stanford-srparser-2014-10-23-models.jar"
+    // Stanford pins one SR model release per CoreNLP version family; the
+    // 2014-10-23 jar is the one that ships with CoreNLP 4.5.x (it's what
+    // `Maven Central edu.stanford.nlp:stanford-corenlp:4.5.5:models-english`
+    // documents and what nlp.stanford.edu/software/srparser.html links to).
+    val srJarUrl = "https://nlp.stanford.edu/software/$srJarName"
+    val libsDir = layout.projectDirectory.dir("libs")
+    val srJarFile = libsDir.file(srJarName).asFile
+
+    outputs.file(srJarFile)
+    outputs.upToDateWhen { srJarFile.exists() && srJarFile.length() > 0L }
+
+    doLast {
+        if (srJarFile.exists() && srJarFile.length() > 0L) {
+            val sizeMB = srJarFile.length() / (1024 * 1024)
+            println("Stanford SR parser already present at ${srJarFile.relativeTo(projectDir)} (${sizeMB} MB); skipping download.")
+            return@doLast
+        }
+        srJarFile.parentFile.mkdirs()
+        val tmpFile = File(srJarFile.parentFile, "${srJarName}.part")
+        println("Downloading Stanford SR parser from $srJarUrl ...")
+        try {
+            val url = URI(srJarUrl).toURL()
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 300_000
+            conn.instanceFollowRedirects = true
+            conn.connect()
+            if (conn.responseCode !in 200..299) {
+                throw GradleException("HTTP ${conn.responseCode} ${conn.responseMessage}")
+            }
+            conn.inputStream.use { input: InputStream ->
+                tmpFile.outputStream().use { output: OutputStream ->
+                    input.copyTo(output)
+                }
+            }
+            if (tmpFile.length() == 0L) {
+                tmpFile.delete()
+                throw GradleException("Downloaded SR parser jar is empty ($srJarUrl)")
+            }
+            tmpFile.renameTo(srJarFile)
+            val sizeMB = srJarFile.length() / (1024 * 1024)
+            println("Downloaded ${sizeMB} MB to ${srJarFile.relativeTo(projectDir)}")
+            println("Restart the app; StanfordNLPService will auto-detect SR on classpath.")
+        } catch (e: Exception) {
+            tmpFile.delete()
+            throw GradleException(
+                "Failed to download Stanford SR parser from $srJarUrl: ${e.message}. " +
+                "Check network connectivity or set app.nlp.parse-model to point at a local model.",
+                e,
+            )
+        }
     }
 }
