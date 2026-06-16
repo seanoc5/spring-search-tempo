@@ -156,7 +156,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     @Query(
         value = """
             SELECT f.crawl_config_id, f.analysis_status, f.last_updated
-            FROM fsfolder f
+            FROM fs_folder f
             JOIN crawl_config cc ON f.crawl_config_id = cc.id
             WHERE f.uri = :uri
             AND f.job_run_id IS NOT NULL
@@ -253,7 +253,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
                     p.id AS folder_id,
                     CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END AS prefix,
                     LENGTH(CASE WHEN p.uri = '/' THEN '/' ELSE p.uri || '/' END) AS prefix_len
-                FROM fsfolder p
+                FROM fs_folder p
                 WHERE p.id IN (:folderIds)
             )
             SELECT
@@ -271,7 +271,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
                           AND POSITION('/' IN SUBSTRING(c.uri FROM p.prefix_len + 1)) = 0
                     ) AS direct_folder_count,
                     COUNT(*) FILTER (WHERE c.id <> p.folder_id) AS recursive_folder_count
-                FROM fsfolder c
+                FROM fs_folder c
                 WHERE c.uri >= p.prefix
                   AND c.uri < p.prefix || chr(1114111)
             ) fc ON TRUE
@@ -282,7 +282,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
                     ) AS direct_file_count,
                     COUNT(*) AS recursive_file_count,
                     COALESCE(SUM(f.size), 0) AS total_file_size
-                FROM fsfile f
+                FROM fs_file f
                 WHERE f.uri >= p.prefix
                   AND f.uri < p.prefix || chr(1114111)
             ) ff ON TRUE
@@ -354,7 +354,7 @@ interface FSFolderRepository : JpaRepository<FSFolder, Long> {
     @Query(
         value = """
             SELECT f.*
-            FROM fsfolder f
+            FROM fs_folder f
             WHERE f.uri = regexp_replace(:childUri, '/[^/]+$', '')
             LIMIT 1
         """,

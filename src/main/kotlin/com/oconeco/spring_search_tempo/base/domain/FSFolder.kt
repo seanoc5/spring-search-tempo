@@ -5,12 +5,14 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.OneToMany
+import jakarta.persistence.Table
 import java.time.OffsetDateTime
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 
 
 @Entity
+@Table(name = "fs_folder")
 class FSFolder : FSObject() {
 
     // ============ Smart Crawl Scheduling Fields ============

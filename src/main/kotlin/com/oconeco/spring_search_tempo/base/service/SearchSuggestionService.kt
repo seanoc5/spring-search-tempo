@@ -91,13 +91,13 @@ class SearchSuggestionServiceImpl(
         val sql = """
             SELECT DISTINCT term, source, 1.0 as similarity
             FROM (
-                SELECT title as term, 'title' as source FROM fsfile
+                SELECT title as term, 'title' as source FROM fs_file
                 WHERE title IS NOT NULL AND LOWER(title) LIKE LOWER(:pattern)
                 UNION ALL
-                SELECT label as term, 'label' as source FROM fsfile
+                SELECT label as term, 'label' as source FROM fs_file
                 WHERE label IS NOT NULL AND LOWER(label) LIKE LOWER(:pattern)
                 UNION ALL
-                SELECT author as term, 'author' as source FROM fsfile
+                SELECT author as term, 'author' as source FROM fs_file
                 WHERE author IS NOT NULL AND LOWER(author) LIKE LOWER(:pattern)
             ) candidates
             LIMIT :limit

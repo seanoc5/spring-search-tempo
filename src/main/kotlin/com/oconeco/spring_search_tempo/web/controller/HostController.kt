@@ -146,11 +146,11 @@ class HostController(
             val result = sourceHostService.repairOrphanFsFiles(host)
             redirectAttributes.addFlashAttribute(
                 "message",
-                "Adopted ${result.repaired} orphan fsfile rows into host '${result.fallbackHost}'. Remaining=${result.remaining}."
+                "Adopted ${result.repaired} orphan fs_file rows into host '${result.fallbackHost}'. Remaining=${result.remaining}."
             )
             "redirect:/hosts?host=$host&tab=content"
         } catch (e: Exception) {
-            redirectAttributes.addFlashAttribute("error", "Orphan fsfile repair failed for '$host': ${e.message}")
+            redirectAttributes.addFlashAttribute("error", "Orphan fs_file repair failed for '$host': ${e.message}")
             "redirect:/hosts?host=$host&tab=content"
         }
     }

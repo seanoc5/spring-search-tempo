@@ -14,9 +14,10 @@ import org.hibernate.type.SqlTypes
 
 @Entity
 @Table(
+    name = "fs_file",
     indexes = [
         Index(name = "idx_status", columnList = "status"),
-        Index(name = "idx_fsfile_metadata_dup", columnList = "label, size, fs_last_modified"),
+        Index(name = "idx_fs_file_metadata_dup", columnList = "label, size, fs_last_modified"),
     ]
 )
 class FSFile : FSObject() {

@@ -90,7 +90,7 @@ class SearchStatsServiceImpl(
             val textBytes = (row[3] as Number?)?.toLong() ?: 0L
 
             when (tableName) {
-                "fsfile" -> {
+                "fs_file" -> {
                     totalFiles = total
                     indexedFiles = indexed
                     fileTextBytes = textBytes
@@ -121,7 +121,7 @@ class SearchStatsServiceImpl(
         val fileStats = try {
             val sql = """
                 SELECT COUNT(*), COUNT(fts_vector), COALESCE(SUM(LENGTH(body_text)), 0)
-                FROM fsfile
+                FROM fs_file
             """.trimIndent()
             val result = entityManager.createNativeQuery(sql).singleResult as Array<Any?>
             Triple(

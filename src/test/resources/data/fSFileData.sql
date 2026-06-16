@@ -1,4 +1,4 @@
-INSERT INTO fsfile (
+INSERT INTO fs_file (
     id,
     uri,
     label,
@@ -38,7 +38,7 @@ INSERT INTO fsfile (
     '2024-09-02 14:30:00'
 );
 
-INSERT INTO fsfile (
+INSERT INTO fs_file (
     id,
     uri,
     label,
