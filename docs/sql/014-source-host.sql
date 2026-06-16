@@ -63,8 +63,8 @@ ALTER TABLE user_source_host ADD COLUMN IF NOT EXISTS source_host_id bigint;
 ALTER TABLE remote_crawl_task ADD COLUMN IF NOT EXISTS source_host_id bigint;
 ALTER TABLE crawl_discovery_run ADD COLUMN IF NOT EXISTS source_host_id bigint;
 ALTER TABLE crawl_discovery_folder_obs ADD COLUMN IF NOT EXISTS source_host_id bigint;
-ALTER TABLE fsfolder ADD COLUMN IF NOT EXISTS source_host_id bigint;
-ALTER TABLE fsfile ADD COLUMN IF NOT EXISTS source_host_id bigint;
+ALTER TABLE fs_folder ADD COLUMN IF NOT EXISTS source_host_id bigint;
+ALTER TABLE fs_file ADD COLUMN IF NOT EXISTS source_host_id bigint;
 
 CREATE INDEX IF NOT EXISTS idx_source_host_normalized_host ON source_host (normalized_host);
 CREATE INDEX IF NOT EXISTS idx_crawl_config_source_host_id ON crawl_config (source_host_id);
@@ -73,8 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_user_source_host_source_host_id ON user_source_ho
 CREATE INDEX IF NOT EXISTS idx_remote_crawl_task_source_host_id ON remote_crawl_task (source_host_id);
 CREATE INDEX IF NOT EXISTS idx_crawl_discovery_run_source_host_id ON crawl_discovery_run (source_host_id);
 CREATE INDEX IF NOT EXISTS idx_crawl_discovery_folder_obs_source_host_id ON crawl_discovery_folder_obs (source_host_id);
-CREATE INDEX IF NOT EXISTS idx_fsfolder_source_host_id ON fsfolder (source_host_id);
-CREATE INDEX IF NOT EXISTS idx_fsfile_source_host_id ON fsfile (source_host_id);
+CREATE INDEX IF NOT EXISTS idx_fs_folder_source_host_id ON fs_folder (source_host_id);
+CREATE INDEX IF NOT EXISTS idx_fs_file_source_host_id ON fs_file (source_host_id);
 
 INSERT INTO source_host (
     id,
@@ -155,14 +155,14 @@ FROM (
     UNION ALL
 
     SELECT lower(trim(source_host)) AS normalized_host, min(trim(source_host)) AS display_name, NULL::varchar(20) AS os_type
-    FROM fsfolder
+    FROM fs_folder
     WHERE source_host IS NOT NULL AND trim(source_host) <> ''
     GROUP BY lower(trim(source_host))
 
     UNION ALL
 
     SELECT lower(trim(source_host)) AS normalized_host, min(trim(source_host)) AS display_name, NULL::varchar(20) AS os_type
-    FROM fsfile
+    FROM fs_file
     WHERE source_host IS NOT NULL AND trim(source_host) <> ''
     GROUP BY lower(trim(source_host))
 ) hosts
@@ -217,23 +217,23 @@ WHERE cdfo.source_host_id IS NULL
   AND cdfo.host IS NOT NULL
   AND lower(trim(cdfo.host)) = sh.normalized_host;
 
-UPDATE fsfolder f
+UPDATE fs_folder f
 SET source_host_id = sh.id
 FROM source_host sh
 WHERE f.source_host_id IS NULL
   AND f.source_host IS NOT NULL
   AND lower(trim(f.source_host)) = sh.normalized_host;
 
-UPDATE fsfile f
+UPDATE fs_file f
 SET source_host_id = sh.id
 FROM source_host sh
 WHERE f.source_host_id IS NULL
   AND f.source_host IS NOT NULL
   AND lower(trim(f.source_host)) = sh.normalized_host;
 
-UPDATE fsfile f
+UPDATE fs_file f
 SET source_host_id = d.source_host_id
-FROM fsfolder d
+FROM fs_folder d
 WHERE f.source_host_id IS NULL
   AND f.fs_folder_id = d.id
   AND d.source_host_id IS NOT NULL;
@@ -277,13 +277,13 @@ BEGIN
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_fsfolder_source_host') THEN
-        ALTER TABLE fsfolder
+        ALTER TABLE fs_folder
             ADD CONSTRAINT fk_fsfolder_source_host
             FOREIGN KEY (source_host_id) REFERENCES source_host(id);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_fsfile_source_host') THEN
-        ALTER TABLE fsfile
+        ALTER TABLE fs_file
             ADD CONSTRAINT fk_fsfile_source_host
             FOREIGN KEY (source_host_id) REFERENCES source_host(id);
     END IF;

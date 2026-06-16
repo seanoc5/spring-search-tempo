@@ -1,4 +1,4 @@
-INSERT INTO fsfolder (
+INSERT INTO fs_folder (
     id,
     uri,
     label,
@@ -38,7 +38,7 @@ INSERT INTO fsfolder (
     '2024-09-02 14:30:00'
 );
 
-INSERT INTO fsfolder (
+INSERT INTO fs_folder (
     id,
     uri,
     label,

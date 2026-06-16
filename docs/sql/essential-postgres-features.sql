@@ -89,9 +89,9 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- For search suggestions/autocomplete
 \echo '>>> Setting up FTS GENERATED columns...'
 
 -- FSFile: Drop JPA-created column and recreate as GENERATED
-ALTER TABLE fsfile DROP COLUMN IF EXISTS fts_vector CASCADE;
+ALTER TABLE fs_file DROP COLUMN IF EXISTS fts_vector CASCADE;
 
-ALTER TABLE fsfile ADD COLUMN fts_vector tsvector GENERATED ALWAYS AS (
+ALTER TABLE fs_file ADD COLUMN fts_vector tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(author, '')), 'B') ||
     setweight(to_tsvector('english', coalesce(subject, '')), 'B') ||
@@ -100,7 +100,7 @@ ALTER TABLE fsfile ADD COLUMN fts_vector tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('english', coalesce(label, '')), 'D')
 ) STORED;
 
-COMMENT ON COLUMN fsfile.fts_vector IS 'Auto-generated FTS vector with weighted fields (A: title, B: metadata, C: body first 250KB, D: label)';
+COMMENT ON COLUMN fs_file.fts_vector IS 'Auto-generated FTS vector with weighted fields (A: title, B: metadata, C: body first 250KB, D: label)';
 
 -- ContentChunks: Drop JPA-created column and recreate with NLP-enhanced fields
 ALTER TABLE content_chunks DROP COLUMN IF EXISTS fts_vector CASCADE;
@@ -118,7 +118,7 @@ COMMENT ON COLUMN content_chunks.fts_vector IS 'Auto-generated FTS vector with N
 -- =============================================================================
 \echo '>>> Creating FTS GIN indexes...'
 
-CREATE INDEX IF NOT EXISTS idx_fsfile_fts ON fsfile USING GIN(fts_vector);
+CREATE INDEX IF NOT EXISTS idx_fs_file_fts ON fs_file USING GIN(fts_vector);
 CREATE INDEX IF NOT EXISTS idx_content_chunks_fts ON content_chunks USING GIN(fts_vector);
 CREATE INDEX IF NOT EXISTS idx_browser_bookmark_fts ON browser_bookmark USING GIN(fts_vector);
 CREATE INDEX IF NOT EXISTS idx_browser_bookmark_folder_path ON browser_bookmark (folder_path);
@@ -154,7 +154,7 @@ CREATE INDEX IF NOT EXISTS content_chunks_embedding_not_null_idx
 -- =============================================================================
 \echo '>>> Creating search functions...'
 
--- Full-text search across fsfile and content_chunks
+-- Full-text search across fs_file and content_chunks
 DROP FUNCTION IF EXISTS search_full_text(TEXT, INTEGER, INTEGER);
 
 CREATE OR REPLACE FUNCTION search_full_text(
@@ -171,9 +171,9 @@ CREATE OR REPLACE FUNCTION search_full_text(
 ) AS $$
 BEGIN
     RETURN QUERY
-    -- Search in fsfile
+    -- Search in fs_file
     SELECT
-        'fsfile'::TEXT as source_table,
+        'fs_file'::TEXT as source_table,
         f.id,
         f.uri,
         f.label,
@@ -181,7 +181,7 @@ BEGIN
                     to_tsquery('english', search_query),
                     'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
         ts_rank(f.fts_vector, to_tsquery('english', search_query)) as rank
-    FROM fsfile f
+    FROM fs_file f
     WHERE f.fts_vector @@ to_tsquery('english', search_query)
 
     UNION ALL
@@ -197,7 +197,7 @@ BEGIN
                     'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
         ts_rank(c.fts_vector, to_tsquery('english', search_query)) as rank
     FROM content_chunks c
-    LEFT JOIN fsfile f ON c.concept_id = f.id
+    LEFT JOIN fs_file f ON c.concept_id = f.id
     WHERE c.fts_vector @@ to_tsquery('english', search_query)
 
     ORDER BY rank DESC
@@ -206,7 +206,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION search_full_text IS 'Full-text search across fsfile and content_chunks with ranking';
+COMMENT ON FUNCTION search_full_text IS 'Full-text search across fs_file and content_chunks with ranking';
 
 -- Sentiment-filtered search for content chunks
 DROP FUNCTION IF EXISTS search_chunks_with_sentiment(TEXT, TEXT, INTEGER, INTEGER);
@@ -240,7 +240,7 @@ BEGIN
         c.sentiment_score,
         c.named_entities
     FROM content_chunks c
-    LEFT JOIN fsfile f ON c.concept_id = f.id
+    LEFT JOIN fs_file f ON c.concept_id = f.id
     WHERE c.fts_vector @@ to_tsquery('english', search_query)
       AND (sentiment_filter IS NULL OR c.sentiment = sentiment_filter)
     ORDER BY rank DESC
@@ -271,7 +271,7 @@ BEGIN
             f.title as term,
             'title' as source,
             similarity(f.title, partial_query) as sim
-        FROM fsfile f
+        FROM fs_file f
         WHERE f.title IS NOT NULL
           AND f.title % partial_query  -- trigram similarity operator
           AND length(f.title) > 2
@@ -283,7 +283,7 @@ BEGIN
             f.label as term,
             'label' as source,
             similarity(f.label, partial_query) as sim
-        FROM fsfile f
+        FROM fs_file f
         WHERE f.label IS NOT NULL
           AND f.label % partial_query
           AND length(f.label) > 2
@@ -295,7 +295,7 @@ BEGIN
             f.author as term,
             'author' as source,
             similarity(f.author, partial_query) as sim
-        FROM fsfile f
+        FROM fs_file f
         WHERE f.author IS NOT NULL
           AND f.author % partial_query
           AND length(f.author) > 2
@@ -307,7 +307,7 @@ BEGIN
             f.keywords as term,
             'keywords' as source,
             similarity(f.keywords, partial_query) as sim
-        FROM fsfile f
+        FROM fs_file f
         WHERE f.keywords IS NOT NULL
           AND f.keywords % partial_query
           AND length(f.keywords) > 2
@@ -328,14 +328,14 @@ COMMENT ON FUNCTION search_suggest IS 'Autocomplete suggestions using trigram si
 \echo '>>> Creating performance indexes...'
 
 -- Trigram indexes for search suggestions/autocomplete
-CREATE INDEX IF NOT EXISTS idx_fsfile_title_trgm ON fsfile USING GIN(title gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_fsfile_label_trgm ON fsfile USING GIN(label gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_fsfile_author_trgm ON fsfile USING GIN(author gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_fsfile_keywords_trgm ON fsfile USING GIN(keywords gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fs_file_title_trgm ON fs_file USING GIN(title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fs_file_label_trgm ON fs_file USING GIN(label gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fs_file_author_trgm ON fs_file USING GIN(author gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_fs_file_keywords_trgm ON fs_file USING GIN(keywords gin_trgm_ops);
 
 -- Job run lookups (for file/folder browsing by crawl config)
-CREATE INDEX IF NOT EXISTS idx_fsfile_job_run_id ON fsfile(job_run_id);
-CREATE INDEX IF NOT EXISTS idx_fsfolder_job_run_id ON fsfolder(job_run_id);
+CREATE INDEX IF NOT EXISTS idx_fs_file_job_run_id ON fs_file(job_run_id);
+CREATE INDEX IF NOT EXISTS idx_fs_folder_job_run_id ON fs_folder(job_run_id);
 CREATE INDEX IF NOT EXISTS idx_job_run_crawl_config_id ON job_run(crawl_config_id);
 
 -- Discovery observation indexes (tables are created by JPA before this script runs)
@@ -351,11 +351,11 @@ DROP MATERIALIZED VIEW IF EXISTS search_stats CASCADE;
 
 CREATE MATERIALIZED VIEW search_stats AS
 SELECT
-    'fsfile' as table_name,
+    'fs_file' as table_name,
     COUNT(*) as total_documents,
     COUNT(fts_vector) as indexed_documents,
     SUM(LENGTH(body_text)) as total_text_bytes
-FROM fsfile
+FROM fs_file
 UNION ALL
 SELECT
     'content_chunks' as table_name,
@@ -386,10 +386,10 @@ $$ LANGUAGE plpgsql;
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'fsfolder_analysis_status_check'
+        SELECT 1 FROM pg_constraint WHERE conname = 'fs_folder_analysis_status_check'
     ) THEN
-        ALTER TABLE fsfolder
-            ADD CONSTRAINT fsfolder_analysis_status_check
+        ALTER TABLE fs_folder
+            ADD CONSTRAINT fs_folder_analysis_status_check
             CHECK (analysis_status IN ('SKIP', 'LOCATE', 'INDEX', 'ANALYZE', 'SEMANTIC'));
     END IF;
 END $$;
@@ -398,10 +398,10 @@ END $$;
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'fsfile_analysis_status_check'
+        SELECT 1 FROM pg_constraint WHERE conname = 'fs_file_analysis_status_check'
     ) THEN
-        ALTER TABLE fsfile
-            ADD CONSTRAINT fsfile_analysis_status_check
+        ALTER TABLE fs_file
+            ADD CONSTRAINT fs_file_analysis_status_check
             CHECK (analysis_status IN ('SKIP', 'LOCATE', 'INDEX', 'ANALYZE', 'SEMANTIC'));
     END IF;
 END $$;

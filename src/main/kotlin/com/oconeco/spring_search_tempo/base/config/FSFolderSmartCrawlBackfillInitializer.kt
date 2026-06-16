@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component
 /**
  * Backfills nullable smart-crawl columns on legacy databases.
  *
- * Some existing instances have NULL values for fsfolder.change_score /
- * fsfolder.crawl_temperature from pre-default schema states, which can
+ * Some existing instances have NULL values for fs_folder.change_score /
+ * fs_folder.crawl_temperature from pre-default schema states, which can
  * break entity hydration for non-null Kotlin properties.
  */
 @Component
@@ -22,7 +22,7 @@ class FSFolderSmartCrawlBackfillInitializer(
 
     companion object {
         private val log = LoggerFactory.getLogger(FSFolderSmartCrawlBackfillInitializer::class.java)
-        private val TABLE_CANDIDATES = listOf("fsfolder", "fs_folder")
+        private val TABLE_CANDIDATES = listOf("fs_folder")
     }
 
     override fun run(args: ApplicationArguments?) {
@@ -81,7 +81,7 @@ class FSFolderSmartCrawlBackfillInitializer(
                 return tableName
             }
         }
-        log.debug("FS folder backfill skipped: no fsfolder/fs_folder table found")
+        log.debug("FS folder backfill skipped: no fs_folder table found")
         return null
     }
 

@@ -37,7 +37,7 @@ class FSFileMetadataDuplicateRepositoryImpl(
         val countSql = """
             SELECT COUNT(*) FROM (
                 SELECT 1
-                FROM fsfile
+                FROM fs_file
                 WHERE label IS NOT NULL
                 AND size IS NOT NULL
                 AND fs_last_modified IS NOT NULL

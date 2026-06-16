@@ -70,7 +70,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_hcsf_fsfolder') THEN
         ALTER TABLE host_crawl_session_folder
             ADD CONSTRAINT fk_hcsf_fsfolder
-            FOREIGN KEY (fs_folder_id) REFERENCES fsfolder(id);
+            FOREIGN KEY (fs_folder_id) REFERENCES fs_folder(id);
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_hcsf_remote_task') THEN
         ALTER TABLE host_crawl_session_folder
