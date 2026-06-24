@@ -189,6 +189,30 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
     ): Page<EmailMessage>
 
     /**
+     * Find chunked email messages whose body_text exceeds the given
+     * character threshold. Backfill helper for ADR-006 / issue #161 —
+     * these rows can be safely truncated because their full text is
+     * already represented in ContentChunk. `LENGTH()` on a PostgreSQL
+     * `text` column is a character count, which is what we compare
+     * against the threshold.
+     *
+     * "Chunked" here means at least one ContentChunk row points at the
+     * EmailMessage. (EmailMessage has no `chunked_at` timestamp of its
+     * own — the existence check stands in for the same invariant.)
+     */
+    @Query("""
+        SELECT e FROM EmailMessage e
+        WHERE e.bodyText IS NOT NULL
+        AND LENGTH(e.bodyText) > :thresholdChars
+        AND EXISTS (SELECT 1 FROM ContentChunk cc WHERE cc.emailMessage = e)
+        ORDER BY e.id
+    """)
+    fun findChunkedEmailsWithLargeBodyText(
+        @Param("thresholdChars") thresholdChars: Long,
+        pageable: org.springframework.data.domain.Pageable
+    ): Page<EmailMessage>
+
+    /**
      * Find messages by tag with pagination.
      */
     @Query(

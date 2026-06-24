@@ -1,8 +1,8 @@
-# ADR 006: Chunking strategy for FSFiles with `body_text` > 1 MB
+# ADR 006: Chunking strategy for FSFiles and EmailMessages with `body_text` > 1 MB
 
 ## Status
 
-Accepted
+Accepted (extended for `email_message` in issue #161)
 
 ## Context
 
@@ -81,6 +81,30 @@ in `fs_file.body_text`."
    admin REST endpoint (`POST /api/admin/truncate-large-bodies`). Rows
    that haven't been chunked yet are left alone — they'll be picked up by
    the normal chunking pipeline and truncated on the next run.
+5. **Email messages (issue #161)**: the same Strategy A applies to
+   `email_message.body_text`. The Spring Batch `EmailQuickSyncJobBuilder`
+   already runs a `EmailChunking_<account>` step after body enrichment;
+   `EmailChunkWriter` now calls
+   `EmailMessageService.truncateBodyTextToThreshold` once an email's
+   chunks have landed. The threshold knob is the same
+   (`app.crawl.large-body-threshold-chars`), and the
+   `email_message.fts_vector` column already carries the same
+   `substring(body_text, 1, 250000)` cap as `fs_file.fts_vector`, so the
+   FTS path is identical. Backfill ships as a sibling endpoint:
+   `POST /api/admin/truncate-large-email-bodies`. EmailMessage has no
+   `chunked_at` timestamp of its own — the backfill query stands in by
+   requiring at least one `ContentChunk` to point at the message.
+6. **Defensive write-time guard (issue #161, item f)**:
+   `EmailMessageServiceImpl.updateBodyAndComplete` (the Pass-2 body
+   enrichment writer) now caps `body_text` at
+   `large-body-threshold-chars × 5` *before* the UPDATE fires, logging
+   a WARN when it kicks in. Normal flow never trips this guard — the
+   body is well under the multiplier and Pass 3 chunking handles the
+   real truncation a few seconds later. The guard only fires if
+   something pathological gets past the upstream extractor (a 50 MB
+   plaintext mail-list digest, for instance), turning a tsvector batch
+   abort into a single WARN-logged row. Same belt-and-suspenders
+   pattern that other large-text sites in the codebase rely on.
 
 ## Rationale
 
@@ -177,4 +201,6 @@ keeps all of that intact.
 
 - Original TODO: `src/main/kotlin/com/oconeco/spring_search_tempo/base/domain/FSFile.kt:143`
 - Related: `app.text-extraction.max-text-length` (Tika body-handler cap)
-- Issue #147
+- Issue #147 — FSFile body bound
+- Issue #161 — EmailMessage body bound (extension of the same policy)
+- PostgreSQL tsvector limit: https://www.postgresql.org/docs/current/textsearch-limitations.html

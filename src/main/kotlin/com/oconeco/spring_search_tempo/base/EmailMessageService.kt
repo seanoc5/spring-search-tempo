@@ -83,6 +83,26 @@ interface EmailMessageService {
     fun updateBodyAndComplete(id: Long, bodyText: String?, bodySize: Long?, hasAttachments: Boolean, attachmentCount: Int, attachmentNames: String?)
 
     /**
+     * If [emailId]'s `body_text` is longer than [thresholdChars], truncate it
+     * to that many characters and append a marker noting how much was
+     * dropped. No-op when bodyText is null/shorter than the threshold or
+     * when [thresholdChars] <= 0. Used after chunking to bound row size
+     * while preserving full coverage in `ContentChunk` (ADR-006 / issue #161).
+     *
+     * @return number of characters trimmed (0 if nothing was changed)
+     */
+    fun truncateBodyTextToThreshold(emailId: Long, thresholdChars: Long): Int
+
+    /**
+     * Backfill helper: iterate over already-chunked email messages whose
+     * body_text exceeds [thresholdChars] and truncate them. Returns the
+     * number of rows touched. Emails without ContentChunk rows are
+     * skipped — their full content isn't in chunks yet, so we let the
+     * normal chunking pipeline pick them up first (ADR-006 / issue #161).
+     */
+    fun truncateLargeBodyTextBackfill(thresholdChars: Long, batchSize: Int = 100): Int
+
+    /**
      * Find messages that need categorization.
      * Returns messages with fetchStatus=COMPLETE and categorizedAt=NULL.
      */
