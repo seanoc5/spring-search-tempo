@@ -134,9 +134,18 @@ class FullTextSearchServiceImpl(
      * [SnippetSanitizer]); `MaxFragments=2` + the " ... " delimiter give a
      * Spotlight-style "snippet ... snippet" preview when matches are spread
      * out in the source text.
+     *
+     * MinWords is derived from MaxWords (rather than hard-coded at 15) so an
+     * operator setting `app.search.snippet-max-words` low doesn't push past
+     * PostgreSQL's `MaxWords >= MinWords` constraint and break every FTS
+     * query at runtime.
      */
     private val headlineOptions: String
-        get() = "StartSel=<mark>, StopSel=</mark>, MaxWords=$snippetMaxWords, MinWords=15, MaxFragments=2, FragmentDelimiter=\" ... \""
+        get() {
+            val maxWords = snippetMaxWords.coerceAtLeast(2)
+            val minWords = (maxWords / 2).coerceAtLeast(1).coerceAtMost(maxWords - 1)
+            return "StartSel=<mark>, StopSel=</mark>, MaxWords=$maxWords, MinWords=$minWords, MaxFragments=2, FragmentDelimiter=\" ... \""
+        }
 
     override fun searchAll(query: String, pageable: Pageable): Page<SearchResult> {
         val sanitizedQuery = sanitizeQuery(query)
