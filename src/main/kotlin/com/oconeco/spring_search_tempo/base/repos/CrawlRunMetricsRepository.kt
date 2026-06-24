@@ -9,6 +9,22 @@ import org.springframework.data.repository.query.Param
 
 interface CrawlRunMetricsRepository : JpaRepository<CrawlRunMetrics, Long> {
 
+    /**
+     * Pageable-respecting filter — callers pass the Sort in the
+     * [Pageable]. Used by the admin list controller, where clicking
+     * a column header must actually change the ordering.
+     */
+    fun findByCrawlConfigId(
+        crawlConfigId: Long,
+        pageable: Pageable
+    ): Page<CrawlRunMetrics>
+
+    /**
+     * Explicit "most recent first" — used by the REST endpoint and CSV
+     * export where the caller doesn't pass a sort and a stable order
+     * matters for downstream consumers (parallel-crawl design issue
+     * needs the freshest rows at the top).
+     */
     fun findByCrawlConfigIdOrderByStartedAtDesc(
         crawlConfigId: Long,
         pageable: Pageable

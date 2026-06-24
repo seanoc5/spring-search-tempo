@@ -38,7 +38,7 @@ class CrawlRunMetricsAdminController(
         model: Model
     ): String {
         val page = if (configId != null) {
-            metricsRepository.findByCrawlConfigIdOrderByStartedAtDesc(configId, pageable)
+            metricsRepository.findByCrawlConfigId(configId, pageable)
         } else {
             metricsRepository.findAll(pageable)
         }
