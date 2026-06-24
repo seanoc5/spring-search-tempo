@@ -24,7 +24,21 @@ data class CrawlConfiguration(
      * has no per-config knob of its own). 50 levels comfortably exceeds any
      * legitimate filesystem depth.
      */
-    var absoluteMaxDepth: Int = 50
+    var absoluteMaxDepth: Int = 50,
+    /**
+     * How [com.oconeco.spring_search_tempo.batch.fscrawl.FileSystemMetadata] gathers
+     * per-file stat data during a crawl batch (issue #148).
+     *
+     * - SEQUENTIAL — one `Files.readAttributes` per path on the calling thread.
+     *   Lowest overhead; the right default for SSDs where syscall latency is sub-millisecond.
+     * - PARALLEL — bounded ForkJoinPool fan-out (parallelism = min(cpus, 8)).
+     *   Pays off on spinning disks and network mounts where stat latency dominates wall-clock.
+     * - BULK — placeholder for an OS-specific batched-syscall path (Linux `getdents64`
+     *   + lazy `statx`). Not yet implemented; falls back to PARALLEL with a one-time warn.
+     *
+     * Operator can flip this without a code change to measure the win on their own tree.
+     */
+    var metadataGatherMode: MetadataGatherMode = MetadataGatherMode.SEQUENTIAL
 ) {
     /**
      * Merge crawl-specific patterns with global defaults.
@@ -159,6 +173,15 @@ data class PatternPriority(
         AnalysisStatus.INDEX -> index
         AnalysisStatus.LOCATE -> locate
     }
+}
+
+/**
+ * Strategy for batching filesystem stat calls. See [CrawlConfiguration.metadataGatherMode].
+ */
+enum class MetadataGatherMode {
+    SEQUENTIAL,
+    PARALLEL,
+    BULK
 }
 
 /**

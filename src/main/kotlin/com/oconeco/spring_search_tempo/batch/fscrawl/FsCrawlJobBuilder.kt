@@ -294,7 +294,8 @@ class FsCrawlJobBuilder(
             forceFullRecrawl = forceFullRecrawl,
             meterRegistry = meterRegistry,
             archiveService = archiveEnumerationService,
-            archiveConfig = archiveConfiguration
+            archiveConfig = archiveConfiguration,
+            metadataGatherMode = crawlConfiguration.metadataGatherMode
         )
     }
 
