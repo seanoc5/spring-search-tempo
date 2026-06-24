@@ -27,6 +27,16 @@ interface FSFileRepository : JpaRepository<FSFile, Long>, FSFileMetadataDuplicat
 
     fun findFirstByFsFolderId(id: Long): FSFile?
 
+    /**
+     * Count files directly owned by a folder whose analysisStatus is in the given set.
+     * Used by the folder NLP rollup panel to decide whether enough indexed content
+     * exists to render the panel.
+     */
+    fun countByFsFolderIdAndAnalysisStatusIn(
+        folderId: Long,
+        analysisStatuses: Collection<AnalysisStatus>
+    ): Long
+
     fun existsByUri(uri: String?): Boolean
 
     fun findByUri(uri: String): FSFile?

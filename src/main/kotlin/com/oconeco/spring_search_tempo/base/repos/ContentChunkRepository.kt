@@ -354,6 +354,54 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     ): Long
 
     /**
+     * Sentiment rollup for all chunks directly owned by files in a given folder.
+     * Returns rows of [sentiment, chunkCount, avgSentimentScore, maxNlpProcessedAt].
+     * Sentiment may be null for NLP-processed chunks that produced no sentence-level
+     * verdict — caller groups those into a "no-sentiment" bucket if desired.
+     * Only chunks at INDEX/ANALYZE/SEMANTIC parent level are considered.
+     */
+    @Query("""
+        SELECT c.sentiment, COUNT(c), AVG(c.sentimentScore), MAX(c.nlpProcessedAt)
+        FROM ContentChunk c
+        JOIN c.concept f
+        WHERE f.fsFolder.id = :folderId
+          AND f.analysisStatus IN :analysisStatuses
+          AND c.nlpProcessedAt IS NOT NULL
+        GROUP BY c.sentiment
+    """)
+    fun aggregateSentimentForFolder(
+        @Param("folderId") folderId: Long,
+        @Param("analysisStatuses") analysisStatuses: List<AnalysisStatus>
+    ): List<Array<Any?>>
+
+    /**
+     * Named-entity occurrence rollup for all chunks directly owned by files in a given folder.
+     * Returns rows of [entityType, entityText, occurrenceCount]. The caller groups by type
+     * and takes the top-N per group for display.
+     * Only chunks at INDEX/ANALYZE/SEMANTIC parent level are considered.
+     */
+    @Query(
+        value = """
+            SELECT
+                elem->>'type' AS entity_type,
+                elem->>'text' AS entity_text,
+                COUNT(*) AS occurrence_count
+            FROM content_chunks c
+            JOIN fs_file f ON c.concept_id = f.id,
+                 jsonb_array_elements(CAST(c.named_entities AS jsonb)) elem
+            WHERE f.fs_folder_id = :folderId
+              AND f.analysis_status IN ('INDEX', 'ANALYZE', 'SEMANTIC')
+              AND c.named_entities IS NOT NULL
+            GROUP BY elem->>'type', elem->>'text'
+            ORDER BY occurrence_count DESC
+        """,
+        nativeQuery = true
+    )
+    fun aggregateNamedEntitiesForFolder(
+        @Param("folderId") folderId: Long
+    ): List<Array<Any?>>
+
+    /**
      * Count chunks by processing status.
      * Note: ContentChunk.status is a String field, not an enum.
      */
