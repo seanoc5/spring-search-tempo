@@ -7,6 +7,7 @@ import com.oconeco.spring_search_tempo.base.EmailCategorizationService
 import com.oconeco.spring_search_tempo.base.EmailFolderService
 import com.oconeco.spring_search_tempo.base.EmailMessageService
 import com.oconeco.spring_search_tempo.base.JobRunService
+import com.oconeco.spring_search_tempo.base.config.CrawlConfiguration
 import com.oconeco.spring_search_tempo.base.domain.ContentChunk
 import com.oconeco.spring_search_tempo.base.model.ContentChunkDTO
 import com.oconeco.spring_search_tempo.base.model.EmailAccountDTO
@@ -82,6 +83,7 @@ class EmailQuickSyncJobBuilder(
     private val embeddingService: EmbeddingService,
     private val contentChunkMapper: ContentChunkMapper,
     private val contentChunkRepository: ContentChunkRepository,
+    private val crawlConfiguration: CrawlConfiguration,
     @Qualifier("stepTaskExecutor") private val stepTaskExecutor: TaskExecutor
 ) {
     companion object {
@@ -491,11 +493,16 @@ class EmailQuickSyncJobBuilder(
      * Create a chunk writer that saves ContentChunks.
      */
     private fun createChunkWriter(forceRefresh: Boolean): ItemWriter<List<ContentChunkDTO>> {
-        log.debug("Creating EmailChunkWriter (forceRefresh={})", forceRefresh)
+        log.debug(
+            "Creating EmailChunkWriter (forceRefresh={}, largeBodyThreshold={} chars)",
+            forceRefresh, crawlConfiguration.largeBodyThresholdChars
+        )
         return EmailChunkWriter(
             chunkService = chunkService,
             contentChunkRepository = if (forceRefresh) contentChunkRepository else null,
-            forceRefresh = forceRefresh
+            forceRefresh = forceRefresh,
+            emailMessageService = emailMessageService,
+            largeBodyThresholdChars = crawlConfiguration.largeBodyThresholdChars
         )
     }
 
