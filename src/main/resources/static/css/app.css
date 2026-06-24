@@ -771,3 +771,15 @@ body.admin-dashboard {
     animation: navJobIndicatorSpin 1s linear infinite;
     display: inline-block;
 }
+
+/* Search snippet highlighting (issue #152) — <mark> tags come from
+   PostgreSQL ts_headline (FTS) or SnippetSanitizer.highlight (semantic).
+   Pin the color/padding so the highlight reads cleanly inside Bootstrap
+   list-group snippets where the default browser yellow can otherwise be
+   reset away. */
+mark {
+    background-color: #fff3a3;
+    color: inherit;
+    padding: 0 2px;
+    border-radius: 2px;
+}

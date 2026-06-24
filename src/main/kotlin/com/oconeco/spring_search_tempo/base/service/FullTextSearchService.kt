@@ -1,8 +1,10 @@
 package com.oconeco.spring_search_tempo.base.service
 
 import com.oconeco.spring_search_tempo.base.model.SearchFilterDTO
+import com.oconeco.spring_search_tempo.base.util.SnippetSanitizer
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
@@ -118,12 +120,23 @@ data class ChunkSearchResult(
 @Service
 @Transactional(readOnly = true)
 class FullTextSearchServiceImpl(
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    @Value("\${app.search.snippet-max-words:35}") private val snippetMaxWords: Int
 ) : FullTextSearchService {
 
     companion object {
         private val log = LoggerFactory.getLogger(FullTextSearchServiceImpl::class.java)
     }
+
+    /**
+     * Headline options passed to PostgreSQL `ts_headline`. `<mark>` is the
+     * semantic highlight tag (sanitized through to the browser via
+     * [SnippetSanitizer]); `MaxFragments=2` + the " ... " delimiter give a
+     * Spotlight-style "snippet ... snippet" preview when matches are spread
+     * out in the source text.
+     */
+    private val headlineOptions: String
+        get() = "StartSel=<mark>, StopSel=</mark>, MaxWords=$snippetMaxWords, MinWords=15, MaxFragments=2, FragmentDelimiter=\" ... \""
 
     override fun searchAll(query: String, pageable: Pageable): Page<SearchResult> {
         val sanitizedQuery = sanitizeQuery(query)
@@ -140,7 +153,7 @@ class FullTextSearchServiceImpl(
                 f.label,
                 ts_headline('english', COALESCE(f.body_text, f.label),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank
             FROM fs_file f
             WHERE f.fts_vector @@ to_tsquery('english', :query)
@@ -155,7 +168,7 @@ class FullTextSearchServiceImpl(
                 COALESCE(odi.label, odi.item_name, 'OneDrive Item') as label,
                 ts_headline('english', COALESCE(odi.body_text, odi.item_name),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank
             FROM one_drive_item odi
             WHERE odi.fts_vector @@ to_tsquery('english', :query)
@@ -171,7 +184,7 @@ class FullTextSearchServiceImpl(
                 COALESCE(f.label, 'Chunk #' || c.chunk_number) as label,
                 ts_headline('english', COALESCE(c.text, ''),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank
             FROM content_chunks c
             LEFT JOIN fs_file f ON c.concept_id = f.id
@@ -204,7 +217,7 @@ class FullTextSearchServiceImpl(
                         id = (cols[1] as Number).toLong(),
                         uri = cols[2] as String,
                         label = cols[3] as String,
-                        snippet = cols[4] as String,
+                        snippet = SnippetSanitizer.sanitize(cols[4] as String?) ?: "",
                         rank = (cols[5] as Number).toFloat()
                     )
                 }
@@ -234,7 +247,7 @@ class FullTextSearchServiceImpl(
                 f.label,
                 ts_headline('english', COALESCE(f.body_text, f.label),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank,
                 f.author,
                 f.title,
@@ -262,7 +275,7 @@ class FullTextSearchServiceImpl(
                         id = (cols[0] as Number).toLong(),
                         uri = cols[1] as String,
                         label = cols[2] as String,
-                        snippet = cols[3] as String,
+                        snippet = SnippetSanitizer.sanitize(cols[3] as String?) ?: "",
                         rank = (cols[4] as Number).toFloat(),
                         author = cols[5] as String?,
                         title = cols[6] as String?,
@@ -303,7 +316,7 @@ class FullTextSearchServiceImpl(
                 c.chunk_type,
                 ts_headline('english', COALESCE(c.text, ''),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank,
                 c.sentiment,
                 c.sentiment_score,
@@ -345,7 +358,7 @@ class FullTextSearchServiceImpl(
                         fileLabel = cols[2] as String?,
                         chunkNumber = (cols[3] as Number).toInt(),
                         chunkType = cols[4] as String?,
-                        snippet = cols[5] as String,
+                        snippet = SnippetSanitizer.sanitize(cols[5] as String?) ?: "",
                         rank = (cols[6] as Number).toFloat(),
                         sentiment = cols[7] as String?,
                         sentimentScore = (cols[8] as Number?)?.toDouble(),
@@ -487,7 +500,7 @@ class FullTextSearchServiceImpl(
                     id = (cols[1] as Number).toLong(),
                     uri = cols[2] as String,
                     label = cols[3] as String,
-                    snippet = cols[4] as String,
+                    snippet = SnippetSanitizer.sanitize(cols[4] as String?) ?: "",
                     rank = (cols[5] as Number).toFloat(),
                     sentiment = cols[6] as String?,
                     sentimentScore = (cols[7] as Number?)?.toDouble(),
@@ -551,7 +564,7 @@ class FullTextSearchServiceImpl(
                 f.label,
                 ts_headline('english', COALESCE(f.body_text, f.label),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(f.fts_vector, to_tsquery('english', :query)) as rank,
                 NULL::text as sentiment,
                 NULL::double precision as sentiment_score,
@@ -587,7 +600,7 @@ class FullTextSearchServiceImpl(
                 COALESCE(e.subject, 'Email #' || e.id) as label,
                 ts_headline('english', COALESCE(e.body_text, e.subject),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(e.fts_vector, to_tsquery('english', :query)) as rank,
                 NULL::text as sentiment,
                 NULL::double precision as sentiment_score,
@@ -623,7 +636,7 @@ class FullTextSearchServiceImpl(
                 COALESCE(odi.label, odi.item_name, 'OneDrive Item') as label,
                 ts_headline('english', COALESCE(odi.body_text, odi.item_name),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(odi.fts_vector, to_tsquery('english', :query)) as rank,
                 NULL::text as sentiment,
                 NULL::double precision as sentiment_score,
@@ -662,7 +675,7 @@ class FullTextSearchServiceImpl(
                 COALESCE(f.label, em.subject, odi.item_name, 'Chunk #' || c.chunk_number) as label,
                 ts_headline('english', COALESCE(c.text, ''),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1') as snippet,
+                           '$headlineOptions') as snippet,
                 ts_rank(c.fts_vector, to_tsquery('english', :query)) as rank,
                 c.sentiment,
                 c.sentiment_score,
@@ -701,7 +714,7 @@ class FullTextSearchServiceImpl(
         val snippetExpr = if (hasFreeText) {
             """ts_headline('english', COALESCE(b.title, b.url, ''),
                            to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, MaxFragments=1')"""
+                           '$headlineOptions')"""
         } else {
             "COALESCE(b.folder_path, '') || CASE WHEN b.folder_path IS NULL THEN '' ELSE ' • ' END || COALESCE(b.url, '')"
         }

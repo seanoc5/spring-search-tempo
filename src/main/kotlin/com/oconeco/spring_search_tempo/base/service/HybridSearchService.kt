@@ -215,7 +215,7 @@ class HybridSearchServiceImpl(
             HybridSearchResult(
                 chunkId = chunkId,
                 text = semanticResult?.text ?: "",
-                snippet = ftsResult?.snippet,
+                snippet = ftsResult?.snippet ?: semanticResult?.snippet,
                 chunkType = ftsResult?.chunkType ?: semanticResult?.chunkType,
                 sentiment = ftsResult?.sentiment ?: semanticResult?.sentiment,
                 hybridScore = hybridScore,
@@ -276,7 +276,7 @@ class HybridSearchServiceImpl(
     private fun SemanticSearchResult.toHybridResult(method: SearchMethod) = HybridSearchResult(
         chunkId = chunkId,
         text = text,
-        snippet = null,
+        snippet = snippet,
         chunkType = chunkType,
         sentiment = sentiment,
         hybridScore = similarity,
