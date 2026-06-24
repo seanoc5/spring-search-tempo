@@ -1,0 +1,134 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Email Contacts</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-4 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-person-lines-fill me-2"></i>Email Contacts
+        </h1>
+        <form th:action="@{/admin/email/contacts/recompute}" method="post" class="ms-2">
+            <input type="hidden" name="accountId" th:value="${selectedAccountId}" />
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-arrow-clockwise"></i>
+                <span th:if="${selectedAccountId == null}">Recompute All Accounts</span>
+                <span th:if="${selectedAccountId != null}">Recompute This Account</span>
+            </button>
+        </form>
+    </div>
+
+    <div th:if="${MSG_SUCCESS}" class="alert alert-success alert-dismissible fade show" role="alert">
+        [[${MSG_SUCCESS}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${MSG_ERROR}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        [[${MSG_ERROR}]]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <p class="text-muted">
+        Phase 1 contact aggregate (issue #146). One row per
+        <code>(account, normalized_address)</code>; counters are recomputed from
+        <code>EmailMessage</code> on demand. Address normalization lowercases and
+        strips Gmail-style <code>+suffix</code> plus-addressing.
+    </p>
+
+    <!-- Filter widget: per-account scope -->
+    <form th:action="@{/admin/email/contacts}" method="get" class="row g-2 mb-3 align-items-end">
+        <div class="col-md-4">
+            <label for="accountId" class="form-label">Account</label>
+            <select id="accountId" name="accountId" class="form-select" onchange="this.form.submit()">
+                <option value="">All accounts</option>
+                <option th:each="acct : ${accounts}"
+                        th:value="${acct.id}"
+                        th:text="${acct.email}"
+                        th:selected="${selectedAccountId != null and acct.id == selectedAccountId}">
+                    user@example.com
+                </option>
+            </select>
+        </div>
+        <div class="col-md-auto">
+            <noscript>
+                <button type="submit" class="btn btn-secondary">Apply filter</button>
+            </noscript>
+        </div>
+    </form>
+
+    <div th:if="${contacts.empty}" class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>
+        No contact aggregates yet. Click <strong>Recompute</strong> to populate from existing email messages.
+    </div>
+
+    <div th:unless="${contacts.empty}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+            <tr th:with="qs=${selectedAccountId != null ? '&accountId=' + selectedAccountId : ''}">
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=normalizedAddress,ASC${qs}|}"
+                       class="text-decoration-none">Address</a>
+                </th>
+                <th>Display name</th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=sentToCount,DESC${qs}|}"
+                       class="text-decoration-none">Sent to</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=receivedFromCount,DESC${qs}|}"
+                       class="text-decoration-none">Received from</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=repliedToCount,DESC${qs}|}"
+                       class="text-decoration-none">Replied to</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=repliedFromCount,DESC${qs}|}"
+                       class="text-decoration-none">Replied from</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=threadsAppearedIn,DESC${qs}|}"
+                       class="text-decoration-none">Threads</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=firstSeen,ASC${qs}|}"
+                       class="text-decoration-none">First seen</a>
+                </th>
+                <th>
+                    <a th:href="@{|/admin/email/contacts?sort=lastSeen,DESC${qs}|}"
+                       class="text-decoration-none">Last seen</a>
+                </th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="c : ${contacts}">
+                <td><code th:text="${c.normalizedAddress}">addr@example.com</code></td>
+                <td>
+                    <span th:if="${c.displayNameLatest}" th:text="${c.displayNameLatest}">Name</span>
+                    <span th:unless="${c.displayNameLatest}" class="text-muted">—</span>
+                </td>
+                <td class="text-end" th:text="${c.sentToCount}">0</td>
+                <td class="text-end" th:text="${c.receivedFromCount}">0</td>
+                <td class="text-end" th:text="${c.repliedToCount}">0</td>
+                <td class="text-end" th:text="${c.repliedFromCount}">0</td>
+                <td class="text-end" th:text="${c.threadsAppearedIn}">0</td>
+                <td>
+                    <span th:if="${c.firstSeen}"
+                          th:text="${#temporals.format(c.firstSeen, 'yyyy-MM-dd')}">2026-01-01</span>
+                    <span th:unless="${c.firstSeen}" class="text-muted">—</span>
+                </td>
+                <td>
+                    <span th:if="${c.lastSeen}"
+                          th:text="${#temporals.format(c.lastSeen, 'yyyy-MM-dd HH:mm')}">2026-01-01 12:00</span>
+                    <span th:unless="${c.lastSeen}" class="text-muted">—</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div th:replace="~{fragments/utils::pagination()}" />
+</div>
+</body>
+</html>

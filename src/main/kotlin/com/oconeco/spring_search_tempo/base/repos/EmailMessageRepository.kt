@@ -27,6 +27,12 @@ interface EmailMessageRepository : JpaRepository<EmailMessage, Long> {
 
     fun findByBodyTextIsNotNullAndEmailAccountId(accountId: Long, pageable: Pageable): Page<EmailMessage>
 
+    /**
+     * Paginated read of all messages for an account, ordered by the caller's [Pageable].
+     * Used by the contact-graph aggregation (issue #146).
+     */
+    fun findByEmailAccountId(accountId: Long, pageable: Pageable): Page<EmailMessage>
+
     fun findByEmailAccountIdAndImapUidGreaterThan(accountId: Long, uid: Long): List<EmailMessage>
 
     fun findByEmailFolderId(folderId: Long): List<EmailMessage>
