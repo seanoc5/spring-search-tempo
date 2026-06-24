@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
 import com.oconeco.spring_search_tempo.base.config.ArchiveConfiguration
 import com.oconeco.spring_search_tempo.base.config.EffectivePatterns
+import com.oconeco.spring_search_tempo.base.config.MetadataGatherMode
 import com.oconeco.spring_search_tempo.base.domain.AnalysisStatus
 import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
@@ -71,8 +72,16 @@ class CombinedCrawlProcessor(
     meterRegistry: MeterRegistry? = null,
     private val maxCacheSize: Long = DEFAULT_MAX_CACHE_SIZE,
     private val archiveService: ArchiveEnumerationService? = null,
-    private val archiveConfig: ArchiveConfiguration = ArchiveConfiguration()
+    private val archiveConfig: ArchiveConfiguration = ArchiveConfiguration(),
+    metadataGatherMode: MetadataGatherMode = MetadataGatherMode.SEQUENTIAL
 ) : ItemProcessor<CombinedCrawlItem, CombinedCrawlResult> {
+
+    /**
+     * Bulk metadata gatherer for files in a directory batch (issue #148).
+     * Folder-level reads stay single-path; the wall-clock cost of crawls is
+     * dominated by per-file stat calls.
+     */
+    internal val metadataGatherer = FileSystemMetadataGatherer(metadataGatherMode, meterRegistry)
 
     companion object {
         private val log = LoggerFactory.getLogger(CombinedCrawlProcessor::class.java)
@@ -224,8 +233,8 @@ class CombinedCrawlProcessor(
         val uri = directory.toString()
         log.info("Processing folder: {}", uri)
 
-        // Extract lightweight filesystem metadata
-        val fsMetadata = FileSystemMetadata.fromPath(directory)
+        // Extract lightweight filesystem metadata (timed via gatherer; issue #148)
+        val fsMetadata = metadataGatherer.fromPath(directory)
         if (fsMetadata == null) {
             log.warn("Could not extract metadata for folder, skipping: {}", uri)
             return null
@@ -329,10 +338,26 @@ class CombinedCrawlProcessor(
             }
         }
 
+        // Issue #148: bulk-gather stat metadata for the whole batch before the
+        // per-file loop. Sequential mode is the default and matches prior
+        // behaviour byte-for-byte; PARALLEL spreads the syscalls across a
+        // bounded ForkJoinPool, which pays off when files live on a spinning
+        // disk or network mount where readAttributes latency dominates.
+        val metadataByFile: List<Pair<Path, FileSystemMetadata?>> =
+            files.zip(metadataGatherer.fromPaths(files))
+
         // Process each file
         val fileDtos = mutableListOf<FSFileDTO>()
-        for (file in files) {
-            val dto = processFile(file, parentFolderStatus)
+        for ((file, fsMetadata) in metadataByFile) {
+            // Bulk gather already produced this file's stat record (or null on
+            // inaccessibility). Handling null here avoids a redundant second
+            // stat inside processFile and prevents double-counting the timer
+            // for inaccessible paths.
+            if (fsMetadata == null) {
+                log.warn("Could not extract metadata for file, skipping: {}", file)
+                continue
+            }
+            val dto = processFile(file, parentFolderStatus, fsMetadata)
             if (dto != null) {
                 log.debug("\t\t++++ File {} will be persisted", file)
                 fileDtos.add(dto)
@@ -359,17 +384,19 @@ class CombinedCrawlProcessor(
 
     /**
      * Process a single file with pattern matching, metadata comparison, and text extraction.
+     *
+     * Caller is responsible for supplying metadata (issue #148): [processFiles]
+     * pre-gathers a whole chunk in one call. Keeping the parameter required
+     * means an inaccessible-path null surfaces in the caller's logging and
+     * doesn't trigger a redundant second stat here.
      */
-    private fun processFile(file: Path, parentFolderStatus: AnalysisStatus?): FSFileDTO? {
+    private fun processFile(
+        file: Path,
+        parentFolderStatus: AnalysisStatus?,
+        fsMetadata: FileSystemMetadata
+    ): FSFileDTO? {
         val uri = file.toString()
         log.debug("\t\tProcessing file: {}", uri)
-
-        // Extract lightweight filesystem metadata
-        val fsMetadata = FileSystemMetadata.fromPath(file)
-        if (fsMetadata == null) {
-            log.warn("Could not extract metadata for file, skipping: {}", uri)
-            return null
-        }
 
         // Check if file exists in DB (use cache)
         val existingFile = fileCache.getIfPresent(uri)

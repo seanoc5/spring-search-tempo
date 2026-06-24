@@ -145,6 +145,13 @@ app:
     # DiscoveryReader, and CombinedCrawlReader. 50 comfortably exceeds
     # any sane filesystem depth.
     absolute-max-depth: 50
+    # How filesystem stat metadata is gathered during a crawl (issue #148):
+    #   SEQUENTIAL  one stat per file on the calling thread (default; lowest overhead on SSD)
+    #   PARALLEL    bounded ForkJoinPool fan-out (parallelism = min(cpus, 8))
+    #   BULK        reserved for future OS-batched syscall path; currently falls back to PARALLEL
+    # Flip to PARALLEL on spinning disks / network mounts where stat latency dominates.
+    # Timing is exposed at `tempo.crawl.metadata.read` (tag mode=…).
+    metadata-gather-mode: SEQUENTIAL
     # Global defaults that all crawls inherit
     defaults:
       max-depth: 10
