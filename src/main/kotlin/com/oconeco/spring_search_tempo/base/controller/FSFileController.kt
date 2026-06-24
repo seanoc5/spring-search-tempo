@@ -3,10 +3,12 @@ package com.oconeco.spring_search_tempo.base.controller
 import com.oconeco.spring_search_tempo.base.ContentChunkService
 import com.oconeco.spring_search_tempo.base.FSFileService
 import com.oconeco.spring_search_tempo.base.FSFolderService
+import com.oconeco.spring_search_tempo.base.SmartDiffService
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
 import org.springframework.data.web.SortDefault
@@ -28,7 +30,10 @@ class FSFileController(
     private val fSFileService: FSFileService,
     private val fSFolderService: FSFolderService,
     private val contentChunkService: ContentChunkService,
+    private val smartDiffService: SmartDiffService,
 ) {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     @ModelAttribute
     fun prepareContext(model: Model) {
@@ -56,12 +61,56 @@ class FSFileController(
         @PageableDefault(size = 25) pageable: Pageable,
         model: Model
     ): String {
-        model.addAttribute("fSFile", fSFileService.get(id))
+        val fSFile = fSFileService.get(id)
+        model.addAttribute("fSFile", fSFile)
         val chunkPage = contentChunkService.findNlpViewsForFile(id, pageable)
         model.addAttribute("chunkNlpViews", chunkPage)
         model.addAttribute("paginationModel", WebUtils.getPaginationModel(chunkPage))
         model.addAttribute("duplicateCount", fSFileService.countDuplicates(id))
+
+        // Smart-diff panel: only meaningful when the strategy registry covers this
+        // content-type AND the file has a content hash to pair siblings against
+        // (issue #144).
+        val smartDiffSupported = smartDiffService.isSupported(fSFile.contentType)
+            && fSFile.contentHash != null
+        model.addAttribute("smartDiffSupported", smartDiffSupported)
+        model.addAttribute(
+            "smartDiffSiblings",
+            if (smartDiffSupported) smartDiffService.findSiblingVersions(id) else emptyList(),
+        )
         return "fSFile/view"
+    }
+
+    /**
+     * Render the smart-diff result fragment for the FSFile detail page.
+     * Issue #144.
+     */
+    @GetMapping("/{id}/smart-diff")
+    fun smartDiff(
+        @PathVariable(name = "id") id: Long,
+        @RequestParam(name = "compareWith") compareWith: Long,
+        model: Model,
+    ): String {
+        return try {
+            val result = smartDiffService.diff(oldFileId = compareWith, newFileId = id)
+            model.addAttribute("diff", result)
+            "fSFile/smart-diff :: result"
+        } catch (e: IllegalArgumentException) {
+            // Expected dispatch failures: unknown id, no strategy registered.
+            log.warn("smart-diff dispatch failed: {}", e.message)
+            model.addAttribute("smartDiffError", e.message ?: "Unable to compute diff")
+            "fSFile/smart-diff :: error"
+        } catch (e: java.io.IOException) {
+            // Strategy couldn't read one of the files (moved/deleted between
+            // sibling listing and click). Return the error fragment rather
+            // than 500-ing the HTMX request.
+            log.warn("smart-diff i/o failure for files {} vs {}: {}", compareWith, id, e.message)
+            model.addAttribute(
+                "smartDiffError",
+                "Could not read one of the files (it may have been moved or deleted).",
+            )
+            "fSFile/smart-diff :: error"
+        }
     }
 
     @GetMapping("/{id}/duplicates")

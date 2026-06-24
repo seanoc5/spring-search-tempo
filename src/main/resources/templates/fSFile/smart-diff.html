@@ -1,0 +1,84 @@
+<!DOCTYPE HTML>
+<!--
+    Smart-diff fragments for the FSFile detail page (issue #144).
+    These fragments are HTMX-targeted by the "Compare with..." dropdown in
+    fSFile/view.html; the whole page is never rendered directly.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="result" class="smart-diff">
+    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center small">
+        <span class="badge bg-success">
+            +<span th:text="${diff.summary.inserted}">0</span> inserted
+        </span>
+        <span class="badge bg-danger">
+            -<span th:text="${diff.summary.deleted}">0</span> deleted
+        </span>
+        <span class="badge bg-warning text-dark">
+            ~<span th:text="${diff.summary.changed}">0</span> changed
+        </span>
+        <span class="badge bg-light text-dark border">
+            <span th:text="${diff.summary.unchanged}">0</span> unchanged
+        </span>
+        <span class="ms-auto text-muted"
+              th:text="|${diff.oldLabel ?: '(old)'} → ${diff.newLabel ?: '(new)'}|">
+            old → new
+        </span>
+    </div>
+
+    <div th:if="${not #lists.isEmpty(diff.notes)}" class="alert alert-secondary py-2 small mb-3">
+        <ul class="mb-0 ps-3">
+            <li th:each="note : ${diff.notes}" th:text="${note}">note</li>
+        </ul>
+    </div>
+
+    <div th:if="${diff.summary.totalChanges == 0}" class="alert alert-info mb-0 py-2">
+        Both files extract to the same paragraph stream — no textual differences.
+    </div>
+
+    <div th:unless="${diff.summary.totalChanges == 0}" class="border rounded">
+        <table class="table table-sm mb-0 smart-diff-table">
+            <colgroup>
+                <col style="width: 4ch;" />
+                <col style="width: 4ch;" />
+                <col />
+            </colgroup>
+            <tbody>
+            <tr th:each="line : ${diff.lines}"
+                th:switch="${line.kind?.name()}"
+                th:classappend="${line.kind?.name() == 'INSERTED' ? 'table-success'
+                                 : (line.kind?.name() == 'DELETED' ? 'table-danger'
+                                 : (line.kind?.name() == 'CHANGED' ? 'table-warning' : ''))}">
+                <td class="text-muted small text-end pe-2"
+                    th:text="${line.oldLineNo ?: ''}">1</td>
+                <td class="text-muted small text-end pe-2"
+                    th:text="${line.newLineNo ?: ''}">1</td>
+                <td>
+                    <div th:case="'CHANGED'">
+                        <div>
+                            <span class="badge bg-danger me-2">old</span>
+                            <span th:text="${line.oldText}">old text</span>
+                        </div>
+                        <div>
+                            <span class="badge bg-success me-2">new</span>
+                            <span th:text="${line.newText}">new text</span>
+                        </div>
+                    </div>
+                    <span th:case="'INSERTED'"><strong>+</strong> <span th:text="${line.text}">inserted</span></span>
+                    <span th:case="'DELETED'"><strong>-</strong> <span th:text="${line.text}">deleted</span></span>
+                    <span th:case="*" class="text-muted" th:text="${line.text}">unchanged</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div th:fragment="error" class="alert alert-warning mb-0">
+    <strong>Smart-diff failed.</strong>
+    <span th:text="${smartDiffError}">Reason</span>
+</div>
+
+</body>
+</html>

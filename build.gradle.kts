@@ -89,6 +89,10 @@ dependencies {
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.1")
     implementation("org.apache.poi:poi-ooxml:5.4.1")
 
+    // java-diff-utils for line/paragraph-level diffs in the smart-diff feature (issue #144).
+    // ~200 KB jar with no transitive dependencies. Apache 2.0.
+    implementation("io.github.java-diff-utils:java-diff-utils:4.15")
+
     // Apache Commons Compress for per-entry enumeration of .zip/.tar/.7z/.jar archives (issue #118).
     // Tika already pulls in commons-compress transitively, but pinning the dep makes our
     // dependency on the API surface explicit and survives future Tika upgrades.

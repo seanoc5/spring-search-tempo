@@ -348,6 +348,31 @@ interface FSFileRepository : JpaRepository<FSFile, Long>, FSFileMetadataDuplicat
     fun countByContentHashAndIdNot(contentHash: String, id: Long): Int
 
     /**
+     * Find sibling version candidates for the smart-diff feature (issue #144):
+     * other files sharing the same [label] (typically the basename) but with a
+     * different [contentHash], so they are byte-distinct from this file.
+     *
+     * Files with a null contentHash are excluded — we can only assert "different
+     * bytes" once both sides are hashed. Ordering is fsLastModified DESC then
+     * id DESC, so the most recently modified sibling renders first in the
+     * "Compare with..." dropdown.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.label = :label
+        AND f.id <> :excludeId
+        AND f.contentHash IS NOT NULL
+        AND f.contentHash <> :excludeContentHash
+        ORDER BY f.fsLastModified DESC NULLS LAST, f.id DESC
+    """)
+    fun findSiblingVersionCandidates(
+        @Param("label") label: String,
+        @Param("excludeId") excludeId: Long,
+        @Param("excludeContentHash") excludeContentHash: String,
+        pageable: Pageable,
+    ): List<FSFile>
+
+    /**
      * Fetch the actual files for one metadata-duplicate group (issue #120).
      */
     @Query("""
