@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.FSFile
 import com.oconeco.spring_search_tempo.base.domain.FSFolder
 import com.oconeco.spring_search_tempo.base.model.FSFileDTO
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFolderRepository
 import com.oconeco.spring_search_tempo.base.service.CrawlCheckpointService
@@ -41,7 +42,8 @@ class CombinedCrawlWriter(
     private val fileRepository: FSFileRepository,
     private val folderMapper: FSFolderMapper,
     private val fileMapper: FSFileMapper,
-    private val checkpointService: CrawlCheckpointService? = null
+    private val checkpointService: CrawlCheckpointService? = null,
+    private val contentChunkRepository: ContentChunkRepository? = null
 ) : ItemWriter<CombinedCrawlResult>, StepExecutionListener {
 
     companion object {
@@ -243,6 +245,10 @@ class CombinedCrawlWriter(
         val (newDTOs, existingDTOs) = fileDTOs.partition { it.id == null }
 
         val entities = mutableListOf<FSFile>()
+        // Files whose content was modified since last ingest — their existing
+        // ContentChunks carry stale NLP annotations and must be re-processed
+        // (issue #150). Collected here, reset after saveAll.
+        val fileIdsNeedingNlpReset = mutableListOf<Long>()
 
         // Map new DTOs to new entities
         // Pass real folderRepository for mapper @AfterMapping; during crawl dto.fsFolder
@@ -261,6 +267,9 @@ class CombinedCrawlWriter(
             for (dto in existingDTOs) {
                 val entity = existingEntities[dto.id]
                 if (entity != null) {
+                    if (isFileContentModified(entity, dto)) {
+                        entity.id?.let { fileIdsNeedingNlpReset.add(it) }
+                    }
                     fileMapper.updateFSFile(dto, entity, folderRepository)
                     entities.add(entity)
                 } else {
@@ -270,6 +279,8 @@ class CombinedCrawlWriter(
         }
 
         val saved = fileRepository.saveAll(entities)
+
+        resetStaleNlpForReingest(fileIdsNeedingNlpReset)
 
         // Track statistics
         var count = 0
@@ -286,15 +297,55 @@ class CombinedCrawlWriter(
         return count
     }
 
+    /**
+     * True when the inbound DTO carries a different content signature than the
+     * persisted entity — i.e. fsLastModified or size changed. Used to decide
+     * whether existing ContentChunks need their NLP state reset (issue #150).
+     *
+     * Returns false if the new fsLastModified is null (no signal to act on) or
+     * if both signals match — re-ingest of an unchanged file (e.g. LOCATE→INDEX
+     * promotion path) leaves chunks alone since their text is unchanged.
+     */
+    private fun isFileContentModified(existing: FSFile, dto: FSFileDTO): Boolean {
+        val newModified = dto.fsLastModified ?: return false
+        val oldModified = existing.fsLastModified
+        if (oldModified != null && newModified.isAfter(oldModified)) return true
+        // size change with same or null mtime — also content-modified
+        val newSize = dto.size
+        val oldSize = existing.size
+        if (newSize != null && oldSize != null && newSize != oldSize) return true
+        return false
+    }
+
+    private fun resetStaleNlpForReingest(fileIds: List<Long>) {
+        if (fileIds.isEmpty() || contentChunkRepository == null) return
+        for (fileId in fileIds) {
+            try {
+                val reset = contentChunkRepository.resetNlpProcessedAtByConceptId(fileId)
+                if (reset > 0) {
+                    log.info("Re-ingest of FSFile {}: reset NLP on {} chunk(s) (issue #150)", fileId, reset)
+                }
+            } catch (e: Exception) {
+                log.warn("Failed to reset NLP for re-ingested FSFile {}: {}", fileId, e.message)
+            }
+        }
+    }
+
     private fun writeFilesPerItem(fileDTOs: List<FSFileDTO>): Int {
         var written = 0
         for (file in fileDTOs) {
             try {
                 val isNew = file.id == null
+                val needsNlpReset = !isNew && contentChunkRepository != null &&
+                    fileRepository.findById(file.id!!).orElse(null)
+                        ?.let { isFileContentModified(it, file) } == true
                 if (isNew) {
                     fileService.create(file)
                 } else {
                     fileService.update(file.id!!, file)
+                }
+                if (needsNlpReset) {
+                    resetStaleNlpForReingest(listOf(file.id!!))
                 }
                 written++
                 incrementFileCounter(isNew, file.analysisStatus)

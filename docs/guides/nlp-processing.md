@@ -231,6 +231,54 @@ class MyService(private val nlpJobLauncher: NLPJobLauncher) {
 }
 ```
 
+## Re-NLP on file re-ingest (issue #150)
+
+When a file is edited on disk and re-crawled, its ContentChunks would
+otherwise keep their old NLP annotations — search results would show
+last week's named entities for content that no longer matches.
+
+**What triggers re-NLP:**
+
+`CombinedCrawlWriter` (the file-crawl writer) detects that an existing
+FSFile row's content signature has changed and resets the NLP state on
+its chunks before the next NLP run picks them up. Specifically, when
+the inbound DTO has either:
+
+  - `fsLastModified` strictly after the persisted entity's value, OR
+  - a `size` that differs from the persisted entity's value
+
+the writer calls `ContentChunkRepository.resetNlpProcessedAtByConceptId(fileId)`,
+which sets `nlpProcessedAt = NULL` on every chunk linked to that file.
+The annotation columns (`sentiment`, `namedEntities`, `nouns`, `verbs`,
+`parseTree`, …) are intentionally left in place — the next
+`NLPChunkProcessor` run overwrites them, so leaving the old values
+avoids a window of empty annotations between the reset and the
+re-processing.
+
+The NLP step's reader (`ContentChunkRepository.findChunksForNlpProcessing`)
+already filters by `nlpProcessedAt IS NULL`, so the reset re-flows
+those chunks through the normal pipeline — no separate stale-NLP job
+is needed. The next auto-trigger or manual `/api/nlp/process` call
+will re-process them.
+
+**Stale-NLP detection (audit / admin):**
+
+`ContentChunkRepository.findStaleNlpChunks(pageable)` returns FSFile-
+linked chunks where `nlpProcessedAt IS NULL` OR `nlpProcessedAt <
+parent.fsLastModified`. Use this for ad-hoc audits or admin views;
+the writer reset path covers the production hot path.
+
+**Manually forcing re-NLP for a file:**
+
+If you need to force re-processing without an actual file edit (e.g.
+after upgrading the NLP model), reset the chunks directly via the
+repository:
+
+```kotlin
+contentChunkRepository.resetNlpProcessedAtByConceptId(fileId)
+nlpJobLauncher.launchNLPJob(triggeredBy = "manual-reprocess")
+```
+
 ## ContentChunk NLP Fields
 
 After NLP processing, ContentChunk entities are enriched with:
