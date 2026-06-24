@@ -17,12 +17,20 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Uses bulk createBulk() for efficiency, with per-item fallback on failure.
  *
+ * When [largeBodyThresholdChars] > 0, also truncates `fs_file.body_text`
+ * to that many characters after the file's chunks land (ADR-006 / issue
+ * #147). Truncation runs only on files whose chunks wrote successfully —
+ * so we never throw away content that isn't represented in `ContentChunk`.
+ *
  * @param chunkService Service for persisting ContentChunks
  * @param fileService Service for updating file chunkedAt timestamp
+ * @param largeBodyThresholdChars Character cap for `body_text` after
+ *   chunking. 0 (or negative) disables the truncation step.
  */
 class ChunkWriter(
     private val chunkService: ContentChunkService,
-    private val fileService: FSFileService? = null
+    private val fileService: FSFileService? = null,
+    private val largeBodyThresholdChars: Long = 0L
 ) : ItemWriter<List<ContentChunkDTO>> {
 
     companion object {
@@ -31,6 +39,7 @@ class ChunkWriter(
 
     private val totalChunksSaved = AtomicInteger(0)
     private val totalFilesMarked = AtomicInteger(0)
+    private val totalBodyTextTruncated = AtomicInteger(0)
 
     override fun write(chunk: Chunk<out List<ContentChunkDTO>>) {
         var batchChunksSaved = 0
@@ -70,7 +79,9 @@ class ChunkWriter(
             }
         }
 
-        // Update chunkedAt for successfully processed files
+        // Update chunkedAt for successfully processed files, then truncate
+        // body_text so we don't keep a multi-MB row around when the full
+        // content is already in ContentChunk (ADR-006 / issue #147).
         if (fileService != null) {
             processedFileIds.forEach { fileId ->
                 try {
@@ -78,6 +89,22 @@ class ChunkWriter(
                     totalFilesMarked.incrementAndGet()
                 } catch (e: Exception) {
                     log.warn("Failed to mark file {} as chunked: {}", fileId, e.message)
+                }
+                if (largeBodyThresholdChars > 0) {
+                    try {
+                        val dropped = fileService.truncateBodyTextToThreshold(
+                            fileId, largeBodyThresholdChars
+                        )
+                        if (dropped > 0) {
+                            totalBodyTextTruncated.incrementAndGet()
+                            log.debug(
+                                "Truncated body_text for file {}: dropped {} chars (kept first {})",
+                                fileId, dropped, largeBodyThresholdChars
+                            )
+                        }
+                    } catch (e: Exception) {
+                        log.warn("Failed to truncate body_text for file {}: {}", fileId, e.message)
+                    }
                 }
             }
         }
