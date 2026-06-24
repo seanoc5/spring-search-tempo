@@ -53,6 +53,7 @@ class FsCrawlJobBuilder(
     private val fsFileRepository: com.oconeco.spring_search_tempo.base.repos.FSFileRepository,
     private val fileService: com.oconeco.spring_search_tempo.base.FSFileService,
     private val fileMapper: com.oconeco.spring_search_tempo.base.service.FSFileMapper,
+    private val contentChunkRepository: com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository,
     private val patternMatchingService: PatternMatchingService,
     private val textExtractionService: TextExtractionService,
     private val crawlConfigService: CrawlConfigService,
@@ -312,7 +313,8 @@ class FsCrawlJobBuilder(
             fileRepository = fsFileRepository,
             folderMapper = folderMapper,
             fileMapper = fileMapper,
-            checkpointService = checkpointService
+            checkpointService = checkpointService,
+            contentChunkRepository = contentChunkRepository
         )
     }
 }

@@ -271,6 +271,47 @@ interface ContentChunkRepository : JpaRepository<ContentChunk, Long> {
     fun countNlpPending(): Long
 
     /**
+     * Find FSFile-linked chunks whose NLP annotations are stale relative to
+     * the parent file's `fsLastModified` (issue #150).
+     *
+     * A chunk is stale when:
+     *   - nlpProcessedAt IS NULL (never processed), OR
+     *   - nlpProcessedAt < parent FSFile.fsLastModified (file edited after NLP ran).
+     *
+     * The existing `findChunksForNlpProcessing` reader already covers the
+     * IS NULL case via `nlpProcessedAt IS NULL`. The intended remediation
+     * (see issue #150) is to reset `nlpProcessedAt` to NULL on re-ingest so
+     * the standard reader re-flows the work — this query exists primarily
+     * as a detection / audit hook (admin views, integration tests).
+     */
+    @Query("""
+        SELECT c FROM ContentChunk c
+        JOIN c.concept f
+        WHERE c.text IS NOT NULL
+          AND f.fsLastModified IS NOT NULL
+          AND (
+              c.nlpProcessedAt IS NULL
+              OR c.nlpProcessedAt < f.fsLastModified
+          )
+    """)
+    fun findStaleNlpChunks(pageable: Pageable): Page<ContentChunk>
+
+    /**
+     * Reset NLP annotations for all chunks belonging to a given FSFile by
+     * setting `nlpProcessedAt = NULL`. Used by the file-crawl writer on
+     * re-ingest of a modified file (issue #150) so the next NLP run reprocesses
+     * the chunks against the new content.
+     *
+     * Only nulls out `nlpProcessedAt`; entity/POS/sentiment columns are left
+     * in place and will be overwritten by NLPChunkProcessor on the next run.
+     *
+     * @return number of chunk rows updated
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ContentChunk c SET c.nlpProcessedAt = NULL WHERE c.concept.id = :fileId")
+    fun resetNlpProcessedAtByConceptId(@Param("fileId") fileId: Long): Int
+
+    /**
      * Count chunks whose parent (FSFile, EmailMessage, BrowserBookmark, or OneDriveItem)
      * is at the given analysis status. Used by the NLP coverage admin page to break out
      * counts by INDEX vs ANALYZE.
