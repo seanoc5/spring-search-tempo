@@ -317,6 +317,7 @@ class MyComponent(
 |------|----------------|------------|
 | Add entity | Entity → Repo → DTO → Mapper → Service | [Guide](docs/guides/adding-entities.md) |
 | Add batch job | Config → Steps → Reader/Processor/Writer | [Guide](docs/guides/batch-jobs.md) |
+| Add smart-diff format | Implement `SmartDiffStrategy`, declare content-types | [Guide](docs/guides/smart-diff.md) |
 | Custom validation | Annotation → Validator → Apply to DTO | [Guide](docs/guides/validation.md) |
 | Run specific test | `./gradlew test --tests TestName` | [Commands](docs/reference/commands.md) |
 | Verify modules | `./gradlew test --tests ModularityTest` | [Module Design](docs/architecture/module-design.md) |
