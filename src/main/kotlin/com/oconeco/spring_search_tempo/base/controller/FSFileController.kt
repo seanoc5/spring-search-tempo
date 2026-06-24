@@ -96,8 +96,19 @@ class FSFileController(
             model.addAttribute("diff", result)
             "fSFile/smart-diff :: result"
         } catch (e: IllegalArgumentException) {
+            // Expected dispatch failures: unknown id, no strategy registered.
             log.warn("smart-diff dispatch failed: {}", e.message)
             model.addAttribute("smartDiffError", e.message ?: "Unable to compute diff")
+            "fSFile/smart-diff :: error"
+        } catch (e: java.io.IOException) {
+            // Strategy couldn't read one of the files (moved/deleted between
+            // sibling listing and click). Return the error fragment rather
+            // than 500-ing the HTMX request.
+            log.warn("smart-diff i/o failure for files {} vs {}: {}", compareWith, id, e.message)
+            model.addAttribute(
+                "smartDiffError",
+                "Could not read one of the files (it may have been moved or deleted).",
+            )
             "fSFile/smart-diff :: error"
         }
     }
