@@ -343,13 +343,21 @@ class CombinedCrawlProcessor(
         // behaviour byte-for-byte; PARALLEL spreads the syscalls across a
         // bounded ForkJoinPool, which pays off when files live on a spinning
         // disk or network mount where readAttributes latency dominates.
-        val metadataByPath: Map<Path, FileSystemMetadata?> =
-            files.zip(metadataGatherer.fromPaths(files)).toMap()
+        val metadataByFile: List<Pair<Path, FileSystemMetadata?>> =
+            files.zip(metadataGatherer.fromPaths(files))
 
         // Process each file
         val fileDtos = mutableListOf<FSFileDTO>()
-        for (file in files) {
-            val dto = processFile(file, parentFolderStatus, metadataByPath[file])
+        for ((file, fsMetadata) in metadataByFile) {
+            // Bulk gather already produced this file's stat record (or null on
+            // inaccessibility). Handling null here avoids a redundant second
+            // stat inside processFile and prevents double-counting the timer
+            // for inaccessible paths.
+            if (fsMetadata == null) {
+                log.warn("Could not extract metadata for file, skipping: {}", file)
+                continue
+            }
+            val dto = processFile(file, parentFolderStatus, fsMetadata)
             if (dto != null) {
                 log.debug("\t\t++++ File {} will be persisted", file)
                 fileDtos.add(dto)
@@ -377,23 +385,18 @@ class CombinedCrawlProcessor(
     /**
      * Process a single file with pattern matching, metadata comparison, and text extraction.
      *
-     * @param preGatheredMetadata Metadata already fetched by [processFiles] in bulk
-     *   (issue #148). Null means the caller has no bulk batch — fall back to a
-     *   timed per-call read so the timer still tracks single-path entry points.
+     * Caller is responsible for supplying metadata (issue #148): [processFiles]
+     * pre-gathers a whole chunk in one call. Keeping the parameter required
+     * means an inaccessible-path null surfaces in the caller's logging and
+     * doesn't trigger a redundant second stat here.
      */
     private fun processFile(
         file: Path,
         parentFolderStatus: AnalysisStatus?,
-        preGatheredMetadata: FileSystemMetadata? = null
+        fsMetadata: FileSystemMetadata
     ): FSFileDTO? {
         val uri = file.toString()
         log.debug("\t\tProcessing file: {}", uri)
-
-        val fsMetadata = preGatheredMetadata ?: metadataGatherer.fromPath(file)
-        if (fsMetadata == null) {
-            log.warn("Could not extract metadata for file, skipping: {}", uri)
-            return null
-        }
 
         // Check if file exists in DB (use cache)
         val existingFile = fileCache.getIfPresent(uri)
