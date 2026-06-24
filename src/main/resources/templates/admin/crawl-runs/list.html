@@ -1,0 +1,201 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Crawl Run Metrics</title>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="d-flex flex-wrap mb-3 align-items-center">
+        <h1 class="flex-grow-1 mb-0">
+            <i class="bi bi-speedometer2 me-2"></i>Crawl Run Metrics
+        </h1>
+        <a th:href="@{/admin/crawl-runs/export.csv(configId=${configId})}"
+           class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-download"></i> CSV
+        </a>
+        <a th:href="@{/admin/crawl/orchestrator-runs}" class="btn btn-sm btn-outline-secondary ms-2">
+            <i class="bi bi-list-check"></i> Sweep History
+        </a>
+    </div>
+
+    <p class="text-muted">
+        Per-crawl wall-clock and resource snapshots captured by
+        <code>FsCrawlOrchestrator</code> (issue #149). One row per
+        <code>(crawl_config_id, started_at)</code>. The data the
+        parallel-crawl design issue is gated on — these are the numbers
+        a parallel sweep has to budget against.
+    </p>
+
+    <form th:action="@{/admin/crawl-runs}" method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-md-4">
+            <label for="configId" class="form-label small text-muted mb-1">Filter by crawl config</label>
+            <select id="configId" name="configId" class="form-select form-select-sm"
+                    onchange="this.form.submit()">
+                <option value="">All configs</option>
+                <option th:each="c : ${configs}"
+                        th:value="${c.id}"
+                        th:selected="${configId != null && configId == c.id}"
+                        th:text="${c.name + (c.label != null ? ' (' + c.label + ')' : '')}"></option>
+            </select>
+        </div>
+        <div class="col-md-2" th:if="${configId != null}">
+            <a th:href="@{/admin/crawl-runs}" class="btn btn-sm btn-outline-secondary">Clear filter</a>
+        </div>
+    </form>
+
+    <!-- Top pagination -->
+    <div th:replace="~{fragments/utils::pagination()}" />
+
+    <div th:if="${metrics.empty}" class="alert alert-secondary">
+        <i class="bi bi-info-circle me-2"></i>
+        No crawl-run metrics recorded yet. Trigger a sweep from the
+        Crawl Configurations page or via
+        <code>POST /api/crawl/run-all-enabled</code>.
+    </div>
+
+    <div th:unless="${metrics.empty}" class="table-responsive">
+        <table class="table table-sm table-striped table-hover align-middle">
+            <thead class="table-light">
+            <tr>
+                <th>
+                    <a th:href="@{/admin/crawl-runs(sort='startedAt,' + (param.sort != null and param.sort[0] == 'startedAt,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">
+                        Started
+                        <span th:if="${param.sort != null and param.sort[0] == 'startedAt,ASC'}">&#9650;</span>
+                        <span th:if="${param.sort == null or param.sort[0] == 'startedAt,DESC'}">&#9660;</span>
+                    </a>
+                </th>
+                <th>
+                    <a th:href="@{/admin/crawl-runs(sort='crawlConfigName,' + (param.sort != null and param.sort[0] == 'crawlConfigName,ASC' ? 'DESC' : 'ASC'), configId=${configId})}"
+                       class="text-decoration-none">Config</a>
+                </th>
+                <th>Status</th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='durationMs,' + (param.sort != null and param.sort[0] == 'durationMs,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Duration</a>
+                </th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='filesVisited,' + (param.sort != null and param.sort[0] == 'filesVisited,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Files</a>
+                </th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='bytesRead,' + (param.sort != null and param.sort[0] == 'bytesRead,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Bytes</a>
+                </th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='peakHeapBytes,' + (param.sort != null and param.sort[0] == 'peakHeapBytes,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Peak heap</a>
+                </th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='peakHikariActive,' + (param.sort != null and param.sort[0] == 'peakHikariActive,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Peak pool</a>
+                </th>
+                <th class="text-end">
+                    <a th:href="@{/admin/crawl-runs(sort='tikaFailures,' + (param.sort != null and param.sort[0] == 'tikaFailures,DESC' ? 'ASC' : 'DESC'), configId=${configId})}"
+                       class="text-decoration-none">Tika failures</a>
+                </th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <th:block th:each="m : ${metrics}">
+                <tr>
+                    <td>
+                        <span th:text="${#temporals.format(m.startedAt, 'yyyy-MM-dd HH:mm:ss')}">2026-06-24 12:00:00</span>
+                    </td>
+                    <td>
+                        <strong th:text="${m.crawlConfigName ?: '#' + m.crawlConfigId}">name</strong>
+                        <div class="small text-muted">id=<span th:text="${m.crawlConfigId}">42</span></div>
+                    </td>
+                    <td>
+                        <span th:if="${m.runStatus == 'COMPLETED'}" class="badge bg-success" th:text="${m.runStatus}">COMPLETED</span>
+                        <span th:if="${m.runStatus == 'FAILED'}" class="badge bg-danger" th:text="${m.runStatus}">FAILED</span>
+                        <span th:if="${m.runStatus != null and m.runStatus != 'COMPLETED' and m.runStatus != 'FAILED'}"
+                              class="badge bg-secondary" th:text="${m.runStatus}">STATUS</span>
+                        <span th:if="${m.runStatus == null}" class="text-muted">—</span>
+                    </td>
+                    <td class="text-end">
+                        <span th:if="${m.durationMs != null}" th:text="${m.durationMs + ' ms'}">0 ms</span>
+                        <span th:if="${m.durationMs == null}" class="text-muted">—</span>
+                    </td>
+                    <td class="text-end" th:text="${m.filesVisited}">0</td>
+                    <td class="text-end" th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(m.bytesRead)}">0 B</td>
+                    <td class="text-end">
+                        <span th:if="${m.peakHeapBytes != null}"
+                              th:text="${T(com.oconeco.spring_search_tempo.web.service.SystemMonitorService).formatBytes(m.peakHeapBytes)}">0 B</span>
+                        <span th:if="${m.peakHeapBytes == null}" class="text-muted">—</span>
+                    </td>
+                    <td class="text-end">
+                        <span th:if="${m.peakHikariActive != null}" th:text="${m.peakHikariActive}">0</span>
+                        <span th:if="${m.peakHikariActive == null}" class="text-muted">—</span>
+                    </td>
+                    <td class="text-end">
+                        <span th:if="${m.tikaFailures > 0}" class="text-danger" th:text="${m.tikaFailures}">0</span>
+                        <span th:if="${m.tikaFailures == 0}" class="text-muted">0</span>
+                    </td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="collapse"
+                                th:attr="data-bs-target='#detail-' + ${m.id}"
+                                aria-expanded="false">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="10" class="p-0 border-0">
+                        <div class="collapse" th:id="${'detail-' + m.id}">
+                            <div class="bg-light p-3 small">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <strong>Levels touched</strong>
+                                        <ul class="list-unstyled mb-0">
+                                            <li>SKIP: <span th:text="${m.filesLevelSkip}">0</span></li>
+                                            <li>LOCATE: <span th:text="${m.filesLevelLocate}">0</span></li>
+                                            <li>INDEX: <span th:text="${m.filesLevelIndex}">0</span></li>
+                                            <li>ANALYZE: <span th:text="${m.filesLevelAnalyze}">0</span></li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Counters</strong>
+                                        <ul class="list-unstyled mb-0">
+                                            <li>Visited: <span th:text="${m.filesVisited}">0</span></li>
+                                            <li>Indexed (new+updated): <span th:text="${m.filesIndexed}">0</span></li>
+                                            <li>Skipped: <span th:text="${m.filesSkipped}">0</span></li>
+                                            <li>Tika failures: <span th:text="${m.tikaFailures}">0</span></li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <strong>Job linkage</strong>
+                                        <ul class="list-unstyled mb-0">
+                                            <li>jobExecutionId: <code th:text="${m.jobExecutionId ?: '—'}">—</code></li>
+                                            <li>jobRunId: <code th:text="${m.jobRunId ?: '—'}">—</code></li>
+                                            <li th:if="${m.orchestratorOutcome != null}">
+                                                outcome id:
+                                                <a th:if="${m.orchestratorOutcome.orchestratorRun != null}"
+                                                   th:href="@{/admin/crawl/orchestrator-runs/{id}(id=${m.orchestratorOutcome.orchestratorRun.id})}"
+                                                   th:text="${m.orchestratorOutcome.id}">42</a>
+                                                <span th:unless="${m.orchestratorOutcome.orchestratorRun != null}"
+                                                      th:text="${m.orchestratorOutcome.id}">42</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div th:if="${m.errorMessage != null}" class="mt-2 alert alert-danger small mb-0">
+                                    <strong>Error:</strong> <span th:text="${m.errorMessage}">message</span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </th:block>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bottom pagination -->
+    <div th:replace="~{fragments/utils::pagination()}" />
+</div>
+</body>
+</html>

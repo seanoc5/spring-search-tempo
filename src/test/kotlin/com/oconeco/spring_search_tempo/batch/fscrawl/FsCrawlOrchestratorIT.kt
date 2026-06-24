@@ -6,6 +6,7 @@ import com.oconeco.spring_search_tempo.base.domain.CrawlConfig
 import com.oconeco.spring_search_tempo.base.domain.FsCrawlOrchestratorRunStatus
 import com.oconeco.spring_search_tempo.base.domain.FsCrawlOutcomeStatus
 import com.oconeco.spring_search_tempo.base.repos.CrawlConfigRepository
+import com.oconeco.spring_search_tempo.base.repos.CrawlRunMetricsRepository
 import com.oconeco.spring_search_tempo.base.repos.FsCrawlOrchestratorOutcomeRepository
 import com.oconeco.spring_search_tempo.base.repos.FsCrawlOrchestratorRunRepository
 import com.oconeco.spring_search_tempo.testfixtures.CrawlTreeFixture
@@ -61,6 +62,7 @@ class FsCrawlOrchestratorIT : BaseIT() {
     @Autowired lateinit var crawlConfigRepository: CrawlConfigRepository
     @Autowired lateinit var orchestratorRunRepository: FsCrawlOrchestratorRunRepository
     @Autowired lateinit var orchestratorOutcomeRepository: FsCrawlOrchestratorOutcomeRepository
+    @Autowired lateinit var crawlRunMetricsRepository: CrawlRunMetricsRepository
 
     /**
      * Spy on the job builder so the failure-isolation test can throw on
@@ -112,6 +114,20 @@ class FsCrawlOrchestratorIT : BaseIT() {
         assertThat(loaded.finishedAt).isNotNull
         assertThat(outcomes).allMatch { it.jobExecutionId != null }
         assertThat(outcomes).allMatch { it.elapsedMs != null && it.elapsedMs!! >= 0 }
+
+        // Issue #149 — one CrawlRunMetrics row per outcome, keyed by
+        // (crawl_config_id, started_at). The collector is wired in
+        // production order; here we just assert it produced rows with
+        // matching config ids and non-null duration. Peak heap is always
+        // > 0 because start() takes an immediate sample.
+        val allMetrics = crawlRunMetricsRepository.findAll()
+        val metricsForConfigs = allMetrics.filter { it.crawlConfigId in configIds }
+        assertThat(metricsForConfigs).hasSize(3)
+        assertThat(metricsForConfigs.map { it.crawlConfigId })
+            .containsExactlyInAnyOrderElementsOf(configIds)
+        assertThat(metricsForConfigs).allMatch { it.durationMs != null && it.durationMs!! >= 0 }
+        assertThat(metricsForConfigs).allMatch { it.peakHeapBytes != null && it.peakHeapBytes!! > 0 }
+        assertThat(metricsForConfigs).allMatch { it.jobExecutionId != null }
     }
 
     @Test

@@ -22,6 +22,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.batch.core.repository.JobRepository
 import java.util.Optional
+import javax.sql.DataSource
 
 /**
  * Unit tests for `FsCrawlOrchestrator` iteration logic (issue #139, AC #f).
@@ -44,6 +45,8 @@ class FsCrawlOrchestratorIterationTest {
     private lateinit var orchestratorRunRepository: FsCrawlOrchestratorRunRepository
     private lateinit var orchestratorOutcomeRepository: FsCrawlOrchestratorOutcomeRepository
     private lateinit var jobRepository: JobRepository
+    private lateinit var crawlMetricsRecorder: CrawlMetricsRecorder
+    private lateinit var dataSource: DataSource
 
     private lateinit var orchestrator: FsCrawlOrchestrator
 
@@ -61,6 +64,8 @@ class FsCrawlOrchestratorIterationTest {
         orchestratorRunRepository = mock(FsCrawlOrchestratorRunRepository::class.java)
         orchestratorOutcomeRepository = mock(FsCrawlOrchestratorOutcomeRepository::class.java)
         jobRepository = mock(JobRepository::class.java)
+        crawlMetricsRecorder = mock(CrawlMetricsRecorder::class.java)
+        dataSource = mock(DataSource::class.java)
 
         `when`(orchestratorOutcomeRepository.save(anyNonNull<FsCrawlOrchestratorOutcome>()))
             .thenAnswer { invocation ->
@@ -89,7 +94,9 @@ class FsCrawlOrchestratorIterationTest {
             fsCrawlJobBuilder = fsCrawlJobBuilder,
             orchestratorRunRepository = orchestratorRunRepository,
             orchestratorOutcomeRepository = orchestratorOutcomeRepository,
-            jobRepository = jobRepository
+            jobRepository = jobRepository,
+            crawlMetricsRecorder = crawlMetricsRecorder,
+            dataSource = dataSource
         )
     }
 

@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
 import java.time.OffsetDateTime
+import javax.sql.DataSource
 
 /**
  * "Run all enabled FS crawls" orchestrator (issue #139).
@@ -57,7 +58,9 @@ class FsCrawlOrchestrator(
     private val fsCrawlJobBuilder: FsCrawlJobBuilder,
     private val orchestratorRunRepository: FsCrawlOrchestratorRunRepository,
     private val orchestratorOutcomeRepository: FsCrawlOrchestratorOutcomeRepository,
-    private val jobRepository: JobRepository
+    private val jobRepository: JobRepository,
+    private val crawlMetricsRecorder: CrawlMetricsRecorder,
+    private val dataSource: DataSource
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(FsCrawlOrchestrator::class.java)
@@ -182,6 +185,8 @@ class FsCrawlOrchestrator(
         }
 
         val started = System.nanoTime()
+        val collector = CrawlMetricsCollector(dataSource)
+        var execution: JobExecution? = null
         try {
             // Reuse the same DTO → CrawlDefinition path the per-config
             // "Run" button uses so the orchestrator and that button stay
@@ -203,7 +208,8 @@ class FsCrawlOrchestrator(
                 .addLong("timestamp", System.currentTimeMillis())
                 .toJobParameters()
 
-            val execution: JobExecution = syncLauncher.run(job, params)
+            collector.start()
+            execution = syncLauncher.run(job, params)
             outcome.jobExecutionId = execution.id.toString()
             outcome.batchStatus = execution.status.name
             outcome.outcome = when (execution.status) {
@@ -223,6 +229,7 @@ class FsCrawlOrchestrator(
             outcome.outcome = FsCrawlOutcomeStatus.FAILED
             outcome.errorMessage = e.message ?: e.javaClass.simpleName
         } finally {
+            collector.stop()
             outcome.finishedAt = OffsetDateTime.now()
             outcome.elapsedMs = Duration.ofNanos(System.nanoTime() - started).toMillis()
         }
@@ -242,6 +249,27 @@ class FsCrawlOrchestrator(
             FsCrawlOutcomeStatus.PENDING -> Unit // shouldn't happen post-loop
         }
         orchestratorRunRepository.save(run)
+
+        // Persist the metrics row for issue #149. We do this even on
+        // failure so operators can see *what* the crawl was doing when
+        // it died — peak heap and pool sample are the most diagnostic
+        // signals when a parallel-crawl attempt OOMs or starves the pool.
+        try {
+            crawlMetricsRecorder.record(
+                config = config,
+                outcome = savedOutcome,
+                execution = execution,
+                collector = collector,
+                startedAt = outcome.startedAt ?: OffsetDateTime.now(),
+                finishedAt = outcome.finishedAt ?: OffsetDateTime.now()
+            )
+        } catch (e: Exception) {
+            log.warn(
+                "CrawlMetricsRecorder failed for config '{}' (id={}): {}",
+                config.name, config.id, e.message
+            )
+        }
+
         return savedOutcome
     }
 
