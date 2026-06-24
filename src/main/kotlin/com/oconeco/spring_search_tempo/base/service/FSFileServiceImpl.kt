@@ -140,6 +140,45 @@ class FSFileServiceImpl(
         fSFileRepository.save(file)
     }
 
+    override fun truncateBodyTextToThreshold(fileId: Long, thresholdChars: Long): Int {
+        if (thresholdChars <= 0) return 0
+        val file = fSFileRepository.findById(fileId).orElse(null) ?: return 0
+        val body = file.bodyText ?: return 0
+        if (body.length.toLong() <= thresholdChars) return 0
+        val keep = thresholdChars.toInt()
+        val dropped = body.length - keep
+        file.bodyText = body.substring(0, keep) +
+            "\n…[truncated: $dropped chars; full content in chunks]"
+        fSFileRepository.save(file)
+        return dropped
+    }
+
+    override fun truncateLargeBodyTextBackfill(thresholdChars: Long, batchSize: Int): Int {
+        if (thresholdChars <= 0) return 0
+        var touched = 0
+        var pageNum = 0
+        while (true) {
+            val pageable = org.springframework.data.domain.PageRequest.of(pageNum, batchSize, Sort.by("id"))
+            val page = fSFileRepository.findChunkedFilesWithLargeBodyText(thresholdChars, pageable)
+            if (page.isEmpty) break
+            page.content.forEach { file ->
+                val body = file.bodyText ?: return@forEach
+                if (body.length.toLong() <= thresholdChars) return@forEach
+                val keep = thresholdChars.toInt()
+                val dropped = body.length - keep
+                file.bodyText = body.substring(0, keep) +
+                    "\n…[truncated: $dropped chars; full content in chunks]"
+                touched++
+            }
+            fSFileRepository.saveAll(page.content)
+            if (!page.hasNext()) break
+            // Don't advance pageNum: rows we just truncated drop out of the
+            // filter on the next query, so page 0 keeps surfacing the
+            // remaining un-truncated rows.
+        }
+        return touched
+    }
+
     @EventListener(BeforeDeleteFSFolder::class)
     fun on(event: BeforeDeleteFSFolder) {
         val referencedException = ReferencedException()

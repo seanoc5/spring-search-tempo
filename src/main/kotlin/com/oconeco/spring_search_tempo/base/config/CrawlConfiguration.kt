@@ -38,7 +38,16 @@ data class CrawlConfiguration(
      *
      * Operator can flip this without a code change to measure the win on their own tree.
      */
-    var metadataGatherMode: MetadataGatherMode = MetadataGatherMode.SEQUENTIAL
+    var metadataGatherMode: MetadataGatherMode = MetadataGatherMode.SEQUENTIAL,
+    /**
+     * After chunking finishes for a file, `body_text` is truncated to this
+     * many characters and a marker is appended (see ADR-006 / issue #147).
+     * The full document remains addressable via `ContentChunk` rows, whose
+     * `fts_vector` is unioned with `fs_file.fts_vector` by
+     * `search_full_text()`. Default 1,048,576 (1 MB of extracted text).
+     * Set to 0 (or any value <= 0) to disable truncation entirely.
+     */
+    var largeBodyThresholdBytes: Long = 1_048_576L
 ) {
     /**
      * Merge crawl-specific patterns with global defaults.

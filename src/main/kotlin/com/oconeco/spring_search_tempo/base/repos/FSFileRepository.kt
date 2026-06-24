@@ -335,6 +335,25 @@ interface FSFileRepository : JpaRepository<FSFile, Long>, FSFileMetadataDuplicat
     ): List<Array<Any>>
 
     /**
+     * Find chunked files whose body_text exceeds the given character threshold.
+     * Backfill helper for ADR-006 / issue #147 — these rows can be safely
+     * truncated because their full text is already represented in
+     * ContentChunk. `LENGTH()` on a PostgreSQL `text` column is a character
+     * count, which is what we compare against the threshold.
+     */
+    @Query("""
+        SELECT f FROM FSFile f
+        WHERE f.bodyText IS NOT NULL
+        AND f.chunkedAt IS NOT NULL
+        AND LENGTH(f.bodyText) > :thresholdChars
+        ORDER BY f.id
+    """)
+    fun findChunkedFilesWithLargeBodyText(
+        @Param("thresholdChars") thresholdChars: Long,
+        pageable: Pageable
+    ): Page<FSFile>
+
+    /**
      * Find all files sharing the same SHA-256 content hash.
      * Issue #119: byte-identical duplicate detection.
      */

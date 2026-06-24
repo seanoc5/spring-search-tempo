@@ -47,6 +47,26 @@ interface FSFileService {
     fun markAsChunked(fileId: Long)
 
     /**
+     * If [fileId]'s `body_text` is longer than [thresholdChars], truncate it
+     * to that many characters and append a marker noting how much was
+     * dropped. No-op when bodyText is null/shorter than the threshold or
+     * when [thresholdChars] <= 0. Used after chunking to bound row size
+     * while preserving full coverage in `ContentChunk` (ADR-006).
+     *
+     * @return number of characters trimmed (0 if nothing was changed)
+     */
+    fun truncateBodyTextToThreshold(fileId: Long, thresholdChars: Long): Int
+
+    /**
+     * Backfill helper: iterate over already-chunked files whose body_text
+     * exceeds [thresholdChars] and truncate them. Returns the number of
+     * rows touched. Files without `chunked_at` are skipped — they still
+     * need their content represented somewhere, so we let normal chunking
+     * pick them up first (ADR-006).
+     */
+    fun truncateLargeBodyTextBackfill(thresholdChars: Long, batchSize: Int = 100): Int
+
+    /**
      * Count files owned by a specific job run.
      */
     fun countByJobRunId(jobRunId: Long): Long
