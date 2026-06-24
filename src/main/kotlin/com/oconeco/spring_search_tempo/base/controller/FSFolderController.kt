@@ -2,6 +2,7 @@ package com.oconeco.spring_search_tempo.base.controller
 
 import com.oconeco.spring_search_tempo.base.FSFolderService
 import com.oconeco.spring_search_tempo.base.model.FSFolderDTO
+import com.oconeco.spring_search_tempo.base.service.FolderNLPRollupService
 import com.oconeco.spring_search_tempo.base.util.ReferencedException
 import com.oconeco.spring_search_tempo.base.util.WebUtils
 import jakarta.validation.Valid
@@ -23,7 +24,8 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes
 @Controller
 @RequestMapping("/fSFolders")
 class FSFolderController(
-    private val fSFolderService: FSFolderService
+    private val fSFolderService: FSFolderService,
+    private val folderNLPRollupService: FolderNLPRollupService
 ) {
 
     @GetMapping
@@ -44,6 +46,7 @@ class FSFolderController(
     @GetMapping("/{id}")
     fun view(@PathVariable(name = "id") id: Long, model: Model): String {
         model.addAttribute("fSFolder", fSFolderService.get(id))
+        model.addAttribute("nlpRollup", folderNLPRollupService.getRollup(id))
         return "fSFolder/view"
     }
 
