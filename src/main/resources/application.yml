@@ -113,6 +113,11 @@ management:
 
 app:
   host-name: "${TEMPO_HOST_NAME:localhost}"
+  search:
+    # ts_headline MaxWords for chunk/file/email snippets (issue #152).
+    # Smaller values give tighter previews; raise it if reviewers want more
+    # surrounding context in the highlighted excerpt.
+    snippet-max-words: 35
   jobs:
     heartbeat:
       # Defense-in-depth backstop for in-process wedged steps (issue #64).

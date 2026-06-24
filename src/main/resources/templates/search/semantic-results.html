@@ -147,7 +147,10 @@
                                     </span>
                                 </div>
                                 <p th:if="${result.sourceUri}" class="mb-1 text-muted small text-break" th:text="${result.sourceUri}">source uri</p>
-                                <p class="mb-1" th:text="${#strings.abbreviate(result.text, 300)}">
+                                <p class="mb-1" th:if="${result.snippet}" th:utext="${result.snippet}">
+                                    Highlighted snippet with <mark>matching</mark> terms...
+                                </p>
+                                <p class="mb-1" th:unless="${result.snippet}" th:text="${#strings.abbreviate(result.text, 300)}">
                                     Content preview...
                                 </p>
                             </div>

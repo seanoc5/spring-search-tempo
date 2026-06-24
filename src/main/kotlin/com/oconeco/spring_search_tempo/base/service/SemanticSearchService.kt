@@ -3,7 +3,9 @@ package com.oconeco.spring_search_tempo.base.service
 import com.oconeco.spring_search_tempo.base.repos.ContentChunkRepository
 import com.oconeco.spring_search_tempo.base.repos.FSFileRepository
 import com.oconeco.spring_search_tempo.base.repos.EmailMessageRepository
+import com.oconeco.spring_search_tempo.base.util.SnippetSanitizer
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -65,7 +67,12 @@ data class SemanticSearchResult(
     /** Label/title of the source (populated by service) */
     val sourceLabel: String? = null,
     /** URI of the source (populated by service) */
-    val sourceUri: String? = null
+    val sourceUri: String? = null,
+    /**
+     * HTML-safe preview of [text] with query terms wrapped in `<mark>` tags.
+     * Sanitized for direct rendering via `th:utext`.
+     */
+    val snippet: String? = null
 )
 
 /**
@@ -85,11 +92,14 @@ class SemanticSearchServiceImpl(
     private val embeddingService: EmbeddingService,
     private val contentChunkRepository: ContentChunkRepository,
     private val fsFileRepository: FSFileRepository,
-    private val emailMessageRepository: EmailMessageRepository
+    private val emailMessageRepository: EmailMessageRepository,
+    @Value("\${app.search.snippet-max-words:35}") private val snippetMaxWords: Int
 ) : SemanticSearchService {
 
     companion object {
         private val log = LoggerFactory.getLogger(SemanticSearchServiceImpl::class.java)
+        /** Split natural-language semantic queries into highlight tokens. */
+        private val TOKEN_SPLIT = Regex("\\W+")
     }
 
     override fun search(queryText: String, limit: Int, maxDistance: Double?): List<SemanticSearchResult> {
@@ -114,15 +124,22 @@ class SemanticSearchServiceImpl(
             contentChunkRepository.findNearestByEmbedding(embeddingString, limit)
         }
 
-        return mapResults(results)
+        return mapResults(results, extractHighlightTerms(queryText))
     }
 
     override fun findSimilar(chunkId: Long, limit: Int): List<SemanticSearchResult> {
         log.debug("Finding {} similar chunks to chunk {}", limit, chunkId)
 
         val results = contentChunkRepository.findSimilarToChunk(chunkId, limit)
-        return mapResults(results)
+        // findSimilar has no free-text query to highlight against — leave snippet null.
+        return mapResults(results, emptyList())
     }
+
+    private fun extractHighlightTerms(query: String): List<String> =
+        query.split(TOKEN_SPLIT)
+            .map { it.trim() }
+            .filter { it.length >= 2 }
+            .distinct()
 
     override fun isAvailable(): Boolean {
         return try {
@@ -156,7 +173,7 @@ class SemanticSearchServiceImpl(
      * Map raw SQL results to SemanticSearchResult objects.
      * Result columns: [id, text, chunkType, sentiment, sentimentScore, distance, conceptId, emailMessageId, oneDriveItemId]
      */
-    private fun mapResults(rawResults: List<Array<Any?>>): List<SemanticSearchResult> {
+    private fun mapResults(rawResults: List<Array<Any?>>, highlightTerms: List<String>): List<SemanticSearchResult> {
         // Pre-fetch source labels for all results
         val fileIds = rawResults.mapNotNull { it[6] as? Number }.map { it.toLong() }.distinct()
         val emailIds = rawResults.mapNotNull { it[7] as? Number }.map { it.toLong() }.distinct()
@@ -205,7 +222,10 @@ class SemanticSearchServiceImpl(
                 sourceType = sourceType as String,
                 sourceId = sourceId as? Long,
                 sourceLabel = sourceLabel as? String,
-                sourceUri = sourceUri as? String
+                sourceUri = sourceUri as? String,
+                snippet = SnippetSanitizer.sanitize(
+                    SnippetSanitizer.highlight(text, highlightTerms, snippetMaxWords)
+                )
             )
         }
     }
