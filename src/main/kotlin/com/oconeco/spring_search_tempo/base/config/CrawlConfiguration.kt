@@ -41,13 +41,17 @@ data class CrawlConfiguration(
     var metadataGatherMode: MetadataGatherMode = MetadataGatherMode.SEQUENTIAL,
     /**
      * After chunking finishes for a file, `body_text` is truncated to this
-     * many characters and a marker is appended (see ADR-006 / issue #147).
-     * The full document remains addressable via `ContentChunk` rows, whose
-     * `fts_vector` is unioned with `fs_file.fts_vector` by
-     * `search_full_text()`. Default 1,048,576 (1 MB of extracted text).
-     * Set to 0 (or any value <= 0) to disable truncation entirely.
+     * many **characters** and a marker is appended (see ADR-006 / issue
+     * #147). Character-count is the natural unit here: `body_text` is a
+     * PostgreSQL `text` column, `LENGTH()` reports characters, and the
+     * existing `fts_vector` substring cap (`substring(body_text, 1, 250000)`)
+     * is also character-based. For ASCII text 1,048,576 chars ≈ 1 MB on
+     * disk; mostly-UTF-8 content can be 2–4× larger byte-wise — set this
+     * lower if you need a tighter on-disk ceiling.
+     *
+     * Default 1,048,576. Set <= 0 to disable truncation entirely.
      */
-    var largeBodyThresholdBytes: Long = 1_048_576L
+    var largeBodyThresholdChars: Long = 1_048_576L
 ) {
     /**
      * Merge crawl-specific patterns with global defaults.

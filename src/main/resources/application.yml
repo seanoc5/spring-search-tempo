@@ -152,10 +152,12 @@ app:
     # Flip to PARALLEL on spinning disks / network mounts where stat latency dominates.
     # Timing is exposed at `tempo.crawl.metadata.read` (tag mode=…).
     metadata-gather-mode: SEQUENTIAL
-    # After chunking, `fs_file.body_text` is truncated to this many characters
-    # (ADR-006 / issue #147). Full document remains addressable via
-    # ContentChunk rows. Default 1 MiB. Set <= 0 to disable truncation.
-    large-body-threshold-bytes: 1048576
+    # After chunking, `fs_file.body_text` is truncated to this many CHARACTERS
+    # (ADR-006 / issue #147). Char-count is what PostgreSQL `LENGTH(text)`
+    # reports; UTF-8 means on-disk bytes can be 2–4× larger for non-ASCII.
+    # Full document remains addressable via ContentChunk rows. Default
+    # 1,048,576. Set <= 0 to disable truncation.
+    large-body-threshold-chars: 1048576
     # Global defaults that all crawls inherit
     defaults:
       max-depth: 10

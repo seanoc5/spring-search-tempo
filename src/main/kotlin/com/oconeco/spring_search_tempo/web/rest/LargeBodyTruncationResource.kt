@@ -37,7 +37,7 @@ class LargeBodyTruncationResource(
         @RequestParam(name = "threshold", required = false) threshold: Long?,
         @RequestParam(name = "batchSize", defaultValue = "100") batchSize: Int
     ): ResponseEntity<TruncationResponse> {
-        val effectiveThreshold = threshold ?: crawlConfiguration.largeBodyThresholdBytes
+        val effectiveThreshold = threshold ?: crawlConfiguration.largeBodyThresholdChars
         log.info(
             "Backfill truncation requested: threshold={} chars, batchSize={}",
             effectiveThreshold, batchSize

@@ -185,11 +185,11 @@ class FsCrawlJobBuilder(
      */
     private fun createChunkWriter(): ItemWriter<List<com.oconeco.spring_search_tempo.base.model.ContentChunkDTO>> {
         log.debug("Creating ChunkWriter (largeBodyThreshold={} chars)",
-            crawlConfiguration.largeBodyThresholdBytes)
+            crawlConfiguration.largeBodyThresholdChars)
         return ChunkWriter(
             chunkService = chunkService,
             fileService = fileService,
-            largeBodyThresholdChars = crawlConfiguration.largeBodyThresholdBytes
+            largeBodyThresholdChars = crawlConfiguration.largeBodyThresholdChars
         )
     }
 

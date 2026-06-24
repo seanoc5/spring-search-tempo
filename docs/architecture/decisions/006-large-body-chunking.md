@@ -42,9 +42,14 @@ in `fs_file.body_text`."
 
 ## Decision
 
-1. **Threshold**: `app.crawl.large-body-threshold-bytes`, default
-   **1,048,576** (1 MB of extracted text — measured in characters since
-   `body_text` is stored as PostgreSQL `text`).
+1. **Threshold**: `app.crawl.large-body-threshold-chars`, default
+   **1,048,576**. The unit is *characters* — `body_text` is a PostgreSQL
+   `text` column, `LENGTH(body_text)` reports characters, and the
+   existing `substring(body_text, 1, 250000)` cap on `fs_file.fts_vector`
+   is also character-based. For ASCII content 1,048,576 chars ≈ 1 MB on
+   disk; mostly-UTF-8 content can be 2–4× larger byte-wise. Operators
+   who need a tight on-disk ceiling should dial the threshold down
+   accordingly.
 2. **Strategy A — preview-in-`body_text`, full coverage in chunks**:
    - During ingestion, extracted text is left intact on the FSFile until
      the chunking step has finished consuming it.
@@ -122,7 +127,7 @@ about FTS, not about row size. As a preview-and-cheap-FTS budget, 1 MB
 (~250 pages of plain text) covers almost every file we expect to crawl
 without truncation, and only bites on log dumps / exports / book-length
 documents. Operators can dial the threshold down via
-`app.crawl.large-body-threshold-bytes` if they want a tighter row-size
+`app.crawl.large-body-threshold-chars` if they want a tighter row-size
 ceiling.
 
 ### Why not chunk inline during extraction?
