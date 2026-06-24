@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <!--
-    Smart-diff fragments for the FSFile detail page (issue #144).
+    Smart-diff fragments for the FSFile detail page (issue #144, extended in #145).
     These fragments are HTMX-targeted by the "Compare with..." dropdown in
     fSFile/view.html; the whole page is never rendered directly.
 -->
@@ -33,11 +33,87 @@
         </ul>
     </div>
 
-    <div th:if="${diff.summary.totalChanges == 0}" class="alert alert-info mb-0 py-2">
-        Both files extract to the same paragraph stream — no textual differences.
+    <!-- Per-section jump list (e.g. per-slide for .pptx, issue #145). Hidden when the
+         strategy produces no sections (e.g. .docx). -->
+    <div th:if="${not #lists.isEmpty(diff.sections)}" class="mb-3">
+        <div class="card">
+            <div class="card-header py-2 small fw-semibold">Jump to</div>
+            <div class="card-body py-2 d-flex flex-wrap gap-2">
+                <a th:each="section : ${diff.sections}"
+                   th:href="|#${section.key}|"
+                   class="btn btn-sm"
+                   th:classappend="${section.kind?.name() == 'INSERTED' ? 'btn-outline-success'
+                                    : (section.kind?.name() == 'DELETED' ? 'btn-outline-danger'
+                                    : (section.kind?.name() == 'CHANGED' ? 'btn-outline-warning' : 'btn-outline-secondary'))}">
+                    <span th:text="${section.label}">Slide 1</span>
+                    <span th:if="${section.kind?.name() == 'INSERTED'}" class="badge bg-success ms-1">new</span>
+                    <span th:if="${section.kind?.name() == 'DELETED'}" class="badge bg-danger ms-1">removed</span>
+                    <span th:if="${section.kind?.name() == 'CHANGED'}" class="badge bg-warning text-dark ms-1">changed</span>
+                </a>
+            </div>
+        </div>
     </div>
 
-    <div th:unless="${diff.summary.totalChanges == 0}" class="border rounded">
+    <div th:if="${diff.summary.totalChanges == 0 && #lists.isEmpty(diff.sections)}" class="alert alert-info mb-0 py-2">
+        Both files extract to the same text stream — no textual differences.
+    </div>
+
+    <!-- Sectioned render (per-slide blocks with anchors). -->
+    <div th:if="${not #lists.isEmpty(diff.sections)}">
+        <div th:each="section : ${diff.sections}"
+             th:id="${section.key}"
+             class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <h6 class="mb-0" th:text="${section.label}">Slide 1</h6>
+                <span th:if="${section.kind?.name() == 'INSERTED'}" class="badge bg-success">new</span>
+                <span th:if="${section.kind?.name() == 'DELETED'}" class="badge bg-danger">removed</span>
+                <span th:if="${section.kind?.name() == 'CHANGED'}" class="badge bg-warning text-dark">changed</span>
+                <span th:if="${section.kind?.name() == 'UNCHANGED'}" class="badge bg-light text-dark border">unchanged</span>
+            </div>
+            <div th:if="${section.lineEndIndex == section.lineStartIndex}"
+                 class="text-muted small fst-italic ps-2">(empty slide)</div>
+            <div th:unless="${section.lineEndIndex == section.lineStartIndex}" class="border rounded">
+                <table class="table table-sm mb-0 smart-diff-table">
+                    <colgroup>
+                        <col style="width: 4ch;" />
+                        <col style="width: 4ch;" />
+                        <col />
+                    </colgroup>
+                    <tbody>
+                    <tr th:each="line, lineStat : ${diff.lines}"
+                        th:if="${lineStat.index >= section.lineStartIndex && lineStat.index < section.lineEndIndex}"
+                        th:switch="${line.kind?.name()}"
+                        th:classappend="${line.kind?.name() == 'INSERTED' ? 'table-success'
+                                         : (line.kind?.name() == 'DELETED' ? 'table-danger'
+                                         : (line.kind?.name() == 'CHANGED' ? 'table-warning' : ''))}">
+                        <td class="text-muted small text-end pe-2"
+                            th:text="${line.oldLineNo ?: ''}">1</td>
+                        <td class="text-muted small text-end pe-2"
+                            th:text="${line.newLineNo ?: ''}">1</td>
+                        <td>
+                            <div th:case="'CHANGED'">
+                                <div>
+                                    <span class="badge bg-danger me-2">old</span>
+                                    <span th:text="${line.oldText}">old text</span>
+                                </div>
+                                <div>
+                                    <span class="badge bg-success me-2">new</span>
+                                    <span th:text="${line.newText}">new text</span>
+                                </div>
+                            </div>
+                            <span th:case="'INSERTED'"><strong>+</strong> <span th:text="${line.text}">inserted</span></span>
+                            <span th:case="'DELETED'"><strong>-</strong> <span th:text="${line.text}">deleted</span></span>
+                            <span th:case="*" class="text-muted" th:text="${line.text}">unchanged</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flat render for strategies without sections (e.g. .docx). -->
+    <div th:if="${#lists.isEmpty(diff.sections) && diff.summary.totalChanges > 0}" class="border rounded">
         <table class="table table-sm mb-0 smart-diff-table">
             <colgroup>
                 <col style="width: 4ch;" />

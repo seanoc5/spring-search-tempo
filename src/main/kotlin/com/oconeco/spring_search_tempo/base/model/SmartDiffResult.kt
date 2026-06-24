@@ -21,6 +21,13 @@ data class SmartDiffResult(
     val summary: SmartDiffSummary,
     /** Free-form notes the strategy wants to surface (e.g. "tracked changes ignored"). */
     val notes: List<String> = emptyList(),
+    /**
+     * Optional per-section grouping. When non-empty, the UI renders a jump list at the top and
+     * splits the line stream into anchored blocks (one per section). Each section's
+     * [lineStartIndex, lineEndIndex) refers to indexes into [lines]. Empty for strategies that
+     * have no natural sub-grouping (`.docx`); populated for slide-keyed formats (`.pptx`).
+     */
+    val sections: List<SmartDiffSection> = emptyList(),
 )
 
 /**
@@ -56,3 +63,20 @@ data class SmartDiffSummary(
 ) {
     val totalChanges: Int get() = inserted + deleted + changed
 }
+
+/**
+ * A contiguous run of [SmartDiffLine]s the strategy wants to surface as a single addressable
+ * unit — currently used for per-slide grouping in `.pptx` (issue #145). [key] becomes the
+ * HTML anchor id; [label] is what the jump list renders.
+ *
+ * [kind] reflects the section as a whole: UNCHANGED if every line in the range is UNCHANGED;
+ * INSERTED if this section is a wholly-new slide; DELETED if a slide removed in the new
+ * version; CHANGED otherwise (paired slides with any edit inside).
+ */
+data class SmartDiffSection(
+    val key: String,
+    val label: String,
+    val kind: SmartDiffKind,
+    val lineStartIndex: Int,
+    val lineEndIndex: Int,
+)
