@@ -52,7 +52,7 @@ class LargeBodyTruncationResource(
             return ResponseEntity.badRequest().body(
                 TruncationResponse(
                     thresholdChars = effectiveThreshold,
-                    rowsTruncated = 0,
+                    filesTruncated = 0,
                     message = "Threshold must be > 0; configured default disables truncation."
                 )
             )
@@ -63,7 +63,7 @@ class LargeBodyTruncationResource(
         return ResponseEntity.ok(
             TruncationResponse(
                 thresholdChars = effectiveThreshold,
-                rowsTruncated = touched,
+                filesTruncated = touched,
                 message = "Truncated $touched chunked files whose body_text exceeded $effectiveThreshold chars."
             )
         )
@@ -73,7 +73,7 @@ class LargeBodyTruncationResource(
     fun truncateLargeEmailBodies(
         @RequestParam(name = "threshold", required = false) threshold: Long?,
         @RequestParam(name = "batchSize", defaultValue = "100") batchSize: Int
-    ): ResponseEntity<TruncationResponse> {
+    ): ResponseEntity<EmailTruncationResponse> {
         val effectiveThreshold = threshold ?: crawlConfiguration.largeBodyThresholdChars
         log.info(
             "EmailMessage backfill truncation requested: threshold={} chars, batchSize={}",
@@ -82,9 +82,9 @@ class LargeBodyTruncationResource(
 
         if (effectiveThreshold <= 0) {
             return ResponseEntity.badRequest().body(
-                TruncationResponse(
+                EmailTruncationResponse(
                     thresholdChars = effectiveThreshold,
-                    rowsTruncated = 0,
+                    emailsTruncated = 0,
                     message = "Threshold must be > 0; configured default disables truncation."
                 )
             )
@@ -93,9 +93,9 @@ class LargeBodyTruncationResource(
         val touched = emailMessageService.truncateLargeBodyTextBackfill(effectiveThreshold, batchSize)
         log.info("EmailMessage backfill truncation done: {} messages truncated", touched)
         return ResponseEntity.ok(
-            TruncationResponse(
+            EmailTruncationResponse(
                 thresholdChars = effectiveThreshold,
-                rowsTruncated = touched,
+                emailsTruncated = touched,
                 message = "Truncated $touched chunked email messages whose body_text exceeded $effectiveThreshold chars."
             )
         )
@@ -104,6 +104,12 @@ class LargeBodyTruncationResource(
 
 data class TruncationResponse(
     val thresholdChars: Long,
-    val rowsTruncated: Int,
+    val filesTruncated: Int,
+    val message: String
+)
+
+data class EmailTruncationResponse(
+    val thresholdChars: Long,
+    val emailsTruncated: Int,
     val message: String
 )

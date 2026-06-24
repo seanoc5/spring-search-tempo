@@ -76,13 +76,13 @@ class EmailChunkWriter(
                 processedEmailIds.addAll(emailIdsThisList)
             } catch (e: Exception) {
                 log.warn("Bulk chunk save failed for email, falling back to per-item: {}", e.message)
-                val perItemSuccess = mutableSetOf<Long>()
+                var perItemSavedCount = 0
                 chunkList.forEach { chunkDTO ->
                     try {
                         chunkService.create(chunkDTO)
                         batchChunksSaved++
                         totalChunksSaved++
-                        chunkDTO.emailMessage?.let { perItemSuccess.add(it) }
+                        perItemSavedCount++
                     } catch (e2: Exception) {
                         log.error(
                             "Error saving chunk {} for email {}: {}",
@@ -93,7 +93,19 @@ class EmailChunkWriter(
                         )
                     }
                 }
-                processedEmailIds.addAll(perItemSuccess)
+                // Only mark these emails as "fully chunked" — and thus
+                // eligible for body_text truncation — when EVERY chunk
+                // landed. A partial save means some content is still
+                // only in body_text; truncating would lose it.
+                if (perItemSavedCount == chunkList.size) {
+                    processedEmailIds.addAll(emailIdsThisList)
+                } else {
+                    log.warn(
+                        "Partial chunk save for email(s) {}: {}/{} chunks saved; " +
+                            "skipping body_text truncation to preserve missing content.",
+                        emailIdsThisList, perItemSavedCount, chunkList.size
+                    )
+                }
             }
         }
 
