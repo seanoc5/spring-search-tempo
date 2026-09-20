@@ -4,7 +4,7 @@
 # 2) Run: caddy run --config ops/proxy/Caddyfile
 # 3) Trust local CA (once): sudo caddy trust
 #
-# This assumes Spring Boot (Tomcat) listens on 127.0.0.1:8082.
+# This assumes Spring Boot (Tomcat) listens on 127.0.0.1:8085.
 
 # Redirect HTTP to HTTPS for all configured names.
 http://localhost, http://minti9, http://192.168.1.101 {
@@ -17,7 +17,7 @@ localhost, minti9, 192.168.1.101 {
 
     encode zstd gzip
 
-    reverse_proxy 127.0.0.1:8082 {
+    reverse_proxy 127.0.0.1:8085 {
         header_up X-Forwarded-Proto https
         header_up X-Forwarded-Host {host}
         header_up X-Forwarded-For {remote_host}

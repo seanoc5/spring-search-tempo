@@ -184,7 +184,7 @@ Trigger NLP processing via HTTP:
 
 ```bash
 # Trigger NLP processing
-curl -X POST http://localhost:8089/api/nlp/process
+curl -X POST http://localhost:8085/api/nlp/process
 
 # Response:
 {
@@ -195,7 +195,7 @@ curl -X POST http://localhost:8089/api/nlp/process
 }
 
 # Check NLP status
-curl http://localhost:8089/api/nlp/status
+curl http://localhost:8085/api/nlp/status
 
 # Response:
 {
@@ -311,13 +311,13 @@ The REST API supports filtering search results by sentiment:
 
 ```bash
 # Search for "crisis" in NEGATIVE sentiment chunks
-curl "http://localhost:8089/api/search/chunks?q=crisis&sentiment=NEGATIVE"
+curl "http://localhost:8085/api/search/chunks?q=crisis&sentiment=NEGATIVE"
 
 # Search for "growth" in POSITIVE sentiment chunks
-curl "http://localhost:8089/api/search/chunks?q=growth&sentiment=POSITIVE"
+curl "http://localhost:8085/api/search/chunks?q=growth&sentiment=POSITIVE"
 
 # Search without sentiment filter (all results)
-curl "http://localhost:8089/api/search/chunks?q=growth"
+curl "http://localhost:8085/api/search/chunks?q=growth"
 ```
 
 ### Search Response with NLP Data

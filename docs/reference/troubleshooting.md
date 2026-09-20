@@ -10,8 +10,8 @@ Common issues and solutions for Spring Search Tempo.
 
 **Solution**:
 ```bash
-# Find process using port 8082
-lsof -i :8082
+# Find process using port 8085
+lsof -i :8085
 
 # Kill the process
 kill -9 <PID>
@@ -523,9 +523,9 @@ jstack <PID> > threaddump.txt
 ### Check Actuator Health
 
 ```bash
-curl http://localhost:8082/actuator/health
-curl http://localhost:8082/actuator/metrics
-curl http://localhost:8082/actuator/env
+curl http://localhost:8085/actuator/health
+curl http://localhost:8085/actuator/metrics
+curl http://localhost:8085/actuator/env
 ```
 
 ### Common Log Locations

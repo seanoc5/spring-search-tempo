@@ -68,7 +68,7 @@ docker compose up -d
 # Run the application
 ./gradlew bootRun
 
-# Access at http://localhost:8082
+# Access at http://localhost:8085
 # Default credentials: user / password
 ```
 
@@ -400,7 +400,7 @@ Contributions welcome! Please:
 
 **Port already in use**:
 ```bash
-lsof -i :8082
+lsof -i :8085
 kill -9 <PID>
 ```
 

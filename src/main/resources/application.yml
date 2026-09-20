@@ -1,5 +1,8 @@
+# Canonical port map (sysadmin/docs/port-map.md, 2026-09-19): spring-search-tempo = 8085
+# on minti9 and kdeyoga alike (was 8082); management = app port + 1000. The port is the
+# in-repo default so neither machine needs a per-host override. 8080 is reserved/free.
 server:
-  port: 8082
+  port: 8085
   servlet:
     session:
       cookie:
@@ -90,6 +93,13 @@ error:
       SpringRoleLabelUnique: SPRING_ROLE_LABEL_UNIQUE
 
 management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9085}
+    # Not loopback-only by default: ops/monitoring's Prometheus scrapes over the bridge
+    # network via host.docker.internal, which a 127.0.0.1 bind would refuse. Acceptable
+    # because BasicSecurityConfig gates /actuator/** to ROLE_ADMIN except health. Pin
+    # MANAGEMENT_SERVER_ADDRESS=127.0.0.1 in the env file when this lands on kdeyoga.
+    address: ${MANAGEMENT_SERVER_ADDRESS:0.0.0.0}
   endpoints:
     web:
       exposure:
@@ -385,7 +395,7 @@ app:
   onedrive:
     enabled: false
     client-id: "${ONEDRIVE_CLIENT_ID:}"
-    redirect-uri: "http://localhost:8089/oneDriveAccounts/callback"
+    redirect-uri: "http://localhost:8085/oneDriveAccounts/callback"
     scopes:
       - "Files.Read"
       - "offline_access"

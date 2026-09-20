@@ -114,7 +114,7 @@ class SystemMonitorService(
             profiles = environment.activeProfiles.toList(),
             uptime = uptime,
             startTime = startTime,
-            serverPort = environment.getProperty("server.port", "8082"),
+            serverPort = environment.getProperty("server.port", "8085"),
             javaVersion = System.getProperty("java.version", "unknown"),
             kotlinVersion = KotlinVersion.CURRENT.toString(),
             springBootVersion = springBootVersion,
