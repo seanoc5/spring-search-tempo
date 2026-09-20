@@ -56,7 +56,7 @@ Provisioned dashboard:
 
 Prometheus scrapes:
 
-- `host.docker.internal:8082/actuator/prometheus`
+- `host.docker.internal:8085/actuator/prometheus`
 
 If your app runs on a different host/port, update:
 

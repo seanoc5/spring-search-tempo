@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 8085
 spring:
   devtools:
     restart:
@@ -73,7 +73,7 @@ app:
 #    health:
 #      show-details: always
 #server:
-#  port: 8089
+#  port: 8085
 #todo: merge into `crawler` below
 #app:
 #  crawl:

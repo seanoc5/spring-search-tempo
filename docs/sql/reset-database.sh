@@ -106,7 +106,7 @@ if [ "$START_APP" = true ]; then
     # Wait for app to be ready (check health endpoint)
     echo "    Waiting for application to start..."
     for i in {1..90}; do
-        if curl -s http://localhost:8082/actuator/health > /dev/null 2>&1; then
+        if curl -s -o /dev/null http://localhost:8085/ > /dev/null 2>&1; then
             echo "    Application is ready."
             break
         fi

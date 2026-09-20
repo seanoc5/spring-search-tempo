@@ -15,7 +15,7 @@ For ready reverse-proxy configs tailored to this repo, see:
 
 ### Option A (recommended): TLS at reverse proxy
 
-- Run Spring Boot on HTTP internally (for example `localhost:8082`)
+- Run Spring Boot on HTTP internally (for example `localhost:8085`)
 - Terminate TLS at Nginx/Caddy/Traefik on `443`
 - Point crawler to `https://<server-hostname>`
 

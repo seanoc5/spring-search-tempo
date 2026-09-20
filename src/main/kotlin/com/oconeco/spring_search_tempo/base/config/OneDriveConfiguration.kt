@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration
  *   onedrive:
  *     enabled: true
  *     client-id: "${ONEDRIVE_CLIENT_ID:}"
- *     redirect-uri: "http://localhost:8089/oneDriveAccounts/callback"
+ *     redirect-uri: "http://localhost:8085/oneDriveAccounts/callback"
  *     scopes: [Files.Read, offline_access, User.Read]
  *     # DEPRECATED: rename to app.security.encryption-key (env APP_ENCRYPTION_KEY).
  *     # Still honored as a fallback for backward compatibility.
@@ -27,7 +27,7 @@ import org.springframework.context.annotation.Configuration
 data class OneDriveConfiguration(
     var enabled: Boolean = false,
     var clientId: String = "",
-    var redirectUri: String = "http://localhost:8089/oneDriveAccounts/callback",
+    var redirectUri: String = "http://localhost:8085/oneDriveAccounts/callback",
     var scopes: List<String> = listOf("Files.Read", "offline_access", "User.Read"),
     var tokenEncryptionKey: String = "",
     var downloadTempDir: String = "/tmp/onedrive-downloads",

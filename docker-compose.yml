@@ -1,5 +1,11 @@
 services:
+  # Opt-in only since 2026-09-19: `docker compose --profile localdb up` (pair with the
+  # `docker` Spring profile, which points JDBC at localhost:15432). The default `dev` and
+  # `baremetal` profiles use the bare-metal PostgreSQL 18 on 5432, per the shared port
+  # map in sysadmin/docs/port-map.md; an unprofiled service here comes back as an empty
+  # container on every `docker compose up`. Testcontainers manages its own.
   postgres:
+    profiles: ["localdb"]
     image:  pgvector/pgvector:pg18
     environment:
     - POSTGRES_DB=tempo

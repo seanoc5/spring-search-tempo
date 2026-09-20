@@ -130,7 +130,7 @@
             <p class="mb-2">To connect OneDrive:</p>
             <ol class="mb-0">
                 <li>Register an app at <a href="https://portal.azure.com" target="_blank">Azure Portal</a> (App registrations)</li>
-                <li>Set platform to "Mobile and desktop applications" with redirect URI <code th:text="${'http://localhost:8089/oneDriveAccounts/callback'}"></code></li>
+                <li>Set platform to "Mobile and desktop applications" with redirect URI <code th:text="${'http://localhost:8085/oneDriveAccounts/callback'}"></code></li>
                 <li>Add permissions: <code>Files.Read</code>, <code>User.Read</code>, <code>offline_access</code></li>
                 <li>Set <code>ONEDRIVE_CLIENT_ID</code> and <code>ONEDRIVE_TOKEN_ENCRYPTION_KEY</code> env vars</li>
                 <li>Set <code>app.onedrive.enabled: true</code> in config</li>
