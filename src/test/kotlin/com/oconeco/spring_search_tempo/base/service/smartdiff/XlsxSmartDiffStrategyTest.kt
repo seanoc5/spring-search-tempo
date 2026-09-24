@@ -112,6 +112,34 @@ class XlsxSmartDiffStrategyTest {
     }
 
     @Test
+    @DisplayName("sheet names with spaces/punctuation produce an id-safe section key")
+    fun sheetNameSlugifiedForSectionKey() {
+        val a = makeFile(writeXlsx("a.xlsx", listOf("Q1 Report (Draft)!" to listOf(listOf("x")))), id = 1L)
+        val b = makeFile(writeXlsx("b.xlsx", listOf("Q1 Report (Draft)!" to listOf(listOf("y")))), id = 2L)
+
+        val result = strategy.diff(a, b)
+
+        assertThat(result.sections).hasSize(1)
+        val key = result.sections[0].key
+        assertThat(key).matches("[A-Za-z0-9-]+")
+        assertThat(key).doesNotContain(" ", "(", ")", "!")
+    }
+
+    @Test
+    @DisplayName("a formula POI can't evaluate is diffed without throwing, not a 500")
+    fun unevaluatableFormulaDoesNotThrow() {
+        val a = makeFile(writeXlsxWithSelfReferencingFormula("a.xlsx"), id = 1L)
+        val b = makeFile(writeXlsxWithSelfReferencingFormula("b.xlsx"), id = 2L)
+
+        val result = strategy.diff(a, b)
+
+        // The important assertion is simply that diff() completed rather than
+        // propagating POI's CircularReferenceException (a plain RuntimeException
+        // the controller doesn't catch — see PR #173 self-review).
+        assertThat(result.sections).hasSize(1)
+    }
+
+    @Test
     @DisplayName("empty workbooks (no sheets) produce no sections and no changes")
     fun emptyWorkbooks() {
         val a = makeFile(writeXlsx("a.xlsx", emptyList()), id = 1L)
@@ -175,6 +203,22 @@ class XlsxSmartDiffStrategyTest {
                     cells.forEachIndexed { cellIdx, value -> row.createCell(cellIdx).setCellValue(value) }
                 }
             }
+            Files.newOutputStream(path).use { workbook.write(it) }
+        }
+        return path
+    }
+
+    /**
+     * A1 = "=A1" — POI's [org.apache.poi.ss.formula.eval.NotImplementedException] /
+     * circular-reference detection throws a plain [RuntimeException] from
+     * `FormulaEvaluator`, the exact condition [XlsxSmartDiffStrategy]'s
+     * `formatCell` fallback exists to survive.
+     */
+    private fun writeXlsxWithSelfReferencingFormula(name: String): Path {
+        val path = tmp.resolve(name)
+        XSSFWorkbook().use { workbook ->
+            val sheet = workbook.createSheet("Sheet1")
+            sheet.createRow(0).createCell(0).cellFormula = "A1"
             Files.newOutputStream(path).use { workbook.write(it) }
         }
         return path

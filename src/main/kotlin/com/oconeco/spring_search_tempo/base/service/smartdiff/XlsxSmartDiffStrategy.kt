@@ -75,7 +75,7 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
         var totalChanged = 0
         var totalUnchanged = 0
 
-        for (alignment in alignments) {
+        for ((sectionIndex, alignment) in alignments.withIndex()) {
             val startIdx = allLines.size
             val sectionKind: SmartDiffKind
             val sectionKey: String
@@ -90,7 +90,7 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
                     totalChanged += emitted.summary.changed
                     totalUnchanged += emitted.summary.unchanged
                     sectionKind = if (emitted.summary.totalChanges == 0) SmartDiffKind.UNCHANGED else SmartDiffKind.CHANGED
-                    sectionKey = "sheet-${alignment.old.name}"
+                    sectionKey = "sheet-$sectionIndex-${slugify(alignment.old.name)}"
                     sectionLabel = "Sheet ${alignment.new.name}"
                 }
                 is SheetAlignment.Inserted -> {
@@ -104,7 +104,7 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
                     allLines += lines
                     totalInserted += lines.size
                     sectionKind = SmartDiffKind.INSERTED
-                    sectionKey = "sheet-${alignment.new.name}"
+                    sectionKey = "sheet-$sectionIndex-${slugify(alignment.new.name)}"
                     sectionLabel = "Sheet ${alignment.new.name} [new]"
                 }
                 is SheetAlignment.Deleted -> {
@@ -118,7 +118,7 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
                     allLines += lines
                     totalDeleted += lines.size
                     sectionKind = SmartDiffKind.DELETED
-                    sectionKey = "sheet-${alignment.old.name}"
+                    sectionKey = "sheet-$sectionIndex-${slugify(alignment.old.name)}"
                     sectionLabel = "Sheet ${alignment.old.name} [removed]"
                 }
             }
@@ -186,13 +186,37 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
         if (lastCell < 0) return ""
         val cells = (0 until lastCell).map { idx ->
             val cell = row.getCell(idx) ?: return@map ""
-            formatter.formatCellValue(cell, evaluator).trim()
+            formatCell(cell, formatter, evaluator).trim()
         }
         // Drop trailing blank cells so two rows that only differ by unused trailing
         // columns don't register as a spurious change.
         val trimmedEnd = cells.indexOfLast { it.isNotEmpty() }
         if (trimmedEnd < 0) return ""
         return cells.subList(0, trimmedEnd + 1).joinToString("\t")
+    }
+
+    /**
+     * Formula evaluation is best-effort: POI throws a plain [RuntimeException] (not
+     * an [java.io.IOException]) for functions it doesn't implement or for links to
+     * external workbooks it can't resolve, which would otherwise propagate past the
+     * strategy and 500 the HTMX fragment. Fall back to the file's cached formula
+     * result (no live evaluation) and, if even that fails, a visible placeholder —
+     * a diff line reading "[formula error]" beats losing the whole diff.
+     */
+    private fun formatCell(
+        cell: org.apache.poi.ss.usermodel.Cell,
+        formatter: DataFormatter,
+        evaluator: org.apache.poi.ss.usermodel.FormulaEvaluator,
+    ): String = try {
+        formatter.formatCellValue(cell, evaluator)
+    } catch (e: RuntimeException) {
+        log.debug("Formula evaluation failed for cell {}: {}", cell.address, e.message)
+        try {
+            formatter.formatCellValue(cell)
+        } catch (e2: RuntimeException) {
+            log.debug("Cached-value fallback also failed for cell {}: {}", cell.address, e2.message)
+            "[formula error]"
+        }
     }
 
     internal fun alignSheets(
@@ -226,6 +250,20 @@ class XlsxSmartDiffStrategy : SmartDiffStrategy {
         data class Paired(val old: SheetContent, val new: SheetContent) : SheetAlignment
         data class Inserted(val new: SheetContent) : SheetAlignment
         data class Deleted(val old: SheetContent) : SheetAlignment
+    }
+
+    /**
+     * Sheet names are unconstrained Excel user text (spaces, punctuation, unicode);
+     * [SmartDiffSection.key] is rendered verbatim as an HTML `id` and a `#`-fragment
+     * `href` by the template, so it must be reduced to an id-safe token. The caller
+     * also prefixes this with the section's positional index, so collisions between
+     * two names that slugify identically (`"Q 1"` / `"Q-1"`) still get distinct keys.
+     */
+    private fun slugify(name: String): String {
+        val slug = name.lowercase().map { if (it.isLetterOrDigit()) it else '-' }.joinToString("")
+            .trim('-')
+            .replace(Regex("-+"), "-")
+        return slug.ifEmpty { "sheet" }
     }
 
     companion object {
