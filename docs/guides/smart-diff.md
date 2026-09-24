@@ -1,7 +1,7 @@
 # Smart-Diff
 
-> **Issues:** [#144](https://github.com/seanoc5/spring-search-tempo/issues/144) (shared infra + `.docx`), [#145](https://github.com/seanoc5/spring-search-tempo/issues/145) (`.pptx`) — graduate spike [#126](../research/smart-diff-tools.md).
-> **Status:** `.docx` and `.pptx` shipped. `.xlsx` filed as a separate follow-up.
+> **Issues:** [#144](https://github.com/seanoc5/spring-search-tempo/issues/144) (shared infra + `.docx`), [#145](https://github.com/seanoc5/spring-search-tempo/issues/145) (`.pptx`), [#166](https://github.com/seanoc5/spring-search-tempo/issues/166) (`.xlsx`) — graduate spike [#126](../research/smart-diff-tools.md).
+> **Status:** `.docx`, `.pptx`, and `.xlsx` shipped.
 
 Smart-Diff is the FSFile detail-page feature that answers **"what changed
 between two versions of this file?"** It works on user-authored documents
@@ -31,10 +31,10 @@ from each version and producing a paragraph-level diff.
 |---|---|---|
 | `.docx` | [`DocxSmartDiffStrategy`](../../src/main/kotlin/com/oconeco/spring_search_tempo/base/service/smartdiff/DocxSmartDiffStrategy.kt) | Paragraph-level. Tables flattened with a `[table]` marker; headers/footers/footnotes ignored; tracked-changes layer ignored (uses the "current" view). |
 | `.pptx` | [`PptxSmartDiffStrategy`](../../src/main/kotlin/com/oconeco/spring_search_tempo/base/service/smartdiff/PptxSmartDiffStrategy.kt) | Per-slide. Slides are pre-aligned by index with a title-similarity look-ahead to detect inserted/deleted slides; per-slide text is then diffed with the shared line emitter. Result carries a `sections` list so the UI renders a per-slide jump list with anchors. Images, charts, animations, and speaker notes are out of scope. |
+| `.xlsx` | [`XlsxSmartDiffStrategy`](../../src/main/kotlin/com/oconeco/spring_search_tempo/base/service/smartdiff/XlsxSmartDiffStrategy.kt) | Per-sheet. Sheets are aligned by name (stable, unlike slide titles) — a rename is reported as a removed sheet plus a new one, not a rename, in v1. Each row becomes one diff line: cells tab-joined in column order, formulas rendered as their computed value. Result carries a `sections` list, same as `.pptx`. Charts, images, and formatting are out of scope. |
 
-`.xlsx` is planned next per the [smart-diff spike
-recommendation](../research/smart-diff-tools.md#7-recommendation). `.pdf` is
-deferred indefinitely — see the spike for the layout-extraction caveats.
+`.pdf` is deferred indefinitely — see the spike for the layout-extraction
+caveats.
 
 ## Adding a new strategy
 
