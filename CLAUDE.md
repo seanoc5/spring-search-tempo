@@ -4,6 +4,8 @@ Concise guidance for Claude Code when working with Spring Search Tempo.
 
 Domain context: see [docs/architecture/CONTEXT.md](docs/architecture/CONTEXT.md).
 
+Shared UI rules: follow the `oconeco-web-ui` skill. Its source, the decided cross-app UI policy and this app's colours and theme status live in the `oconeco-ui` repo (https://github.com/seanoc5/oconeco-ui), and ship with the skill as `~/.claude/skills/oconeco-web-ui/reference/*.md` (readable inside swarm containers). App-specific rules in this file win on this repo's own syntax gotchas.
+
 ---
 
 ## Project Overview
