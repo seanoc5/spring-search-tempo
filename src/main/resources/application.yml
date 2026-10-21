@@ -95,11 +95,10 @@ error:
 management:
   server:
     port: ${MANAGEMENT_SERVER_PORT:9085}
-    # Not loopback-only by default: ops/monitoring's Prometheus scrapes over the bridge
-    # network via host.docker.internal, which a 127.0.0.1 bind would refuse. Acceptable
-    # because BasicSecurityConfig gates /actuator/** to ROLE_ADMIN except health. Pin
-    # MANAGEMENT_SERVER_ADDRESS=127.0.0.1 in the env file when this lands on kdeyoga.
-    address: ${MANAGEMENT_SERVER_ADDRESS:0.0.0.0}
+    # Loopback only, like every other oconeco app: the scraper (the host's shared
+    # Prometheus, or ops/monitoring here) runs on the host network and reads
+    # 127.0.0.1:9085 directly.
+    address: ${MANAGEMENT_SERVER_ADDRESS:127.0.0.1}
   endpoints:
     web:
       exposure:

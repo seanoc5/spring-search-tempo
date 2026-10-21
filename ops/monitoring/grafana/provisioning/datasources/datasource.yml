@@ -5,6 +5,6 @@ datasources:
     uid: prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://host.docker.internal:9090   # Prometheus runs on the host network
     isDefault: true
     editable: false
