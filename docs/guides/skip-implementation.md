@@ -352,7 +352,7 @@ Update `templates/fSFile/list.html`:
 ./gradlew bootRun
 ```
 
-Visit: `http://localhost:8085/fSFiles`
+Visit: `http://localhost:8086/fSFiles`
 
 **Verify**:
 - [ ] Checkbox appears below search/sort controls

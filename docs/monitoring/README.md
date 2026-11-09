@@ -117,7 +117,7 @@ scrape_configs:
   - job_name: 'spring-search-tempo'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['localhost:8085']
+      - targets: ['localhost:8086']
     scrape_interval: 15s
 ```
 

@@ -8,7 +8,7 @@ Quick reference for Spring Search Tempo configuration options.
 
 ```yaml
 server:
-  port: 8085                    # Web server port
+  port: 8086                    # Web server port
   servlet:
     context-path: /             # Base URL path
 ```
