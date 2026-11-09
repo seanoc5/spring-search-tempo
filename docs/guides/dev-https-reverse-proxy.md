@@ -14,7 +14,7 @@ This is the recommended setup for this project on a dev machine.
 - Spring Boot + devtools restart loop stays simple.
 - TLS config/certs are isolated in one proxy layer.
 - You can rotate certs without touching app runtime.
-- You can expose only 443/80 publicly and keep app on `127.0.0.1:8085`.
+- You can expose only 443/80 publicly and keep app on `127.0.0.1:8086`.
 
 ## Confirm Current Server
 
@@ -32,7 +32,7 @@ Browser / Remote Crawler
         |
   Caddy or Nginx (TLS terminate)
         |
-     HTTP 127.0.0.1:8085
+     HTTP 127.0.0.1:8086
         |
  Spring Boot (Tomcat + devtools)
 ```
@@ -42,7 +42,7 @@ Browser / Remote Crawler
 Use local-only bind for backend app:
 
 ```bash
-./gradlew bootRun --args='--server.address=127.0.0.1 --server.port=8085'
+./gradlew bootRun --args='--server.address=127.0.0.1 --server.port=8086'
 ```
 
 Optional: keep this in your dev profile if desired.

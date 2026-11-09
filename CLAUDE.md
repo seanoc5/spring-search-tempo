@@ -64,7 +64,7 @@ Shared UI rules: follow the `oconeco-web-ui` skill. Its source, the decided cros
 ## Quick Start
 
 ```bash
-./gradlew bootRun          # Start app (http://localhost:8085)
+./gradlew bootRun          # Start app (http://localhost:8086)
 ./gradlew test             # Run all tests
 ./gradlew test --tests ModularityTest  # Verify module boundaries
 docker compose up -d       # Start PostgreSQL manually if needed
@@ -236,8 +236,8 @@ when (val result = recentCrawlChecker.shouldSkipFolder(dir)) {
 
 2. **REST API**: Manual trigger via HTTP
    ```bash
-   curl -X POST http://localhost:8085/api/nlp/process
-   curl http://localhost:8085/api/nlp/status
+   curl -X POST http://localhost:8086/api/nlp/process
+   curl http://localhost:8086/api/nlp/status
    ```
 
 3. **UI**: POST to `/nlp/process` with optional `redirectTo` parameter
@@ -484,7 +484,7 @@ Avoid framework-reserved names in templates, model attributes, and local vars.
 
 | Issue | Quick Fix |
 |-------|-----------|
-| Port 8085 in use | `lsof -i :8085` → `kill -9 <PID>` |
+| Port 8086 in use | `lsof -i :8086` → `kill -9 <PID>` |
 | Can't connect DB | `docker compose up -d` |
 | Job already complete | Clear batch tables or add timestamp parameter |
 | Kapt errors | `./gradlew cleanKapt && rm -rf build/generated/source/kapt` |

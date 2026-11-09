@@ -20,7 +20,7 @@ Complete reference for building, running, and testing Spring Search Tempo.
 ./gradlew bootRun --args='--debug'
 ```
 
-**Access application**: http://localhost:8085
+**Access application**: http://localhost:8086
 
 **Custom local config**: Create `src/main/resources/application-local.yml`
 
@@ -29,7 +29,7 @@ Complete reference for building, running, and testing Spring Search Tempo.
 ```bash
 # Ctrl+C in terminal
 # Or find and kill process:
-lsof -i :8085
+lsof -i :8086
 kill -9 <PID>
 ```
 
@@ -123,7 +123,7 @@ kill -9 <PID>
   --imageName=com.oconeco/spring-search-tempo:1.0.0
 
 # Run built image
-docker run -p 8085:8085 com.oconeco/spring-search-tempo
+docker run -p 8086:8086 com.oconeco/spring-search-tempo
 ```
 
 ## Running Built JAR
@@ -242,10 +242,10 @@ pg_dump -h localhost -p 5432 -U tempo -d tempo \
 
 ```bash
 # Trigger NLP processing via REST API
-curl -X POST http://localhost:8085/api/nlp/process
+curl -X POST http://localhost:8086/api/nlp/process
 
 # Check NLP status
-curl http://localhost:8085/api/nlp/status
+curl http://localhost:8086/api/nlp/status
 
 # Disable NLP auto-trigger (in application.yml or command line)
 ./gradlew bootRun --args='--app.nlp.auto-trigger=false'
@@ -437,16 +437,16 @@ kill -3 <PID>
 
 ```bash
 # Health check
-curl http://localhost:8085/actuator/health
+curl http://localhost:8086/actuator/health
 
 # Application info
-curl http://localhost:8085/actuator/info
+curl http://localhost:8086/actuator/info
 
 # Metrics
-curl http://localhost:8085/actuator/metrics
+curl http://localhost:8086/actuator/metrics
 
 # Batch jobs
-curl http://localhost:8085/actuator/batch
+curl http://localhost:8086/actuator/batch
 ```
 
 ## CI/CD Commands
@@ -500,8 +500,8 @@ rm -rf build/generated/source/kapt
 ### Fix Port Conflicts
 
 ```bash
-# Find process using port 8085
-lsof -i :8085
+# Find process using port 8086
+lsof -i :8086
 
 # Kill process
 kill -9 <PID>
@@ -583,7 +583,7 @@ git diff --staged
 | Run specific test | `./gradlew :test --tests TestName`                          |
 | Modulith docs | `./gradlew :test --tests com.oconeco.spring_search_tempo.ModularityTest` |
 | Coverage report | `./gradlew test jacocoTestReport`                           |
-| Trigger NLP | `curl -X POST http://localhost:8085/api/nlp/process`        |
+| Trigger NLP | `curl -X POST http://localhost:8086/api/nlp/process`        |
 
 ## See Also
 
